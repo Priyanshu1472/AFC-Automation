@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { MD_CREATABLE_ROLES, DGM_CREATABLE_ROLES, ROLE_LABELS, OFFICES } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
@@ -8,7 +9,15 @@ import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
+import FieldTooltip from "../../components/FieldTooltip";
 import "../../styles/CreateUserPage.css";
+
+const FIELD_HELP = {
+  email: "This becomes their login. They'll receive a temporary password here — make sure it's an address they can actually check.",
+  role: "Controls what this person can see and do. MD can create any role below MD; a DGM can only create AGM, SRM, Project Officer, or Associate Consultant, and only within their own team.",
+  team: "The working group this person belongs to (e.g. BPDD, CBBO). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
+  office: "The physical office this person is based out of.",
+};
 
 const EMPTY_FORM = { full_name: "", email: "", role: "", team: "", office: "" };
 
@@ -93,6 +102,9 @@ export default function CreateUserPage() {
     <div className="app-shell">
       <AppHeader />
       <div className="app-container">
+        <Link to="/users" className="text-sm text-secondary">
+          ← Back to Users
+        </Link>
         <div className="page-header">
           <h1>Create User</h1>
           <p>Create a staff account. A temporary password will be generated and emailed automatically.</p>
@@ -130,10 +142,12 @@ export default function CreateUserPage() {
                   />
                 </div>
                 <div className="field full">
+                  <label className="field-label" htmlFor="email">
+                    Email <span className="required">*</span> <FieldTooltip text={FIELD_HELP.email} />
+                  </label>
                   <Input
-                    label="Email"
+                    id="email"
                     type="email"
-                    required
                     value={form.email}
                     onChange={(e) => set("email", e.target.value)}
                     placeholder="user@afcindia.org.in"
@@ -143,7 +157,7 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field">
                   <label className="field-label">
-                    Role <span className="required">*</span>
+                    Role <span className="required">*</span> <FieldTooltip text={FIELD_HELP.role} />
                   </label>
                   <Select
                     options={roleOptions}
@@ -158,7 +172,9 @@ export default function CreateUserPage() {
 
                 {isDgm ? (
                   <div className="field">
-                    <label className="field-label">Team / Office</label>
+                    <label className="field-label">
+                      Team / Office <FieldTooltip text="New users you create are automatically placed on your own team and office — this can't be changed here." />
+                    </label>
                     <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>
                       {profile.team} · {profile.office}
                     </p>
@@ -166,7 +182,9 @@ export default function CreateUserPage() {
                 ) : (
                   <>
                     <div className="field">
-                      <label className="field-label">Team</label>
+                      <label className="field-label">
+                        Team <FieldTooltip text={FIELD_HELP.team} />
+                      </label>
                       <Input
                         value={form.team}
                         onChange={(e) => set("team", e.target.value)}
@@ -177,7 +195,7 @@ export default function CreateUserPage() {
                     </div>
                     <div className="field">
                       <label className="field-label">
-                        Office {form.role !== "md" && <span className="required">*</span>}
+                        Office {form.role !== "md" && <span className="required">*</span>} <FieldTooltip text={FIELD_HELP.office} />
                       </label>
                       <Select
                         options={officeOptions}
