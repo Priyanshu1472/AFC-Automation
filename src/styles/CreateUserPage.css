@@ -1,0 +1,11 @@
+.cup-password {
+  display: inline-block;
+  margin-top: var(--space-2);
+  padding: 8px 14px;
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: var(--bg-surface-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}

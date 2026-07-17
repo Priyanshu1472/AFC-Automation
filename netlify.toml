@@ -1,0 +1,35 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+[[headers]]
+  for = "/home"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, private"
+
+[[headers]]
+  for = "/create-user"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, private"
+
+[[headers]]
+  for = "/users"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, private"
