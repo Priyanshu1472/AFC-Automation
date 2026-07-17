@@ -10,7 +10,10 @@ export default function PublicOnlyRoute({ children }) {
 
   if (loading) return <PageLoader />;
 
-  if (user && profile) {
+  // Only redirect an active account — an inactive one is left on the
+  // login form so useLogin's own validation can sign it back out and
+  // show the "deactivated" error, instead of flashing /home first.
+  if (user && profile?.is_active) {
     return <Navigate to={profile.must_change_password ? "/change-password" : "/home"} replace />;
   }
 

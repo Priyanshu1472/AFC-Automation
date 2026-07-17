@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { MD_CREATABLE_ROLES, DGM_CREATABLE_ROLES, ROLE_LABELS, OFFICES } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import AppHeader from "../../components/shared/AppHeader";
@@ -68,8 +68,14 @@ export default function CreateUserPage() {
           },
         });
 
-        if (error) throw error;
-        if (!data?.success) throw new Error(data?.error || "Failed to create account.");
+        if (error) {
+          setBanner(await extractFunctionErrorMessage(error, "Failed to create account."));
+          return;
+        }
+        if (!data?.success) {
+          setBanner(data?.error || "Failed to create account.");
+          return;
+        }
 
         setResult({ emailSent: data.email_sent, password: data.password });
         setBanner(`Account created for ${form.full_name.trim()}.`);

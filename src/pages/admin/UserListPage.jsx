@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { ROLE_LABELS, can } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import AppHeader from "../../components/shared/AppHeader";
@@ -53,8 +53,14 @@ export default function UserListPage() {
       const { data, error } = await supabase.functions.invoke("set-user-status", {
         body: { user_id: user.id, is_active: !user.is_active },
       });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Failed to update user.");
+      if (error) {
+        setBanner(await extractFunctionErrorMessage(error, "Failed to update user status."));
+        return;
+      }
+      if (!data?.success) {
+        setBanner(data?.error || "Failed to update user status.");
+        return;
+      }
       await fetchUsers();
     } catch (err) {
       setBanner(err.message || "Failed to update user status.");

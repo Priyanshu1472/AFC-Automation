@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { VALID_ROLES } from "../lib/roles";
 import {
@@ -15,7 +14,6 @@ function isValidEmail(val) {
 }
 
 export function useLogin() {
-  const navigate = useNavigate();
   const { refreshProfile } = useAuth();
 
   const [email, setEmail] = useState("");
@@ -62,8 +60,13 @@ export function useLogin() {
           return;
         }
 
-        // Pull the fresh afc_users row synchronously so we can gate on
-        // is_active / role / must_change_password before navigating.
+        // Pull the fresh afc_users row synchronously so we can reject
+        // inactive/invalid accounts right here. We deliberately don't
+        // navigate on success — PublicOnlyRoute (wrapping /login) already
+        // redirects reactively as soon as AuthContext's own profile fetch
+        // resolves, and it does so faster than this second fetch. An
+        // imperative navigate() here used to race against that and could
+        // fire later, clobbering wherever the user had since clicked.
         const sessionUser = await refreshProfile();
         const { data: profile, error: profileError } = await supabase
           .from("afc_users")
@@ -89,14 +92,13 @@ export function useLogin() {
 
         clearRateLimit("afc");
         setAttempts(0);
-        navigate(profile.must_change_password ? "/change-password" : "/home", { replace: true });
       } catch {
         setError("Something went wrong. Please check your connection and try again.");
       } finally {
         setLoading(false);
       }
     },
-    [email, password, navigate, refreshProfile]
+    [email, password, refreshProfile]
   );
 
   return {
