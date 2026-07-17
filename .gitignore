@@ -28,3 +28,6 @@ yarn-error.log*
 
 # Legacy reference project (not part of the new build)
 /old/
+
+# Local Netlify folder
+.netlify
