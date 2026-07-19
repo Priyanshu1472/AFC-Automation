@@ -1,11 +1,56 @@
+/* ============================================================
+   CreateUserPage.css
+   Mostly leans on .form-grid / .field from App.css.
+   Only the one-time password block needs bespoke treatment.
+   ============================================================ */
+
+/* Keep the form comfortable to read — a two-column grid stretched
+   across 1280px puts far too much distance between label and value. */
+.app-container .card form .form-grid {
+  max-width: 720px;
+}
+
+/* Alerts on this page stack above the card */
+.app-container > .alert {
+  margin-bottom: var(--space-4);
+}
+
+/* ── One-time password ──────────────────────────────────── */
 .cup-password {
-  display: inline-block;
-  margin-top: var(--space-2);
-  padding: 8px 14px;
+  display: block;
+  width: 100%;
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   font-size: var(--text-md);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  background: var(--bg-surface-3);
-  border: 1px solid var(--border-default);
+  letter-spacing: 0.08em;
+  word-break: break-all;
+  color: var(--text-primary);
+
+  background: var(--bg-surface);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
+
+  /* It is meant to be copied — make selection effortless */
+  user-select: all;
+  -webkit-user-select: all;
+  cursor: text;
+}
+
+.cup-password:hover {
+  border-color: var(--text-primary);
+}
+
+/* Read-only Team/Office summary shown to DGMs */
+.field > p.text-sm {
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .cup-password {
+    font-size: var(--text-sm);
+    letter-spacing: 0.06em;
+  }
 }

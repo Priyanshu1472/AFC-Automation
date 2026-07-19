@@ -20,7 +20,9 @@ export default function AppHeader() {
 
   if (!profile) return null;
 
-  const canSeeUsers = can.viewAllTeams(profile.role) || can.viewOwnTeam(profile.role);
+  const canSeeUsers = ["md", "dgm"].includes(profile.role);
+  const canSeeAuditLogs = can.viewAllTeams(profile.role);
+  const canSeeEmpanelment = ["associate_consultant", "project_officer", "dgm", "cfo", "cs", "md"].includes(profile.role);
 
   return (
     <header className="app-header">
@@ -36,6 +38,16 @@ export default function AppHeader() {
         {canSeeUsers && (
           <Link to="/users" className={location.pathname === "/users" ? "active" : ""} onClick={() => setMenuOpen(false)}>
             Users
+          </Link>
+        )}
+        {canSeeAuditLogs && (
+          <Link to="/audit-logs" className={location.pathname === "/audit-logs" ? "active" : ""} onClick={() => setMenuOpen(false)}>
+            Audit Logs
+          </Link>
+        )}
+        {canSeeEmpanelment && (
+          <Link to="/empanelment" className={location.pathname.startsWith("/empanelment") ? "active" : ""} onClick={() => setMenuOpen(false)}>
+            Empanelment
           </Link>
         )}
       </nav>

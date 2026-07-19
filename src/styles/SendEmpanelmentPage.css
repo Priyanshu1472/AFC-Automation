@@ -1,0 +1,570 @@
+/* ============================================================
+   SendEmpanelmentForm.css — uses App.css tokens only
+   ============================================================ */
+
+/* ── Page wrapper ─────────────────────────────────────────── */
+.sef-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding-bottom: var(--space-12);
+}
+
+/* ── Step bar ─────────────────────────────────────────────── */
+.sef-steps {
+  display: flex;
+  align-items: center;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-6);
+  box-shadow: var(--card-shadow);
+}
+
+.sef-step-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+}
+
+.sef-step-item:last-child { flex: 0; }
+
+.sef-step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border-default);
+  background: var(--bg-surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--text-tertiary);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.sef-step-dot.sef-step-active {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+  color: var(--brand-600);
+}
+
+.sef-step-dot.sef-step-done {
+  border-color: var(--success);
+  background: var(--success-light);
+  color: var(--success-dark);
+}
+
+[data-theme="dark"] .sef-step-dot.sef-step-active {
+  background: rgba(52,128,245,0.15);
+  color: var(--brand-400);
+}
+
+[data-theme="dark"] .sef-step-dot.sef-step-done {
+  background: rgba(16,185,129,0.15);
+  color: #6ee7b7;
+}
+
+.sef-step-label {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  font-weight: 400;
+  transition: color var(--duration-normal) var(--ease-out);
+}
+
+.sef-step-label-active { color: var(--brand-600); font-weight: 600; }
+.sef-step-label-done   { color: var(--success);   font-weight: 500; }
+
+[data-theme="dark"] .sef-step-label-active { color: var(--brand-400); }
+[data-theme="dark"] .sef-step-label-done   { color: #6ee7b7; }
+
+.sef-step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border-default);
+  border-radius: 1px;
+  transition: background var(--duration-slow) var(--ease-out);
+}
+
+.sef-step-line-done { background: var(--success); }
+
+/* ── Layout ───────────────────────────────────────────────── */
+/* FIX: increased from 560px so the form card isn't tiny
+   compared to the full-width step bar above it           */
+.sef-layout {
+  max-width: 8000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.sef-layout-wide {
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.sef-main-card { width: 100%; }
+
+/* ── Card body ────────────────────────────────────────────── */
+.sef-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6) !important;
+}
+
+/* ── Sender strip ─────────────────────────────────────────── */
+.sef-sender-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.sef-sender-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-5);
+  border-right: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+
+.sef-sender-item:last-child { border-right: none; }
+
+.sef-sender-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+}
+
+.sef-sender-value {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sef-sender-highlight { color: var(--text-brand); }
+
+/* ── Divider ──────────────────────────────────────────────── */
+.sef-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 0 calc(-1 * var(--space-6));
+}
+
+/* ── Fields ───────────────────────────────────────────────── */
+.sef-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sef-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+
+.sef-required { color: var(--danger); margin-left: 2px; }
+
+.sef-field-error {
+  font-size: var(--text-xs);
+  color: var(--danger);
+}
+
+/* ── Button rows ──────────────────────────────────────────── */
+.sef-btn-row {
+  display: flex;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.sef-btn-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+/* ── Summary card (left column on preview step) ───────────── */
+.sef-summary-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6) !important;
+}
+
+.sef-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sef-summary-last { border-bottom: none !important; padding-bottom: 0 !important; }
+
+.sef-summary-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+}
+
+.sef-summary-value {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.sef-summary-email { color: var(--text-brand); word-break: break-all; }
+
+.sef-summary-role {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.sef-summary-notice {
+  padding: var(--space-3) var(--space-4);
+  background: var(--warning-light);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: var(--warning-dark);
+  line-height: 1.6;
+}
+
+[data-theme="dark"] .sef-summary-notice {
+  background: rgba(245,158,11,0.1);
+  border-color: rgba(245,158,11,0.2);
+  color: #fcd34d;
+}
+
+/* ── Email preview (right column) ─────────────────────────── */
+.sef-email-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sef-email-wrap-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+}
+
+/* ── Email chrome mock ────────────────────────────────────── */
+.sef-email-chrome {
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--card-bg);
+  box-shadow: var(--shadow-sm);
+}
+
+.sef-email-chrome-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-surface-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sef-email-chrome-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.sef-email-chrome-dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: block;
+  background: var(--border-default);
+}
+
+.sef-email-chrome-dots span:nth-child(1) { background: #FF5F57; }
+.sef-email-chrome-dots span:nth-child(2) { background: #FFBD2E; }
+.sef-email-chrome-dots span:nth-child(3) { background: #28C840; }
+
+.sef-email-chrome-title {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-weight: 500;
+  flex: 1;
+  text-align: center;
+  margin-right: 30px;
+}
+
+/* ── Email head ───────────────────────────────────────────── */
+.sef-email-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sef-email-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--info-light);
+  color: var(--info-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .sef-email-avatar {
+  background: rgba(59,130,246,0.15);
+  color: #93c5fd;
+}
+
+.sef-email-head-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.sef-email-subject {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.sef-email-meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.sef-email-from  { font-size: var(--text-xs); color: var(--text-secondary); }
+.sef-email-arrow { font-size: var(--text-xs); color: var(--text-tertiary); }
+.sef-email-to    { font-size: var(--text-xs); color: var(--text-brand); font-weight: 500; word-break: break-all; }
+
+/* ── Email body ───────────────────────────────────────────── */
+.sef-email-body {
+  padding: var(--space-5) var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sef-email-salutation {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  font-weight: 600;
+  margin: 0;
+}
+
+.sef-email-para {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* Application code callout */
+.sef-email-code-block {
+  border: 1px solid var(--border-brand);
+  background: var(--info-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+[data-theme="dark"] .sef-email-code-block {
+  background: rgba(59,130,246,0.1);
+  border-color: rgba(59,130,246,0.25);
+}
+
+.sef-email-code-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--info-dark);
+}
+
+[data-theme="dark"] .sef-email-code-label { color: #93c5fd; }
+
+.sef-email-code-value {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 10px;
+  color: var(--info-dark);
+  font-family: var(--font-display);
+}
+
+[data-theme="dark"] .sef-email-code-value { color: #93c5fd; }
+
+.sef-email-code-note {
+  font-size: var(--text-xs);
+  color: var(--info-dark);
+  line-height: 1.5;
+  opacity: 0.75;
+}
+
+[data-theme="dark"] .sef-email-code-note { color: #93c5fd; }
+
+/* CTA mock */
+.sef-email-cta-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.sef-email-cta {
+  display: inline-block;
+  padding: 10px var(--space-5);
+  background: var(--btn-primary-bg);
+  color: #fff;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: default;
+  user-select: none;
+  box-shadow: 0 1px 3px rgba(26,95,212,0.3);
+}
+
+.sef-email-cta-url {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-family: monospace;
+}
+
+/* Regards */
+.sef-email-regards {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.9;
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sef-email-contact { color: var(--text-brand); }
+
+/* ── Success screen ───────────────────────────────────────── */
+.sef-success-card {
+  max-width: 540px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.sef-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-10) var(--space-8);
+  gap: var(--space-4);
+}
+
+.sef-success-icon {
+  color: var(--success);
+  line-height: 1;
+}
+
+.sef-success-title {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.sef-success-sub {
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 400px;
+}
+
+.sef-success-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .sef-layout-wide {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .sef-sender-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .sef-sender-item:nth-child(2) { border-right: none; }
+  .sef-sender-item:nth-child(3),
+  .sef-sender-item:nth-child(4) {
+    border-top: 1px solid var(--border-subtle);
+  }
+  .sef-sender-item:nth-child(4) { border-right: none; }
+  .sef-btn-row { flex-direction: column; }
+  .sef-btn-row .btn { width: 100%; }
+  .sef-steps { padding: var(--space-3) var(--space-4); }
+}
+
+@media (max-width: 420px) {
+  .sef-sender-row { grid-template-columns: 1fr; }
+  .sef-sender-item {
+    border-right: none !important;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .sef-sender-item:first-child { border-top: none; }
+  .sef-step-label { display: none; }
+}
+
+/* ── Summary group wrapper ────────────────────────────────── */
+.sef-summary-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.sef-summary-group .sef-summary-item {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sef-summary-group .sef-summary-last {
+  border-bottom: none;
+}

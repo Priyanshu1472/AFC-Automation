@@ -128,6 +128,15 @@ export default function LoginPage() {
             </form>
           </Card>
 
+          <div className="login-ba-panel">
+            <p className="login-ba-heading">Business Associate?</p>
+            <div className="login-ba-links">
+              <Link to="/ba-form" className="login-ba-link">Fill Empanelment Form</Link>
+              <span className="login-ba-sep" aria-hidden="true">·</span>
+              <Link to="/empanelment/correction" className="login-ba-link">Submit a Correction</Link>
+            </div>
+          </div>
+
           <p className="login-footer-note">© {new Date().getFullYear()} AFC India Limited. All rights reserved.</p>
         </div>
       </div>

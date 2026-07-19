@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import { ToastProvider } from "./context/ToastContext";
+import ErrorBoundary from "./components/shared/ErrorBoundary";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
 import PublicOnlyRoute from "./components/routing/PublicOnlyRoute";
 
@@ -10,14 +12,23 @@ import ChangePasswordPage from "./pages/auth/ChangePasswordPage";
 import HomePage from "./pages/HomePage";
 import CreateUserPage from "./pages/admin/CreateUserPage";
 import UserListPage from "./pages/admin/UserListPage";
+import AuditLogsPage from "./pages/admin/AuditLogsPage";
+import SendEmpanelmentPage from "./pages/empanelment/SendEmpanelmentPage";
+import BaFormPage from "./pages/empanelment/BaFormPage";
+import EmpanelmentListPage from "./pages/empanelment/EmpanelmentListPage";
+import ApplicationReviewPage from "./pages/empanelment/ApplicationReviewPage";
+import EmpanelmentCorrectionPage from "./pages/empanelment/EmpanelmentCorrectionPage";
+import NotFoundPage from "./pages/NotFoundPage";
 
 import "./App.css";
 
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
+      <ErrorBoundary>
+        <ToastProvider>
+          <AuthProvider>
+            <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
 
           <Route
@@ -69,15 +80,52 @@ export default function App() {
           <Route
             path="/users"
             element={
-              <ProtectedRoute allowedRoles={["md", "cfo", "cs", "dgm"]}>
+              <ProtectedRoute allowedRoles={["md", "dgm"]}>
                 <UserListPage />
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/audit-logs"
+            element={
+              <ProtectedRoute allowedRoles={["md", "cfo", "cs"]}>
+                <AuditLogsPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </AuthProvider>
+              <Route path="/ba-form" element={<BaFormPage />} />
+              <Route path="/empanelment/correction" element={<EmpanelmentCorrectionPage />} />
+              <Route
+                path="/empanelment/send"
+                element={
+                  <ProtectedRoute allowedRoles={["associate_consultant"]}>
+                    <SendEmpanelmentPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/empanelment"
+                element={
+                  <ProtectedRoute allowedRoles={["associate_consultant", "project_officer", "dgm", "cfo", "cs", "md"]}>
+                    <EmpanelmentListPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/empanelment/:id"
+                element={
+                  <ProtectedRoute allowedRoles={["associate_consultant", "project_officer", "dgm", "cfo", "cs", "md"]}>
+                    <ApplicationReviewPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </AuthProvider>
+        </ToastProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

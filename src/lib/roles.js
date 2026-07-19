@@ -8,6 +8,7 @@ export const ROLES = {
   srm: 5,
   project_officer: 6,
   associate_consultant: 7,
+  business_associate: 8,
 };
 
 export const ROLE_LABELS = {
@@ -19,6 +20,7 @@ export const ROLE_LABELS = {
   srm: "Senior Regional Manager",
   project_officer: "Project Officer",
   associate_consultant: "Associate Consultant",
+  business_associate: "Business Associate",
 };
 
 // ─── MD can create these roles ────────────────────────────────

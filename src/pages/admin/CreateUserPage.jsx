@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { MD_CREATABLE_ROLES, DGM_CREATABLE_ROLES, ROLE_LABELS, OFFICES } from "../../lib/roles";
+import { MD_CREATABLE_ROLES, DGM_CREATABLE_ROLES, ROLE_LABELS, OFFICES, TEAMS } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -35,6 +35,7 @@ export default function CreateUserPage() {
   }, [isDgm]);
 
   const officeOptions = OFFICES.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }));
+  const teamOptions = TEAMS.map((t) => ({ value: t, label: t }));
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
@@ -102,12 +103,16 @@ export default function CreateUserPage() {
     <div className="app-shell">
       <AppHeader />
       <div className="app-container">
-        <Link to="/users" className="text-sm text-secondary">
-          ← Back to Users
-        </Link>
         <div className="page-header">
-          <h1>Create User</h1>
-          <p>Create a staff account. A temporary password will be generated and emailed automatically.</p>
+          <div className="page-title-row">
+            <div>
+              <h1>Create User</h1>
+              <p>Create a staff account. A temporary password will be generated and emailed automatically.</p>
+            </div>
+            <Link to="/users" className="btn btn-secondary btn-sm">
+              ← Back to Users
+            </Link>
+          </div>
         </div>
 
         {banner && (
@@ -185,13 +190,15 @@ export default function CreateUserPage() {
                       <label className="field-label">
                         Team <FieldTooltip text={FIELD_HELP.team} />
                       </label>
-                      <Input
+                      <Select
+                        options={teamOptions}
                         value={form.team}
-                        onChange={(e) => set("team", e.target.value)}
-                        placeholder="e.g. BPDD (optional)"
+                        onChange={(v) => set("team", v)}
+                        placeholder="Select team (optional)"
                         disabled={saving || form.role === "md"}
                         error={errors.team}
                       />
+                      {errors.team && <span className="field-error">{errors.team}</span>}
                     </div>
                     <div className="field">
                       <label className="field-label">

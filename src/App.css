@@ -874,6 +874,33 @@ select.input {
 [data-theme="dark"] .alert-danger  { background: rgba(211,137,122,0.1); border-color: rgba(211,137,122,0.2); color: #d3897a; }
 [data-theme="dark"] .alert-info    { background: rgba(147,167,179,0.1); border-color: rgba(147,167,179,0.2); color: #93a7b3; }
 
+.toast-stack {
+  position: fixed;
+  top: var(--space-5);
+  right: var(--space-5);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(360px, calc(100vw - var(--space-8)));
+  pointer-events: none;
+}
+
+.toast {
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+  animation: slideInRight var(--duration-normal) var(--ease-out);
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(24px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@media (max-width: 480px) {
+  .toast-stack { left: var(--space-4); right: var(--space-4); width: auto; }
+}
+
 /* ============================================================
    14. DIVIDER
    ============================================================ */

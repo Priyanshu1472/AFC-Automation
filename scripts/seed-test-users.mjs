@@ -22,8 +22,8 @@ const PROD_PROJECT_REF_DENYLIST = ["REPLACE_WITH_PROD_PROJECT_REF"];
 
 const TEST_USERS = [
   { emailLocal: "md", full_name: "Test MD", role: "md" },
-  { emailLocal: "cfo", full_name: "Test CFO", role: "cfo" },
-  { emailLocal: "cs", full_name: "Test CS", role: "cs" },
+  { emailLocal: "cfo", full_name: "Test CFO", role: "cfo", office: "delhi" },
+  { emailLocal: "cs", full_name: "Test CS", role: "cs", office: "delhi" },
   { emailLocal: "dgm", full_name: "Test DGM", role: "dgm", team: "BPDD", office: "delhi" },
   { emailLocal: "agm", full_name: "Test AGM", role: "agm", team: "BPDD", office: "delhi" },
   { emailLocal: "srm", full_name: "Test SRM", role: "srm", team: "BPDD", office: "delhi" },

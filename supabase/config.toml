@@ -431,3 +431,45 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/set-user-status/deno.json"
 entrypoint = "./functions/set-user-status/index.ts"
+
+[functions.send-empanelment-invite]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-empanelment-invite/deno.json"
+entrypoint = "./functions/send-empanelment-invite/index.ts"
+
+[functions.submit-ba-form]
+enabled = true
+verify_jwt = false
+import_map = "./functions/submit-ba-form/deno.json"
+entrypoint = "./functions/submit-ba-form/index.ts"
+
+[functions.get-empanelment-document-url]
+enabled = true
+verify_jwt = true
+import_map = "./functions/get-empanelment-document-url/deno.json"
+entrypoint = "./functions/get-empanelment-document-url/index.ts"
+
+[functions.advance-empanelment-stage]
+enabled = true
+verify_jwt = true
+import_map = "./functions/advance-empanelment-stage/deno.json"
+entrypoint = "./functions/advance-empanelment-stage/index.ts"
+
+[functions.raise-empanelment-hold]
+enabled = true
+verify_jwt = true
+import_map = "./functions/raise-empanelment-hold/deno.json"
+entrypoint = "./functions/raise-empanelment-hold/index.ts"
+
+[functions.submit-empanelment-correction]
+enabled = true
+verify_jwt = false
+import_map = "./functions/submit-empanelment-correction/deno.json"
+entrypoint = "./functions/submit-empanelment-correction/index.ts"
+
+[functions.get-empanelment-correction-info]
+enabled = true
+verify_jwt = false
+import_map = "./functions/get-empanelment-correction-info/deno.json"
+entrypoint = "./functions/get-empanelment-correction-info/index.ts"
