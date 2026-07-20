@@ -11,7 +11,6 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { checkAnonKey, getClientIP, checkRateLimit, clearRateLimit } from "../_shared/publicAccess.ts";
 import { notifyUser } from "../_shared/notify.ts";
 
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
 function clean(val: unknown): string {
   if (val === null || val === undefined) return "";
@@ -95,17 +94,17 @@ serve(async (req) => {
 
   if (!checkAnonKey(req)) return jsonRes(req, 401, { error: "Unauthorized" });
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseService = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const adminClient = createClient(supabaseUrl, supabaseService);
+
   const clientIP = getClientIP(req);
-  const rateResult = checkRateLimit(rateLimitStore, clientIP);
+  const rateResult = await checkRateLimit(adminClient, `ba-form:${clientIP}`);
   if (!rateResult.allowed) {
     return jsonRes(req, 429, {
       error: `Too many attempts. Please wait ${rateResult.waitMinutes} minute${rateResult.waitMinutes > 1 ? "s" : ""} before trying again.`,
     });
   }
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseService = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const adminClient = createClient(supabaseUrl, supabaseService);
 
   try {
     let formData: FormData;
@@ -284,7 +283,7 @@ serve(async (req) => {
       link: `/empanelment/${application.id}`,
     });
 
-    clearRateLimit(rateLimitStore, clientIP);
+    clearRateLimit(adminClient, `ba-form:${clientIP}`);
 
     return jsonRes(req, 200, { success: true, documents_count: uploadedDocs.length });
   } catch (err) {

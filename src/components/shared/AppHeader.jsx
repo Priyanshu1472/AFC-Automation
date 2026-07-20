@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
+import NavDropdown from "./NavDropdown";
 import UserMenu from "./UserMenu";
 import { useAuth } from "../../hooks/useAuth";
 import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, ROLE_LABELS } from "../../lib/roles";
@@ -76,6 +77,12 @@ export default function AppHeader() {
             <NavLink to="/empanelment" className={navLinkClass} onClick={closeMenu}>
               Empanelment
             </NavLink>
+          )}
+          {canSeeEmpanelment && (
+            <NavDropdown label="Dashboard" items={[{ to: "/dashboard/empanelment", label: "Empanelment" }]} onNavigate={closeMenu} />
+          )}
+          {canSeeEmpanelment && (
+            <NavDropdown label="Reports" items={[{ to: "/reports/empanelment", label: "Empanelment" }]} onNavigate={closeMenu} />
           )}
           {canSeeUsers && (
             <NavLink to="/users" className={navLinkClass} onClick={closeMenu}>

@@ -1,0 +1,158 @@
+/* ============================================================
+   DatePickerCalendar.css
+   Uses App.css tokens only — themes automatically with light/dark.
+   ============================================================ */
+
+.dpc-root { position: relative; width: 100%; }
+
+/* ── Trigger ─────────────────────────────────────────────────── */
+.dpc-trigger {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-2); padding: 9px 14px;
+  font-family: var(--font-body); font-size: var(--text-sm);
+  background: var(--input-bg); border: 1px solid var(--input-border);
+  border-radius: var(--radius-md); cursor: pointer; text-align: left;
+  color: var(--input-text);
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow    var(--duration-fast) var(--ease-out);
+}
+.dpc-trigger:hover      { border-color: var(--border-strong); }
+.dpc-trigger--open      { border-color: var(--input-border-focus); box-shadow: var(--input-shadow-focus); outline: none; }
+.dpc-trigger--empty     { color: var(--input-placeholder); }
+
+.dpc-trigger-inner {
+  display: flex; align-items: center; gap: var(--space-2); flex: 1; min-width: 0;
+}
+.dpc-cal-icon  { color: var(--text-tertiary); flex-shrink: 0; }
+.dpc-chevron   { color: var(--text-tertiary); flex-shrink: 0; transition: transform var(--duration-fast) var(--ease-out); }
+.dpc-chevron--open { transform: rotate(180deg); }
+
+/* ── Panel ───────────────────────────────────────────────────── */
+.dpc-panel {
+  position: absolute;
+  bottom: calc(100% + 6px); left: 0;
+  z-index: var(--z-dropdown);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 280px;
+  max-width: 90vw;
+  overflow: hidden;
+  animation: slideIn var(--duration-fast) var(--ease-out);
+}
+
+/* ── Nav bar ─────────────────────────────────────────────────── */
+.dpc-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface-2);
+}
+
+.dpc-nav-btn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  background: none; color: var(--text-secondary); cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.dpc-nav-btn:hover { border-color: var(--border-strong); color: var(--text-primary); background: var(--bg-surface-3); }
+
+.dpc-header-btn {
+  font-family: var(--font-display); font-size: var(--text-sm); font-weight: 700;
+  color: var(--text-primary); background: none; border: none; cursor: pointer;
+  padding: 4px 10px; border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.dpc-header-btn:hover { background: var(--bg-surface-3); }
+
+.dpc-header-label {
+  font-family: var(--font-display); font-size: var(--text-sm); font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ── Day grid ────────────────────────────────────────────────── */
+.dpc-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  padding: var(--space-3);
+}
+
+.dpc-day-label {
+  font-size: 11px; font-weight: 600;
+  color: var(--text-tertiary);
+  text-align: center; padding: 4px 0;
+}
+
+.dpc-day {
+  aspect-ratio: 1;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-body); font-size: var(--text-xs);
+  color: var(--text-primary);
+  background: none; border: none; border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.dpc-day:hover:not(:disabled)  { background: var(--bg-surface-3); color: var(--text-primary); }
+.dpc-day--empty                 { pointer-events: none; }
+.dpc-day--today                 { color: var(--text-primary); font-weight: 700; box-shadow: inset 0 0 0 1px var(--border-strong); }
+.dpc-day--selected              { background: var(--btn-primary-bg) !important; color: var(--btn-primary-text) !important; font-weight: 700; border-radius: var(--radius-sm); }
+.dpc-day:disabled               { opacity: 0; pointer-events: none; }
+
+/* ── Month grid ──────────────────────────────────────────────── */
+.dpc-month-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2); padding: var(--space-4);
+}
+
+.dpc-month-btn {
+  padding: 10px 8px;
+  font-family: var(--font-body); font-size: var(--text-sm); font-weight: 500;
+  color: var(--text-primary); background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  cursor: pointer; text-align: center;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.dpc-month-btn:hover          { border-color: var(--border-strong); background: var(--bg-surface-3); }
+.dpc-month-btn--today         { color: var(--text-primary); border-color: var(--border-strong); }
+.dpc-month-btn--selected      { background: var(--btn-primary-bg); color: var(--btn-primary-text); border-color: var(--btn-primary-bg); font-weight: 700; }
+
+/* ── Year grid ───────────────────────────────────────────────── */
+.dpc-year-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2); padding: var(--space-4);
+}
+
+.dpc-year-btn {
+  padding: 10px 4px;
+  font-family: var(--font-body); font-size: var(--text-sm); font-weight: 500;
+  color: var(--text-primary); background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  cursor: pointer; text-align: center;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.dpc-year-btn:hover        { border-color: var(--border-strong); background: var(--bg-surface-3); }
+.dpc-year-btn--today       { color: var(--text-primary); border-color: var(--border-strong); }
+.dpc-year-btn--selected    { background: var(--btn-primary-bg); color: var(--btn-primary-text); border-color: var(--btn-primary-bg); font-weight: 700; }
+
+/* ── Footer ──────────────────────────────────────────────────── */
+.dpc-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface-2);
+}
+
+.dpc-footer-btn {
+  font-family: var(--font-body); font-size: var(--text-xs); font-weight: 600;
+  color: var(--text-secondary);
+  background: none; border: none; cursor: pointer; padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.dpc-footer-btn:hover        { color: var(--text-primary); background: var(--bg-surface-3); }
+.dpc-footer-btn--today       { color: var(--text-primary); font-weight: 700; }
+.dpc-footer-btn--today:hover { background: var(--bg-surface-3); }

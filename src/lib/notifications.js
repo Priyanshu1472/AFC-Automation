@@ -27,20 +27,43 @@ export async function fetchPendingActionNotifications(userId, limit = 10) {
   return data || [];
 }
 
+// NotificationBell and PendingActionsPanel both subscribe for the same
+// user at the same time (they mount together on Home). Supabase reuses a
+// channel object for a given topic instead of creating a second one, so a
+// naive "channel().on().subscribe()" per caller throws the second time
+// ("cannot add postgres_changes callbacks ... after subscribe()"). Instead,
+// keep one real channel per user here and fan its events out to every
+// caller, ref-counting so the channel is torn down once the last caller
+// unsubscribes.
+const notificationChannels = new Map(); // userId -> { channel, listeners: Set }
+
 // Subscribes to INSERT events for this user only. Returns an unsubscribe
 // function for cleanup in a useEffect.
 export function subscribeToNotifications(userId, onInsert) {
-  const channel = supabase
-    .channel(`notifications-${userId}`)
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-      (payload) => onInsert(payload.new)
-    )
-    .subscribe();
+  let entry = notificationChannels.get(userId);
+
+  if (!entry) {
+    const listeners = new Set();
+    const channel = supabase
+      .channel(`notifications-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+        (payload) => listeners.forEach((fn) => fn(payload.new))
+      )
+      .subscribe();
+    entry = { channel, listeners };
+    notificationChannels.set(userId, entry);
+  }
+
+  entry.listeners.add(onInsert);
 
   return () => {
-    supabase.removeChannel(channel);
+    entry.listeners.delete(onInsert);
+    if (entry.listeners.size === 0) {
+      notificationChannels.delete(userId);
+      supabase.removeChannel(entry.channel);
+    }
   };
 }
 

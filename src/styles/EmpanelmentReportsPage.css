@@ -1,0 +1,378 @@
+.erp-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: var(--radius-full);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ── Filter drawer ────────────────────────────────────────── */
+.erp-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  z-index: var(--z-modal);
+  animation: fadeIn var(--duration-fast) var(--ease-out);
+}
+
+.erp-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(360px, 100vw);
+  background: var(--card-bg);
+  border-left: 1px solid var(--card-border);
+  box-shadow: var(--shadow-xl);
+  z-index: var(--z-modal);
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight var(--duration-normal) var(--ease-out);
+}
+
+.erp-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.erp-drawer-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.erp-drawer-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.erp-drawer-close:hover { background: var(--bg-surface-3); }
+
+.erp-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.erp-drawer-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.erp-drawer-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.erp-drawer-footer {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.erp-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* Grid tracks default to min-width:auto, which lets a wide table's
+   intrinsic content width push the whole page wider instead of scrolling
+   inside its own box — this is what forces every child of the report-side
+   track to actually respect the track width. */
+.erp-layout > * { min-width: 0; }
+
+@media (max-width: 900px) {
+  .erp-layout { grid-template-columns: 1fr; }
+}
+
+.erp-sidebar {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  position: sticky;
+  top: var(--space-4);
+  max-height: calc(100vh - var(--space-8));
+  overflow-y: auto;
+}
+
+/* Sidebar list is the desktop picker; ReportPicker (a dropdown) takes over
+   below 900px — a 13-report vertical list eats the whole first screen on a
+   phone, a dropdown gets straight to the report. */
+@media (max-width: 900px) {
+  .erp-sidebar { display: none; }
+}
+
+/* ── Mobile report picker (dropdown) ─────────────────────── */
+.erp-picker-wrap {
+  display: none;
+  position: relative;
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 900px) {
+  .erp-picker-wrap { display: block; }
+}
+
+.erp-picker-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+.erp-picker-trigger-open { border-color: var(--border-strong); }
+
+.erp-picker-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.erp-picker-group-hint {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+.erp-picker-current {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.erp-picker-chevron {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+.erp-picker-chevron-open { transform: rotate(180deg); }
+
+.erp-picker-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: var(--z-dropdown);
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-2);
+  animation: slideIn var(--duration-fast) var(--ease-out);
+}
+
+.erp-picker-group-label {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+  padding: var(--space-2) var(--space-2) 4px;
+}
+
+.erp-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 9px var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.erp-picker-item:hover { background: var(--bg-surface-2); }
+
+.erp-picker-item-active {
+  background: var(--bg-surface-3);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.erp-picker-check { color: var(--text-primary); flex-shrink: 0; }
+
+.erp-sidebar-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: var(--space-2) var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-1);
+}
+
+.erp-sidebar-summary-value {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.erp-sidebar-summary-label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.erp-group-label {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+  padding: 0 var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.erp-group-icon {
+  display: inline-flex;
+  color: var(--text-tertiary);
+}
+
+.erp-report-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.erp-report-item:hover { background: var(--bg-surface-2); color: var(--text-primary); }
+
+.erp-report-item--active {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  font-weight: 600;
+}
+.erp-report-item--active:hover { background: var(--btn-primary-bg-hover); color: var(--btn-primary-text); }
+
+.erp-dl-btns { display: flex; gap: var(--space-2); }
+
+.erp-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.erp-kpi {
+  background: var(--bg-surface-2);
+  border-radius: var(--radius-md);
+  border-top: 3px solid var(--border-strong);
+  padding: var(--space-3) var(--space-4);
+  text-align: center;
+}
+.erp-kpi-0 { border-top-color: var(--edb-cat-1, var(--info)); }
+.erp-kpi-1 { border-top-color: var(--edb-cat-5, var(--success)); }
+.erp-kpi-2 { border-top-color: var(--edb-cat-4, var(--warning)); }
+.erp-kpi-3 { border-top-color: var(--edb-cat-8, var(--danger)); }
+
+.erp-kpi-value {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.erp-kpi-label {
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+/* ── In-report search ─────────────────────────────────────── */
+.erp-search-row {
+  position: relative;
+  margin-bottom: var(--space-4);
+}
+
+.erp-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.erp-search-input { padding-left: 34px; max-width: 360px; }
+
+/* ── Sortable table headers ───────────────────────────────── */
+.erp-th-sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.erp-th-sortable:hover { color: var(--text-primary); }
+
+.erp-sort-icon {
+  display: inline-block;
+  opacity: 0.4;
+  font-size: 10px;
+}
+.erp-sort-icon-active { opacity: 1; color: var(--text-primary); font-weight: 700; }
+
+.erp-table-wrap { max-height: 560px; overflow-y: auto; }
+
+.erp-table td { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

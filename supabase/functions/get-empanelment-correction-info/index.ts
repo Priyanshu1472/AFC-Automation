@@ -10,14 +10,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { checkAnonKey, getClientIP, checkRateLimit } from "../_shared/publicAccess.ts";
 
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
   if (!checkAnonKey(req)) return jsonRes(req, 401, { error: "Unauthorized" });
 
-  const rateResult = checkRateLimit(rateLimitStore, getClientIP(req));
+  const adminClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+  const rateResult = await checkRateLimit(adminClient, `correction-info:${getClientIP(req)}`);
   if (!rateResult.allowed) return jsonRes(req, 429, { error: `Too many attempts. Please wait ${rateResult.waitMinutes} minute(s) before trying again.` });
 
   let body: Record<string, unknown>;
@@ -29,8 +29,6 @@ serve(async (req) => {
 
   const appCode = typeof body.application_code === "string" ? body.application_code.trim() : "";
   if (!/^\d{5}$/.test(appCode)) return jsonRes(req, 400, { error: "Application code must be exactly 5 digits." });
-
-  const adminClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   const { data: application, error: appErr } = await adminClient
     .from("empanelment_applications")

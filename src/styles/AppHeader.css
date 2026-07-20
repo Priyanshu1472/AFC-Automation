@@ -58,6 +58,76 @@
   text-decoration: none;
 }
 
+/* ── Nav dropdown (Reports / Dashboard) ─────────────────────── */
+.nav-dropdown-wrap {
+  position: relative;
+}
+
+.nav-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.nav-dropdown-trigger:hover {
+  color: var(--text-primary);
+  background: var(--btn-ghost-bg-hover);
+}
+
+.nav-dropdown-trigger.active {
+  color: var(--text-primary);
+  font-weight: 700;
+  background: var(--bg-surface-3);
+}
+
+.nav-dropdown-chevron {
+  display: inline-flex;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+.nav-dropdown-chevron-open { transform: rotate(180deg); }
+
+.nav-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 180px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-1);
+  z-index: var(--z-dropdown);
+  animation: slideIn var(--duration-fast) var(--ease-out);
+}
+
+.nav-dropdown-item {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.nav-dropdown-item:hover {
+  color: var(--text-primary);
+  background: var(--btn-ghost-bg-hover);
+  text-decoration: none;
+}
+
+.nav-dropdown-item.active {
+  color: var(--text-primary);
+  font-weight: 700;
+  background: var(--bg-surface-3);
+}
+
 /* Divider — only meaningful inside the mobile drawer, hidden on desktop */
 .app-header-nav-divider {
   display: none;

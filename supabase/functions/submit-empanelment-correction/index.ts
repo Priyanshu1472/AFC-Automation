@@ -13,7 +13,6 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { checkAnonKey, getClientIP, checkRateLimit, clearRateLimit } from "../_shared/publicAccess.ts";
 import { notifyUser, notifyRole } from "../_shared/notify.ts";
 
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 const BUCKET = "ba-documents";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const PDF_MAGIC = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
@@ -49,11 +48,11 @@ serve(async (req) => {
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
   if (!checkAnonKey(req)) return jsonRes(req, 401, { error: "Unauthorized" });
 
-  const clientIP = getClientIP(req);
-  const rateResult = checkRateLimit(rateLimitStore, clientIP);
-  if (!rateResult.allowed) return jsonRes(req, 429, { error: `Too many attempts. Please wait ${rateResult.waitMinutes} minute(s) before trying again.` });
-
   const adminClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+  const clientIP = getClientIP(req);
+  const rateResult = await checkRateLimit(adminClient, `correction:${clientIP}`);
+  if (!rateResult.allowed) return jsonRes(req, 429, { error: `Too many attempts. Please wait ${rateResult.waitMinutes} minute(s) before trying again.` });
 
   try {
     let formData: FormData;
@@ -186,7 +185,7 @@ serve(async (req) => {
       await notifyRole(adminClient, "md", correctionPayload);
     }
 
-    clearRateLimit(rateLimitStore, clientIP);
+    clearRateLimit(adminClient, `correction:${clientIP}`);
     return jsonRes(req, 200, { success: true, corrected_count: submittedKeys.length });
   } catch (err) {
     console.error("Unhandled error:", err);

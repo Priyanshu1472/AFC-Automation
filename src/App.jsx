@@ -19,6 +19,8 @@ import BaFormPage from "./pages/empanelment/BaFormPage";
 import EmpanelmentListPage from "./pages/empanelment/EmpanelmentListPage";
 import ApplicationReviewPage from "./pages/empanelment/ApplicationReviewPage";
 import EmpanelmentCorrectionPage from "./pages/empanelment/EmpanelmentCorrectionPage";
+import EmpanelmentDashboardPage from "./pages/empanelment/EmpanelmentDashboardPage";
+import EmpanelmentReportsPage from "./pages/empanelment/EmpanelmentReportsPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES } from "./lib/roles";
 
@@ -120,6 +122,22 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={EMPANELMENT_ROLES}>
                       <ApplicationReviewPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/empanelment"
+                  element={
+                    <ProtectedRoute allowedRoles={EMPANELMENT_ROLES}>
+                      <EmpanelmentDashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/reports/empanelment"
+                  element={
+                    <ProtectedRoute allowedRoles={EMPANELMENT_ROLES}>
+                      <EmpanelmentReportsPage />
                     </ProtectedRoute>
                   }
                 />

@@ -4,6 +4,52 @@
    Breakpoint: 860px (the table has 7 columns and cramps early)
    ============================================================ */
 
+/* ── Filter row ─────────────────────────────────────────── */
+.ul-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+}
+
+.ul-search-input { flex: 1 1 220px; min-width: 180px; }
+.ul-filter-select { flex: 0 1 170px; min-width: 150px; }
+
+/* ── Grouped-by-team view (MD, "All Teams") ─────────────── */
+.ul-team-sep-row td {
+  padding: var(--space-3) var(--space-6);
+  background: var(--table-header-bg);
+  border-bottom: 1px solid var(--table-border);
+}
+
+.ul-grouped-table tbody:first-of-type .ul-team-sep-row td {
+  border-top: none;
+}
+
+.ul-team-sep-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ul-team-sep-count {
+  margin-left: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.ul-team-sep-row-mobile {
+  display: flex;
+  align-items: baseline;
+  padding: var(--space-3) var(--space-5);
+  background: var(--table-header-bg);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
 /* ── Desktop table ──────────────────────────────────────── */
 .ul-desktop-table {
   border: none;

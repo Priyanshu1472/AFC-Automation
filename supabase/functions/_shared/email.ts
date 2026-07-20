@@ -45,6 +45,7 @@ export async function sendResendEmail(opts: {
   to: string;
   subject: string;
   html: string;
+  attachments?: { filename: string; content: string }[]; // content is base64
 }): Promise<boolean> {
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!RESEND_API_KEY) {
@@ -60,6 +61,7 @@ export async function sendResendEmail(opts: {
       to: [opts.to],
       subject: opts.subject,
       html: opts.html,
+      ...(opts.attachments ? { attachments: opts.attachments } : {}),
     }),
   });
 
