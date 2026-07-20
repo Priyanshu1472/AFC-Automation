@@ -1,0 +1,119 @@
+.user-menu-wrap {
+  position: relative;
+}
+
+.user-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 180px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: none;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+}
+
+.user-menu-btn:hover,
+.user-menu-btn[aria-expanded="true"] {
+  background: var(--btn-ghost-bg-hover);
+  border-color: var(--border-default);
+}
+
+.user-menu-avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-surface-3);
+  border: 1px solid var(--border-default);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.user-menu-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.user-menu-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-menu-role {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 220px;
+  max-width: calc(100vw - 32px);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: calc(var(--z-modal) + 1);
+  animation: slideIn var(--duration-fast) var(--ease-out);
+  overflow: hidden;
+}
+
+.user-menu-panel-header {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-menu-panel-name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.user-menu-panel-role {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.user-menu-signout {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--danger);
+  background: none;
+  border: none;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.user-menu-signout:hover {
+  background: var(--danger-light);
+}
+
+/* UserMenu itself is hidden below 720px (see AppHeader.css's
+   .app-header-nav-utilities .user-menu-wrap rule) — the mobile drawer
+   shows profile info and Sign out directly instead, so there's no
+   mobile-specific layout needed here. */

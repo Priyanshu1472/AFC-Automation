@@ -301,6 +301,19 @@ serve(async (req) => {
       return jsonRes(req, 500, { error: "Failed to save user profile. Please try again." });
     }
 
+    // ── Notify the new user (best-effort — never fails account creation) ──
+    try {
+      await adminClient.from("notifications").insert({
+        user_id: newAuthUser.user.id,
+        title: "Welcome to AFC India Limited",
+        sub_text: `Your ${ROLE_LABELS[role] || role} account has been created. Sign in and set a new password to get started.`,
+        type: "account_created",
+        link: "/change-password",
+      });
+    } catch (notifErr) {
+      console.error("Failed to insert welcome notification:", (notifErr as Error).message);
+    }
+
     const siteUrl = Deno.env.get("SITE_URL") || "http://localhost:5173";
     const emailSent = await sendCredentialsEmail({
       to: normalizedEmail,

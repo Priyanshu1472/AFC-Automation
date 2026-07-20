@@ -21,35 +21,53 @@
   border-radius: var(--radius-sm);
 }
 
+/* ── Nav (holds links + utilities; becomes the mobile drawer below) ─── */
 .app-header-nav {
   display: flex;
-  gap: var(--space-4);
+  align-items: center;
+  flex: 1;
   margin-left: var(--space-6);
 }
 
-.app-header-nav a {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  padding: var(--space-2) 0;
+.app-header-nav-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
-.app-header-nav a:hover,
-.app-header-nav a.active {
+.app-header-nav-links a {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.app-header-nav-links a:hover {
   color: var(--text-primary);
+  background: var(--btn-ghost-bg-hover);
   text-decoration: none;
 }
 
-.app-header-right {
-  margin-left: auto;
+.app-header-nav-links a.active {
+  color: var(--text-primary);
+  font-weight: 700;
+  background: var(--bg-surface-3);
+  text-decoration: none;
+}
+
+/* Divider — only meaningful inside the mobile drawer, hidden on desktop */
+.app-header-nav-divider {
+  display: none;
+}
+
+.app-header-nav-utilities {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-}
-
-.app-header-user {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  white-space: nowrap;
+  margin-left: auto;
 }
 
 .app-header-menu-btn {
@@ -66,44 +84,168 @@
   flex-shrink: 0;
 }
 
+.app-header-backdrop {
+  display: none;
+}
+
+/* Mobile-drawer-only rows — hidden on desktop, revealed in the mobile
+   media query below. Desktop shows the equivalent info via UserMenu's
+   chip + dropdown instead. */
+.app-header-nav-profile-mobile,
+.app-header-nav-signout-mobile {
+  display: none;
+}
+
 /* ── Mobile ──────────────────────────────────────────── */
 @media (max-width: 720px) {
   .app-header {
-    flex-wrap: wrap;
     padding: var(--space-3) var(--space-4);
   }
 
-  .app-header-brand span {
-    display: none;
-  }
-
+  /* Right-side sliding drawer — holds links, then utilities (theme,
+     notifications, user menu) so the mobile top bar only ever shows the
+     logo and the hamburger button. */
   .app-header-nav {
-    display: none;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    flex: none;
+    width: min(320px, 85vw);
+    margin: 0;
+    padding: var(--space-16) var(--space-4) var(--space-5);
+    background: var(--card-bg);
+    border-left: 1px solid var(--card-border);
+    box-shadow: var(--shadow-xl);
     flex-direction: column;
-    gap: 0;
-    width: 100%;
-    margin: var(--space-3) 0 0;
-    order: 3;
+    align-items: stretch;
+    gap: var(--space-1);
+    transform: translateX(100%);
+    transition: transform var(--duration-normal) var(--ease-out);
+    z-index: var(--z-modal);
+    overflow-y: auto;
   }
 
   .app-header-nav.open {
-    display: flex;
+    transform: translateX(0);
   }
 
-  .app-header-nav a {
-    padding: var(--space-3) 0;
-    border-top: 1px solid var(--border-subtle);
+  .app-header-nav-links {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
   }
 
-  .app-header-right {
-    margin-left: auto;
+  .app-header-nav-links a {
+    padding: var(--space-3);
   }
 
-  .app-header-user {
+  .app-header-nav-links a.active {
+    border-left: 3px solid var(--border-brand);
+    padding-left: calc(var(--space-3) - 3px);
+  }
+
+  .app-header-nav-divider {
+    display: block;
+    height: 1px;
+    background: var(--border-subtle);
+    margin: var(--space-3) 0;
+  }
+
+  .app-header-nav-utilities {
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: 0;
+  }
+
+  /* Profile + Sign out already show directly (see below), so UserMenu's
+     click-to-reveal dropdown would just be a redundant second path to the
+     same info on mobile — desktop-only from this breakpoint down. */
+  .app-header-nav-utilities .user-menu-wrap {
     display: none;
+  }
+
+  .app-header-nav-profile-mobile {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0 var(--space-1) var(--space-3);
+    margin-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .app-header-nav-profile-avatar {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-surface-3);
+    border: 1px solid var(--border-default);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--text-secondary);
+  }
+
+  .app-header-nav-profile-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .app-header-nav-profile-name {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .app-header-nav-profile-role {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+  }
+
+  .app-header-nav-signout-mobile {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--danger);
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    padding: var(--space-3) var(--space-1);
+    margin-top: auto;
+    /* Pins to the bottom of the flex-column drawer regardless of how much
+       content (links, utilities) sits above it. */
+    cursor: pointer;
+  }
+
+  .app-header-nav-signout-mobile:hover {
+    background: var(--danger-light);
+  }
+
+  .app-header-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: var(--bg-overlay);
+    z-index: calc(var(--z-modal) - 1);
+    animation: fadeIn var(--duration-fast) var(--ease-out);
   }
 
   .app-header-menu-btn {
     display: inline-flex;
+    /* .app-header-nav is position:fixed on mobile (removed from normal
+       flow), so without this the brand and hamburger — the only two
+       remaining flow children of .app-header — sit flush together on the
+       left instead of spanning the header. */
+    margin-left: auto;
   }
 }

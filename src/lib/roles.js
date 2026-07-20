@@ -42,6 +42,19 @@ export const DGM_CREATABLE_ROLES = [
   "associate_consultant",
 ];
 
+// ─── Users page — nav visibility and the /users route's allowedRoles must
+// stay in sync, so both read from this single list. ──────────────────
+export const USERS_PAGE_ROLES = ["md", "dgm"];
+
+// ─── Audit log — MD only. ──────────────────────────────────────────
+export const AUDIT_LOG_ROLES = ["md"];
+
+// ─── Empanelment — visible to every staff role (not the business_associate
+// portal role, which has its own separate area). Only associate_consultant
+// can actually send a new one; who can act at each review stage is enforced
+// by the empanelment RLS policies, not by this nav-level list.
+export const EMPANELMENT_ROLES = Object.keys(ROLES).filter((r) => r !== "business_associate");
+
 // ─── Permissions ──────────────────────────────────────────────
 export const can = {
   manageAllUsers: (role) => role === "md",
@@ -51,6 +64,9 @@ export const can = {
   viewAllTeams: (role) => ["md", "cfo", "cs"].includes(role),
   viewOwnTeam: (role) =>
     ["dgm", "agm", "srm", "project_officer", "associate_consultant"].includes(role),
+
+  viewUsersPage: (role) => USERS_PAGE_ROLES.includes(role),
+  viewAuditLog: (role) => AUDIT_LOG_ROLES.includes(role),
 };
 
 export function isTeamUser(role) {

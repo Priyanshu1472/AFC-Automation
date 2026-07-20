@@ -1,8 +1,10 @@
-import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import Button from "../ui/Button";
+import { useEffect, useState } from "react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import ThemeToggle from "./ThemeToggle";
+import NotificationBell from "./NotificationBell";
+import UserMenu from "./UserMenu";
 import { useAuth } from "../../hooks/useAuth";
-import { ROLE_LABELS, can } from "../../lib/roles";
+import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, ROLE_LABELS } from "../../lib/roles";
 import { MenuIcon, CloseIcon } from "../icons";
 import logo from "../../images/Logo.png";
 import "../../styles/AppHeader.css";
@@ -10,19 +12,39 @@ import "../../styles/AppHeader.css";
 export default function AppHeader() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  function closeMenu() {
+    setMenuOpen(false);
+  }
+
+  // Mobile-drawer-only: Users tapping Sign out here shouldn't need to open
+  // UserMenu's dropdown first — see UserMenu (desktop-only from this
+  // breakpoint down) for the equivalent click-to-reveal action.
   async function handleSignOut() {
+    closeMenu();
     await signOut();
     navigate("/login", { replace: true });
   }
 
+  // Close on Escape — standard drawer a11y behavior.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKey(e) {
+      if (e.key === "Escape") closeMenu();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+
   if (!profile) return null;
 
-  const canSeeUsers = ["md", "dgm"].includes(profile.role);
-  const canSeeAuditLogs = can.viewAllTeams(profile.role);
-  const canSeeEmpanelment = ["associate_consultant", "project_officer", "dgm", "cfo", "cs", "md"].includes(profile.role);
+  const canSeeUsers = USERS_PAGE_ROLES.includes(profile.role);
+  const canSeeAuditLogs = AUDIT_LOG_ROLES.includes(profile.role);
+  const canSeeEmpanelment = EMPANELMENT_ROLES.includes(profile.role);
+  const navLinkClass = ({ isActive }) => (isActive ? "active" : "");
+  const roleLabel = ROLE_LABELS[profile.role] || profile.role;
+  const initial = (profile.full_name || "?").trim().charAt(0).toUpperCase();
 
   return (
     <header className="app-header">
@@ -31,43 +53,66 @@ export default function AppHeader() {
         <span className="font-display font-semibold text-primary">AFC India Limited</span>
       </Link>
 
-      <nav className={`app-header-nav${menuOpen ? " open" : ""}`}>
-        <Link to="/home" className={location.pathname === "/home" ? "active" : ""} onClick={() => setMenuOpen(false)}>
-          Home
-        </Link>
-        {canSeeUsers && (
-          <Link to="/users" className={location.pathname === "/users" ? "active" : ""} onClick={() => setMenuOpen(false)}>
-            Users
-          </Link>
-        )}
-        {canSeeAuditLogs && (
-          <Link to="/audit-logs" className={location.pathname === "/audit-logs" ? "active" : ""} onClick={() => setMenuOpen(false)}>
-            Audit Logs
-          </Link>
-        )}
-        {canSeeEmpanelment && (
-          <Link to="/empanelment" className={location.pathname.startsWith("/empanelment") ? "active" : ""} onClick={() => setMenuOpen(false)}>
-            Empanelment
-          </Link>
-        )}
+      {menuOpen && <div className="app-header-backdrop" onClick={closeMenu} aria-hidden="true" />}
+
+      <nav id="app-header-drawer" className={`app-header-nav${menuOpen ? " open" : ""}`}>
+        {/* Mobile-drawer-only — hidden on desktop via CSS, where the
+            equivalent info lives in UserMenu's chip + dropdown instead. */}
+        <div className="app-header-nav-profile-mobile">
+          <span className="app-header-nav-profile-avatar" aria-hidden="true">
+            {initial}
+          </span>
+          <span className="app-header-nav-profile-text">
+            <span className="app-header-nav-profile-name">{profile.full_name}</span>
+            <span className="app-header-nav-profile-role">{roleLabel}</span>
+          </span>
+        </div>
+
+        <div className="app-header-nav-links">
+          <NavLink to="/home" className={navLinkClass} onClick={closeMenu}>
+            Home
+          </NavLink>
+          {canSeeEmpanelment && (
+            <NavLink to="/empanelment" className={navLinkClass} onClick={closeMenu}>
+              Empanelment
+            </NavLink>
+          )}
+          {canSeeUsers && (
+            <NavLink to="/users" className={navLinkClass} onClick={closeMenu}>
+              Users
+            </NavLink>
+          )}
+          {canSeeAuditLogs && (
+            <NavLink to="/audit-logs" className={navLinkClass} onClick={closeMenu}>
+              Audit Logs
+            </NavLink>
+          )}
+        </div>
+
+        <div className="app-header-nav-divider" aria-hidden="true" />
+
+        <div className="app-header-nav-utilities">
+          <ThemeToggle />
+          <NotificationBell />
+          <UserMenu />
+        </div>
+
+        {/* Mobile-drawer-only — pinned to the bottom of the drawer so
+            signing out never requires opening UserMenu's dropdown first. */}
+        <button type="button" className="app-header-nav-signout-mobile" onClick={handleSignOut}>
+          Sign out
+        </button>
       </nav>
 
-      <div className="app-header-right">
-        <span className="app-header-user">
-          {profile.full_name} · {ROLE_LABELS[profile.role] || profile.role}
-        </span>
-        <Button variant="ghost" size="sm" onClick={handleSignOut}>
-          Sign out
-        </Button>
-        <button
-          className="app-header-menu-btn"
-          onClick={() => setMenuOpen((p) => !p)}
-          aria-label={menuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={menuOpen}
-        >
-          {menuOpen ? <CloseIcon /> : <MenuIcon />}
-        </button>
-      </div>
+      <button
+        className="app-header-menu-btn"
+        onClick={() => setMenuOpen((p) => !p)}
+        aria-label={menuOpen ? "Close menu" : "Open menu"}
+        aria-expanded={menuOpen}
+        aria-controls="app-header-drawer"
+      >
+        {menuOpen ? <CloseIcon /> : <MenuIcon />}
+      </button>
     </header>
   );
 }

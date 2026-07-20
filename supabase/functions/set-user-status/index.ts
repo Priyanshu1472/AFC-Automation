@@ -129,6 +129,21 @@ serve(async (req) => {
       comment: `${is_active ? "Activated" : "Deactivated"} ${target.full_name} (${target.email})`,
     });
 
+    // ── Notify the affected user (best-effort) ──
+    try {
+      await adminClient.from("notifications").insert({
+        user_id: target.id,
+        title: is_active ? "Your account has been activated" : "Your account has been deactivated",
+        sub_text: is_active
+          ? "You can now sign in to AFC India Limited."
+          : "Contact your DGM or administrator if you believe this is a mistake.",
+        type: is_active ? "account_activated" : "account_deactivated",
+        link: is_active ? "/home" : null,
+      });
+    } catch (notifErr) {
+      console.error("Failed to insert status-change notification:", (notifErr as Error).message);
+    }
+
     return jsonRes(req, 200, { success: true });
   } catch (err) {
     console.error("Unhandled error:", (err as Error).message);
