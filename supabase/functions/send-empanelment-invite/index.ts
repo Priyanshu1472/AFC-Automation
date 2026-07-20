@@ -7,6 +7,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
+import { notifyUser } from "../_shared/notify.ts";
 
 const ROLE_LABELS: Record<string, string> = {
   md: "Managing Director",
@@ -148,6 +149,21 @@ serve(async (req) => {
       action: emailSent ? "sent" : "sent_email_failed",
       comment: `Invitation sent to ${normalizedEmail}.`,
     });
+
+    await notifyUser(adminClient, po.id, {
+      title: "New empanelment invite sent",
+      sub_text: `An invite was sent to ${normalizedEmail}. You're assigned as the reviewing Project Officer.`,
+      type: "info",
+      link: `/empanelment/${app.id}`,
+    });
+    if (dgm?.id) {
+      await notifyUser(adminClient, dgm.id, {
+        title: "New empanelment invite sent",
+        sub_text: `An invite was sent to ${normalizedEmail} on your team.`,
+        type: "info",
+        link: `/empanelment/${app.id}`,
+      });
+    }
 
     return jsonRes(req, 200, { success: true, email_sent: emailSent, application_id: app.id });
   } catch (err) {

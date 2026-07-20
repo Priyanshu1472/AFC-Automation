@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AppHeader from "../components/shared/AppHeader";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
@@ -6,6 +7,8 @@ import PageLoader from "../components/ui/PageLoader";
 import { useAuth } from "../hooks/useAuth";
 import { ROLE_LABELS } from "../lib/roles";
 import { supabase } from "../lib/supabase";
+import { fetchPendingActionNotifications, subscribeToNotifications, markNotificationRead } from "../lib/notifications";
+import "../styles/HomePage.css";
 
 const STATUS_MAP = {
   sent: { label: "Sent", variant: "info" },
@@ -75,6 +78,67 @@ function BaStatusCard() {
   );
 }
 
+// Notifications the recipient hasn't acted on yet (type: "action_required",
+// unread) — a review stage waiting on this specific person, not a generic
+// activity feed. Clicking one marks it read and jumps to the application.
+function PendingActionsPanel() {
+  const { profile } = useAuth();
+  const navigate = useNavigate();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    let cancelled = false;
+
+    fetchPendingActionNotifications(profile.id)
+      .then((rows) => {
+        if (!cancelled) setItems(rows);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    const unsubscribe = subscribeToNotifications(profile.id, (row) => {
+      if (row.type === "action_required") setItems((prev) => [row, ...prev]);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [profile?.id]);
+
+  function handleClick(n) {
+    setItems((prev) => prev.filter((it) => it.id !== n.id));
+    markNotificationRead(n.id).catch(() => {});
+    if (n.link) navigate(n.link);
+  }
+
+  if (loading || items.length === 0) return null;
+
+  return (
+    <Card className="pending-actions-card">
+      <Card.Header
+        title="Needs your action"
+        subtitle={`${items.length} application${items.length !== 1 ? "s" : ""} waiting on you`}
+      />
+      <div className="pending-actions-list">
+        {items.map((n) => (
+          <button key={n.id} type="button" className="pending-action-item" onClick={() => handleClick(n)}>
+            <span className="pending-action-dot" aria-hidden="true" />
+            <span className="pending-action-body">
+              <span className="pending-action-title">{n.title}</span>
+              {n.sub_text && <span className="pending-action-sub">{n.sub_text}</span>}
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export default function HomePage() {
   const { profile } = useAuth();
   const isBa = profile?.role === "business_associate";
@@ -88,6 +152,7 @@ export default function HomePage() {
           <p>Signed in as {ROLE_LABELS[profile?.role] || profile?.role}.</p>
         </div>
         {isBa && <BaStatusCard />}
+        {!isBa && <PendingActionsPanel />}
       </div>
     </div>
   );

@@ -82,6 +82,11 @@
   color: var(--text-secondary);
   cursor: pointer;
   flex-shrink: 0;
+  position: relative;
+  /* Above the backdrop (z-modal - 1) and the drawer (z-modal) — otherwise
+     the backdrop visually covers this button once the drawer opens, and
+     the close (X) icon becomes invisible even though it's still there. */
+  z-index: calc(var(--z-modal) + 2);
 }
 
 .app-header-backdrop {
@@ -139,11 +144,6 @@
 
   .app-header-nav-links a {
     padding: var(--space-3);
-  }
-
-  .app-header-nav-links a.active {
-    border-left: 3px solid var(--border-brand);
-    padding-left: calc(var(--space-3) - 3px);
   }
 
   .app-header-nav-divider {

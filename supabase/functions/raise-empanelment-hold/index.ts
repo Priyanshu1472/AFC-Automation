@@ -9,6 +9,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 import { isValidFieldKey, labelForFieldKey } from "../_shared/empanelmentFields.ts";
+import { notifyUser } from "../_shared/notify.ts";
 
 const ALLOWED_STATUS_BY_ROLE: Record<string, string[]> = {
   project_officer: ["po_review", "po_final_review"],
@@ -47,7 +48,7 @@ serve(async (req) => {
 
   const { data: app, error: appErr } = await adminClient
     .from("empanelment_applications")
-    .select("id, status, ba_email, team, project_officer_id")
+    .select("id, status, ba_email, team, project_officer_id, dgm_id, sent_by")
     .eq("id", application_id)
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
@@ -105,6 +106,18 @@ serve(async (req) => {
       action: "hold_raised",
       comment: `${flagRows.length} item(s) flagged: ${flagRows.map((f) => f.field_label).join(", ")}`,
     });
+
+    // Let the rest of the pipeline know review is paused — informational,
+    // not action_required (the next step is the BA's, via their own
+    // public correction form, not anything in-app for staff).
+    const holdPayload = {
+      title: "Compliance hold raised",
+      sub_text: `${flagRows.length} item(s) flagged on ${orgName}'s application. Review is paused until the BA submits a correction.`,
+      type: "info",
+      link: `/empanelment/${application_id}`,
+    };
+    const holdRecipients = [app.sent_by, caller.role !== "project_officer" ? app.project_officer_id : null, caller.role !== "dgm" ? app.dgm_id : null];
+    await Promise.all(holdRecipients.map((id) => notifyUser(adminClient, id, holdPayload)));
 
     return jsonRes(req, 200, { success: true, status: "on_hold", flags_count: flagRows.length, email_sent: emailSent });
   } catch (err) {

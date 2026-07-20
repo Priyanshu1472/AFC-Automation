@@ -9,6 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { checkAnonKey, getClientIP, checkRateLimit, clearRateLimit } from "../_shared/publicAccess.ts";
+import { notifyUser } from "../_shared/notify.ts";
 
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
@@ -121,7 +122,7 @@ serve(async (req) => {
 
     const { data: application, error: appErr } = await adminClient
       .from("empanelment_applications")
-      .select("id, status")
+      .select("id, status, project_officer_id")
       .eq("application_code", appCode)
       .maybeSingle();
     if (appErr) throw new Error("Database error. Please try again.");
@@ -274,6 +275,13 @@ serve(async (req) => {
       actor_role: "ba",
       action: "ba_filled",
       comment: `BA form submitted by ${get("orgName")} (${email}). Documents uploaded: ${uploadedDocs.length}.`,
+    });
+
+    await notifyUser(adminClient, application.project_officer_id, {
+      title: "New empanelment form submitted",
+      sub_text: `${get("orgName")} has submitted their empanelment application. Please review.`,
+      type: "action_required",
+      link: `/empanelment/${application.id}`,
     });
 
     clearRateLimit(rateLimitStore, clientIP);

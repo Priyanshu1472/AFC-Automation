@@ -1,0 +1,55 @@
+.pending-actions-card {
+  margin-top: var(--space-4);
+  border-color: var(--warning);
+}
+
+.pending-actions-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.pending-action-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  text-align: left;
+  padding: var(--space-3) var(--space-5);
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  background: none;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.pending-action-item:hover {
+  background: var(--bg-surface-2);
+}
+
+.pending-action-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.pending-action-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pending-action-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pending-action-sub {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}

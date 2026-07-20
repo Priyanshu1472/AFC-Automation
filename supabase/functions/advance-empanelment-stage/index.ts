@@ -9,6 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
+import { notifyUser, notifyRole, notifyTeam } from "../_shared/notify.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -177,6 +178,14 @@ serve(async (req) => {
         if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "cfo_cs_review", po_comment: trimmedComment }).eq("id", app.id);
         await logActivity(adminClient, app.id, caller.id, caller.role, "po_forwarded", trimmedComment);
+        const forwardPayload = {
+          title: "Empanelment application awaiting your review",
+          sub_text: `${orgName}'s application was forwarded by the Project Officer.`,
+          type: "action_required",
+          link: `/empanelment/${app.id}`,
+        };
+        await notifyRole(adminClient, "cfo", forwardPayload);
+        await notifyRole(adminClient, "cs", forwardPayload);
         return jsonRes(req, 200, { success: true, status: "cfo_cs_review" });
       }
 
@@ -195,6 +204,14 @@ serve(async (req) => {
 
         await adminClient.from("empanelment_applications").update(update).eq("id", app.id);
         await logActivity(adminClient, app.id, caller.id, caller.role, isCfo ? "cfo_reviewed" : "cs_reviewed", trimmedComment);
+        if (otherDone) {
+          await notifyUser(adminClient, app.project_officer_id, {
+            title: "Empanelment application awaiting your review",
+            sub_text: `${orgName}'s application cleared CFO and CS review. Please give it a final look before forwarding to the DGM.`,
+            type: "action_required",
+            link: `/empanelment/${app.id}`,
+          });
+        }
         return jsonRes(req, 200, { success: true, status: otherDone ? "po_final_review" : "cfo_cs_review", forwarded: !!otherDone });
       }
 
@@ -209,6 +226,14 @@ serve(async (req) => {
           cs_comment: null,
         }).eq("id", app.id);
         await logActivity(adminClient, app.id, caller.id, caller.role, "po_resent_cfo_cs", trimmedComment || "Sent back to CFO and CS for a fresh review.");
+        const resendPayload = {
+          title: "Empanelment application sent back for review",
+          sub_text: `${orgName}'s application was sent back by the Project Officer for a fresh look.`,
+          type: "action_required",
+          link: `/empanelment/${app.id}`,
+        };
+        await notifyRole(adminClient, "cfo", resendPayload);
+        await notifyRole(adminClient, "cs", resendPayload);
         return jsonRes(req, 200, { success: true, status: "cfo_cs_review" });
       }
 
@@ -217,6 +242,17 @@ serve(async (req) => {
         if (app.status !== "po_final_review") return badState("po_final_review");
         await adminClient.from("empanelment_applications").update({ status: "dgm_review", po_final_comment: trimmedComment || null }).eq("id", app.id);
         await logActivity(adminClient, app.id, caller.id, caller.role, "po_final_forwarded", trimmedComment || "Forwarded to DGM.");
+        const dgmPayload = {
+          title: "Empanelment application awaiting your review",
+          sub_text: `${orgName}'s application was forwarded by the Project Officer.`,
+          type: "action_required",
+          link: `/empanelment/${app.id}`,
+        };
+        if (app.dgm_id) {
+          await notifyUser(adminClient, app.dgm_id, dgmPayload);
+        } else {
+          await notifyRole(adminClient, "dgm", dgmPayload, app.team);
+        }
         return jsonRes(req, 200, { success: true, status: "dgm_review" });
       }
 
@@ -226,6 +262,12 @@ serve(async (req) => {
         if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "md_review", dgm_comment: trimmedComment }).eq("id", app.id);
         await logActivity(adminClient, app.id, caller.id, caller.role, "dgm_recommended", trimmedComment);
+        await notifyRole(adminClient, "md", {
+          title: "Empanelment application awaiting your decision",
+          sub_text: `${orgName}'s application was recommended by the DGM and is ready for a final decision.`,
+          type: "action_required",
+          link: `/empanelment/${app.id}`,
+        });
         return jsonRes(req, 200, { success: true, status: "md_review" });
       }
 
@@ -241,6 +283,12 @@ serve(async (req) => {
         await adminClient.from("empanelment_applications").update({ status: "rejected", [field]: trimmedComment, decided_at: new Date().toISOString() }).eq("id", app.id);
         const emailSent = await sendDecisionMail(orgName, app.ba_email, false, trimmedComment);
         await logActivity(adminClient, app.id, caller.id, caller.role, isDgm ? "dgm_rejected" : "md_rejected", trimmedComment);
+        await notifyUser(adminClient, app.sent_by, {
+          title: "Empanelment application rejected",
+          sub_text: `${orgName}'s application was rejected by ${isDgm ? "the DGM" : "the MD"}.`,
+          type: "info",
+          link: `/empanelment/${app.id}`,
+        });
         return jsonRes(req, 200, { success: true, status: "rejected", email_sent: emailSent });
       }
 
@@ -253,6 +301,14 @@ serve(async (req) => {
         const credentials = await provisionBaAccount(adminClient, app.id, app.ba_email, orgName, baData?.contact_person || null);
         const emailSent = await sendDecisionMail(orgName, app.ba_email, true, trimmedComment, credentials);
         await logActivity(adminClient, app.id, caller.id, caller.role, emailSent ? "md_accepted" : "md_accepted_email_failed", trimmedComment);
+        const acceptedPayload = {
+          title: "Empanelment application accepted",
+          sub_text: `${orgName}'s application was accepted by the MD.`,
+          type: "info",
+          link: `/empanelment/${app.id}`,
+        };
+        await notifyUser(adminClient, app.sent_by, acceptedPayload);
+        await notifyTeam(adminClient, app.team, acceptedPayload, caller.id);
         return jsonRes(req, 200, { success: true, status: "accepted", email_sent: emailSent, ba_account_created: !!credentials });
       }
 

@@ -11,6 +11,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { checkAnonKey, getClientIP, checkRateLimit, clearRateLimit } from "../_shared/publicAccess.ts";
+import { notifyUser, notifyRole } from "../_shared/notify.ts";
 
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 const BUCKET = "ba-documents";
@@ -67,12 +68,12 @@ serve(async (req) => {
 
     const { data: application, error: appErr } = await adminClient
       .from("empanelment_applications")
-      .select("id, status, hold_origin_status")
+      .select("id, status, hold_origin_status, team, project_officer_id, dgm_id")
       .eq("application_code", appCode)
       .maybeSingle();
     if (appErr) throw new Error("Database error. Please try again.");
     if (!application) return jsonRes(req, 400, { error: "Invalid application code. Please check and try again." });
-    if (application.status !== "on_hold") return jsonRes(req, 400, { error: `This application is in "${application.status}" status — there is nothing pending correction.` });
+    if (application.status !== "on_hold") return jsonRes(req, 400, { error: `there is nothing pending correction.` });
 
     const { data: openFlags, error: flagsErr } = await adminClient
       .from("compliance_flags")
@@ -168,6 +169,22 @@ serve(async (req) => {
       action: "ba_corrected",
       comment: `Corrected: ${submittedKeys.join(", ")}.`,
     });
+
+    // Notify whoever's turn it is to act now that review has resumed.
+    const correctionPayload = {
+      title: "Correction submitted — review resumed",
+      sub_text: `The flagged item(s) have been corrected. Please continue reviewing this application.`,
+      type: "action_required",
+      link: `/empanelment/${application.id}`,
+    };
+    if (resumeStatus === "po_review" || resumeStatus === "po_final_review") {
+      await notifyUser(adminClient, application.project_officer_id, correctionPayload);
+    } else if (resumeStatus === "dgm_review") {
+      if (application.dgm_id) await notifyUser(adminClient, application.dgm_id, correctionPayload);
+      else await notifyRole(adminClient, "dgm", correctionPayload, application.team);
+    } else if (resumeStatus === "md_review") {
+      await notifyRole(adminClient, "md", correctionPayload);
+    }
 
     clearRateLimit(rateLimitStore, clientIP);
     return jsonRes(req, 200, { success: true, corrected_count: submittedKeys.length });
