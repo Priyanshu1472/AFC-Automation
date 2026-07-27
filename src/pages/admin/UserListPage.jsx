@@ -13,6 +13,7 @@ import Select from "../../components/ui/Select";
 import PageLoader from "../../components/ui/PageLoader";
 import Tooltip from "../../components/ui/Tooltip";
 import FieldTooltip from "../../components/FieldTooltip";
+import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import "../../styles/UserListPage.css";
 
 const ROLE_VARIANT = {
@@ -24,6 +25,7 @@ const ROLE_VARIANT = {
   srm: "neutral",
   project_officer: "warning",
   associate_consultant: "info",
+  admin: "danger",
 };
 
 const PAGE_SIZE = 25;
@@ -51,6 +53,17 @@ function ToggleButton({ user, isSelf, togglingId, onToggle }) {
   );
 }
 
+function EditButton({ user, isSelf, onEdit }) {
+  if (isSelf) return null;
+  return (
+    <Tooltip text="Fix a mistake on this account — name, team, office, or (Admin/MD only) role.">
+      <Button variant="secondary" size="sm" onClick={() => onEdit(user)}>
+        Edit
+      </Button>
+    </Tooltip>
+  );
+}
+
 export default function UserListPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -63,6 +76,7 @@ export default function UserListPage() {
   const [teamFilter, setTeamFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
   const [page, setPage] = useState(0);
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   const canManage = can.manageAllUsers(profile?.role) || can.manageTeamUsers(profile?.role);
   const canCreate = can.createUsers(profile?.role);
@@ -158,7 +172,8 @@ export default function UserListPage() {
     setRoleFilter(value);
     setPage(0);
   }
-  const hasActiveFilters = teamFilter !== "all" || roleFilter !== "all";
+  const activeFilterCount = [teamFilter !== "all", roleFilter !== "all"].filter(Boolean).length;
+  const hasActiveFilters = activeFilterCount > 0;
   function clearFilters() {
     setTeamFilter("all");
     setRoleFilter("all");
@@ -186,6 +201,10 @@ export default function UserListPage() {
     } finally {
       setTogglingId(null);
     }
+  }
+
+  function handleEdit(user) {
+    navigate(`/users/${user.id}/edit`);
   }
 
   const from = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
@@ -228,15 +247,7 @@ export default function UserListPage() {
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
             />
-            {can.viewAllTeams(profile?.role) && (
-              <Select className="ul-filter-select" options={teamFilterOptions} value={teamFilter} onChange={handleTeamFilterChange} placeholder="All Teams" />
-            )}
-            <Select className="ul-filter-select" options={roleFilterOptions} value={roleFilter} onChange={handleRoleFilterChange} placeholder="All Roles" />
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                Clear
-              </Button>
-            )}
+            <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={activeFilterCount} />
           </Card.Body>
 
           {users.length === 0 ? (
@@ -274,7 +285,10 @@ export default function UserListPage() {
                           <td><Badge variant={u.is_active ? "success" : "danger"} dot>{u.is_active ? "Active" : "Inactive"}</Badge></td>
                           {canManage && (
                             <td>
-                              <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
+                              <div style={{ display: "flex", gap: 8 }}>
+                                <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
+                                <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
+                              </div>
                             </td>
                           )}
                         </tr>
@@ -305,7 +319,8 @@ export default function UserListPage() {
                           {u.office && <span className="text-xs text-tertiary">{u.office.charAt(0).toUpperCase() + u.office.slice(1)}</span>}
                         </div>
                         {canManage && (
-                          <div className="ul-mobile-card-actions">
+                          <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }}>
+                            <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                             <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
                           </div>
                         )}
@@ -356,7 +371,10 @@ export default function UserListPage() {
                         </td>
                         {canManage && (
                           <td>
-                            <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
+                              <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -384,7 +402,8 @@ export default function UserListPage() {
                       {u.team && <span className="text-xs text-tertiary">{u.team}</span>}
                     </div>
                     {canManage && (
-                      <div className="ul-mobile-card-actions">
+                      <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }}>
+                        <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                         <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
                       </div>
                     )}
@@ -416,6 +435,17 @@ export default function UserListPage() {
           )}
         </Card>
       </div>
+
+      <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={clearFilters}>
+        {can.viewAllTeams(profile?.role) && (
+          <FilterField label="Team">
+            <Select options={teamFilterOptions} value={teamFilter} onChange={handleTeamFilterChange} placeholder="All Teams" />
+          </FilterField>
+        )}
+        <FilterField label="Role">
+          <Select options={roleFilterOptions} value={roleFilter} onChange={handleRoleFilterChange} placeholder="All Roles" />
+        </FilterField>
+      </FilterDrawer>
     </div>
   );
 }

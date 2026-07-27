@@ -1,0 +1,231 @@
+/* ============================================================
+   AddProject.css  —  Knowledge Repository: Add / Edit Project
+   Shared by AddProject.jsx and EditProject.jsx
+   All values use App.css tokens. Zero hardcoded colours.
+   ============================================================ */
+
+.add-project-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding-bottom: var(--space-12);
+  width: 100%;
+}
+
+/* ── Form header ────────────────────────────────────────────── */
+.form-header {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.form-header h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+/* ── Form grid ──────────────────────────────────────────────── */
+.ap-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-5);
+}
+
+.ap-field           { display: flex; flex-direction: column; gap: var(--space-2); }
+.ap-field.full-width { grid-column: 1 / -1; }
+
+.ap-field label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+
+.ap-field input,
+.ap-field select,
+.ap-field textarea {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--input-text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  outline: none;
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow    var(--duration-fast) var(--ease-out);
+}
+
+.ap-field input::placeholder,
+.ap-field textarea::placeholder { color: var(--input-placeholder); }
+
+.ap-field input:focus,
+.ap-field select:focus,
+.ap-field textarea:focus {
+  border-color: var(--input-border-focus);
+  box-shadow: var(--input-shadow-focus);
+  background: var(--input-bg-focus);
+}
+
+.ap-field textarea {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.6;
+}
+
+.ap-field select {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236da8ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 36px;
+}
+
+/* ── Date row ───────────────────────────────────────────────── */
+.ap-date-row { display: flex; gap: var(--space-4); flex-wrap: wrap; }
+
+.ap-date-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 140px;
+}
+
+.ap-date-row label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+
+.ap-date-row input {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--input-text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  outline: none;
+  width: 100%;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow    var(--duration-fast) var(--ease-out);
+}
+.ap-date-row input:focus {
+  border-color: var(--input-border-focus);
+  box-shadow: var(--input-shadow-focus);
+}
+
+/* ── Keyword / Document sections ────────────────────────────── */
+.ap-keyword-section {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ap-kw-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.ap-section-label {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+.ap-section-hint { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+/* ── Save button ────────────────────────────────────────────── */
+.ap-btn-save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--btn-primary-text);
+  background: var(--btn-primary-bg);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 11px 28px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(77,148,255,0.3);
+  transition: all var(--duration-fast) var(--ease-out);
+  align-self: flex-start;
+}
+.ap-btn-save:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  box-shadow: 0 2px 8px rgba(77,148,255,0.35);
+  transform: translateY(-1px);
+}
+.ap-btn-save:active:not(:disabled) { transform: translateY(0); }
+.ap-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Save success ───────────────────────────────────────────── */
+.ap-save-success {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--success-dark);
+  background: var(--success-light);
+  border: 1px solid rgba(16,185,129,0.25);
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  align-self: flex-start;
+}
+
+/* ── Loading ────────────────────────────────────────────────── */
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16) var(--space-8);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .ap-form-grid         { grid-template-columns: 1fr; }
+  .ap-field.full-width  { grid-column: 1; }
+  .ap-date-row          { flex-direction: column; }
+}
+
+/* ── Cancel button ──────────────────────────────────────────── */
+.ap-btn-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 11px 20px;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.ap-btn-cancel:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text-primary); }
+.ap-btn-cancel:disabled { opacity: 0.5; cursor: not-allowed; }

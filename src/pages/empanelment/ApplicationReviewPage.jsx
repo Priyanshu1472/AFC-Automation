@@ -10,6 +10,7 @@ import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import ComplianceHoldModal from "./ComplianceHoldModal";
+import OtpVerifyModal from "./OtpVerifyModal";
 import "../../styles/ApplicationReviewPage.css";
 
 const STATUS_FLOW = [
@@ -94,66 +95,19 @@ function ProgressStepper({ currentStatus }) {
   );
 }
 
-function RejectModal({ onConfirm, onClose, loading, orgName, baEmail }) {
+// MD-only now (DGM can no longer reject — see the removed dgm_reject
+// button/handler below). No preview step: the OTP modal that follows this
+// one is the actual safety gate, so this is just remarks capture.
+function RejectModal({ onConfirm, onClose }) {
   const [remark, setRemark] = useState("");
-  const [showPreview, setShowPreview] = useState(false);
   return (
-    <div className="ar-modal-backdrop" onClick={() => !loading && onClose()}>
+    <div className="ar-modal-backdrop" onClick={() => onClose()}>
       <div className="ar-modal ar-modal-lg" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        {!showPreview ? (
-          <>
-            <div className="ar-modal-header"><h3 className="ar-modal-title">Reject Application</h3><p className="ar-modal-desc">Write the rejection remarks. You will see a preview of the email before it is sent.</p></div>
-            <div className="ar-field"><label className="ar-label">Rejection Remarks <span className="ar-required">*</span></label><textarea className="input" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="Write the reason for rejection clearly..." rows={4} /></div>
-            <div className="ar-modal-actions">
-              <Button variant="danger" block disabled={!remark.trim()} onClick={() => setShowPreview(true)} icon={<ArrowRightIcon />}>Preview Email</Button>
-              <Button variant="secondary" block onClick={onClose}>Cancel</Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="ar-modal-header"><h3 className="ar-modal-title">Email Preview</h3><p className="ar-modal-desc">Review the rejection email carefully before sending to <strong>{baEmail}</strong>.</p></div>
-            <div className="ar-email-preview">
-              <div className="ar-email-preview-header">
-                <span className="ar-email-preview-field"><strong>To:</strong> {baEmail}</span>
-                <span className="ar-email-preview-field"><strong>Subject:</strong> Empanelment Application Status — AFC India Limited</span>
-              </div>
-              <div className="ar-email-preview-body">
-                <p>Dear Sir / Ma&apos;am,</p>
-                <p>We regret to inform you that the empanelment application submitted by <strong>{orgName || baEmail}</strong> has been <strong style={{ color: "#dc2626" }}>rejected</strong>.</p>
-                <div className="ar-email-preview-remark"><span className="ar-email-preview-remark-label">Remarks from AFC India Limited</span><p>{remark}</p></div>
-                <p>For queries, contact us at <strong>afc@afcindia.org.in</strong>.</p>
-              </div>
-            </div>
-            <div className="ar-modal-actions">
-              <Button variant="danger" block loading={loading} onClick={() => onConfirm(remark)} icon={<XIcon />}>{loading ? "Sending & Rejecting..." : "Confirm — Send Rejection Email"}</Button>
-              <Button variant="secondary" block disabled={loading} onClick={() => setShowPreview(false)} icon={<ArrowLeftIcon />}>Edit Remarks</Button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AcceptPreviewModal({ onConfirm, onClose, loading, orgName, baEmail, remarks }) {
-  return (
-    <div className="ar-modal-backdrop" onClick={() => !loading && onClose()}>
-      <div className="ar-modal ar-modal-lg" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div className="ar-modal-header"><h3 className="ar-modal-title" style={{ color: "var(--success-dark)" }}>Email Preview — Empanelment Approval</h3><p className="ar-modal-desc">Review the approval email that will be sent to <strong>{baEmail}</strong>.</p></div>
-        <div className="ar-email-preview">
-          <div className="ar-email-preview-header">
-            <span className="ar-email-preview-field"><strong>To:</strong> {baEmail}</span>
-            <span className="ar-email-preview-field"><strong>Subject:</strong> Empanelment Approved — AFC India Limited</span>
-          </div>
-          <div className="ar-email-preview-body">
-            <p>Dear Sir / Ma&apos;am,</p>
-            <p>We are pleased to inform you that the empanelment application submitted by <strong>{orgName || baEmail}</strong> has been <strong style={{ color: "var(--success-dark)" }}>approved</strong>.</p>
-            {remarks && <div className="ar-email-preview-remark ar-email-preview-remark-success"><span className="ar-email-preview-remark-label">MD Remarks</span><p>{remarks}</p></div>}
-          </div>
-        </div>
+        <div className="ar-modal-header"><h3 className="ar-modal-title">Reject Application</h3><p className="ar-modal-desc">Write the rejection remarks — you'll be asked to verify with a one-time code emailed to you before this is sent.</p></div>
+        <div className="ar-field"><label className="ar-label">Rejection Remarks <span className="ar-required">*</span></label><textarea className="input" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="Write the reason for rejection clearly..." rows={4} /></div>
         <div className="ar-modal-actions">
-          <Button variant="primary" block loading={loading} onClick={onConfirm} icon={<CheckIcon />}>{loading ? "Processing..." : "Confirm — Send Approval Email"}</Button>
-          <Button variant="secondary" block disabled={loading} onClick={onClose} icon={<ArrowLeftIcon />}>Go Back</Button>
+          <Button variant="danger" block disabled={!remark.trim()} onClick={() => onConfirm(remark.trim())} icon={<XIcon />}>Reject Application</Button>
+          <Button variant="secondary" block onClick={onClose}>Cancel</Button>
         </div>
       </div>
     </div>
@@ -244,10 +198,14 @@ export default function ApplicationReviewPage() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [showReject, setShowReject] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
-  const [showAcceptPreview, setShowAcceptPreview] = useState(false);
   const [showHoldModal, setShowHoldModal] = useState(false);
   const [openFlags, setOpenFlags] = useState([]);
-  const [provisionalLoading, setProvisionalLoading] = useState(false);
+  // MD accept/reject and the DGM's provisional letter all go through an
+  // OTP-verify step before the real action (and its email) fires.
+  const [showAcceptOtp, setShowAcceptOtp] = useState(false);
+  const [rejectRemark, setRejectRemark] = useState("");
+  const [showRejectOtp, setShowRejectOtp] = useState(false);
+  const [showProvisionalOtp, setShowProvisionalOtp] = useState(false);
 
   const fetchApp = useCallback(async () => {
     const { data: application } = await supabase
@@ -346,34 +304,21 @@ export default function ApplicationReviewPage() {
     const data = await runAction("md_send_back");
     if (data) { showBanner("Sent back to DGM."); setComment(""); fetchApp(); }
   }
-  async function handleSendProvisional() {
-    setProvisionalLoading(true);
-    setBanner(null);
-    try {
-      const { data, error } = await supabase.functions.invoke("send-provisional-letter", { body: { application_id: id } });
-      if (error) { showBanner(await extractFunctionErrorMessage(error, "Failed to send provisional letter."), "danger"); return; }
-      if (!data?.success) { showBanner(data?.error || "Failed to send provisional letter.", "danger"); return; }
-      showBanner(`Provisional letter sent (Ref: ${data.ref}).`);
-      fetchApp();
-    } catch (err) {
-      showBanner(err.message || "Something went wrong.", "danger");
-    } finally {
-      setProvisionalLoading(false);
-    }
+  function handleAcceptOtpSuccess() {
+    setShowAcceptOtp(false);
+    navigate("/empanelment");
   }
-  async function handleDGMReject(remark) {
-    setComment(remark);
-    const data = await runAction("dgm_reject", { comment: remark.trim() });
-    if (data) { showBanner(`Application rejected. Rejection email ${data.email_sent ? "sent to" : "failed to send to"} BA.`, data.email_sent ? "success" : "warning"); setShowReject(false); fetchApp(); }
+  function handleRejectOtpSuccess(data) {
+    setShowRejectOtp(false);
+    showBanner(`Application rejected. Rejection email ${data.email_sent ? "sent to" : "failed to send to"} BA.`, data.email_sent ? "success" : "warning");
+    setComment("");
+    setRejectRemark("");
+    fetchApp();
   }
-  async function handleMDReject(remark) {
-    setComment(remark);
-    const data = await runAction("md_reject", { comment: remark.trim() });
-    if (data) { showBanner(`Application rejected. Rejection email ${data.email_sent ? "sent to" : "failed to send to"} BA.`, data.email_sent ? "success" : "warning"); setShowReject(false); fetchApp(); }
-  }
-  async function handleMDAccept() {
-    const data = await runAction("md_accept");
-    if (data) { setShowAcceptPreview(false); navigate("/empanelment"); }
+  function handleProvisionalOtpSuccess(data) {
+    setShowProvisionalOtp(false);
+    showBanner(`Provisional letter sent (Ref: ${data.ref}).`);
+    fetchApp();
   }
 
   function canAct() {
@@ -568,7 +513,6 @@ export default function ApplicationReviewPage() {
                       </div>
                       <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleDGMRecommend}>{actionLoading ? "Sending..." : "Recommend to Managing Director"}</Button>
                       <Button variant="secondary" block disabled={actionLoading} icon={<ArrowLeftIcon />} onClick={handleDGMSendBack}>Send Back to Project Officer</Button>
-                      <Button variant="danger" block disabled={actionLoading} icon={<XIcon />} onClick={() => setShowReject(true)}>Reject Application</Button>
                     </>)}
 
                     {role === "md" && (<>
@@ -576,9 +520,9 @@ export default function ApplicationReviewPage() {
                         <label className="ar-label">Final Remarks <span className="ar-required">*</span></label>
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your remarks along with the final decision..." rows={4} />
                       </div>
-                      <Button variant="primary" block disabled={!comment.trim() || actionLoading} icon={<CheckIcon />} onClick={() => setShowAcceptPreview(true)}>Preview Approval Email</Button>
+                      <Button variant="primary" block disabled={!comment.trim() || actionLoading} icon={<CheckIcon />} onClick={() => setShowAcceptOtp(true)}>Accept</Button>
                       <Button variant="secondary" block disabled={actionLoading} icon={<ArrowLeftIcon />} onClick={handleMDSendBack}>Send Back to DGM</Button>
-                      <Button variant="danger" block disabled={actionLoading} icon={<XIcon />} onClick={() => setShowReject(true)}>Preview Rejection Email</Button>
+                      <Button variant="danger" block disabled={actionLoading} icon={<XIcon />} onClick={() => setShowReject(true)}>Reject</Button>
                     </>)}
 
                     {["project_officer", "dgm", "md"].includes(role) && (
@@ -598,8 +542,8 @@ export default function ApplicationReviewPage() {
                     <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
                       A non-final, provisional empanelment letter emailed to the BA — separate from the MD&apos;s final acceptance email.
                     </p>
-                    <Button variant="secondary" block loading={provisionalLoading} disabled={app.provisional_letter_sent} icon={<DocumentIcon />} onClick={handleSendProvisional}>
-                      {app.provisional_letter_sent ? "Provisional Letter Already Sent" : provisionalLoading ? "Sending..." : "Send Provisional Letter"}
+                    <Button variant="secondary" block disabled={app.provisional_letter_sent} icon={<DocumentIcon />} onClick={() => setShowProvisionalOtp(true)}>
+                      {app.provisional_letter_sent ? "Provisional Letter Already Sent" : "Send Provisional Letter"}
                     </Button>
                   </Card.Body>
                 </Card>
@@ -646,8 +590,21 @@ export default function ApplicationReviewPage() {
         </div>
       </div>
 
-      {showReject && <RejectModal onConfirm={role === "md" ? handleMDReject : handleDGMReject} onClose={() => setShowReject(false)} loading={actionLoading} orgName={baData?.org_name || app?.ba_email} baEmail={app?.ba_email} />}
-      {showAcceptPreview && <AcceptPreviewModal onConfirm={handleMDAccept} onClose={() => setShowAcceptPreview(false)} loading={actionLoading} orgName={baData?.org_name || app?.ba_email} baEmail={app?.ba_email} remarks={comment} />}
+      {showReject && (
+        <RejectModal
+          onConfirm={(remark) => { setRejectRemark(remark); setShowReject(false); setShowRejectOtp(true); }}
+          onClose={() => setShowReject(false)}
+        />
+      )}
+      {showAcceptOtp && (
+        <OtpVerifyModal applicationId={app.id} action="md_accept" comment={comment.trim()} onClose={() => setShowAcceptOtp(false)} onSuccess={handleAcceptOtpSuccess} />
+      )}
+      {showRejectOtp && (
+        <OtpVerifyModal applicationId={app.id} action="md_reject" comment={rejectRemark} onClose={() => setShowRejectOtp(false)} onSuccess={handleRejectOtpSuccess} />
+      )}
+      {showProvisionalOtp && (
+        <OtpVerifyModal applicationId={app.id} action="provisional_letter" onClose={() => setShowProvisionalOtp(false)} onSuccess={handleProvisionalOtpSuccess} />
+      )}
       {showHoldModal && (
         <ComplianceHoldModal
           applicationId={app.id}

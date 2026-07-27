@@ -10,13 +10,15 @@ import jsPDF from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
-import { TEAMS, OFFICES } from "../../lib/roles";
+import { TEAMS, OFFICES, can } from "../../lib/roles";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
 import Select from "../../components/ui/Select";
 import DatePickerCalendar from "../../components/ui/DatePickerCalendar";
 import PageLoader from "../../components/ui/PageLoader";
+import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
+import PreviewModal from "../../components/ui/PreviewModal";
 import "../../styles/EmpanelmentReportsPage.css";
 
 const PIPELINE = ["sent", "filled", "po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "accepted", "rejected", "on_hold"];
@@ -342,19 +344,82 @@ function fileBase(report) {
   return `AFC_Empanelment_${report.id}_${new Date().toISOString().slice(0, 10)}`;
 }
 
+// Sheet names can't contain : \ / ? * [ ] and are capped at 31 chars.
+function sheetName(title) {
+  return (title || "Report").replace(/[:\\/?*[\]]/g, " ").slice(0, 31) || "Report";
+}
+
+// Single sheet — header info, KPI summary, then the full data table with
+// autofilter enabled on the header row so the numbers are actually easy to
+// sort/filter/analyse inside Excel itself, not just a flat dump. (This
+// package's writer doesn't support cell styling like bold/fills, so section
+// labels are plain text rather than bold — autofilter is the meaningful win
+// here.) Column widths are sized off real cell content, not just the label,
+// so text doesn't read as clipped/sparse.
 function exportExcel(report, output, filters) {
+  const rows = [];
+  rows.push(["AFC India Limited"]);
+  rows.push([`Report: ${report.title}`]);
+  rows.push([`Filters: ${buildFilterLine(filters)}`]);
+  rows.push([`Generated: ${new Date().toLocaleString("en-IN")}`]);
+  rows.push([]);
+
+  if (output.kpis?.length) {
+    rows.push(["SUMMARY"]);
+    output.kpis.forEach((k) => rows.push([k.label, k.value]));
+    rows.push([]);
+  }
+
+  const headerRowIndex = rows.length;
+  rows.push(output.columns.map((c) => c.label));
+  output.rows.forEach((row) => rows.push(output.columns.map((c) => row[c.key] ?? "")));
+  rows.push([]);
+  rows.push([`Total records: ${output.rows.length}`]);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"] = output.columns.map((c) => {
+    const maxLen = output.rows.reduce((max, row) => Math.max(max, String(row[c.key] ?? "").length), c.label.length);
+    return { wch: Math.min(Math.max(maxLen + 2, 10), 60) };
+  });
+
+  if (output.rows.length > 0) {
+    ws["!autofilter"] = {
+      ref: XLSX.utils.encode_range({
+        s: { r: headerRowIndex, c: 0 },
+        e: { r: headerRowIndex + output.rows.length, c: output.columns.length - 1 },
+      }),
+    };
+  }
+
   const wb = XLSX.utils.book_new();
-  const info = [
-    ["AFC India Limited"], ["Report", report.title], ["Filters", buildFilterLine(filters)],
-    ["Generated", new Date().toLocaleString("en-IN")], [],
-    ...(output.kpis?.length ? [["Summary"], ...output.kpis.map((k) => [k.label, k.value]), []] : []),
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(info), "Info");
-  const aoa = [output.columns.map((c) => c.label), ...output.rows.map((row) => output.columns.map((c) => row[c.key] ?? ""))];
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = output.columns.map((c) => ({ wch: Math.max(10, c.label.length + 2) }));
-  XLSX.utils.book_append_sheet(wb, ws, "Report");
+  XLSX.utils.book_append_sheet(wb, ws, sheetName(report.title));
   XLSX.writeFile(wb, `${fileBase(report)}.xlsx`);
+}
+
+function escapeHtml(val) {
+  return String(val).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+// HTML mirror of the PDF/Excel content, shown in PreviewModal before the
+// user commits to the actual PDF download.
+function buildReportPreviewHTML(report, output, filters) {
+  const kpisHtml = output.kpis?.length
+    ? `<p><strong>Summary:</strong> ${output.kpis.map((k) => `${escapeHtml(k.label)}: ${escapeHtml(k.value)}`).join(" &nbsp;|&nbsp; ")}</p>`
+    : "";
+  const headHtml = `<tr>${output.columns.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("")}</tr>`;
+  const bodyHtml = output.rows.length
+    ? output.rows.map((row) => `<tr>${output.columns.map((c) => `<td>${escapeHtml(row[c.key] ?? "—")}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${output.columns.length}">No data for the selected filters.</td></tr>`;
+
+  return `
+    <p><strong>AFC India Limited</strong></p>
+    <p>${escapeHtml(report.title)}</p>
+    <p style="font-size:8pt;color:#666;">${escapeHtml(buildFilterLine(filters))}</p>
+    <p style="font-size:8pt;color:#666;">Generated ${escapeHtml(new Date().toLocaleString("en-IN"))}</p>
+    ${kpisHtml}
+    <table><thead>${headHtml}</thead><tbody>${bodyHtml}</tbody></table>
+    <p style="font-size:8pt;color:#666;">Total records: ${output.rows.length}</p>
+  `;
 }
 
 function exportPDF(report, output, filters) {
@@ -492,55 +557,34 @@ function ReportPreview({ report, output, onExcel, onPdf }) {
   );
 }
 
-const IconFilter = <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>;
-
 // Slide-in drawer, matching the old project's report filter UX — filters
 // stay out of the way until asked for, instead of a permanent row of
-// selects eating vertical space above every report.
-function FilterDrawer({ open, onClose, filters, set, onReset, officeOptions, sectorOptions }) {
-  if (!open) return null;
+// selects eating vertical space above every report. Every other list/search
+// page in the app uses the same shared FilterDrawer for consistency.
+function ReportFilterDrawer({ open, onClose, filters, set, onReset, officeOptions, sectorOptions, canFilterTeamOffice }) {
   return (
-    <>
-      <div className="erp-drawer-backdrop" onClick={onClose} />
-      <div className="erp-drawer" role="dialog" aria-label="Report filters">
-        <div className="erp-drawer-header">
-          <span className="erp-drawer-title">{IconFilter} Filters</span>
-          <button type="button" className="erp-drawer-close" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-        <div className="erp-drawer-body">
-          <div className="erp-drawer-field">
-            <label className="erp-drawer-label">Team</label>
-            <Select value={filters.team} onChange={(v) => set("team", v)} placeholder="All Teams" options={[{ value: "all", label: "All Teams" }, ...TEAMS.map((t) => ({ value: t, label: t }))]} />
-          </div>
-          <div className="erp-drawer-field">
-            <label className="erp-drawer-label">Office</label>
-            <Select value={filters.office} onChange={(v) => set("office", v)} placeholder="All Offices" options={[{ value: "all", label: "All Offices" }, ...officeOptions.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }))]} />
-          </div>
-          <div className="erp-drawer-field">
-            <label className="erp-drawer-label">Status</label>
-            <Select value={filters.status} onChange={(v) => set("status", v)} placeholder="All Statuses" options={[{ value: "all", label: "All Statuses" }, ...PIPELINE.map((s) => ({ value: s, label: STATUS_LABELS[s] }))]} />
-          </div>
-          {sectorOptions.length > 0 && (
-            <div className="erp-drawer-field">
-              <label className="erp-drawer-label">Sector</label>
-              <Select value={filters.sector} onChange={(v) => set("sector", v)} placeholder="All Sectors" options={[{ value: "all", label: "All Sectors" }, ...sectorOptions.map((s) => ({ value: s, label: s }))]} />
-            </div>
-          )}
-          <div className="erp-drawer-field">
-            <label className="erp-drawer-label">Date From</label>
-            <DatePickerCalendar value={filters.from} onChange={(v) => set("from", v)} placeholder="Start date" />
-          </div>
-          <div className="erp-drawer-field">
-            <label className="erp-drawer-label">Date To</label>
-            <DatePickerCalendar value={filters.to} onChange={(v) => set("to", v)} placeholder="End date" />
-          </div>
-        </div>
-        <div className="erp-drawer-footer">
-          <Button variant="primary" block onClick={onClose}>Done</Button>
-          <Button variant="secondary" block onClick={onReset}>Reset</Button>
-        </div>
-      </div>
-    </>
+    <FilterDrawer open={open} onClose={onClose} onReset={onReset} title="Filters">
+      <FilterField label="Team">
+        <Select disabled={!canFilterTeamOffice} value={filters.team} onChange={(v) => set("team", v)} placeholder="All Teams" options={[{ value: "all", label: "All Teams" }, ...TEAMS.map((t) => ({ value: t, label: t }))]} />
+      </FilterField>
+      <FilterField label="Office">
+        <Select disabled={!canFilterTeamOffice} value={filters.office} onChange={(v) => set("office", v)} placeholder="All Offices" options={[{ value: "all", label: "All Offices" }, ...officeOptions.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }))]} />
+      </FilterField>
+      <FilterField label="Status">
+        <Select value={filters.status} onChange={(v) => set("status", v)} placeholder="All Statuses" options={[{ value: "all", label: "All Statuses" }, ...PIPELINE.map((s) => ({ value: s, label: STATUS_LABELS[s] }))]} />
+      </FilterField>
+      {sectorOptions.length > 0 && (
+        <FilterField label="Sector">
+          <Select value={filters.sector} onChange={(v) => set("sector", v)} placeholder="All Sectors" options={[{ value: "all", label: "All Sectors" }, ...sectorOptions.map((s) => ({ value: s, label: s }))]} />
+        </FilterField>
+      )}
+      <FilterField label="Date From">
+        <DatePickerCalendar value={filters.from} onChange={(v) => set("from", v)} placeholder="Start date" />
+      </FilterField>
+      <FilterField label="Date To">
+        <DatePickerCalendar value={filters.to} onChange={(v) => set("to", v)} placeholder="End date" />
+      </FilterField>
+    </FilterDrawer>
   );
 }
 
@@ -614,6 +658,7 @@ export default function EmpanelmentReportsPage() {
   const [filters, setFilters] = useState({ team: "all", office: "all", status: "all", sector: "all", from: "", to: "" });
   const [selectedId, setSelectedId] = useState(REPORTS[0].id);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -653,9 +698,19 @@ export default function EmpanelmentReportsPage() {
   const report = REPORTS.find((r) => r.id === selectedId);
   const output = useMemo(() => (report ? report.build({ apps: filtered }) : null), [report, filtered]);
 
+  const canFilterTeamOffice = can.filterReportsByTeamOffice(profile?.role);
   const activeCount = [filters.team !== "all", filters.office !== "all", filters.status !== "all", filters.sector !== "all", !!filters.from, !!filters.to].filter(Boolean).length;
 
   function set(k, v) { setFilters((prev) => ({ ...prev, [k]: v })); }
+
+  function handlePdfPreview() {
+    setPdfPreview({
+      html: buildReportPreviewHTML(report, output, filters),
+      title: report.title,
+      downloadLabel: "Download PDF",
+      onDownload: () => { exportPDF(report, output, filters); setPdfPreview(null); },
+    });
+  }
 
   if (loading) return <PageLoader text="Loading report data…" />;
 
@@ -667,11 +722,8 @@ export default function EmpanelmentReportsPage() {
           <div className="page-title-row">
             <div>
               <h1>Empanelment Reports</h1>
-              <p>Pick a report on the left, filter as needed, and export to Excel or PDF.</p>
             </div>
-            <Button variant="secondary" onClick={() => setDrawerOpen(true)}>
-              Filters{activeCount > 0 && <span className="erp-filter-count">{activeCount}</span>}
-            </Button>
+            <FilterButton onClick={() => setDrawerOpen(true)} activeCount={activeCount} />
           </div>
         </div>
 
@@ -701,12 +753,12 @@ export default function EmpanelmentReportsPage() {
           </aside>
 
           {report && output && (
-            <ReportPreview report={report} output={output} onExcel={() => exportExcel(report, output, filters)} onPdf={() => exportPDF(report, output, filters)} />
+            <ReportPreview report={report} output={output} onExcel={() => exportExcel(report, output, filters)} onPdf={handlePdfPreview} />
           )}
         </div>
       </div>
 
-      <FilterDrawer
+      <ReportFilterDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         filters={filters}
@@ -714,7 +766,18 @@ export default function EmpanelmentReportsPage() {
         onReset={() => setFilters({ team: "all", office: "all", status: "all", sector: "all", from: "", to: "" })}
         officeOptions={officeOptions}
         sectorOptions={sectorOptions}
+        canFilterTeamOffice={canFilterTeamOffice}
       />
+
+      {pdfPreview && (
+        <PreviewModal
+          html={pdfPreview.html}
+          title={pdfPreview.title}
+          downloadLabel={pdfPreview.downloadLabel}
+          onDownload={pdfPreview.onDownload}
+          onClose={() => setPdfPreview(null)}
+        />
+      )}
     </div>
   );
 }

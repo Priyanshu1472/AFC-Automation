@@ -454,6 +454,7 @@ h1,h2,h3,h4,h5,h6 { font-family: var(--font-display); font-weight: 600; line-hei
 }
 
 .card-footer {
+  border-radius: 0% 0 var(--radius-lg) var(--radius-lg);
   padding: var(--space-4) var(--space-6);
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-surface-2);

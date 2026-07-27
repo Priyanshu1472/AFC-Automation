@@ -105,7 +105,6 @@
 }
 
 .bl-filter-right {
-  width: 180px;
   flex-shrink: 0;
 }
 
@@ -134,12 +133,31 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: block;
+  cursor: default;
 }
 
 .bl-org {
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+  cursor: default;
+}
+
+/* Every data cell truncates to a single line (rather than wrapping) so
+   every row in the table ends up the same height — full content is still
+   reachable via the native title-attribute tooltip on hover. */
+.bl-contact {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
 }
 
 .bl-not-filled {
@@ -341,9 +359,11 @@
 }
 
 @media (max-width: 768px) {
-  .bl-filters       { flex-direction: column; }
-  .bl-search-wrapper { width: 100%; }
-  .bl-filter-right  { width: 100%; }
+  /* Keep search + filter side by side (not stacked) — the filter button
+     collapses to a compact icon square on mobile (see FilterDrawer.css),
+     so it sits naturally next to the search box instead of a full-width
+     row below it. */
+  .bl-search-wrapper { width: auto; flex: 1; min-width: 0; }
   .bl-modal         { max-width: 100%; border-left: none; border-top: 1px solid var(--card-border); }
   .bl-modal-backdrop { align-items: flex-end; }
   .bl-modal-fields  { grid-template-columns: 1fr; }

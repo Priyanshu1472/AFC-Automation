@@ -5,7 +5,6 @@ import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import PageLoader from "../components/ui/PageLoader";
 import { useAuth } from "../hooks/useAuth";
-import { ROLE_LABELS } from "../lib/roles";
 import { supabase } from "../lib/supabase";
 import { fetchPendingActionNotifications, subscribeToNotifications, markNotificationRead } from "../lib/notifications";
 import "../styles/HomePage.css";
@@ -149,7 +148,6 @@ export default function HomePage() {
       <div className="app-container">
         <div className="page-header">
           <h1>Welcome, {profile?.full_name}</h1>
-          <p>Signed in as {ROLE_LABELS[profile?.role] || profile?.role}.</p>
         </div>
         {isBa && <BaStatusCard />}
         {!isBa && <PendingActionsPanel />}

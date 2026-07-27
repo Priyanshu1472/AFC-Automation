@@ -6,12 +6,26 @@ import Card from "../../components/ui/Card";
 import { LockIcon, ArrowRightIcon, ShowHideButton } from "../../components/icons";
 import { useState } from "react";
 
-// Shared by ResetPasswordPage (via emailed magic link) and
-// ChangePasswordPage (forced on first login) — same rules, same hook.
-export default function SetPasswordForm({ heading, subheading, submitLabel = "Set password" }) {
-  const { password, setPassword, confirmPassword, setConfirmPassword, error, loading, submit } =
-    useSetNewPassword();
+// Shared by ResetPasswordPage (via emailed magic link), ChangePasswordPage
+// (forced on first login), and MyProfilePage (voluntary change) — same
+// rules, same hook. Pass hookOptions to change the post-submit behavior
+// (see useSetNewPassword) and successMessage to show an inline confirmation
+// instead of redirecting away.
+export default function SetPasswordForm({ heading, subheading, submitLabel = "Set password", hookOptions, successMessage }) {
+  const {
+    currentPassword,
+    setCurrentPassword,
+    password,
+    setPassword,
+    confirmPassword,
+    setConfirmPassword,
+    error,
+    loading,
+    success,
+    submit,
+  } = useSetNewPassword(hookOptions);
   const [show, setShow] = useState(false);
+  const requireCurrentPassword = !!hookOptions?.requireCurrentPassword;
 
   return (
     <Card className="login-card">
@@ -22,15 +36,30 @@ export default function SetPasswordForm({ heading, subheading, submitLabel = "Se
             <p>{subheading}</p>
           </div>
 
+          {success && successMessage && <Alert variant="success">{successMessage}</Alert>}
           {error && <Alert variant="danger">{error}</Alert>}
 
           <div className="login-fields">
+            {requireCurrentPassword && (
+              <Input
+                label="Current password"
+                id="current-password"
+                type={show ? "text" : "password"}
+                placeholder="Enter your current password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                icon={<LockIcon />}
+                autoComplete="current-password"
+                required
+                disabled={loading}
+              />
+            )}
             <div style={{ position: "relative" }}>
               <Input
                 label="New password"
                 id="new-password"
                 type={show ? "text" : "password"}
-                placeholder="At least 12 characters"
+                placeholder="At least 8 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 icon={<LockIcon />}
@@ -62,7 +91,7 @@ export default function SetPasswordForm({ heading, subheading, submitLabel = "Se
             variant="primary"
             block
             loading={loading}
-            disabled={loading || !password || !confirmPassword}
+            disabled={loading || !password || !confirmPassword || (requireCurrentPassword && !currentPassword)}
             iconRight={!loading && <ArrowRightIcon />}
           >
             {loading ? "Saving…" : submitLabel}

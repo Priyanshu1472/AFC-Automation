@@ -24,6 +24,11 @@ export default function UserMenu() {
   const roleLabel = ROLE_LABELS[profile.role] || profile.role;
   const initial = (profile.full_name || "?").trim().charAt(0).toUpperCase();
 
+  function goToProfile() {
+    setOpen(false);
+    navigate("/profile");
+  }
+
   async function handleSignOut() {
     setOpen(false);
     await signOut();
@@ -54,6 +59,9 @@ export default function UserMenu() {
             <span className="user-menu-panel-name">{profile.full_name}</span>
             <span className="user-menu-panel-role">{roleLabel}</span>
           </div>
+          <button type="button" className="user-menu-item" role="menuitem" onClick={goToProfile}>
+            My Profile
+          </button>
           <button type="button" className="user-menu-signout" role="menuitem" onClick={handleSignOut}>
             Sign out
           </button>

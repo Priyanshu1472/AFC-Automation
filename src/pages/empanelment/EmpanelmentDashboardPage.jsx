@@ -41,7 +41,7 @@ const DATE_RANGES = [
 // must not be reshuffled at render time.
 const DONUT_BUCKETS = [
   { key: "awaiting", label: "Awaiting BA", match: (s) => s === "sent" || s === "filled", colorVar: "--edb-cat-1" },
-  { key: "accepted", label: "Empanelled", match: (s) => s === "accepted", colorVar: "--edb-cat-2" },
+  { key: "accepted", label: "Accepted", match: (s) => s === "accepted", colorVar: "--edb-cat-2" },
   { key: "cfo_cs", label: "CFO / CS Review", match: (s) => s === "cfo_cs_review", colorVar: "--edb-cat-3" },
   { key: "po", label: "PO Review", match: (s) => s === "po_review" || s === "po_final_review", colorVar: "--edb-cat-4" },
   { key: "dgm", label: "DGM Review", match: (s) => s === "dgm_review", colorVar: "--edb-cat-5" },
@@ -349,7 +349,7 @@ export default function EmpanelmentDashboardPage() {
   // paused, not at a numbered stage) — surfaced separately via the "On
   // Hold" KPI tile and the donut instead.
   const funnelCounts = useMemo(
-    () => PIPELINE.map((s, i) => ({ key: s, count: filtered.filter((a) => PIPELINE.indexOf(a.status) >= i).length })),
+    () => PIPELINE.map((s) => ({ key: s, count: filtered.filter((a) => a.status === s).length })),
     [filtered]
   );
 
@@ -391,15 +391,11 @@ export default function EmpanelmentDashboardPage() {
       .sort((a, b) => b.total - a.total);
   }, [filtered, canFilterTeam]);
 
-  const officeBreakdown = useMemo(() => {
-    const map = {};
-    filtered.forEach((a) => { const o = a.office || "Unspecified"; map[o] = (map[o] || 0) + 1; });
-    return Object.entries(map).map(([office, count]) => ({ office, count })).sort((a, b) => b.count - a.count);
-  }, [filtered]);
-
   const sectorBreakdown = useMemo(() => {
     const map = {};
-    filtered.forEach((a) => (sectorsByApp[a.id] || []).forEach((s) => { map[s] = (map[s] || 0) + 1; }));
+    filtered
+      .filter((a) => a.status === "accepted")
+      .forEach((a) => (sectorsByApp[a.id] || []).forEach((s) => { map[s] = (map[s] || 0) + 1; }));
     return Object.entries(map).map(([sector, count]) => ({ sector, count })).sort((a, b) => b.count - a.count).slice(0, 6);
   }, [filtered, sectorsByApp]);
 
@@ -438,8 +434,7 @@ export default function EmpanelmentDashboardPage() {
     if (activeStage === stageKey) { closeDrill(); return; }
     clearDrillTriggers();
     setActiveStage(stageKey);
-    const idx = PIPELINE.indexOf(stageKey);
-    openDrill(`${STATUS_MAP[stageKey]?.label || stageKey} and beyond`, filtered.filter((a) => PIPELINE.indexOf(a.status) >= idx));
+    openDrill(STATUS_MAP[stageKey]?.label || stageKey, filtered.filter((a) => a.status === stageKey));
   }
   function handleMonthClick(month) {
     openDrill(`Sent in ${month.label}`, month.apps);
@@ -455,7 +450,6 @@ export default function EmpanelmentDashboardPage() {
           <div className="page-title-row">
             <div>
               <h1>Empanelment Dashboard</h1>
-              <p>{canFilterTeam ? "Organisation-wide empanelment overview." : "Your team's empanelment pipeline overview."}</p>
             </div>
             <div className="edb-controls">
               <div className="edb-range-group">
@@ -496,7 +490,7 @@ export default function EmpanelmentDashboardPage() {
             <DonutChart segments={donutSegments} onSegmentClick={handleDonutClick} activeKey={activeDonut} />
           </ChartCard>
 
-          <ChartCard title="Application Pipeline" subtitle="Reached each stage or beyond — click to drill in">
+          <ChartCard title="Application Pipeline" subtitle="Applications currently at each stage — click to drill in">
             <div className="edb-bar-list">
               {funnelCounts.map((f) => (
                 <BarRow key={f.key} label={STATUS_MAP[f.key]?.label || f.key} count={f.count} total={total} variant="brand" onClick={() => handleStageClick(f.key)} active={activeStage === f.key} />
@@ -519,18 +513,8 @@ export default function EmpanelmentDashboardPage() {
           </ChartCard>
         </div>
 
-        <div className="edb-charts-grid edb-charts-grid-3">
-          <ChartCard title="Office-wise Distribution" subtitle="Applications by originating office">
-            {officeBreakdown.length === 0 ? <p className="text-secondary text-sm">No data yet.</p> : (
-              <div className="edb-bar-list">
-                {officeBreakdown.map((o) => (
-                  <BarRow key={o.office} label={o.office.charAt(0).toUpperCase() + o.office.slice(1)} count={o.count} total={total} variant="brand" />
-                ))}
-              </div>
-            )}
-          </ChartCard>
-
-          <ChartCard title="Sector-wise Coverage" subtitle="Top sectors served by BAs (accepted + in-review)">
+        <div className="edb-charts-grid edb-charts-grid-2">
+          <ChartCard title="Sector-wise Coverage" subtitle="Top sectors served by empanelled BAs">
             {sectorBreakdown.length === 0 ? <p className="text-secondary text-sm">No sector data yet.</p> : (
               <div className="edb-bar-list">
                 {sectorBreakdown.map((s) => (

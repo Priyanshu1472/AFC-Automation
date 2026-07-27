@@ -252,14 +252,10 @@
     padding: var(--space-4);
   }
 
-  .al-search-input,
-  .al-filter-select,
-  .al-date-input {
-    flex: 1 1 100%;
+  /* Search stays alongside the (now icon-only) Filters button rather than
+     stacking full-width — see FilterDrawer.css for the button itself. */
+  .al-search-input {
+    flex: 1 1 auto;
     min-width: 0;
-  }
-
-  .al-filter-row .btn {
-    width: 100%;
   }
 }

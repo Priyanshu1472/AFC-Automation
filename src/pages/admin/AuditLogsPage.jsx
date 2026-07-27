@@ -9,6 +9,7 @@ import Button from "../../components/ui/Button";
 import Select from "../../components/ui/Select";
 import Input from "../../components/ui/Input";
 import PageLoader from "../../components/ui/PageLoader";
+import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import "../../styles/AuditLogsPage.css";
 
 const ACTION_META = {
@@ -83,13 +84,14 @@ export default function AuditLogsPage() {
   const [filterAction, setFilterAction] = useState("all");
   const [filterRole, setFilterRole] = useState("all");
   const [filterDate, setFilterDate] = useState("");
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   const isEmp = tab === "empanelment";
   const actionOptions = isEmp ? EMP_ACTION_OPTIONS : ACTION_OPTIONS;
   const roleOptions = isEmp ? EMP_ROLE_OPTIONS : ROLE_OPTIONS;
   const actionMeta = isEmp ? EMP_ACTION_META : ACTION_META;
 
-  const hasActiveFilters = filterAction !== "all" || filterRole !== "all" || !!filterDate || !!search;
+  const activeFilterCount = [filterAction !== "all", filterRole !== "all", !!filterDate].filter(Boolean).length;
 
   const fetchAccountLogs = useCallback(async (currentPage, opts) => {
     let query = supabase
@@ -158,7 +160,6 @@ export default function AuditLogsPage() {
     setFilterAction("all");
     setFilterRole("all");
     setFilterDate("");
-    setSearch("");
   }
 
   const from = total === 0 ? 0 : page * PAGE_SIZE + 1;
@@ -196,19 +197,7 @@ export default function AuditLogsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <Select options={actionOptions} value={filterAction} onChange={setFilterAction} placeholder="All Actions" className="al-filter-select" />
-            <Select options={roleOptions} value={filterRole} onChange={setFilterRole} placeholder="All Roles" className="al-filter-select" />
-            <input
-              type="date"
-              className="input al-date-input"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-            />
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                Clear
-              </Button>
-            )}
+            <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={activeFilterCount} />
           </Card.Body>
         </Card>
 
@@ -310,6 +299,23 @@ export default function AuditLogsPage() {
           )}
         </Card>
       </div>
+
+      <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={clearFilters}>
+        <FilterField label="Action">
+          <Select options={actionOptions} value={filterAction} onChange={setFilterAction} placeholder="All Actions" />
+        </FilterField>
+        <FilterField label="Role">
+          <Select options={roleOptions} value={filterRole} onChange={setFilterRole} placeholder="All Roles" />
+        </FilterField>
+        <FilterField label="Date">
+          <input
+            type="date"
+            className="input"
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
+          />
+        </FilterField>
+      </FilterDrawer>
     </div>
   );
 }

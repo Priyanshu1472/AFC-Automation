@@ -48,7 +48,7 @@ serve(async (req) => {
 
   const caller = callerResult.caller;
   const authorized =
-    ["md", "cfo", "cs"].includes(caller.role) ||
+    ["md", "cfo", "cs", "admin"].includes(caller.role) ||
     (caller.role === "dgm" && caller.team === application.team) ||
     (caller.role === "project_officer" && caller.id === application.project_officer_id) ||
     (caller.role === "associate_consultant" && caller.id === application.sent_by);

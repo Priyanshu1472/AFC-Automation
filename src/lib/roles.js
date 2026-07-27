@@ -9,6 +9,11 @@ export const ROLES = {
   project_officer: 6,
   associate_consultant: 7,
   business_associate: 8,
+  // Not part of the review hierarchy above — a separate, IT/ops-style role
+  // scoped to Home + Users (full manage rights) and read-only visibility
+  // into empanelment/dashboards/reports. Given its own bucket rather than a
+  // hierarchy rank.
+  admin: 9,
 };
 
 export const ROLE_LABELS = {
@@ -21,10 +26,19 @@ export const ROLE_LABELS = {
   project_officer: "Project Officer",
   associate_consultant: "Associate Consultant",
   business_associate: "Business Associate",
+  admin: "Administrator",
 };
 
-// ─── MD can create these roles ────────────────────────────────
-export const MD_CREATABLE_ROLES = [
+// ─── MD can create ONLY admin accounts — this is a bootstrap allowance so
+// there's a way to create the very first Admin. Every other role is created
+// by an Admin (ADMIN_CREATABLE_ROLES below). DGM can no longer create
+// anyone. ─────────────────────────────────────────────────────
+export const MD_CREATABLE_ROLES = ["admin"];
+
+// ─── Admin can create any staff role except admin (avoid Admins silently
+// minting more Admins) and md (MD accounts aren't created through this
+// flow). ─────────────────────────────────────────────────────
+export const ADMIN_CREATABLE_ROLES = [
   "cfo",
   "cs",
   "dgm",
@@ -34,17 +48,11 @@ export const MD_CREATABLE_ROLES = [
   "associate_consultant",
 ];
 
-// ─── DGM can create these roles only, within their own team ──
-export const DGM_CREATABLE_ROLES = [
-  "agm",
-  "srm",
-  "project_officer",
-  "associate_consultant",
-];
-
 // ─── Users page — nav visibility and the /users route's allowedRoles must
-// stay in sync, so both read from this single list. ──────────────────
-export const USERS_PAGE_ROLES = ["md", "dgm"];
+// stay in sync, so both read from this single list. MD and DGM keep seeing
+// Users (and can edit existing accounts) even though they can no longer add
+// new ones — see can.createUsers. ──────────────────────────────
+export const USERS_PAGE_ROLES = ["md", "dgm", "admin"];
 
 // ─── Audit log — MD only. ──────────────────────────────────────────
 export const AUDIT_LOG_ROLES = ["md"];
@@ -52,16 +60,39 @@ export const AUDIT_LOG_ROLES = ["md"];
 // ─── Empanelment — visible to every staff role (not the business_associate
 // portal role, which has its own separate area). Only associate_consultant
 // can actually send a new one; who can act at each review stage is enforced
-// by the empanelment RLS policies, not by this nav-level list.
+// by the empanelment RLS policies, not by this nav-level list. Admin is
+// included here for read-only visibility — it has no branch in any
+// review-stage action UI, so it naturally lands as view-only.
 export const EMPANELMENT_ROLES = Object.keys(ROLES).filter((r) => r !== "business_associate");
+
+// ─── Knowledge Repository — visible to every staff role (not the
+// business_associate portal role). Org-wide, not team-scoped: any staff
+// member can search/view every project so past experience can be cited in
+// proposals company-wide. Adding/editing/deleting is enforced by RLS
+// (can_edit_project), not by this nav-level list.
+export const KNOWLEDGE_REPOSITORY_ROLES = Object.keys(ROLES).filter((r) => r !== "business_associate");
 
 // ─── Permissions ──────────────────────────────────────────────
 export const can = {
-  manageAllUsers: (role) => role === "md",
+  // Activate/deactivate + full edit rights on any user account.
+  manageAllUsers: (role) => role === "md" || role === "admin",
+  // DGM can still manage (activate/deactivate/edit) accounts on their own team.
   manageTeamUsers: (role) => role === "dgm",
-  createUsers: (role) => role === "md" || role === "dgm",
+  // Only Admin can add new accounts day-to-day; MD keeps a narrow bootstrap
+  // allowance (see MD_CREATABLE_ROLES) to create the first Admin.
+  createUsers: (role) => role === "admin" || role === "md",
+  // MD/DGM/Admin can all fix mistakes on existing user records.
+  editUsers: (role) => ["admin", "md", "dgm"].includes(role),
+  // Changing a user's ROLE (not just name/team/office) is restricted to
+  // Admin and MD — a DGM editing a teammate's record can't promote them.
+  editUserRole: (role) => ["admin", "md"].includes(role),
 
-  viewAllTeams: (role) => ["md", "cfo", "cs"].includes(role),
+  viewAllTeams: (role) => ["md", "cfo", "cs", "admin"].includes(role),
+  // Reports page's Team/Office filters — narrower than viewAllTeams: only MD
+  // and Admin get to slice reports by team/office, everyone else's data is
+  // already scoped to their own team/office by RLS so the controls are
+  // disabled rather than a no-op.
+  filterReportsByTeamOffice: (role) => ["md", "admin"].includes(role),
   viewOwnTeam: (role) =>
     ["dgm", "agm", "srm", "project_officer", "associate_consultant"].includes(role),
 

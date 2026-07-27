@@ -4,6 +4,7 @@
 // action, so every function here swallows its own errors and just logs.
 
 import { createAdminClient } from "./auth.ts";
+import { sendResendEmail } from "./email.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -62,4 +63,49 @@ export async function notifyTeam(admin: AdminClient, team: string, payload: Noti
   }
   const ids = (data || []).map((u: { id: string }) => u.id).filter((id: string) => id !== excludeUserId);
   await notifyUsers(admin, ids, payload);
+}
+
+// Actual email (not just the in-app bell) to one specific user by id — used
+// for per-application assignees (the PO/DGM on this application) rather than
+// a whole role. Best-effort, same as emailRole.
+export async function emailUser(admin: AdminClient, userId: string | null | undefined, mail: { subject: string; html: string }) {
+  if (!userId) return;
+  const { data, error } = await admin.from("afc_users").select("email").eq("id", userId).maybeSingle();
+  if (error || !data?.email) {
+    console.error("emailUser lookup failed:", error?.message || "no email on file");
+    return;
+  }
+  try {
+    await sendResendEmail({ to: data.email, subject: mail.subject, html: mail.html });
+  } catch (err) {
+    console.error(`emailUser send to ${data.email} failed:`, (err as Error).message);
+  }
+}
+
+// Actual email (not just the in-app bell) to every active user in a role —
+// used where the in-app notification alone isn't enough (e.g. CFO/CS need
+// to know an application is waiting even if they haven't opened the app).
+// Best-effort per recipient: one failed send never blocks the others or the
+// caller's real action.
+export async function emailRole(
+  admin: AdminClient,
+  role: string,
+  mail: { subject: string; html: string },
+  team?: string | null
+) {
+  let query = admin.from("afc_users").select("email").eq("role", role).eq("is_active", true);
+  if (team) query = query.eq("team", team);
+  const { data, error } = await query;
+  if (error) {
+    console.error("emailRole lookup failed:", error.message);
+    return;
+  }
+  await Promise.all(
+    (data || [])
+      .map((u: { email: string }) => u.email)
+      .filter(Boolean)
+      .map((to: string) => sendResendEmail({ to, subject: mail.subject, html: mail.html }).catch((err) => {
+        console.error(`emailRole send to ${to} failed:`, (err as Error).message);
+      }))
+  );
 }

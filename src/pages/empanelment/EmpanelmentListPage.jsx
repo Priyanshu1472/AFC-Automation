@@ -8,6 +8,7 @@ import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Select from "../../components/ui/Select";
 import PageLoader from "../../components/ui/PageLoader";
+import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import "../../styles/EmpanelmentListPage.css";
 
 function fmt(val) { return val === null || val === undefined || val === "" ? "—" : val; }
@@ -158,6 +159,7 @@ export default function EmpanelmentListPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedBA, setSelectedBA] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState(null);
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   const fetchApplications = useCallback(async () => {
     // RLS (can_view_empanelment_application) scopes the visible rows
@@ -196,16 +198,23 @@ export default function EmpanelmentListPage() {
 
   const filtered = applications.filter((a) => {
     const q = search.toLowerCase();
+    const sectorsServed = Array.isArray(a.ba_reg?.sectors_served) ? a.ba_reg.sectors_served.join(" ") : (a.ba_reg?.sectors_served || "");
+    const assignments = a.ba_reg?.assignments ? (typeof a.ba_reg.assignments === "string" ? a.ba_reg.assignments : JSON.stringify(a.ba_reg.assignments)) : "";
     const matchSearch =
       (a.ba_email || "").toLowerCase().includes(q) ||
       (a.ba_reg?.org_name || "").toLowerCase().includes(q) ||
       (a.ba_reg?.contact_person || "").toLowerCase().includes(q) ||
-      (a.application_code || "").includes(search);
+      (a.application_code || "").includes(search) ||
+      (a.ba_reg?.core_expertise || "").toLowerCase().includes(q) ||
+      sectorsServed.toLowerCase().includes(q) ||
+      assignments.toLowerCase().includes(q);
     return matchSearch && (statusFilter === "all" || a.status === statusFilter);
   });
 
   const canSend = profile?.role === "associate_consultant";
-  const canReview = ["project_officer", "cfo", "cs", "dgm", "md"].includes(profile?.role);
+  // Admin included so it can open the full read-only review page (timeline,
+  // documents, etc.) — it has no action branch there, so it lands view-only.
+  const canReview = ["project_officer", "cfo", "cs", "dgm", "md", "admin"].includes(profile?.role);
 
   if (loading) return <PageLoader text="Loading applications…" />;
 
@@ -218,7 +227,6 @@ export default function EmpanelmentListPage() {
             <div className="page-title-row">
               <div>
                 <h1>Empanelment Applications</h1>
-                <p>Business Associate empanelment pipeline — sent, reviewed, and decided.</p>
               </div>
               {canSend && (
                 <Button variant="primary" onClick={() => navigate("/empanelment/send")}>+ Send Empanelment Form</Button>
@@ -237,10 +245,10 @@ export default function EmpanelmentListPage() {
             <Card.Body className="bl-filters">
               <div className="bl-search-wrapper">
                 <span className="bl-search-icon"><SearchIcon /></span>
-                <input type="text" className="input bl-search" placeholder="Search by email, organisation, contact, app code…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input type="text" className="input bl-search" placeholder="Search by email, organisation, contact, app code, sector, expertise…" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <div className="bl-filter-right">
-                <Select options={STATUS_OPTIONS} value={statusFilter} onChange={setStatusFilter} placeholder="All Statuses" />
+                <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={statusFilter !== "all" ? 1 : 0} />
               </div>
             </Card.Body>
           </Card>
@@ -261,9 +269,9 @@ export default function EmpanelmentListPage() {
                     {filtered.map((a) => (
                       <tr key={a.id}>
                         <td><span className="bl-app-code">{a.application_code || "—"}</span></td>
-                        <td className="bl-email">{fmt(a.ba_email)}</td>
-                        <td>{a.ba_reg?.org_name ? <span className="bl-org">{fmt(a.ba_reg.org_name)}</span> : <span className="bl-not-filled">Not filled yet</span>}</td>
-                        <td>{fmt(a.ba_reg?.contact_person)}</td>
+                        <td className="bl-email" title={a.ba_email || ""}>{fmt(a.ba_email)}</td>
+                        <td>{a.ba_reg?.org_name ? <span className="bl-org" title={a.ba_reg.org_name}>{fmt(a.ba_reg.org_name)}</span> : <span className="bl-not-filled">Not filled yet</span>}</td>
+                        <td className="bl-contact" title={a.ba_reg?.contact_person || ""}>{fmt(a.ba_reg?.contact_person)}</td>
                         <td>{a.team ? <Badge variant="neutral">{a.team}</Badge> : "—"}</td>
                         <td className="bl-date">{fmtDate(a.created_at)}</td>
                         <td><StatusBadge status={a.status} /></td>
@@ -290,6 +298,12 @@ export default function EmpanelmentListPage() {
       </div>
 
       <BADetailModal ba={selectedBA} invStatus={selectedStatus} onClose={() => { setSelectedBA(null); setSelectedStatus(null); }} />
+
+      <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={() => setStatusFilter("all")}>
+        <FilterField label="Status">
+          <Select options={STATUS_OPTIONS} value={statusFilter} onChange={setStatusFilter} placeholder="All Statuses" />
+        </FilterField>
+      </FilterDrawer>
     </div>
   );
 }

@@ -10,8 +10,10 @@ import LoginPage from "./pages/auth/LoginPage";
 import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 import ChangePasswordPage from "./pages/auth/ChangePasswordPage";
+import MyProfilePage from "./pages/auth/MyProfilePage";
 import HomePage from "./pages/HomePage";
 import CreateUserPage from "./pages/admin/CreateUserPage";
+import EditUserPage from "./pages/admin/EditUserPage";
 import UserListPage from "./pages/admin/UserListPage";
 import AuditLogsPage from "./pages/admin/AuditLogsPage";
 import SendEmpanelmentPage from "./pages/empanelment/SendEmpanelmentPage";
@@ -21,8 +23,13 @@ import ApplicationReviewPage from "./pages/empanelment/ApplicationReviewPage";
 import EmpanelmentCorrectionPage from "./pages/empanelment/EmpanelmentCorrectionPage";
 import EmpanelmentDashboardPage from "./pages/empanelment/EmpanelmentDashboardPage";
 import EmpanelmentReportsPage from "./pages/empanelment/EmpanelmentReportsPage";
+import KnowledgeSearchPage from "./pages/knowledge/KnowledgeSearchPage";
+import AddProjectPage from "./pages/knowledge/AddProjectPage";
+import EditProjectPage from "./pages/knowledge/EditProjectPage";
+import ProjectDetailsPage from "./pages/knowledge/ProjectDetailsPage";
+import ShortlistsPage from "./pages/knowledge/ShortlistsPage";
 import NotFoundPage from "./pages/NotFoundPage";
-import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES } from "./lib/roles";
+import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES } from "./lib/roles";
 
 import "./App.css";
 
@@ -75,9 +82,17 @@ export default function App() {
                   }
                 />
                 <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <MyProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/create-user"
                   element={
-                    <ProtectedRoute allowedRoles={["md", "dgm"]}>
+                    <ProtectedRoute allowedRoles={["md", "admin"]}>
                       <CreateUserPage />
                     </ProtectedRoute>
                   }
@@ -87,6 +102,14 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={USERS_PAGE_ROLES}>
                       <UserListPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/users/:id/edit"
+                  element={
+                    <ProtectedRoute allowedRoles={["md", "dgm", "admin"]}>
+                      <EditUserPage />
                     </ProtectedRoute>
                   }
                 />
@@ -138,6 +161,47 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={EMPANELMENT_ROLES}>
                       <EmpanelmentReportsPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/knowledge"
+                  element={
+                    <ProtectedRoute allowedRoles={KNOWLEDGE_REPOSITORY_ROLES}>
+                      <KnowledgeSearchPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/knowledge/add"
+                  element={
+                    <ProtectedRoute allowedRoles={KNOWLEDGE_REPOSITORY_ROLES}>
+                      <AddProjectPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/knowledge/shortlists"
+                  element={
+                    <ProtectedRoute allowedRoles={KNOWLEDGE_REPOSITORY_ROLES}>
+                      <ShortlistsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/knowledge/:id/edit"
+                  element={
+                    <ProtectedRoute allowedRoles={KNOWLEDGE_REPOSITORY_ROLES}>
+                      <EditProjectPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/knowledge/:id"
+                  element={
+                    <ProtectedRoute allowedRoles={KNOWLEDGE_REPOSITORY_ROLES}>
+                      <ProjectDetailsPage />
                     </ProtectedRoute>
                   }
                 />

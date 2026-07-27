@@ -47,8 +47,11 @@ function jsonRes(req: Request, status: number, body: unknown) {
   });
 }
 
-const DGM_CREATABLE_ROLES = ["agm", "srm", "project_officer", "associate_consultant"];
-const MD_CREATABLE_ROLES = ["cfo", "cs", "dgm", "agm", "srm", "project_officer", "associate_consultant"];
+// MD can create ONLY admin accounts — a bootstrap allowance so there's a
+// way to create the very first Admin. Every other role is created by an
+// Admin (ADMIN_CREATABLE_ROLES). DGM can no longer create anyone.
+const MD_CREATABLE_ROLES = ["admin"];
+const ADMIN_CREATABLE_ROLES = ["cfo", "cs", "dgm", "agm", "srm", "project_officer", "associate_consultant"];
 
 const ROLE_LABELS: Record<string, string> = {
   md: "Managing Director",
@@ -59,6 +62,7 @@ const ROLE_LABELS: Record<string, string> = {
   srm: "Senior Regional Manager",
   project_officer: "Project Officer",
   associate_consultant: "Associate Consultant",
+  admin: "Administrator",
 };
 
 // Decode JWT payload without verifying signature — the Supabase gateway
@@ -220,8 +224,8 @@ serve(async (req) => {
 
     if (callerErr || !caller) return jsonRes(req, 403, { error: "Caller account not found." });
     if (!caller.is_active) return jsonRes(req, 403, { error: "Your account is deactivated." });
-    if (!["md", "dgm"].includes(caller.role)) {
-      return jsonRes(req, 403, { error: "Forbidden. Only MD or DGM can create user accounts." });
+    if (!["md", "admin"].includes(caller.role)) {
+      return jsonRes(req, 403, { error: "Forbidden. Only Admin (or MD, to create the first Admin) can create user accounts." });
     }
 
     let body: Record<string, unknown>;
@@ -243,8 +247,8 @@ serve(async (req) => {
       return jsonRes(req, 400, { error: "Role is required." });
     }
 
-    if (caller.role === "dgm" && !DGM_CREATABLE_ROLES.includes(role)) {
-      return jsonRes(req, 403, { error: `DGM can only create: ${DGM_CREATABLE_ROLES.join(", ")}.` });
+    if (caller.role === "admin" && !ADMIN_CREATABLE_ROLES.includes(role)) {
+      return jsonRes(req, 403, { error: `Admin can only create: ${ADMIN_CREATABLE_ROLES.join(", ")}.` });
     }
     if (caller.role === "md" && !MD_CREATABLE_ROLES.includes(role)) {
       return jsonRes(req, 403, { error: `MD can only create: ${MD_CREATABLE_ROLES.join(", ")}.` });
@@ -274,10 +278,8 @@ serve(async (req) => {
       });
     }
 
-    // DGM: team/office are ALWAYS taken from the caller's own DB row —
-    // never from the request body.
-    const finalTeam = caller.role === "dgm" ? caller.team : (body.team as string) || null;
-    const finalOffice = caller.role === "dgm" ? caller.office : (body.office as string) || null;
+    const finalTeam = (body.team as string) || null;
+    const finalOffice = (body.office as string) || null;
 
     const { error: insertErr } = await adminClient.from("afc_users").insert([
       {
@@ -290,7 +292,7 @@ serve(async (req) => {
         is_active: true,
         must_change_password: true,
         created_by: caller.id,
-        managed_by_dgm: caller.role === "dgm" ? caller.id : null,
+        managed_by_dgm: null,
       },
     ]);
 

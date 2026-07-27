@@ -153,16 +153,27 @@
 }
 
 @media (max-width: 720px) {
-  /* Inside the mobile nav drawer now (see AppHeader.css), so the panel is
-     switched to fixed positioning — a drawer with overflow-y:auto forces
-     overflow-x to auto too (CSS2.1 visible/auto pairing rule), which would
-     otherwise clip an absolutely-positioned panel wider than the drawer. */
+  /* Inside the mobile nav drawer now (see AppHeader.css), and that drawer
+     animates with `transform`, which makes it the containing block for any
+     `position: fixed` descendant — so this panel's fixed positioning
+     resolves against the drawer's box, not the viewport. Since the drawer
+     itself spans the full screen height, setting top/bottom (not just
+     bottom) here makes the panel fill nearly that whole area instead of
+     shrinking to an intrinsic-height box pinned to the bottom corner. */
   .notif-bell-panel {
     position: fixed;
-    top: auto;
+    top: var(--space-4);
     bottom: var(--space-4);
     left: var(--space-3);
     right: var(--space-3);
     width: auto;
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .notif-bell-list {
+    flex: 1;
+    max-height: none;
   }
 }

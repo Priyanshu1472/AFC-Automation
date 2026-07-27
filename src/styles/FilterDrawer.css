@@ -1,0 +1,155 @@
+/* ============================================================
+   FilterDrawer.css — shared right-side slide-in filter drawer,
+   standardized across list/search pages (pattern from the
+   Empanelment Reports page).
+   ============================================================ */
+
+/* Text-only on desktop; icon-only on mobile (see the media query below) —
+   never shown together. */
+.fd-filter-icon {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Flex items size via CSS width/height, not the SVG's HTML attributes —
+   without this the icon can compute to 0 width inside the inline-flex
+   button on mobile (Chrome doesn't reliably use attribute-based intrinsic
+   sizing for flex-basis: auto on an <svg>). */
+.fd-filter-icon svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.fd-filter-text {
+  display: inline;
+}
+
+.fd-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: var(--radius-full);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.fd-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  z-index: var(--z-modal);
+  animation: fadeIn var(--duration-fast) var(--ease-out);
+}
+
+.fd-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(360px, 100vw);
+  background: var(--card-bg);
+  border-left: 1px solid var(--card-border);
+  box-shadow: var(--shadow-xl);
+  z-index: var(--z-modal);
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight var(--duration-normal) var(--ease-out);
+}
+
+.fd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fd-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.fd-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.fd-close:hover { background: var(--bg-surface-3); }
+
+.fd-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.fd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fd-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.fd-footer {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 480px) {
+  .fd-drawer { width: 100vw; }
+}
+
+@media (max-width: 720px) {
+  /* Collapse the "Filters" button to a compact square icon button, matching
+     the other icon buttons in the app (theme toggle, notification bell) —
+     the full text label wastes space and forces the search row to wrap. */
+  .fd-filter-btn {
+    padding: 0;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    gap: 0;
+  }
+
+  .fd-filter-icon { display: inline-flex; }
+  .fd-filter-text { display: none; }
+
+  .fd-filter-count {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    margin-left: 0;
+  }
+
+  .fd-filter-btn { position: relative; }
+}

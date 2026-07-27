@@ -17,7 +17,9 @@
   flex-shrink: 0;
 }
 
-.app-header-brand img {
+.app-header-logo {
+  height: 50px;
+  width: auto;
   border-radius: var(--radius-sm);
 }
 
@@ -140,6 +142,48 @@
   margin-left: auto;
 }
 
+/* Desktop-only copy of the Knowledge Repository link, rendered next to the
+   theme toggle instead of in the left-hand nav-links list — an icon-only
+   square button matching ThemeToggle/NotificationBell so it reads as part
+   of that utility group rather than a stray text pill. The mobile drawer
+   keeps its own full-text copy (see .app-header-kr-link-mobile) because
+   this one is hidden below the 720px breakpoint. */
+.app-header-kr-link-desktop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--btn-secondary-bg);
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.app-header-kr-link-desktop:hover {
+  color: var(--text-primary);
+  background: var(--btn-secondary-bg-hover);
+  text-decoration: none;
+}
+
+.app-header-kr-link-desktop.active {
+  color: var(--text-brand);
+  border-color: var(--brand-500);
+  background: var(--bg-surface-3);
+  text-decoration: none;
+}
+
+/* The nav-links list doubles as the desktop top nav and the mobile drawer's
+   link list — the mobile-drawer copy of Knowledge Repository only makes
+   sense in the latter, so it's hidden above the mobile breakpoint (where
+   the desktop copy above takes over instead). */
+@media (min-width: 721px) {
+  .app-header-kr-link-mobile {
+    display: none;
+  }
+}
+
 .app-header-menu-btn {
   display: none;
   align-items: center;
@@ -167,6 +211,7 @@
    media query below. Desktop shows the equivalent info via UserMenu's
    chip + dropdown instead. */
 .app-header-nav-profile-mobile,
+.app-header-nav-profile-link-mobile,
 .app-header-nav-signout-mobile {
   display: none;
 }
@@ -175,6 +220,10 @@
 @media (max-width: 720px) {
   .app-header {
     padding: var(--space-3) var(--space-4);
+  }
+
+  .app-header-logo {
+    height: 50px;
   }
 
   /* Right-side sliding drawer — holds links, then utilities (theme,
@@ -236,6 +285,13 @@
     display: none;
   }
 
+  /* Knowledge Repository's desktop copy (utilities row) is redundant here —
+     the drawer already shows it in the nav-links list, in its normal
+     mobile spot (see .app-header-kr-link-mobile). */
+  .app-header-kr-link-desktop {
+    display: none;
+  }
+
   .app-header-nav-profile-mobile {
     display: flex;
     align-items: center;
@@ -280,6 +336,27 @@
     color: var(--text-tertiary);
   }
 
+  .app-header-nav-profile-link-mobile {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    background: none;
+    border: none;
+    padding: var(--space-3) var(--space-1);
+    cursor: pointer;
+  }
+
+  /* First of the two profile links gets the top divider and the pin-to-
+     bottom margin; the second sits flush below it, then Sign out. */
+  .app-header-nav-profile-link-mobile:first-of-type {
+    border-top: 1px solid var(--border-subtle);
+    margin-top: auto;
+    padding-top: var(--space-3);
+  }
+
   .app-header-nav-signout-mobile {
     display: block;
     width: 100%;
@@ -289,11 +366,7 @@
     color: var(--danger);
     background: none;
     border: none;
-    border-top: 1px solid var(--border-subtle);
     padding: var(--space-3) var(--space-1);
-    margin-top: auto;
-    /* Pins to the bottom of the flex-column drawer regardless of how much
-       content (links, utilities) sits above it. */
     cursor: pointer;
   }
 

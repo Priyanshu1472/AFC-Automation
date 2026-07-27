@@ -31,3 +31,6 @@ yarn-error.log*
 
 # Local Netlify folder
 .netlify
+
+# Demo seed script output (real email addresses + a shared password)
+demo-credentials.md

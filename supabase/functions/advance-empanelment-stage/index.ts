@@ -9,7 +9,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
-import { notifyUser, notifyRole, notifyTeam } from "../_shared/notify.ts";
+import { notifyUser, notifyRole, notifyTeam, emailRole, emailUser } from "../_shared/notify.ts";
+import { verifyOtp } from "../_shared/otp.ts";
 import {
   bytesToBase64, formatDateDDMMYYYY, formatDateLong, addMonths, BLACK,
   Segment, plain, bold, PageEngine, sd, sdLine, sdPara, sdGap, newPdfDoc,
@@ -119,6 +120,39 @@ async function generateEmpanelmentPDF(opts: {
   await sdLine(e, "AFC India Limited", S, false);
 
   return await pdf.save();
+}
+
+// CFO/CS previously only got the in-app bell notification when an
+// application reached their stage — this adds an actual email so it isn't
+// missed if they haven't opened the app.
+// Generic "your action is needed" email — used for every stage handoff
+// besides the CFO/CS one above (which has its own copy), so the PO/DGM/MD
+// get a real email (not just the in-app bell) whenever the application
+// lands in their queue.
+function actionRequiredEmailHtml(orgName: string, applicationId: string, actionPhrase: string): string {
+  const siteUrl = Deno.env.get("SITE_URL") || "http://localhost:5173";
+  return wrapEmailBody(`
+    <p style="margin:0 0 16px;font-size:14px;color:#374151;">Dear Sir / Ma'am,</p>
+    <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
+      The empanelment application submitted by <strong>${escapeHtml(orgName)}</strong> needs you to ${escapeHtml(actionPhrase)}.
+    </p>
+    <p style="margin:0 0 8px;">
+      <a href="${siteUrl}/empanelment/${applicationId}" style="display:inline-block;background:#1a5fd4;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-weight:600;font-size:13px;">Review Application &rarr;</a>
+    </p>
+  `);
+}
+
+function cfoCsReviewEmailHtml(orgName: string, applicationId: string): string {
+  const siteUrl = Deno.env.get("SITE_URL") || "http://localhost:5173";
+  return wrapEmailBody(`
+    <p style="margin:0 0 16px;font-size:14px;color:#374151;">Dear Sir / Ma'am,</p>
+    <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
+      The empanelment application submitted by <strong>${escapeHtml(orgName)}</strong> is awaiting your review.
+    </p>
+    <p style="margin:0 0 8px;">
+      <a href="${siteUrl}/empanelment/${applicationId}" style="display:inline-block;background:#1a5fd4;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-weight:600;font-size:13px;">Review Application &rarr;</a>
+    </p>
+  `);
 }
 
 async function logActivity(admin: AdminClient, applicationId: string, actorId: string, actorRole: string, action: string, comment: string | null) {
@@ -370,6 +404,9 @@ serve(async (req) => {
         };
         await notifyRole(adminClient, "cfo", forwardPayload);
         await notifyRole(adminClient, "cs", forwardPayload);
+        const forwardMail = { subject: "Empanelment Application Awaiting Your Review — AFC India Limited", html: cfoCsReviewEmailHtml(orgName, app.id) };
+        await emailRole(adminClient, "cfo", forwardMail);
+        await emailRole(adminClient, "cs", forwardMail);
         return jsonRes(req, 200, { success: true, status: "cfo_cs_review" });
       }
 
@@ -395,6 +432,10 @@ serve(async (req) => {
             type: "action_required",
             link: `/empanelment/${app.id}`,
           });
+          await emailUser(adminClient, app.project_officer_id, {
+            subject: "Empanelment Application Awaiting Your Final Review — AFC India Limited",
+            html: actionRequiredEmailHtml(orgName, app.id, "give it a final look before forwarding to the DGM, now that CFO and CS review is complete"),
+          });
         }
         return jsonRes(req, 200, { success: true, status: otherDone ? "po_final_review" : "cfo_cs_review", forwarded: !!otherDone });
       }
@@ -418,6 +459,9 @@ serve(async (req) => {
         };
         await notifyRole(adminClient, "cfo", resendPayload);
         await notifyRole(adminClient, "cs", resendPayload);
+        const resendMail = { subject: "Empanelment Application Awaiting Your Review — AFC India Limited", html: cfoCsReviewEmailHtml(orgName, app.id) };
+        await emailRole(adminClient, "cfo", resendMail);
+        await emailRole(adminClient, "cs", resendMail);
         return jsonRes(req, 200, { success: true, status: "cfo_cs_review" });
       }
 
@@ -434,8 +478,16 @@ serve(async (req) => {
         };
         if (app.dgm_id) {
           await notifyUser(adminClient, app.dgm_id, dgmPayload);
+          await emailUser(adminClient, app.dgm_id, {
+            subject: "Empanelment Application Awaiting Your Review — AFC India Limited",
+            html: actionRequiredEmailHtml(orgName, app.id, "review it"),
+          });
         } else {
           await notifyRole(adminClient, "dgm", dgmPayload, app.team);
+          await emailRole(adminClient, "dgm", {
+            subject: "Empanelment Application Awaiting Your Review — AFC India Limited",
+            html: actionRequiredEmailHtml(orgName, app.id, "review it"),
+          }, app.team);
         }
         return jsonRes(req, 200, { success: true, status: "dgm_review" });
       }
@@ -452,6 +504,10 @@ serve(async (req) => {
           type: "action_required",
           link: `/empanelment/${app.id}`,
         });
+        await emailRole(adminClient, "md", {
+          subject: "Empanelment Application Awaiting Your Decision — AFC India Limited",
+          html: actionRequiredEmailHtml(orgName, app.id, "make a final decision — the DGM has recommended this application"),
+        });
         return jsonRes(req, 200, { success: true, status: "md_review" });
       }
 
@@ -465,6 +521,10 @@ serve(async (req) => {
           sub_text: `${orgName}'s application was sent back by the DGM for another look.`,
           type: "action_required",
           link: `/empanelment/${app.id}`,
+        });
+        await emailUser(adminClient, app.project_officer_id, {
+          subject: "Empanelment Application Sent Back — AFC India Limited",
+          html: actionRequiredEmailHtml(orgName, app.id, "take another look — it was sent back by the DGM"),
         });
         return jsonRes(req, 200, { success: true, status: "po_final_review" });
       }
@@ -480,29 +540,46 @@ serve(async (req) => {
           type: "action_required",
           link: `/empanelment/${app.id}`,
         };
-        if (app.dgm_id) await notifyUser(adminClient, app.dgm_id, sendBackPayload);
-        else await notifyRole(adminClient, "dgm", sendBackPayload, app.team);
+        const sendBackMail = {
+          subject: "Empanelment Application Sent Back — AFC India Limited",
+          html: actionRequiredEmailHtml(orgName, app.id, "take another look — it was sent back by the MD"),
+        };
+        if (app.dgm_id) {
+          await notifyUser(adminClient, app.dgm_id, sendBackPayload);
+          await emailUser(adminClient, app.dgm_id, sendBackMail);
+        } else {
+          await notifyRole(adminClient, "dgm", sendBackPayload, app.team);
+          await emailRole(adminClient, "dgm", sendBackMail, app.team);
+        }
         return jsonRes(req, 200, { success: true, status: "dgm_review" });
       }
 
-      case "dgm_reject":
+      // DGMs can no longer reject directly — kept as an explicit case
+      // (rather than falling through to "Unknown action") so the intent is
+      // clear if this is ever hit directly, e.g. a stale client.
+      case "dgm_reject": {
+        return forbidden("DGMs can no longer reject applications directly. Send it back to the Project Officer, or forward it to the MD for a final decision.");
+      }
+
       case "md_reject": {
-        const isDgm = action === "dgm_reject";
-        if (caller.role !== (isDgm ? "dgm" : "md")) return forbidden(`Only ${isDgm ? "the team's DGM" : "the MD"} can reject at this stage.`);
-        if (isDgm && caller.team !== app.team) return forbidden("Only the team's DGM can act on this application.");
-        if (app.status !== (isDgm ? "dgm_review" : "md_review")) return badState(isDgm ? "dgm_review" : "md_review");
+        if (caller.role !== "md") return forbidden("Only the MD can reject at this stage.");
+        if (app.status !== "md_review") return badState("md_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "Rejection remarks are required." });
 
-        const field = isDgm ? "dgm_comment" : "md_remarks";
-        await adminClient.from("empanelment_applications").update({ status: "rejected", [field]: trimmedComment, decided_at: new Date().toISOString() }).eq("id", app.id);
+        const otpValid = await verifyOtp(adminClient, { userId: caller.id, applicationId: app.id, action: "md_reject", otp: body.otp });
+        if (!otpValid) return jsonRes(req, 400, { error: "Invalid or expired verification code. Please request a new one." });
+
+        await adminClient.from("empanelment_applications").update({ status: "rejected", md_remarks: trimmedComment, decided_at: new Date().toISOString() }).eq("id", app.id);
         const emailSent = await sendDecisionMail(orgName, app.ba_email, false, trimmedComment);
-        await logActivity(adminClient, app.id, caller.id, caller.role, isDgm ? "dgm_rejected" : "md_rejected", trimmedComment);
-        await notifyUser(adminClient, app.sent_by, {
+        await logActivity(adminClient, app.id, caller.id, caller.role, "md_rejected", trimmedComment);
+        // Whole team, not just the AC who sent the invite — the team should
+        // know an application they worked on was ultimately rejected.
+        await notifyTeam(adminClient, app.team, {
           title: "Empanelment application rejected",
-          sub_text: `${orgName}'s application was rejected by ${isDgm ? "the DGM" : "the MD"}.`,
+          sub_text: `${orgName}'s application was rejected by the MD. Remarks: ${trimmedComment}`,
           type: "info",
           link: `/empanelment/${app.id}`,
-        });
+        }, caller.id);
         return jsonRes(req, 200, { success: true, status: "rejected", email_sent: emailSent });
       }
 
@@ -510,6 +587,9 @@ serve(async (req) => {
         if (caller.role !== "md") return forbidden("Only the MD can accept this application.");
         if (app.status !== "md_review") return badState("md_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "Remarks are required." });
+
+        const otpValid = await verifyOtp(adminClient, { userId: caller.id, applicationId: app.id, action: "md_accept", otp: body.otp });
+        if (!otpValid) return jsonRes(req, 400, { error: "Invalid or expired verification code. Please request a new one." });
 
         await adminClient.from("empanelment_applications").update({ status: "accepted", md_remarks: trimmedComment, decided_at: new Date().toISOString() }).eq("id", app.id);
         const credentials = await provisionBaAccount(adminClient, app.id, app.ba_email, orgName, baData?.contact_person || null);

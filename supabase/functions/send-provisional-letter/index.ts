@@ -14,6 +14,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { sendResendEmail } from "../_shared/email.ts";
 import { notifyUser } from "../_shared/notify.ts";
+import { verifyOtp } from "../_shared/otp.ts";
 import {
   bytesToBase64, formatDateDDMMYYYY, formatDateLong, addMonths, BLACK,
   Segment, plain, bold, PageEngine, sd, sdLine, sdPara, sdGap, newPdfDoc,
@@ -196,7 +197,7 @@ serve(async (req) => {
     return jsonRes(req, 400, { error: "Invalid JSON body." });
   }
 
-  const { application_id } = body as { application_id?: string };
+  const { application_id, otp } = body as { application_id?: string; otp?: unknown };
   if (!application_id || typeof application_id !== "string") return jsonRes(req, 400, { error: "application_id is required." });
 
   const { data: app, error: appErr } = await adminClient
@@ -209,6 +210,9 @@ serve(async (req) => {
   if (caller.team !== app.team) return jsonRes(req, 403, { error: "Only the team's DGM can send the provisional letter for this application." });
   if (!ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: `The BA hasn't submitted their form yet, so there's nothing to send a letter for.` });
   if (app.provisional_letter_sent) return jsonRes(req, 400, { error: "A provisional letter has already been sent for this application." });
+
+  const otpValid = await verifyOtp(adminClient, { userId: caller.id, applicationId: application_id, action: "provisional_letter", otp });
+  if (!otpValid) return jsonRes(req, 400, { error: "Invalid or expired verification code. Please request a new one." });
 
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!RESEND_API_KEY) return jsonRes(req, 500, { error: "Email service not configured." });

@@ -83,8 +83,8 @@ serve(async (req) => {
 
     if (callerErr || !caller) return jsonRes(req, 403, { error: "Caller account not found." });
     if (!caller.is_active) return jsonRes(req, 403, { error: "Your account is deactivated." });
-    if (!["md", "dgm"].includes(caller.role)) {
-      return jsonRes(req, 403, { error: "Forbidden. Only MD or DGM can change user status." });
+    if (!["md", "dgm", "admin"].includes(caller.role)) {
+      return jsonRes(req, 403, { error: "Forbidden. Only Admin, MD, or DGM can change user status." });
     }
 
     let body: Record<string, unknown>;
@@ -110,10 +110,10 @@ serve(async (req) => {
       if (target.team !== caller.team || !DGM_CREATABLE_ROLES.includes(target.role)) {
         return jsonRes(req, 403, { error: "You can only manage users on your own team." });
       }
-    } else if (["dgm", "cfo", "cs"].includes(target.role) && caller.role !== "md") {
-      // Redundant given the caller.role === "md" || "dgm" gate above, but
-      // explicit: only MD may deactivate another senior role.
-      return jsonRes(req, 403, { error: "Only MD can change this user's status." });
+    } else if (["dgm", "cfo", "cs"].includes(target.role) && !["md", "admin"].includes(caller.role)) {
+      // Redundant given the caller.role gate above, but explicit: only
+      // MD/Admin may deactivate another senior role.
+      return jsonRes(req, 403, { error: "Only MD or Admin can change this user's status." });
     }
 
     const { error: updateErr } = await adminClient
