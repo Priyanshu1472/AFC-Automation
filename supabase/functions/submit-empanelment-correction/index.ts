@@ -12,6 +12,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { checkAnonKey, getClientIP, checkRateLimit, clearRateLimit } from "../_shared/publicAccess.ts";
 import { notifyUser, notifyRole } from "../_shared/notify.ts";
+import { labelForFieldKey } from "../_shared/empanelmentFields.ts";
 
 const BUCKET = "ba-documents";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -91,6 +92,9 @@ serve(async (req) => {
     }
     if (!Array.isArray(submittedKeys) || submittedKeys.length === 0) return jsonRes(req, 400, { error: "No corrections were submitted." });
 
+    const clarification = clean(formData.get("clarification"));
+    if (!clarification) return jsonRes(req, 400, { error: "Please add a clarification explaining your correction." });
+
     for (const key of submittedKeys) {
       if (!openFieldKeys.has(key)) return jsonRes(req, 400, { error: `"${key}" is not currently flagged for correction on this application.` });
     }
@@ -161,12 +165,13 @@ serve(async (req) => {
     const resumeStatus = VALID_RESUME_STATUSES.has(application.hold_origin_status || "") ? application.hold_origin_status : "po_review";
     await adminClient.from("empanelment_applications").update({ status: resumeStatus, hold_origin_status: null }).eq("id", application.id);
 
+    const correctedLabels = submittedKeys.map((k) => labelForFieldKey(k));
     await adminClient.from("empanelment_activity_log").insert({
       application_id: application.id,
       actor_id: null,
       actor_role: "ba",
       action: "ba_corrected",
-      comment: `Corrected: ${submittedKeys.join(", ")}.`,
+      comment: `${clarification}\n\nFields corrected: ${correctedLabels.join(", ")}.`,
     });
 
     // Notify whoever's turn it is to act now that review has resumed.

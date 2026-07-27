@@ -134,6 +134,8 @@ export default function LoginPage() {
               <Link to="/ba-form" className="login-ba-link">Fill Empanelment Form</Link>
               <span className="login-ba-sep" aria-hidden="true">·</span>
               <Link to="/empanelment/correction" className="login-ba-link">Submit a Correction</Link>
+              <span className="login-ba-sep" aria-hidden="true">·</span>
+              <Link to="/empanelment/status" className="login-ba-link">Check Application Status</Link>
             </div>
           </div>
 

@@ -21,6 +21,7 @@ import BaFormPage from "./pages/empanelment/BaFormPage";
 import EmpanelmentListPage from "./pages/empanelment/EmpanelmentListPage";
 import ApplicationReviewPage from "./pages/empanelment/ApplicationReviewPage";
 import EmpanelmentCorrectionPage from "./pages/empanelment/EmpanelmentCorrectionPage";
+import ApplicationStatusPage from "./pages/empanelment/ApplicationStatusPage";
 import EmpanelmentDashboardPage from "./pages/empanelment/EmpanelmentDashboardPage";
 import EmpanelmentReportsPage from "./pages/empanelment/EmpanelmentReportsPage";
 import KnowledgeSearchPage from "./pages/knowledge/KnowledgeSearchPage";
@@ -124,6 +125,7 @@ export default function App() {
 
                 <Route path="/ba-form" element={<BaFormPage />} />
                 <Route path="/empanelment/correction" element={<EmpanelmentCorrectionPage />} />
+                <Route path="/empanelment/status" element={<ApplicationStatusPage />} />
                 <Route
                   path="/empanelment/send"
                   element={
