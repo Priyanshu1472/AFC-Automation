@@ -473,3 +473,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/get-empanelment-correction-info/deno.json"
 entrypoint = "./functions/get-empanelment-correction-info/index.ts"
+
+[functions.get-empanelment-status]
+enabled = true
+verify_jwt = false
+import_map = "./functions/get-empanelment-status/deno.json"
+entrypoint = "./functions/get-empanelment-status/index.ts"
