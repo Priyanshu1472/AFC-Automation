@@ -1,5 +1,6 @@
 // supabase/functions/send-empanelment-invite/index.ts
-// JWT must be ON. Caller must be an active associate_consultant.
+// JWT must be ON. Caller must be an active associate_consultant or
+// project_assistant (same send permissions).
 // Generates a 5-digit application code, creates the empanelment_applications
 // row, and emails the BA the invite + code.
 
@@ -18,6 +19,7 @@ const ROLE_LABELS: Record<string, string> = {
   srm: "Senior Regional Manager",
   project_officer: "Project Officer",
   associate_consultant: "Associate Consultant",
+  project_assistant: "Project Assistant",
 };
 
 function generateAppCode(): string {
@@ -39,8 +41,8 @@ serve(async (req) => {
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
 
-  if (caller.role !== "associate_consultant") {
-    return jsonRes(req, 403, { error: "Only Associate Consultants can send empanelment invitations." });
+  if (!["associate_consultant", "project_assistant"].includes(caller.role)) {
+    return jsonRes(req, 403, { error: "Only Associate Consultants or Project Assistants can send empanelment invitations." });
   }
   if (!caller.team) {
     return jsonRes(req, 400, { error: "You are not assigned to a team. Please contact your DGM." });

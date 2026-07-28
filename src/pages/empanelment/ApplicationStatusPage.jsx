@@ -5,7 +5,7 @@ import Alert from "../../components/ui/Alert";
 import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import { FormNav } from "./formShared";
-import { STATUS_FLOW, STATUS_BADGE, ProgressStepper, TimelineAccordion } from "../../components/empanelment/ApplicationTimeline";
+import { STATUS_FLOW, STATUS_BADGE, ProgressStepper } from "../../components/empanelment/ApplicationTimeline";
 import "../../styles/BaFormPage.css";
 
 function statusMessage(status) {
@@ -102,14 +102,10 @@ export default function ApplicationStatusPage() {
             <Card>
               <Card.Body className="bf-section-body bf-single-col">
                 <p className="ar-stepper-heading">Application Progress</p>
-                <ProgressStepper currentStatus={result.status} />
+                <ProgressStepper currentStatus={result.status} publicView />
               </Card.Body>
             </Card>
 
-            <Card>
-              <Card.Header title="Activity Timeline" />
-              <Card.Body className="ar-timeline-body"><TimelineAccordion logs={result.logs} showActorName={false} /></Card.Body>
-            </Card>
           </>
         )}
       </main>

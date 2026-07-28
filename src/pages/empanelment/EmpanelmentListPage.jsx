@@ -211,7 +211,7 @@ export default function EmpanelmentListPage() {
     return matchSearch && (statusFilter === "all" || a.status === statusFilter);
   });
 
-  const canSend = profile?.role === "associate_consultant";
+  const canSend = ["associate_consultant", "project_assistant"].includes(profile?.role);
   // Admin included so it can open the full read-only review page (timeline,
   // documents, etc.) — it has no action branch there, so it lands view-only.
   const canReview = ["project_officer", "cfo", "cs", "dgm", "md", "admin"].includes(profile?.role);

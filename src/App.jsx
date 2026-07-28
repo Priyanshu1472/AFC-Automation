@@ -129,7 +129,7 @@ export default function App() {
                 <Route
                   path="/empanelment/send"
                   element={
-                    <ProtectedRoute allowedRoles={["associate_consultant"]}>
+                    <ProtectedRoute allowedRoles={["associate_consultant", "project_assistant"]}>
                       <SendEmpanelmentPage />
                     </ProtectedRoute>
                   }

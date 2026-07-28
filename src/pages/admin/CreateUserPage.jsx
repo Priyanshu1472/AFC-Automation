@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { MD_CREATABLE_ROLES, ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, TEAMS } from "../../lib/roles";
+import { MD_CREATABLE_ROLES, ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
+import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
@@ -35,7 +36,8 @@ export default function CreateUserPage() {
   }, [isAdmin]);
 
   const officeOptions = OFFICES.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }));
-  const teamOptions = TEAMS.map((t) => ({ value: t, label: t }));
+  const teams = useTeamOptions();
+  const teamOptions = teams.map((t) => ({ value: t, label: t }));
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
@@ -178,10 +180,11 @@ export default function CreateUserPage() {
                     Team <FieldTooltip text={FIELD_HELP.team} />
                   </label>
                   <Select
+                    creatable
                     options={teamOptions}
                     value={form.team}
                     onChange={(v) => set("team", v)}
-                    placeholder="Select team (optional)"
+                    placeholder="Select or type a team"
                     disabled={saving}
                     error={errors.team}
                   />

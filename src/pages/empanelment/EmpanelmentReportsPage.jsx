@@ -10,7 +10,7 @@ import jsPDF from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
-import { TEAMS, OFFICES, can } from "../../lib/roles";
+import { can } from "../../lib/roles";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
@@ -561,11 +561,11 @@ function ReportPreview({ report, output, onExcel, onPdf }) {
 // stay out of the way until asked for, instead of a permanent row of
 // selects eating vertical space above every report. Every other list/search
 // page in the app uses the same shared FilterDrawer for consistency.
-function ReportFilterDrawer({ open, onClose, filters, set, onReset, officeOptions, sectorOptions, canFilterTeamOffice }) {
+function ReportFilterDrawer({ open, onClose, filters, set, onReset, officeOptions, teamOptions, sectorOptions, canFilterTeamOffice }) {
   return (
     <FilterDrawer open={open} onClose={onClose} onReset={onReset} title="Filters">
       <FilterField label="Team">
-        <Select disabled={!canFilterTeamOffice} value={filters.team} onChange={(v) => set("team", v)} placeholder="All Teams" options={[{ value: "all", label: "All Teams" }, ...TEAMS.map((t) => ({ value: t, label: t }))]} />
+        <Select disabled={!canFilterTeamOffice} value={filters.team} onChange={(v) => set("team", v)} placeholder="All Teams" options={[{ value: "all", label: "All Teams" }, ...teamOptions.map((t) => ({ value: t, label: t }))]} />
       </FilterField>
       <FilterField label="Office">
         <Select disabled={!canFilterTeamOffice} value={filters.office} onChange={(v) => set("office", v)} placeholder="All Offices" options={[{ value: "all", label: "All Offices" }, ...officeOptions.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }))]} />
@@ -691,6 +691,7 @@ export default function EmpanelmentReportsPage() {
   }, [profile?.id]);
 
   const officeOptions = useMemo(() => [...new Set(apps.map((a) => a.office).filter(Boolean))].sort(), [apps]);
+  const teamOptions = useMemo(() => [...new Set(apps.map((a) => a.team).filter(Boolean))].sort(), [apps]);
   const sectorOptions = useMemo(() => { const s = new Set(); apps.forEach((a) => sectorsOf(a).forEach((x) => s.add(x))); return [...s].sort(); }, [apps]);
 
   const filtered = useMemo(() => applyFilters(apps, filters), [apps, filters]);
@@ -765,6 +766,7 @@ export default function EmpanelmentReportsPage() {
         set={set}
         onReset={() => setFilters({ team: "all", office: "all", status: "all", sector: "all", from: "", to: "" })}
         officeOptions={officeOptions}
+        teamOptions={teamOptions}
         sectorOptions={sectorOptions}
         canFilterTeamOffice={canFilterTeamOffice}
       />

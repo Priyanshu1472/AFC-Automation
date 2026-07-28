@@ -51,7 +51,7 @@ function jsonRes(req: Request, status: number, body: unknown) {
 // way to create the very first Admin. Every other role is created by an
 // Admin (ADMIN_CREATABLE_ROLES). DGM can no longer create anyone.
 const MD_CREATABLE_ROLES = ["admin"];
-const ADMIN_CREATABLE_ROLES = ["cfo", "cs", "dgm", "agm", "srm", "project_officer", "associate_consultant"];
+const ADMIN_CREATABLE_ROLES = ["cfo", "cs", "dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"];
 
 const ROLE_LABELS: Record<string, string> = {
   md: "Managing Director",
@@ -62,6 +62,7 @@ const ROLE_LABELS: Record<string, string> = {
   srm: "Senior Regional Manager",
   project_officer: "Project Officer",
   associate_consultant: "Associate Consultant",
+  project_assistant: "Project Assistant",
   admin: "Administrator",
 };
 

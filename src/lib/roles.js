@@ -8,12 +8,16 @@ export const ROLES = {
   srm: 5,
   project_officer: 6,
   associate_consultant: 7,
-  business_associate: 8,
+  // Same permissions/visibility as associate_consultant (can send
+  // empanelment invitations, sees their own team's applications) — kept as
+  // its own role rather than aliased so titles stay accurate on the roster.
+  project_assistant: 8,
+  business_associate: 9,
   // Not part of the review hierarchy above — a separate, IT/ops-style role
   // scoped to Home + Users (full manage rights) and read-only visibility
   // into empanelment/dashboards/reports. Given its own bucket rather than a
   // hierarchy rank.
-  admin: 9,
+  admin: 10,
 };
 
 export const ROLE_LABELS = {
@@ -25,6 +29,7 @@ export const ROLE_LABELS = {
   srm: "Senior Regional Manager",
   project_officer: "Project Officer",
   associate_consultant: "Associate Consultant",
+  project_assistant: "Project Assistant",
   business_associate: "Business Associate",
   admin: "Administrator",
 };
@@ -46,6 +51,7 @@ export const ADMIN_CREATABLE_ROLES = [
   "srm",
   "project_officer",
   "associate_consultant",
+  "project_assistant",
 ];
 
 // ─── Users page — nav visibility and the /users route's allowedRoles must
@@ -94,14 +100,14 @@ export const can = {
   // disabled rather than a no-op.
   filterReportsByTeamOffice: (role) => ["md", "admin"].includes(role),
   viewOwnTeam: (role) =>
-    ["dgm", "agm", "srm", "project_officer", "associate_consultant"].includes(role),
+    ["dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"].includes(role),
 
   viewUsersPage: (role) => USERS_PAGE_ROLES.includes(role),
   viewAuditLog: (role) => AUDIT_LOG_ROLES.includes(role),
 };
 
 export function isTeamUser(role) {
-  return ["dgm", "agm", "srm", "project_officer", "associate_consultant"].includes(role);
+  return ["dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"].includes(role);
 }
 
 export function isAdminLevel(role) {

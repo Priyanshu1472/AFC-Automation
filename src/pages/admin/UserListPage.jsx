@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { ROLE_LABELS, TEAMS, can } from "../../lib/roles";
+import { ROLE_LABELS, can } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
+import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
@@ -25,6 +26,7 @@ const ROLE_VARIANT = {
   srm: "neutral",
   project_officer: "warning",
   associate_consultant: "info",
+  project_assistant: "info",
   admin: "danger",
 };
 
@@ -91,7 +93,8 @@ export default function UserListPage() {
     () => [{ value: "all", label: "All Roles" }, ...Object.entries(ROLE_LABELS).filter(([k]) => k !== "business_associate").map(([value, label]) => ({ value, label }))],
     []
   );
-  const teamFilterOptions = useMemo(() => [{ value: "all", label: "All Teams" }, ...TEAMS.map((t) => ({ value: t, label: t }))], []);
+  const teams = useTeamOptions();
+  const teamFilterOptions = useMemo(() => [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))], [teams]);
 
   const fetchUsersFlat = useCallback(async (currentPage, currentSearch, currentTeam, currentRole) => {
     // RLS scopes the visible rows automatically: md/cfo/cs see everyone,
@@ -155,10 +158,10 @@ export default function UserListPage() {
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(u);
     });
-    // Known teams first (in TEAMS order), then anything else (e.g. Unassigned).
-    const ordered = [...TEAMS.filter((t) => map.has(t)), ...[...map.keys()].filter((k) => !TEAMS.includes(k))];
+    // Known teams first (in teams order), then anything else (e.g. Unassigned).
+    const ordered = [...teams.filter((t) => map.has(t)), ...[...map.keys()].filter((k) => !teams.includes(k))];
     return ordered.map((team) => ({ team, users: map.get(team) }));
-  }, [groupedByTeam, users]);
+  }, [groupedByTeam, users, teams]);
 
   function handleSearchChange(value) {
     setSearch(value);

@@ -1242,6 +1242,45 @@ select.input {
   transform: rotate(180deg);
 }
 
+/* Creatable variant — trigger is a text input instead of a button */
+.csl-trigger-input-wrap {
+  position: relative;
+}
+
+.csl-trigger-input {
+  width: 100%;
+  padding-right: 34px;
+  cursor: text;
+}
+
+.csl-trigger-input::placeholder {
+  color: var(--input-placeholder);
+}
+
+.csl-chevron-input {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.csl-chevron-input.csl-chevron-open {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.csl-option-create {
+  color: var(--text-brand);
+  font-weight: 500;
+}
+
+.csl-option-empty {
+  color: var(--text-tertiary);
+  cursor: default;
+  padding: 9px var(--space-4);
+  font-size: var(--text-sm);
+}
+
 /* Dropdown list */
 .csl-dropdown {
   width: 60%;

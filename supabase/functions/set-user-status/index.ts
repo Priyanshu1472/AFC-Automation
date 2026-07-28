@@ -41,7 +41,7 @@ function jsonRes(req: Request, status: number, body: unknown) {
   });
 }
 
-const DGM_CREATABLE_ROLES = ["agm", "srm", "project_officer", "associate_consultant"];
+const DGM_CREATABLE_ROLES = ["agm", "srm", "project_officer", "associate_consultant", "project_assistant"];
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {

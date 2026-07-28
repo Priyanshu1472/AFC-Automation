@@ -15,6 +15,18 @@ export const STATUS_FLOW = [
   { key: "md_review", label: "MD" },
 ];
 
+// Spelled-out labels for the public (no-login) status-check page — the
+// abbreviations above are fine for AFC staff, who already know the review
+// hierarchy, but confusing for a BA looking the process up cold.
+const STATUS_FLOW_FULL_LABELS = {
+  sent: "Sent",
+  po_review: "Project Officer",
+  cfo_cs_review: "Chief Financial Officer / Company Secretary",
+  po_final_review: "Project Officer (Final Review)",
+  dgm_review: "Deputy General Manager",
+  md_review: "Managing Director",
+};
+
 export const STATUS_BADGE = {
   sent: "info", filled: "warning", po_review: "warning",
   cfo_cs_review: "info", po_final_review: "warning", dgm_review: "neutral",
@@ -24,7 +36,7 @@ export const STATUS_BADGE = {
 function CheckIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>; }
 function XIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>; }
 
-export function ProgressStepper({ currentStatus }) {
+export function ProgressStepper({ currentStatus, publicView = false }) {
   const keys = STATUS_FLOW.map((s) => s.key);
   const isAccepted = currentStatus === "accepted";
   const isRejected = currentStatus === "rejected";
@@ -32,7 +44,7 @@ export function ProgressStepper({ currentStatus }) {
   const currentIdx = isAccepted || isRejected ? keys.length - 1 : keys.indexOf(currentStatus);
 
   return (
-    <div className="ar-stepper">
+    <div className={`ar-stepper${publicView ? " ar-stepper-public" : ""}`}>
       {STATUS_FLOW.map((step, i) => {
         const isDone = isAccepted || (!isHold && i < currentIdx);
         const isCurrent = !isAccepted && !isRejected && !isHold && i === currentIdx;
@@ -43,7 +55,7 @@ export function ProgressStepper({ currentStatus }) {
               <div className={["ar-step-dot", isRejectedStep ? "ar-step-rejected" : "", isCurrent ? "ar-step-current" : "", isDone ? "ar-step-done" : ""].filter(Boolean).join(" ")}>
                 {isRejectedStep ? <XIcon /> : isDone || isAccepted ? <CheckIcon /> : null}
               </div>
-              <span className={["ar-step-label", isRejectedStep ? "ar-step-label-rejected" : "", isCurrent ? "ar-step-label-current" : "", isDone ? "ar-step-label-done" : ""].filter(Boolean).join(" ")}>{step.label}</span>
+              <span className={["ar-step-label", isRejectedStep ? "ar-step-label-rejected" : "", isCurrent ? "ar-step-label-current" : "", isDone ? "ar-step-label-done" : ""].filter(Boolean).join(" ")}>{publicView ? STATUS_FLOW_FULL_LABELS[step.key] : step.label}</span>
             </div>
           </div>
         );
