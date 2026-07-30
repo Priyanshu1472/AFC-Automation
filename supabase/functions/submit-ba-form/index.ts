@@ -11,6 +11,16 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { checkAnonKey, getClientIP, checkRateLimit, clearRateLimit } from "../_shared/publicAccess.ts";
 import { notifyUser } from "../_shared/notify.ts";
 
+// A named function (rather than inlining `createClient(...)` as the default
+// parameter value) so `ReturnType<typeof ...>` resolves the same well-typed
+// client as everywhere else — going through the generic `createClient`
+// directly there instead makes postgrest-js's query builder fail to infer
+// relation types (TS2339 SelectQueryError) even though nothing changes at
+// runtime.
+function createPublicAdminClient() {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+}
+
 
 function clean(val: unknown): string {
   if (val === null || val === undefined) return "";
@@ -46,7 +56,7 @@ async function validateFileBytes(file: File): Promise<string> {
 
 const BUCKET = "ba-documents";
 
-async function uploadFile(adminClient: ReturnType<typeof createClient>, filePath: string, file: File) {
+async function uploadFile(adminClient: ReturnType<typeof createPublicAdminClient>, filePath: string, file: File) {
   const fileBody = new Uint8Array(await file.arrayBuffer());
   const { error } = await adminClient.storage.from(BUCKET).upload(filePath, fileBody, {
     contentType: ALLOWED_MIME,
@@ -88,15 +98,11 @@ const TEXT_FIELD_COLUMNS: Record<string, string> = {
   govtEmpanelments: "govt_empanelments",
 };
 
-serve(async (req) => {
+export async function handleRequest(req: Request, adminClient: ReturnType<typeof createPublicAdminClient> = createPublicAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   if (!checkAnonKey(req)) return jsonRes(req, 401, { error: "Unauthorized" });
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseService = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const adminClient = createClient(supabaseUrl, supabaseService);
 
   const clientIP = getClientIP(req);
   const rateResult = await checkRateLimit(adminClient, `ba-form:${clientIP}`);
@@ -290,4 +296,12 @@ serve(async (req) => {
     console.error("Unhandled error:", err);
     return jsonRes(req, 500, { error: err instanceof Error ? err.message : "Internal server error. Please try again." });
   }
-});
+}
+
+// AFC_EDGE_TEST is never set in any real deployment — only by the test
+// command (see supabase/functions/deno.json). Wrapped rather than passed
+// directly: `serve` invokes its handler with a second `connInfo` argument,
+// which would otherwise land in `adminClient`'s slot.
+if (Deno.env.get("AFC_EDGE_TEST") !== "1") {
+  serve((req) => handleRequest(req));
+}

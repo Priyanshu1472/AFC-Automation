@@ -346,11 +346,13 @@ async function sendDecisionMail(
   });
 }
 
-serve(async (req) => {
+// Exported (rather than only the anonymous callback passed to `serve`) so
+// tests can call it directly with a fake admin client injected — see
+// index.test.ts.
+export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
-  const adminClient = createAdminClient();
   const callerResult = await getCallerProfile(req, adminClient);
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
@@ -621,4 +623,15 @@ serve(async (req) => {
     console.error("Unhandled error:", (err as Error).message);
     return jsonRes(req, 500, { error: "Internal server error." });
   }
-});
+}
+
+// AFC_EDGE_TEST is never set in any real deployment — only by the test
+// command (see supabase/functions/deno.json) — so this is a no-op guard in
+// production and only skips the real network listener when a test file
+// imports this module to call `handleRequest` directly with a fake client.
+// Wrapped rather than passed directly — `serve` invokes its handler with a
+// second `connInfo` argument, which would otherwise land in `adminClient`'s
+// slot and silently shadow the default real client.
+if (Deno.env.get("AFC_EDGE_TEST") !== "1") {
+  serve((req) => handleRequest(req));
+}

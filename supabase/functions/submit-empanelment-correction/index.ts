@@ -14,6 +14,16 @@ import { checkAnonKey, getClientIP, checkRateLimit, clearRateLimit } from "../_s
 import { notifyUser, notifyRole } from "../_shared/notify.ts";
 import { labelForFieldKey } from "../_shared/empanelmentFields.ts";
 
+// A named function (rather than inlining `createClient(...)` as the default
+// parameter value) so `ReturnType<typeof ...>` resolves the same well-typed
+// client as everywhere else — going through the generic `createClient`
+// directly there instead makes postgrest-js's query builder fail to infer
+// relation types (TS2339 SelectQueryError) even though nothing changes at
+// runtime.
+function createPublicAdminClient() {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+}
+
 const BUCKET = "ba-documents";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const PDF_MAGIC = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
@@ -44,12 +54,10 @@ async function validateFileBytes(file: File): Promise<string> {
   return "";
 }
 
-serve(async (req) => {
+export async function handleRequest(req: Request, adminClient: ReturnType<typeof createPublicAdminClient> = createPublicAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
   if (!checkAnonKey(req)) return jsonRes(req, 401, { error: "Unauthorized" });
-
-  const adminClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   const clientIP = getClientIP(req);
   const rateResult = await checkRateLimit(adminClient, `correction:${clientIP}`);
@@ -196,4 +204,12 @@ serve(async (req) => {
     console.error("Unhandled error:", err);
     return jsonRes(req, 500, { error: err instanceof Error ? err.message : "Internal server error. Please try again." });
   }
-});
+}
+
+// AFC_EDGE_TEST is never set in any real deployment — only by the test
+// command (see supabase/functions/deno.json). Wrapped rather than passed
+// directly: `serve` invokes its handler with a second `connInfo` argument,
+// which would otherwise land in `adminClient`'s slot.
+if (Deno.env.get("AFC_EDGE_TEST") !== "1") {
+  serve((req) => handleRequest(req));
+}

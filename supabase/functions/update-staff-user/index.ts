@@ -14,11 +14,10 @@ import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 
 const ADMIN_CREATABLE_ROLES = ["cfo", "cs", "dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"];
 
-serve(async (req) => {
+export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
-  const adminClient = createAdminClient();
   const callerResult = await getCallerProfile(req, adminClient);
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
@@ -87,4 +86,12 @@ serve(async (req) => {
   });
 
   return jsonRes(req, 200, { success: true });
-});
+}
+
+// AFC_EDGE_TEST is never set in any real deployment — only by the test
+// command (see supabase/functions/deno.json). Wrapped rather than passed
+// directly: `serve` invokes its handler with a second `connInfo` argument,
+// which would otherwise land in `adminClient`'s slot.
+if (Deno.env.get("AFC_EDGE_TEST") !== "1") {
+  serve((req) => handleRequest(req));
+}

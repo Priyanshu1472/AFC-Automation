@@ -32,11 +32,10 @@ function isValidEmail(v: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
 
-serve(async (req) => {
+export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
-  const adminClient = createAdminClient();
   const callerResult = await getCallerProfile(req, adminClient);
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
@@ -172,4 +171,12 @@ serve(async (req) => {
     console.error("Unhandled error:", (err as Error).message);
     return jsonRes(req, 500, { error: (err as Error).message || "Internal server error." });
   }
-});
+}
+
+// AFC_EDGE_TEST is never set in any real deployment — only by the test
+// command (see supabase/functions/deno.json). Wrapped rather than passed
+// directly: `serve` invokes its handler with a second `connInfo` argument,
+// which would otherwise land in `adminClient`'s slot.
+if (Deno.env.get("AFC_EDGE_TEST") !== "1") {
+  serve((req) => handleRequest(req));
+}

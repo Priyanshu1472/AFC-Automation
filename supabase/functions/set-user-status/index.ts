@@ -55,7 +55,19 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
-serve(async (req) => {
+// A named function (rather than inlining `createClient(...)` as the default
+// parameter value) so `ReturnType<typeof ...>` resolves the same well-typed
+// client as everywhere else — going through the generic `createClient`
+// directly there instead makes postgrest-js's query builder fail to infer
+// relation types (TS2339 SelectQueryError) even though nothing changes at
+// runtime.
+function createStaffAdminClient() {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+export async function handleRequest(req: Request, adminClient: ReturnType<typeof createStaffAdminClient> = createStaffAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
@@ -67,12 +79,6 @@ serve(async (req) => {
     return jsonRes(req, 401, { error: "Unauthorized — invalid token payload." });
   }
   const callerUserId = payload.sub;
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseService = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const adminClient = createClient(supabaseUrl, supabaseService, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
 
   try {
     const { data: caller, error: callerErr } = await adminClient
@@ -149,4 +155,12 @@ serve(async (req) => {
     console.error("Unhandled error:", (err as Error).message);
     return jsonRes(req, 500, { error: "Internal server error." });
   }
-});
+}
+
+// AFC_EDGE_TEST is never set in any real deployment — only by the test
+// command (see supabase/functions/deno.json). Wrapped rather than passed
+// directly: `serve` invokes its handler with a second `connInfo` argument,
+// which would otherwise land in `adminClient`'s slot.
+if (Deno.env.get("AFC_EDGE_TEST") !== "1") {
+  serve((req) => handleRequest(req));
+}
