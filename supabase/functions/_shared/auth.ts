@@ -32,6 +32,7 @@ export type CallerProfile = {
   role: string;
   team: string | null;
   office: string | null;
+  committee: string | null;
   is_active: boolean;
   email: string;
 };
@@ -59,7 +60,7 @@ export async function getCallerProfile(
 
   const { data: caller, error } = await adminClient
     .from("afc_users")
-    .select("id, role, team, office, is_active, email")
+    .select("id, role, team, office, committee, is_active, email")
     .eq("id", payload.sub)
     .single();
 

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { MD_CREATABLE_ROLES, ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES } from "../../lib/roles";
+import { MD_CREATABLE_ROLES, ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, COMMITTEES } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
@@ -18,9 +18,10 @@ const FIELD_HELP = {
   role: "Controls what this person can see and do. Admin can create any staff role except Admin/MD; MD can only create Admin accounts (to hand off ongoing user management).",
   team: "The working group this person belongs to (e.g. BPDD, CBBO). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
   office: "The physical office this person is based out of.",
+  committee: "Optional Lead Generation review committee. G3 is the DGM committee — membership grants DGM-level review/approval on leads, org-wide.",
 };
 
-const EMPTY_FORM = { full_name: "", email: "", role: "", team: "", office: "" };
+const EMPTY_FORM = { full_name: "", email: "", role: "", team: "", office: "", committee: "" };
 
 function isValidEmail(val) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
@@ -38,6 +39,7 @@ export default function CreateUserPage() {
   const officeOptions = OFFICES.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }));
   const teams = useTeamOptions();
   const teamOptions = teams.map((t) => ({ value: t, label: t }));
+  const committeeOptions = COMMITTEES.map((c) => ({ value: c, label: c }));
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
@@ -75,6 +77,7 @@ export default function CreateUserPage() {
             role: form.role,
             team: form.team || null,
             office: form.office || null,
+            committee: form.committee || null,
           },
         });
 
@@ -203,6 +206,18 @@ export default function CreateUserPage() {
                     error={errors.office}
                   />
                   {errors.office && <span className="field-error">{errors.office}</span>}
+                </div>
+                <div className="field">
+                  <label className="field-label">
+                    Committee <FieldTooltip text={FIELD_HELP.committee} />
+                  </label>
+                  <Select
+                    options={committeeOptions}
+                    value={form.committee}
+                    onChange={(v) => set("committee", v)}
+                    placeholder="— None —"
+                    disabled={saving}
+                  />
                 </div>
               </div>
             </Card.Body>

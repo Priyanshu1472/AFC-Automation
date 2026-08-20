@@ -14,6 +14,11 @@ import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 
 const ADMIN_CREATABLE_ROLES = ["cfo", "cs", "dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"];
 
+// Lead Generation review committees — same admin/md-only gate as `role`
+// itself, since committee membership grants review/approval permission
+// just like a role does.
+const LEAD_COMMITTEES = ["PMT", "PMT Extended", "G3"];
+
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
@@ -33,12 +38,15 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     return jsonRes(req, 400, { error: "Invalid JSON body." });
   }
 
-  const { user_id, full_name, team, office, role } = body;
+  const { user_id, full_name, team, office, role, committee } = body;
   if (!user_id || typeof user_id !== "string") return jsonRes(req, 400, { error: "user_id is required." });
   if (!full_name || typeof full_name !== "string" || full_name.trim().length < 2) {
     return jsonRes(req, 400, { error: "Full name is required." });
   }
   if (user_id === caller.id) return jsonRes(req, 400, { error: "You cannot edit your own account here." });
+  if (committee !== undefined && committee !== null && !LEAD_COMMITTEES.includes(committee as string)) {
+    return jsonRes(req, 400, { error: `Committee must be one of: ${LEAD_COMMITTEES.join(", ")}.` });
+  }
 
   const { data: target, error: targetErr } = await adminClient
     .from("afc_users")
@@ -71,6 +79,9 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       }
       update.role = role;
     }
+    // Same admin/md-only gate as role — a committee grants review/approval
+    // permission just like a role does.
+    if (committee !== undefined) update.committee = (committee as string) || null;
     if (team !== undefined) update.team = (team as string) || null;
     if (office !== undefined) update.office = (office as string) || null;
   }

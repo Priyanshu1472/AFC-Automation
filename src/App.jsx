@@ -29,8 +29,12 @@ import AddProjectPage from "./pages/knowledge/AddProjectPage";
 import EditProjectPage from "./pages/knowledge/EditProjectPage";
 import ProjectDetailsPage from "./pages/knowledge/ProjectDetailsPage";
 import ShortlistsPage from "./pages/knowledge/ShortlistsPage";
+import LeadListPage from "./pages/leads/LeadListPage";
+import CreateLeadPage from "./pages/leads/CreateLeadPage";
+import EditLeadPage from "./pages/leads/EditLeadPage";
+import LeadDetailPage from "./pages/leads/LeadDetailPage";
 import NotFoundPage from "./pages/NotFoundPage";
-import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES } from "./lib/roles";
+import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES } from "./lib/roles";
 
 import "./App.css";
 
@@ -167,6 +171,38 @@ export default function App() {
                   }
                 />
 
+                <Route
+                  path="/leads/create"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <CreateLeadPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/leads/:id/edit"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <EditLeadPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/leads/:id"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <LeadDetailPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/leads"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <LeadListPage />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route
                   path="/knowledge"
                   element={

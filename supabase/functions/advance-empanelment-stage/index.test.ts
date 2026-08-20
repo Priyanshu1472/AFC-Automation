@@ -302,7 +302,7 @@ Deno.test("md_accept - valid OTP accepts, reuses an existing BA login (no new ac
     app: appRow({ status: "md_review" }),
     routes: {
       empanelment_action_otps: [{ data: { id: "row1", otp_hash: hash, expires_at: future() }, error: null }, { data: null, error: null }],
-      afc_users: [{ data: { id: "existing-ba-user" }, error: null }, { data: [{ id: "teammate-1" }], error: null }],
+      afc_users: [{ data: { id: "existing-ba-user", team: "Team 1" }, error: null }, { data: [{ id: "teammate-1" }], error: null }],
     },
   });
   await withFetch(logoFailsEmailOkFetch, async () => {

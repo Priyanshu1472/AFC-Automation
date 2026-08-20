@@ -1,0 +1,87 @@
+/* ============================================================
+   LeadForm.css
+   Leans on .field / .grid-2 / .card from App.css — only the bits
+   specific to this form (type/source toggle, duplicate hint rows,
+   file drop) get bespoke treatment here.
+   ============================================================ */
+
+.lf-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.lf-toggle-group {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.lf-toggle {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+  border: none;
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.lf-toggle + .lf-toggle {
+  border-left: 1px solid var(--border-strong);
+}
+
+.lf-toggle-active {
+  color: var(--btn-primary-text);
+  background: var(--btn-primary-bg);
+  cursor: default;
+  opacity: 1;
+}
+
+.lf-dup-row {
+  font-size: var(--text-sm);
+  margin: var(--space-1) 0;
+}
+
+.lf-dup-reason {
+  opacity: 0.75;
+  font-style: italic;
+}
+
+.lf-file-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: center;
+}
+
+.lf-file-drop:hover {
+  border-color: var(--text-primary);
+}
+
+.lf-file-drop input[type="file"] {
+  display: none;
+}
+
+.lf-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-8);
+}
+
+@media (max-width: 640px) {
+  .lf-toggle-row {
+    flex-direction: column;
+  }
+}
