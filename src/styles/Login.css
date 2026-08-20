@@ -296,3 +296,423 @@
   .login-form-inner,
   .login-attempts-bar { animation: none; }
 }
+
+/* ============================================================
+   LoginPage v2 — the branded split-hero welcome screen.
+   Deliberately NOT theme-reactive (fixed dark palette, its own
+   local colors below) — a one-off marketing-style landing screen,
+   distinct from the neutral light/dark internal app shell that the
+   classes above (shared with Forgot/Reset/ChangePassword) follow.
+   ============================================================ */
+.login-page-v2 {
+  --lg-accent: #22c55e;
+  --lg-accent-2: #16a34a;
+  --lg-bg: #05080a;
+
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--lg-bg);
+  color: #f5f7f6;
+}
+
+/* ── Top bar ─────────────────────────────────────────────── */
+.login-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-10);
+  position: relative;
+  z-index: 5;
+}
+
+.login-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.login-topbar-logo {
+  height: 44px;
+  width: auto;
+  object-fit: contain;
+}
+
+.login-topbar-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-lg);
+  color: #ffffff;
+}
+
+.login-ba-menu {
+  position: relative;
+}
+
+.login-ba-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  color: #e5e7eb;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.login-ba-trigger:hover,
+.login-ba-trigger[aria-expanded="true"] {
+  border-color: var(--lg-accent);
+  color: #ffffff;
+}
+
+.login-ba-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 230px;
+  background: #0d1310;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  padding: var(--space-2);
+  z-index: 50;
+  animation: fadeUp var(--duration-fast) var(--ease-out);
+}
+
+.login-ba-item {
+  display: block;
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: #e5e7eb;
+}
+
+.login-ba-item:hover {
+  background: rgba(34, 197, 94, 0.14);
+  color: #ffffff;
+  text-decoration: none;
+}
+
+/* ── Main split ──────────────────────────────────────────── */
+.login-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  min-height: 0;
+}
+
+/* ── Hero (left) ─────────────────────────────────────────── */
+.login-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: var(--space-6) var(--space-12) var(--space-12);
+  isolation: isolate;
+}
+
+.login-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(120% 90% at 10% 10%, rgba(34, 197, 94, 0.16), transparent 55%),
+    radial-gradient(90% 70% at 100% 100%, rgba(34, 197, 94, 0.08), transparent 60%),
+    var(--lg-bg);
+}
+
+.login-hero-watermark {
+  position: absolute;
+  right: -70px;
+  bottom: -50px;
+  width: 440px;
+  height: 440px;
+  opacity: 0.07;
+  z-index: -1;
+  pointer-events: none;
+  filter: grayscale(1) brightness(2.4);
+}
+
+.login-hero-waves {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  color: var(--lg-accent);
+  pointer-events: none;
+}
+
+.login-hero-content {
+  max-width: 540px;
+}
+
+.login-hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 4.6vw, 56px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+}
+
+.login-hero-title-accent {
+  background: linear-gradient(90deg, #4ade80, var(--lg-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.login-hero-rule {
+  margin-top: var(--space-5);
+  width: 64px;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--lg-accent), transparent);
+}
+
+.login-hero-tagline {
+  margin-top: var(--space-6);
+  font-size: var(--text-lg);
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.62);
+  max-width: 38ch;
+}
+
+/* ── Panel (right) ───────────────────────────────────────── */
+.login-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-10) var(--space-12);
+  background: var(--lg-bg);
+}
+
+.login-panel-inner {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  animation: fadeUp var(--duration-slow) var(--ease-out);
+}
+
+.login-card-v2 {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: var(--radius-xl);
+  padding: var(--space-10) var(--space-8);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.login-card-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.08);
+  color: var(--lg-accent);
+  margin-bottom: var(--space-4);
+}
+
+.login-card-title {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.login-card-sub {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.login-form-v2 {
+  width: 100%;
+  margin-top: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  text-align: left;
+}
+
+.login-label-v2 {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.login-required-v2 {
+  color: var(--lg-accent);
+}
+
+.login-input-v2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.login-input-v2:focus-within {
+  border-color: var(--lg-accent);
+}
+
+.login-input-icon {
+  flex-shrink: 0;
+  display: flex;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.login-input-v2 input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+}
+
+.login-input-v2 input::placeholder {
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.login-input-v2 input:disabled {
+  opacity: 0.6;
+}
+
+/* Chrome/Edge/Safari paint autofilled fields with a hardcoded light
+   background + dark text, ignoring `background`/`color` — the long
+   transition delay is the standard trick to override it (an instant
+   box-shadow gets reset by the browser; a very slow one doesn't repaint
+   in time, so it visually never changes). */
+.login-input-v2 input:-webkit-autofill,
+.login-input-v2 input:-webkit-autofill:hover,
+.login-input-v2 input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff;
+  -webkit-box-shadow: 0 0 0 100px #10151a inset;
+  box-shadow: 0 0 0 100px #10151a inset;
+  transition: background-color 600000s ease-in-out 0s;
+  caret-color: #ffffff;
+}
+
+.login-forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+}
+
+.login-forgot-row a {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--lg-accent);
+}
+
+.login-forgot-row a:hover {
+  text-decoration: underline;
+}
+
+.login-error-v2 {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.login-submit-btn {
+  margin-top: var(--space-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  border: none;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #34d399, var(--lg-accent-2));
+  color: #052e16;
+  font-weight: 700;
+  font-size: var(--text-md);
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(34, 197, 94, 0.25);
+  transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out);
+}
+
+.login-submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px rgba(34, 197, 94, 0.32);
+}
+
+.login-submit-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.login-footer-v2 {
+  text-align: center;
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* Attempts bar is shared markup (see AttemptsBar) — override its globally
+   theme-reactive colors so it stays legible against this page's fixed
+   dark background regardless of the site's light/dark toggle. */
+.login-page-v2 .login-attempts-pip-ok   { background: rgba(255, 255, 255, 0.15); }
+.login-page-v2 .login-attempts-pip-used { background: #ef4444; }
+.login-page-v2 .login-attempts-label    { color: rgba(255, 255, 255, 0.45); }
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .login-main { grid-template-columns: 1fr; }
+
+  .login-hero {
+    padding: var(--space-8) var(--space-6);
+    min-height: 320px;
+  }
+
+  .login-hero-tagline { max-width: none; }
+
+  .login-panel { padding: var(--space-8) var(--space-4) var(--space-10); }
+}
+
+@media (max-width: 560px) {
+  .login-topbar { padding: var(--space-4) var(--space-5); flex-wrap: wrap; gap: var(--space-3); }
+  .login-topbar-name { display: none; }
+  .login-hero-watermark { display: none; }
+  .login-card-v2 { padding: var(--space-8) var(--space-5); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-panel-inner,
+  .login-ba-dropdown { animation: none; }
+}

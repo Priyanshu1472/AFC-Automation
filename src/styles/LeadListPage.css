@@ -1,0 +1,155 @@
+/* ============================================================
+   LeadListPage.css — mirrors EmpanelmentListPage.css conventions,
+   all values from App.css tokens, zero hardcoded colors.
+   ============================================================ */
+
+.ll-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  width: 100%;
+  margin-bottom: var(--space-6);
+}
+
+.ll-stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  position: relative;
+  overflow: hidden;
+  /* These are <button>s now (clickable quick filters) — reset native
+     button chrome back to the card look. */
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: box-shadow var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+}
+
+.ll-stat-card:hover {
+  box-shadow: var(--card-shadow-hover);
+}
+
+.ll-stat-active {
+  border-color: var(--text-brand);
+  box-shadow: 0 0 0 1px var(--text-brand);
+}
+
+.ll-stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.ll-stat-blue::before   { background: var(--brand-600); }
+.ll-stat-purple::before { background: #7c3aed; }
+.ll-stat-amber::before  { background: var(--warning); }
+.ll-stat-green::before  { background: var(--success); }
+
+.ll-stat-value {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.ll-stat-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.ll-filter-card { margin-bottom: var(--space-6); }
+
+.ll-filters {
+  display: flex !important;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-4) !important;
+}
+
+.ll-search {
+  flex: 1;
+  min-width: 200px;
+}
+
+.ll-table-scroll { overflow-x: auto; }
+.ll-table { min-width: 800px; }
+
+.ll-lead-number {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-brand);
+  letter-spacing: 0.04em;
+}
+
+.ll-title {
+  font-size: var(--text-sm);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.ll-date { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
+
+.ll-action-icons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ll-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.ll-icon-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.ll-icon-btn.ll-icon-danger:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.ll-empty {
+  padding: var(--space-10);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.ll-record-count {
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .ll-stats-grid { grid-template-columns: repeat(2, 1fr); }
+}

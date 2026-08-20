@@ -194,11 +194,17 @@ async function provisionBaAccount(
   applicationId: string,
   baEmail: string,
   orgName: string,
-  contactPerson: string | null
+  contactPerson: string | null,
+  applicationTeam: string
 ): Promise<string | null> {
-  const { data: existing } = await admin.from("afc_users").select("id").eq("email", baEmail).maybeSingle();
+  const { data: existing } = await admin.from("afc_users").select("id, team").eq("email", baEmail).maybeSingle();
   if (existing) {
     await admin.from("empanelment_applications").update({ ba_user_id: existing.id }).eq("id", applicationId);
+    // Backfills a pre-existing BA account provisioned before team-scoping was
+    // added — never overwrites a team it already has.
+    if (!existing.team) {
+      await admin.from("afc_users").update({ team: applicationTeam }).eq("id", existing.id);
+    }
     return null;
   }
 
@@ -218,6 +224,7 @@ async function provisionBaAccount(
     full_name: contactPerson || orgName,
     email: baEmail,
     role: "business_associate",
+    team: applicationTeam,
     is_active: true,
     must_change_password: true,
   });
@@ -594,7 +601,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         if (!otpValid) return jsonRes(req, 400, { error: "Invalid or expired verification code. Please request a new one." });
 
         await adminClient.from("empanelment_applications").update({ status: "accepted", md_remarks: trimmedComment, decided_at: new Date().toISOString() }).eq("id", app.id);
-        const credentials = await provisionBaAccount(adminClient, app.id, app.ba_email, orgName, baData?.contact_person || null);
+        const credentials = await provisionBaAccount(adminClient, app.id, app.ba_email, orgName, baData?.contact_person || null, app.team);
         const letter = await tryBuildEmpanelmentLetter(adminClient, app, baData);
         const emailSent = await sendDecisionMail(orgName, app.ba_email, true, trimmedComment, credentials, letter?.attachment);
         await logActivity(

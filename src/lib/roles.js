@@ -123,3 +123,24 @@ export const VALID_ROLES = new Set(Object.keys(ROLES));
 export function isValidRole(role) {
   return VALID_ROLES.has(role);
 }
+
+// ─── Lead Generation ────────────────────────────────────────────────
+// Authorization here is the universal afc_users.role/team (same as every
+// other module — set on the Users page, no separate role-assignment
+// system) plus one additional field, `committee`, for the three Lead
+// Generation review committees. G3 is the DGM committee: membership grants
+// DGM-equivalent lead-workflow permission, org-wide (pooled across all
+// DGMs), independent of the member's own role. See useLeadPermissions.js
+// for the actual can()-style predicates.
+export const COMMITTEES = ["PMT", "PMT Extended", "G3"];
+
+// The tier eligible to be Person Responsible for a lead (owns its
+// PA_REVIEW accept/drop step) and to claim a dropped one. SRM has the same
+// access/permissions as AGM throughout Lead Generation, per product
+// decision — kept alongside it everywhere AGM appears in this module.
+export const LEAD_PA_TIER_ROLES = ["project_assistant", "project_officer", "associate_consultant", "agm", "srm"];
+
+// Route-level gating only (who can even reach /leads*) — every actual
+// create/accept/review permission is re-derived from afc_users.role/
+// committee/team, never from this list.
+export const LEAD_GENERATION_NAV_ROLES = ["project_assistant", "project_officer", "associate_consultant", "agm", "srm", "dgm", "md", "admin"];

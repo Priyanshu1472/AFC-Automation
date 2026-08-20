@@ -479,3 +479,27 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/get-empanelment-status/deno.json"
 entrypoint = "./functions/get-empanelment-status/index.ts"
+
+[functions.create-lead]
+enabled = true
+verify_jwt = true
+import_map = "./functions/create-lead/deno.json"
+entrypoint = "./functions/create-lead/index.ts"
+
+[functions.update-lead]
+enabled = true
+verify_jwt = true
+import_map = "./functions/update-lead/deno.json"
+entrypoint = "./functions/update-lead/index.ts"
+
+[functions.advance-lead-stage]
+enabled = true
+verify_jwt = true
+import_map = "./functions/advance-lead-stage/deno.json"
+entrypoint = "./functions/advance-lead-stage/index.ts"
+
+[functions.get-lead-document-url]
+enabled = true
+verify_jwt = true
+import_map = "./functions/get-lead-document-url/deno.json"
+entrypoint = "./functions/get-lead-document-url/index.ts"

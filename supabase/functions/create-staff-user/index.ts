@@ -53,6 +53,11 @@ function jsonRes(req: Request, status: number, body: unknown) {
 const MD_CREATABLE_ROLES = ["admin"];
 const ADMIN_CREATABLE_ROLES = ["cfo", "cs", "dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"];
 
+// Lead Generation review committees — an optional, independent tag on top
+// of the person's HR role (e.g. a DGM sits on G3; a Project Officer might
+// sit on PMT). Not every role needs one.
+const LEAD_COMMITTEES = ["PMT", "PMT Extended", "G3"];
+
 const ROLE_LABELS: Record<string, string> = {
   md: "Managing Director",
   cfo: "Chief Financial Officer",
@@ -242,7 +247,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       return jsonRes(req, 400, { error: "Invalid JSON body." });
     }
 
-    const { email, full_name, role } = body;
+    const { email, full_name, role, committee } = body;
 
     if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return jsonRes(req, 400, { error: "Valid email is required." });
@@ -252,6 +257,9 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     }
     if (!role || typeof role !== "string") {
       return jsonRes(req, 400, { error: "Role is required." });
+    }
+    if (committee != null && !LEAD_COMMITTEES.includes(committee as string)) {
+      return jsonRes(req, 400, { error: `Committee must be one of: ${LEAD_COMMITTEES.join(", ")}.` });
     }
 
     if (caller.role === "admin" && !ADMIN_CREATABLE_ROLES.includes(role)) {
@@ -287,6 +295,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const finalTeam = (body.team as string) || null;
     const finalOffice = (body.office as string) || null;
+    const finalCommittee = (committee as string) || null;
 
     const { error: insertErr } = await adminClient.from("afc_users").insert([
       {
@@ -296,6 +305,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         role,
         team: finalTeam,
         office: finalOffice,
+        committee: finalCommittee,
         is_active: true,
         must_change_password: true,
         created_by: caller.id,

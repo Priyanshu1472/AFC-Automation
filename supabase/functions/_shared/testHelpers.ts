@@ -42,7 +42,7 @@ export type FakeCallLog = { table: string; calls: string[][] }[];
 // queried more times than it has configured results repeats its last entry.
 export function createFakeAdminClient(routes: Record<string, FakeResult[]> = {}, opts: {
   rpc?: Record<string, FakeResult>;
-  storage?: { upload?: FakeResult; remove?: FakeResult };
+  storage?: { upload?: FakeResult; remove?: FakeResult; createSignedUrl?: FakeResult };
   auth?: {
     createUser?: FakeResult | ((args: Record<string, unknown>) => FakeResult);
     deleteUser?: FakeResult;
@@ -70,6 +70,8 @@ export function createFakeAdminClient(routes: Record<string, FakeResult[]> = {},
         return {
           upload: (..._a: unknown[]) => Promise.resolve(opts.storage?.upload ?? { data: {}, error: null }),
           remove: (..._a: unknown[]) => Promise.resolve(opts.storage?.remove ?? { data: {}, error: null }),
+          createSignedUrl: (..._a: unknown[]) =>
+            Promise.resolve(opts.storage?.createSignedUrl ?? { data: { signedUrl: "https://example.com/signed" }, error: null }),
         };
       },
     },

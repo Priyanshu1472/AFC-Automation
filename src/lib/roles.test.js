@@ -1,8 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   ADMIN_CREATABLE_ROLES, AUDIT_LOG_ROLES, can, EMPANELMENT_ROLES, isAdminLevel, isTeamUser,
-  isValidRole, KNOWLEDGE_REPOSITORY_ROLES, MD_CREATABLE_ROLES, ROLES, USERS_PAGE_ROLES, VALID_ROLES,
+  isValidRole, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, LEAD_PA_TIER_ROLES,
+  MD_CREATABLE_ROLES, ROLES, USERS_PAGE_ROLES, VALID_ROLES,
 } from "./roles";
+
+describe("Lead Generation — SRM has the same access as AGM", () => {
+  it("SRM can reach the Leads nav/routes, same as AGM", () => {
+    expect(LEAD_GENERATION_NAV_ROLES).toContain("agm");
+    expect(LEAD_GENERATION_NAV_ROLES).toContain("srm");
+  });
+
+  it("SRM is PA-tier, same as AGM", () => {
+    expect(LEAD_PA_TIER_ROLES).toContain("agm");
+    expect(LEAD_PA_TIER_ROLES).toContain("srm");
+  });
+});
 
 describe("ROLES / VALID_ROLES", () => {
   it("every role in ROLES is recognized by isValidRole", () => {

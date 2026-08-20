@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, can } from "../../lib/roles";
+import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, COMMITTEES, can } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
@@ -18,6 +18,7 @@ const FIELD_HELP = {
   role: "Changing a role controls what this person can see and do going forward. Only Admin and MD can change a role.",
   team: "The working group this person belongs to (e.g. BPDD, CBBO). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
   office: "The physical office this person is based out of.",
+  committee: "Optional Lead Generation review committee. G3 is the DGM committee — membership grants DGM-level review/approval on leads, org-wide. Only Admin and MD can change this.",
 };
 
 export default function EditUserPage() {
@@ -28,6 +29,7 @@ export default function EditUserPage() {
   const officeOptions = OFFICES.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }));
   const teams = useTeamOptions();
   const teamOptions = teams.map((t) => ({ value: t, label: t }));
+  const committeeOptions = COMMITTEES.map((c) => ({ value: c, label: c }));
 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -44,7 +46,7 @@ export default function EditUserPage() {
     }
     return base;
   }, [target]);
-  const [form, setForm] = useState({ full_name: "", role: "", team: "", office: "" });
+  const [form, setForm] = useState({ full_name: "", role: "", team: "", office: "", committee: "" });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState("");
@@ -54,7 +56,7 @@ export default function EditUserPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("afc_users")
-      .select("id, full_name, email, role, team, office")
+      .select("id, full_name, email, role, team, office, committee")
       .eq("id", id)
       .maybeSingle();
     if (error || !data) {
@@ -63,7 +65,7 @@ export default function EditUserPage() {
       return;
     }
     setTarget(data);
-    setForm({ full_name: data.full_name || "", role: data.role || "", team: data.team || "", office: data.office || "" });
+    setForm({ full_name: data.full_name || "", role: data.role || "", team: data.team || "", office: data.office || "", committee: data.committee || "" });
     setLoading(false);
   }, [id]);
 
@@ -97,7 +99,7 @@ export default function EditUserPage() {
           full_name: form.full_name.trim(),
           team: form.team || null,
           office: form.office || null,
-          ...(canEditRole ? { role: form.role } : {}),
+          ...(canEditRole ? { role: form.role, committee: form.committee || null } : {}),
         },
       });
 
@@ -195,6 +197,21 @@ export default function EditUserPage() {
                   </label>
                   <Select options={officeOptions} value={form.office} onChange={(v) => set("office", v)} placeholder="Select office" disabled={saving} />
                 </div>
+                {canEditRole ? (
+                  <div className="field">
+                    <label className="field-label">
+                      Committee <FieldTooltip text={FIELD_HELP.committee} />
+                    </label>
+                    <Select options={committeeOptions} value={form.committee} onChange={(v) => set("committee", v)} placeholder="— None —" disabled={saving} />
+                  </div>
+                ) : (
+                  target.committee && (
+                    <div className="field">
+                      <label className="field-label">Committee</label>
+                      <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{target.committee}</p>
+                    </div>
+                  )
+                )}
               </div>
             </Card.Body>
             <Card.Footer>

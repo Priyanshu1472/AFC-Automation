@@ -5,7 +5,7 @@ import NotificationBell from "./NotificationBell";
 import NavDropdown from "./NavDropdown";
 import UserMenu from "./UserMenu";
 import { useAuth } from "../../hooks/useAuth";
-import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, ROLE_LABELS } from "../../lib/roles";
+import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, ROLE_LABELS } from "../../lib/roles";
 import { MenuIcon, CloseIcon, BookIcon } from "../icons";
 import logo from "../../images/Logo.png";
 import "../../styles/AppHeader.css";
@@ -44,6 +44,7 @@ export default function AppHeader() {
   const canSeeAuditLogs = AUDIT_LOG_ROLES.includes(profile.role);
   const canSeeEmpanelment = EMPANELMENT_ROLES.includes(profile.role);
   const canSeeKnowledge = KNOWLEDGE_REPOSITORY_ROLES.includes(profile.role);
+  const canSeeLeads = LEAD_GENERATION_NAV_ROLES.includes(profile.role);
   const navLinkClass = ({ isActive }) => (isActive ? "active" : "");
   const roleLabel = ROLE_LABELS[profile.role] || profile.role;
   const initial = (profile.full_name || "?").trim().charAt(0).toUpperCase();
@@ -92,6 +93,11 @@ export default function AppHeader() {
               onClick={closeMenu}
             >
               Knowledge Repository
+            </NavLink>
+          )}
+          {canSeeLeads && (
+            <NavLink to="/leads" className={navLinkClass} onClick={closeMenu}>
+              Leads
             </NavLink>
           )}
           {canSeeUsers && (
