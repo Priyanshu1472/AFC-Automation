@@ -320,9 +320,12 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
               options={baOptions}
               value={form.assigned_ba_id}
               onChange={(v) => set("assigned_ba_id", v)}
-              placeholder="— Select BA —"
+              placeholder={baOptions.length ? "— Select BA —" : "No empanelled BA found on your team."}
               disabled={submitting}
             />
+            {baOptions.length === 0 && (
+              <span className="field-hint">No MD-approved (empanelled) Business Associate found on your team yet.</span>
+            )}
           </div>
 
           <div className="grid-2">
