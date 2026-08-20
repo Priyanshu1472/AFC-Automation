@@ -503,3 +503,51 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/get-lead-document-url/deno.json"
 entrypoint = "./functions/get-lead-document-url/index.ts"
+
+[functions.create-proposal-preparation]
+enabled = true
+verify_jwt = true
+import_map = "./functions/create-proposal-preparation/deno.json"
+entrypoint = "./functions/create-proposal-preparation/index.ts"
+
+[functions.get-proposal-document-url]
+enabled = true
+verify_jwt = true
+import_map = "./functions/get-proposal-document-url/deno.json"
+entrypoint = "./functions/get-proposal-document-url/index.ts"
+
+[functions.lock-proposal]
+enabled = true
+verify_jwt = true
+import_map = "./functions/lock-proposal/deno.json"
+entrypoint = "./functions/lock-proposal/index.ts"
+
+[functions.set-proposal-outcome]
+enabled = true
+verify_jwt = true
+import_map = "./functions/set-proposal-outcome/deno.json"
+entrypoint = "./functions/set-proposal-outcome/index.ts"
+
+[functions.save-fee-notes]
+enabled = true
+verify_jwt = true
+import_map = "./functions/save-fee-notes/deno.json"
+entrypoint = "./functions/save-fee-notes/index.ts"
+
+[functions.send-ba-document-request]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-ba-document-request/deno.json"
+entrypoint = "./functions/send-ba-document-request/index.ts"
+
+[functions.request-fee-note-otp]
+enabled = true
+verify_jwt = true
+import_map = "./functions/request-fee-note-otp/deno.json"
+entrypoint = "./functions/request-fee-note-otp/index.ts"
+
+[functions.decide-fee-note-md]
+enabled = true
+verify_jwt = true
+import_map = "./functions/decide-fee-note-md/deno.json"
+entrypoint = "./functions/decide-fee-note-md/index.ts"

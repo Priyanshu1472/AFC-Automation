@@ -33,6 +33,8 @@ import LeadListPage from "./pages/leads/LeadListPage";
 import CreateLeadPage from "./pages/leads/CreateLeadPage";
 import EditLeadPage from "./pages/leads/EditLeadPage";
 import LeadDetailPage from "./pages/leads/LeadDetailPage";
+import ProposalsListPage from "./pages/proposals/ProposalsListPage";
+import ProposalPreparationPage from "./pages/proposals/ProposalPreparationPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES } from "./lib/roles";
 
@@ -200,6 +202,22 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
                       <LeadListPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/proposals"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <ProposalsListPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/proposals/:leadId"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <ProposalPreparationPage />
                     </ProtectedRoute>
                   }
                 />

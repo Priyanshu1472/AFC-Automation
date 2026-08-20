@@ -100,6 +100,11 @@ export default function AppHeader() {
               Leads
             </NavLink>
           )}
+          {canSeeLeads && (
+            <NavLink to="/proposals" className={navLinkClass} onClick={closeMenu}>
+              Proposal Prep
+            </NavLink>
+          )}
           {canSeeUsers && (
             <NavLink to="/users" className={navLinkClass} onClick={closeMenu}>
               Users
