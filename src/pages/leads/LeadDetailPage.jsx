@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { LEAD_PA_TIER_ROLES } from "../../lib/roles";
+import { canOpenProposal } from "../../lib/proposalPrep";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
@@ -53,6 +54,11 @@ const ACTIONS_BY_STATUS = {
     { key: "reject_reassign", label: "Reject", variant: "danger" },
   ],
   pa_dropped: [{ key: "claim", label: "Claim Lead", variant: "primary" }],
+  dgm_initial_review: [
+    { key: "dgm_initial_approve", label: "Approve → PMT", variant: "primary", requiresReason: true },
+    { key: "dgm_initial_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true },
+    { key: "drop", label: "Withdraw Lead", variant: "danger" },
+  ],
   pmt_review: [
     { key: "pmt_approve", label: "Approve → MD", variant: "primary", requiresReason: true },
     { key: "pmt_escalate", label: "Escalate to PMT Extended", variant: "secondary", requiresReason: true },
@@ -183,6 +189,9 @@ export default function LeadDetailPage() {
           return lead.status === "pa_review" && profile?.id === lead.person_responsible_id && profile?.id !== lead.created_by;
         case "claim":
           return LEAD_PA_TIER_ROLES.includes(profile?.role) && profile?.team === lead.team;
+        case "dgm_initial_approve":
+        case "dgm_initial_decline":
+          return profile?.committee === "G3";
         // PMT / PMT Extended / G3 are all org-wide committees (each spans
         // all 4 teams) — membership alone qualifies, no team match needed.
         case "pmt_approve":
@@ -208,7 +217,7 @@ export default function LeadDetailPage() {
   }
 
   // A BA is optional at creation but required before the Person Responsible
-  // can accept a lead into PMT review — only relevant for "accept" and only
+  // can accept a lead into DGM review — only relevant for "accept" and only
   // when the lead doesn't already have one.
   const needsBaSelection = pendingAction?.key === "accept" && !lead?.assigned_ba_id;
   // Rejecting before PMT review (as PR, not the creator) hands the lead
@@ -474,6 +483,11 @@ export default function LeadDetailPage() {
                     <p className="ar-final-title">
                       {lead.status === "md_approved" ? "Lead Approved" : lead.status === "md_declined" ? "Lead Declined" : "Lead Dropped"}
                     </p>
+                    {lead.status === "md_approved" && canOpenProposal(lead, profile) && (
+                      <Button variant="primary" onClick={() => navigate(`/proposals/${lead.id}`)} style={{ marginTop: "var(--space-3)" }}>
+                        Open Proposal
+                      </Button>
+                    )}
                   </Card.Body>
                 </Card>
               )}

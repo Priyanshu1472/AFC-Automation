@@ -49,7 +49,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   const authorized =
     ["md", "admin"].includes(caller.role) ||
     caller.team === lead.team ||
-    (lead.status === "dgm_review" && caller.committee === "G3") ||
+    (["dgm_initial_review", "dgm_review"].includes(lead.status) && caller.committee === "G3") ||
     [lead.created_by, lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id, lead.handled_by_dgm_id].includes(caller.id) ||
     (caller.role === "business_associate" && lead.assigned_ba_id === caller.id);
 

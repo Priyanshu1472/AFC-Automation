@@ -80,6 +80,14 @@ describe("leadCan", () => {
     expect(leadCan.pmtExtendedReview({ ...user, committee: "PMT" }, lead)).toBe(false);
   });
 
+  it("dgmInitialReview (G3, ahead of PMT) is org-wide — any team matches", () => {
+    const profile = { ...user, committee: "G3", team: "BPDD" };
+    const lead = { status: "dgm_initial_review", team: "SomeOtherTeam" };
+    expect(leadCan.dgmInitialReview(profile, lead)).toBe(true);
+    expect(leadCan.dgmInitialReview({ ...profile, committee: "PMT" }, lead)).toBe(false);
+    expect(leadCan.dgmInitialReview(profile, { ...lead, status: "dgm_review" })).toBe(false);
+  });
+
   it("dgmReview (G3) is org-wide — any team matches", () => {
     const profile = { ...user, committee: "G3", team: "BPDD" };
     const lead = { status: "dgm_review", team: "SomeOtherTeam" };

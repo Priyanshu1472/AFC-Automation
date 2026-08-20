@@ -83,11 +83,11 @@ Deno.test("accept - rejects a caller who isn't Person Responsible", async () => 
   assertEquals(res.status, 403);
 });
 
-Deno.test("accept - success moves to pmt_review when the lead already has a BA", async () => {
+Deno.test("accept - success moves to dgm_initial_review when the lead already has a BA", async () => {
   const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
   assertEquals(res.status, 200);
-  assertEquals(await res.json(), { success: true, status: "pmt_review" });
+  assertEquals(await res.json(), { success: true, status: "dgm_initial_review" });
 });
 
 Deno.test("accept - requires a BA when the lead has none and none is provided", async () => {
@@ -120,7 +120,38 @@ Deno.test("accept - accepts and assigns a BA when caller selects one", async () 
   });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", assigned_ba_id: "ba-9" }), client as never);
   assertEquals(res.status, 200);
-  assertEquals(await res.json(), { success: true, status: "pmt_review" });
+  assertEquals(await res.json(), { success: true, status: "dgm_initial_review" });
+});
+
+// ── DGM initial review (new first-line gate, ahead of PMT) ──
+Deno.test("dgm_initial_approve - rejects a caller without the G3 committee", async () => {
+  const client = buildClient({ caller: callerRow({ committee: null }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("dgm_initial_approve - requires a comment", async () => {
+  const client = buildClient({ caller: callerRow({ committee: "G3" }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("dgm_initial_approve - success moves to pmt_review", async () => {
+  const client = buildClient({ caller: callerRow({ committee: "G3" }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pmt_review");
+});
+
+Deno.test("dgm_initial_decline - requires a reason and returns to pa_action_required", async () => {
+  const client = buildClient({ caller: callerRow({ committee: "G3" }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const missingReason = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_decline" }), client as never);
+  assertEquals(missingReason.status, 400);
+
+  const client2 = buildClient({ caller: callerRow({ committee: "G3" }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_decline", comment: "not viable" }), client2 as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pa_action_required");
 });
 
 // "drop" (true, no-reassignment withdrawal) is creator-only at pa_review —

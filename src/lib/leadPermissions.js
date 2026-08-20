@@ -29,10 +29,13 @@ export const leadCan = {
   // Edit is available before the PR has accepted (pa_review, in place — no
   // status change) and again once returned for changes (pa_action_required,
   // Edit & Resubmit back into pmt_review). Locked while actively under
-  // PMT/PMT Extended/G3/MD review.
+  // DGM/PMT/PMT Extended/G3/MD review.
   editResubmit: (profile, lead) =>
     (lead.status === "pa_review" || lead.status === "pa_action_required") &&
     (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id),
+  // First-line DGM gate, ahead of PMT — same G3 committee as the later
+  // PMT-Extended-escalated dgmReview below, just a different status.
+  dgmInitialReview: (profile, lead) => lead.status === "dgm_initial_review" && profile?.committee === "G3",
   pmtReview: (profile, lead) => lead.status === "pmt_review" && profile?.committee === "PMT",
   pmtExtendedReview: (profile, lead) => lead.status === "pmt_extended_review" && profile?.committee === "PMT Extended",
   dgmReview: (profile, lead) => lead.status === "dgm_review" && profile?.committee === "G3",
@@ -48,6 +51,7 @@ export function isActionRequiredForViewer(profile, lead) {
   return (
     leadCan.accept(profile, lead) ||
     (lead.status === "pa_action_required" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id)) ||
+    leadCan.dgmInitialReview(profile, lead) ||
     leadCan.pmtReview(profile, lead) ||
     leadCan.pmtExtendedReview(profile, lead) ||
     leadCan.dgmReview(profile, lead) ||

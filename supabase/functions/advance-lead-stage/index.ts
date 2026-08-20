@@ -41,7 +41,11 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
   // rejecting a pa_review lead hands it straight to a chosen teammate
   // instead of releasing it into an open pool, so it's a same-status
   // transition (see the "reject_reassign" case).
-  pa_review: { accept: "pmt_review", drop: "pa_dropped", reject_reassign: "pa_review" },
+  // Accept now routes to DGM (G3) first, ahead of PMT — dgm_initial_review
+  // is a distinct status from dgm_review (the PMT-Extended escalation
+  // target further down), so the two don't collide in this map.
+  pa_review: { accept: "dgm_initial_review", drop: "pa_dropped", reject_reassign: "pa_review" },
+  dgm_initial_review: { dgm_initial_approve: "pmt_review", dgm_initial_decline: "pa_action_required", drop: "pa_dropped" },
   pa_dropped: { claim: "pa_review" },
   pmt_review: { pmt_approve: "md_review", pmt_escalate: "pmt_extended_review", pmt_decline: "pa_action_required", drop: "pa_dropped" },
   pmt_extended_review: { pmt_extended_approve: "md_review", pmt_extended_forward_dgm: "dgm_review", pmt_extended_decline: "pa_action_required", drop: "pa_dropped" },
@@ -51,6 +55,7 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
 };
 
 const REQUIRE_COMMENT = new Set([
+  "dgm_initial_approve", "dgm_initial_decline",
   "pmt_approve", "pmt_escalate", "pmt_decline",
   "pmt_extended_approve", "pmt_extended_decline",
   "dgm_accept", "dgm_decline",
@@ -118,8 +123,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           if (baErr) return jsonRes(req, 400, { error: baErr });
           extraFields = { assigned_ba_id: baId };
         }
-        notifyTargetIds = await getOrgWideHolders(adminClient, { committee: "PMT" });
-        notifyTitle = "Lead awaiting PMT review";
+        notifyTargetIds = await getOrgWideHolders(adminClient, { committee: "G3" });
+        notifyTitle = "Lead awaiting DGM review";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was accepted and needs your review.`;
         break;
       }
@@ -174,6 +179,26 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           return forbidden("You must be a PA, Project Officer, Associate Consultant, AGM, or SRM on this team to claim this lead.");
         }
         extraFields = { person_responsible_id: caller.id };
+        break;
+      }
+
+      // New first-line DGM (G3) gate, ahead of PMT — same org-wide G3 pool
+      // that also works the later PMT-Extended-escalated dgm_review stage.
+      case "dgm_initial_approve": {
+        if (caller.committee !== "G3") return forbidden("Only a G3 (DGM) committee member can act on this lead.");
+        extraFields = { handled_by_dgm_id: caller.id };
+        notifyTargetIds = await getOrgWideHolders(adminClient, { committee: "PMT" });
+        notifyTitle = "Lead awaiting PMT review";
+        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was cleared by DGM. ${trimmedComment}`;
+        break;
+      }
+
+      case "dgm_initial_decline": {
+        if (caller.committee !== "G3") return forbidden("Only a G3 (DGM) committee member can act on this lead.");
+        extraFields = { handled_by_dgm_id: caller.id };
+        notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
+        notifyTitle = "Lead returned by DGM";
+        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
         break;
       }
 

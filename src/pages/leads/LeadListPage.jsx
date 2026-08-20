@@ -10,8 +10,9 @@ import Button from "../../components/ui/Button";
 import Select from "../../components/ui/Select";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
-import { EyeIcon, PencilIcon, TrashIcon } from "../../components/icons";
+import { EyeIcon, PencilIcon, TrashIcon, ArrowRightIcon } from "../../components/icons";
 import { STATUS_MAP } from "../../components/leads/leadStatus";
+import { canOpenProposal } from "../../lib/proposalPrep";
 import "../../styles/LeadListPage.css";
 
 const STATUS_OPTIONS = [{ value: "all", label: "All Statuses" }, ...Object.entries(STATUS_MAP).map(([value, cfg]) => ({ value, label: cfg.label }))];
@@ -23,7 +24,7 @@ const QUICK_FILTERS = {
   all: { label: "Total", match: () => true },
   in_review: {
     label: "In Review",
-    match: (l) => ["pa_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review"].includes(l.status),
+    match: (l) => ["pa_review", "dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review"].includes(l.status),
   },
   action_required: { label: "Action Required", match: (l, profile) => isActionRequiredForViewer(profile, l) },
   approved: { label: "Approved", match: (l) => l.status === "md_approved" },
@@ -206,6 +207,11 @@ export default function LeadListPage() {
                           {leadCan.drop(profile, l) && (
                             <button type="button" className="ll-icon-btn ll-icon-danger" title="Drop" aria-label="Drop lead" onClick={() => navigate(`/leads/${l.id}`)}>
                               <TrashIcon />
+                            </button>
+                          )}
+                          {l.status === "md_approved" && canOpenProposal(l, profile) && (
+                            <button type="button" className="ll-icon-btn" title="Open Proposal" aria-label="Open proposal" onClick={() => navigate(`/proposals/${l.id}`)}>
+                              <ArrowRightIcon />
                             </button>
                           )}
                         </div>
