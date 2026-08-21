@@ -144,8 +144,29 @@
   color: var(--text-secondary);
 }
 
-.ll-record-count {
+.ll-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   margin-top: var(--space-4);
+}
+
+.ll-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ll-pagination-page {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.ll-record-count {
+  margin-top: 0;
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }

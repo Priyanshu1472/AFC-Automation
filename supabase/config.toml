@@ -551,3 +551,15 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/decide-fee-note-md/deno.json"
 entrypoint = "./functions/decide-fee-note-md/index.ts"
+
+[functions.set-own-pin]
+enabled = true
+verify_jwt = true
+import_map = "./functions/set-own-pin/deno.json"
+entrypoint = "./functions/set-own-pin/index.ts"
+
+[functions.admin-reset-pin]
+enabled = true
+verify_jwt = true
+import_map = "./functions/admin-reset-pin/deno.json"
+entrypoint = "./functions/admin-reset-pin/index.ts"

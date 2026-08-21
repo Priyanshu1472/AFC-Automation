@@ -16,7 +16,8 @@ function callerRow(overrides: Record<string, unknown> = {}) {
 function leadRow(overrides: Record<string, unknown> = {}) {
   return {
     id: LEAD_ID, status: "pa_action_required", created_by: CALLER_ID, person_responsible_id: PR_ID,
-    lead_number: "LH-2026-000001", documents: [], ...overrides,
+    lead_number: "LH-2026-000001", documents: [], title: "Preparation of DPR for Smart City Project",
+    portal_name: "GeM", bid_number: "BID-123", declined_from_status: "pmt_review", ...overrides,
   };
 }
 
@@ -125,6 +126,27 @@ Deno.test("handleRequest - success moves the lead back to pmt_review", async () 
   const body = await res.json();
   assertEquals(body.success, true);
   assertEquals(body.status, "pmt_review");
+});
+
+Deno.test("handleRequest - a lead declined by DGM resubmits straight back to dgm_initial_review, not pmt_review", async () => {
+  const client = buildClient({ lead: leadRow({ declined_from_status: "dgm_initial_review" }) });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.status, "dgm_initial_review");
+});
+
+Deno.test("handleRequest - title/portal_name/bid_number in the request body are ignored — server keeps the lead's existing values", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(
+    formReq(baseFields({ title: "Sneaky new title", portal_name: "Sneaky portal", bid_number: "Sneaky bid" })),
+    client as never
+  );
+  assertEquals(res.status, 200);
+  const updateCall = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log
+    .find((entry) => entry.table === "leads" && entry.calls.some((c) => c[0] === "update"));
+  const updatePayload = updateCall?.calls.find((c) => c[0] === "update")?.[1] ?? "";
+  assertEquals(updatePayload.includes("Sneaky"), false);
 });
 
 Deno.test("handleRequest - a pa_review lead can be edited in place, status unchanged", async () => {

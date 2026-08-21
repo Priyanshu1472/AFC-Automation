@@ -80,25 +80,28 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!leadId) return jsonRes(req, 400, { error: "lead_id is required." });
 
   const input = {
-    title: get("title"),
     delivery_type: get("delivery_type") || null,
     person_responsible_id: get("person_responsible_id"),
     reviewer_id: get("reviewer_id"),
     approval_authority_id: get("approval_authority_id"),
   };
 
-  const fieldErr = validateRequiredFields(input);
-  if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
-
   const assignedBaId = get("assigned_ba_id") || null;
 
   try {
+    // title/portal_name/bid_number are locked once a lead exists — the UI
+    // disables them, and this is the server-side backstop: whatever the
+    // client sent for those three is ignored, the lead's existing values
+    // are always what gets written back.
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, status, created_by, person_responsible_id, lead_number, documents")
+      .select("id, status, created_by, person_responsible_id, lead_number, documents, title, portal_name, bid_number, declined_from_status")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
+
+    const fieldErr = validateRequiredFields({ ...input, title: lead.title });
+    if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
 
     if (caller.id !== lead.created_by && caller.id !== lead.person_responsible_id) {
       return jsonRes(req, 403, { error: "Only the lead's creator or Person Responsible can edit it." });
@@ -110,7 +113,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     }
     const fromStatus = lead.status as string;
     const isResubmit = fromStatus === "pa_action_required";
-    const toStatus = isResubmit ? "pmt_review" : "pa_review";
+    // Declined by DGM (the new first-line stage) -> resubmitting sends it
+    // straight back to DGM, since they're the ones who asked for changes.
+    // Every other decline source still funnels back into pmt_review, same
+    // as before.
+    const toStatus = isResubmit
+      ? (lead.declined_from_status === "dgm_initial_review" ? "dgm_initial_review" : "pmt_review")
+      : "pa_review";
 
     const { data: personResponsible, error: prErr } = await adminClient
       .from("afc_users")
@@ -151,9 +160,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     const { error: updateErr } = await adminClient
       .from("leads")
       .update({
-        title: input.title.trim(),
-        portal_name: clampText(get("portal_name"), 200),
-        bid_number: clampText(get("bid_number"), 200),
+        // title/portal_name/bid_number deliberately NOT taken from the
+        // client — see the comment above the initial select.
         client_name: clampText(get("client_name"), 300),
         state: clampText(get("state"), 100),
         submission_deadline: get("submission_deadline") || null,
@@ -179,14 +187,16 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
     await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "edited", fromStatus, fromStatus, null);
     if (isResubmit) {
-      await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "resubmitted", "pa_action_required", "pmt_review", null);
+      await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "resubmitted", "pa_action_required", toStatus, null);
     }
 
-    const pmtHolders = isResubmit ? await getOrgWideHolders(adminClient, { committee: "PMT" }) : [];
-    if (pmtHolders.length) {
-      await notifyUsers(adminClient, pmtHolders, {
-        title: "Lead resubmitted — awaiting PMT review",
-        sub_text: `${lead.lead_number} — "${input.title.trim()}" was edited and resubmitted for review.`,
+    const resubmitTargetHolders = isResubmit
+      ? await getOrgWideHolders(adminClient, toStatus === "dgm_initial_review" ? { committee: "G3" } : { committee: "PMT" })
+      : [];
+    if (resubmitTargetHolders.length) {
+      await notifyUsers(adminClient, resubmitTargetHolders, {
+        title: toStatus === "dgm_initial_review" ? "Lead resubmitted — awaiting DGM review" : "Lead resubmitted — awaiting PMT review",
+        sub_text: `${lead.lead_number} — "${lead.title}" was edited and resubmitted for review.`,
         type: "action_required",
         link: `/leads/${lead.id}`,
       });

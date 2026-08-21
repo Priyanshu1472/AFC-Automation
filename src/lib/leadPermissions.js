@@ -19,6 +19,9 @@ export const leadCan = {
   drop: (profile, lead) => {
     if (["md_approved", "md_declined", "pa_dropped"].includes(lead.status)) return false;
     if (lead.status === "pa_review") return profile?.id === lead.created_by;
+    // DGM sent this back for changes — only they should re-review it, so
+    // there's no Withdraw here, only Edit & Resubmit.
+    if (lead.status === "pa_action_required" && lead.declined_from_status === "dgm_initial_review") return false;
     return profile?.id === lead.created_by || profile?.id === lead.person_responsible_id;
   },
   // The PR rejecting a lead they didn't create — hands it to a teammate

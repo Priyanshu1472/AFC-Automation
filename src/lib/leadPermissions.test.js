@@ -42,6 +42,11 @@ describe("leadCan", () => {
     expect(leadCan.drop({ id: "bystander" }, lead)).toBe(false);
   });
 
+  it("drop at pa_action_required is unavailable when DGM sent it back — only Edit & Resubmit", () => {
+    const lead = { status: "pa_action_required", created_by: "user-1", person_responsible_id: "user-1", declined_from_status: "dgm_initial_review" };
+    expect(leadCan.drop(user, lead)).toBe(false);
+  });
+
   it("rejectReassign applies only to the PR at pa_review when they aren't the creator", () => {
     const lead = { status: "pa_review", created_by: "creator-1", person_responsible_id: "user-1" };
     expect(leadCan.rejectReassign(user, lead)).toBe(true);

@@ -12,6 +12,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { canViewLead } from "../_shared/leadAuth.ts";
 
 const BUCKET = "proposal-documents";
 const SIGNED_URL_TTL_SECONDS = 5 * 60;
@@ -50,14 +51,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     .maybeSingle();
   if (!lead) return jsonRes(req, 404, { error: "Lead not found." });
 
-  const authorized =
-    ["md", "admin"].includes(caller.role) ||
-    caller.team === lead.team ||
-    (["dgm_initial_review", "dgm_review"].includes(lead.status) && caller.committee === "G3") ||
-    [lead.created_by, lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id, lead.handled_by_dgm_id].includes(caller.id) ||
-    (caller.role === "business_associate" && lead.assigned_ba_id === caller.id);
-
-  if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this document." });
+  if (!canViewLead(caller, lead)) return jsonRes(req, 403, { error: "You do not have access to this document." });
 
   const { data: signed, error: signErr } = await adminClient.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
   if (signErr || !signed) return jsonRes(req, 500, { error: "Failed to generate document link." });

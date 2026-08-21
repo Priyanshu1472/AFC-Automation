@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { useToast } from "../../hooks/useToast";
 import { PORTALS, INDIAN_STATES } from "../../lib/portal_table";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
@@ -9,13 +10,10 @@ import Select from "../../components/ui/Select";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import DatePickerCalendar from "../../components/ui/DatePickerCalendar";
+import { DELIVERY_TYPE_LABELS } from "../../components/leads/leadStatus";
 import "../../styles/LeadForm.css";
 
-const DELIVERY_TYPE_OPTIONS = [
-  { value: "online", label: "Online" },
-  { value: "offline", label: "Offline" },
-  { value: "both", label: "Both (Online & Offline)" },
-];
+const DELIVERY_TYPE_OPTIONS = Object.entries(DELIVERY_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 const PORTAL_OPTIONS = PORTALS.map((p) => ({ value: p.name, label: p.name }));
 const STATE_OPTIONS = INDIAN_STATES.map((s) => ({ value: s, label: s }));
 
@@ -27,6 +25,8 @@ function toOptions(users) {
 export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { showToast } = useToast();
+  const isEdit = mode === "edit";
 
   // The lead's working team: fixed to the existing lead's team on edit, or
   // the caller's own team on create — matches the real form (no Team
@@ -57,7 +57,6 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   const [baOptions, setBaOptions] = useState([]);
   const [duplicates, setDuplicates] = useState([]);
   const [errors, setErrors] = useState({});
-  const [banner, setBanner] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const dupTimer = useRef(null);
 
@@ -149,7 +148,6 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setBanner(null);
     if (!validate()) return;
 
     setSubmitting(true);
@@ -174,17 +172,18 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
 
       const { data, error } = await supabase.functions.invoke(mode === "create" ? "create-lead" : "update-lead", { body: fd });
       if (error) {
-        setBanner({ type: "danger", text: await extractFunctionErrorMessage(error, "Failed to save lead.") });
+        showToast(await extractFunctionErrorMessage(error, "Failed to save lead."), "danger");
         return;
       }
       if (!data?.success) {
-        setBanner({ type: "danger", text: data?.error || "Failed to save lead." });
+        showToast(data?.error || "Failed to save lead.", "danger");
         return;
       }
+      showToast(isEdit ? "Lead updated." : "Lead created.", "success");
       if (onSuccess) onSuccess(data);
       else navigate(`/leads/${data.id || lead?.id}`);
     } catch (err) {
-      setBanner({ type: "danger", text: err.message || "Something went wrong." });
+      showToast(err.message || "Something went wrong.", "danger");
     } finally {
       setSubmitting(false);
     }
@@ -192,12 +191,6 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      {banner && (
-        <Alert variant={banner.type} onClose={() => setBanner(null)}>
-          {banner.text}
-        </Alert>
-      )}
-
       <Card>
         <Card.Header title="Lead Details" />
         <Card.Body>
@@ -222,7 +215,8 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
             onChange={(e) => set("title", e.target.value)}
             placeholder="e.g. Preparation of DPR for Smart City Project, Nagpur"
             error={errors.title}
-            disabled={submitting}
+            disabled={submitting || isEdit}
+            hint={isEdit ? "Locked once a lead is created — cannot be changed." : undefined}
           />
 
           {duplicates.length > 0 && (
@@ -243,8 +237,9 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
               value={form.portal_name}
               onChange={(v) => set("portal_name", v)}
               placeholder="Select a portal"
-              disabled={submitting}
+              disabled={submitting || isEdit}
             />
+            {isEdit && <span className="field-hint">Locked once a lead is created — cannot be changed.</span>}
           </div>
 
           <Input
@@ -252,8 +247,8 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
             value={form.bid_number}
             onChange={(e) => set("bid_number", e.target.value)}
             placeholder={`Enter ${bidNumberLabel}`}
-            hint="Used for duplicate detection."
-            disabled={submitting}
+            hint={isEdit ? "Locked once a lead is created — cannot be changed." : "Used for duplicate detection."}
+            disabled={submitting || isEdit}
           />
 
           <div className="grid-2">

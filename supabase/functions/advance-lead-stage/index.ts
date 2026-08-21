@@ -14,6 +14,7 @@ import { notifyUsers } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
 import { PA_TIER_ROLES, getOrgWideHolders, getTargetUser } from "../_shared/leadAuth.ts";
 import { validateBusinessAssociate } from "../_shared/leadEligibility.ts";
+import { verifyActionPin } from "../_shared/pin.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -29,6 +30,7 @@ type LeadRow = {
   approval_authority_id: string;
   handled_by_dgm_id: string | null;
   assigned_ba_id: string | null;
+  declined_from_status: string | null;
 };
 
 // (from_status -> action -> to_status) — the single source of truth for
@@ -62,6 +64,20 @@ const REQUIRE_COMMENT = new Set([
   "md_decline",
 ]);
 
+// Every committee/MD decision requires the caller's own 5-digit action
+// PIN — accept, approve, escalate/forward, decline, and drop, but never
+// edit/resubmit, claim, or reject_reassign. dgm_initial_decline is the one
+// explicit exception among the decision actions (product decision: DGM
+// sending a lead back to the assignee doesn't need one).
+const REQUIRE_PIN = new Set([
+  "accept", "drop",
+  "dgm_initial_approve",
+  "pmt_approve", "pmt_escalate", "pmt_decline",
+  "pmt_extended_approve", "pmt_extended_forward_dgm", "pmt_extended_decline",
+  "dgm_accept", "dgm_decline",
+  "md_approve", "md_decline",
+]);
+
 export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
@@ -77,14 +93,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     return jsonRes(req, 400, { error: "Invalid JSON body." });
   }
 
-  const { lead_id, action, comment } = body;
+  const { lead_id, action, comment, pin } = body;
   if (!lead_id || typeof lead_id !== "string") return jsonRes(req, 400, { error: "lead_id is required." });
   if (!action || typeof action !== "string") return jsonRes(req, 400, { error: "action is required." });
   const trimmedComment = typeof comment === "string" ? comment.trim().slice(0, 2000) : "";
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, approval_authority_id, handled_by_dgm_id, assigned_ba_id")
+    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, approval_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -98,6 +114,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   }
   if (REQUIRE_COMMENT.has(action) && !trimmedComment) {
     return jsonRes(req, 400, { error: "Comment/Description is required" });
+  }
+  // DGM sent this back for changes — only they should re-review it; no
+  // Withdraw here so the assignee can't sidestep that by dropping it instead.
+  if (action === "drop" && leadRow.status === "pa_action_required" && leadRow.declined_from_status === "dgm_initial_review") {
+    return forbidden("This lead was returned by DGM and can only be edited and resubmitted — it can't be withdrawn here.");
   }
 
   function forbidden(msg: string) {
@@ -195,7 +216,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
       case "dgm_initial_decline": {
         if (caller.committee !== "G3") return forbidden("Only a G3 (DGM) committee member can act on this lead.");
-        extraFields = { handled_by_dgm_id: caller.id };
+        extraFields = { handled_by_dgm_id: caller.id, declined_from_status: leadRow.status };
         notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
         notifyTitle = "Lead returned by DGM";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
@@ -223,6 +244,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
       case "pmt_decline": {
         if (caller.committee !== "PMT") return forbidden("Only a PMT committee member can act on this lead.");
+        extraFields = { declined_from_status: leadRow.status };
         notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
         notifyTitle = "Lead returned by PMT";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
@@ -247,6 +269,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
       case "pmt_extended_decline": {
         if (caller.committee !== "PMT Extended") return forbidden("Only a PMT Extended committee member can act on this lead.");
+        extraFields = { declined_from_status: leadRow.status };
         notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
         notifyTitle = "Lead returned by PMT Extended";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
@@ -267,7 +290,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
       case "dgm_decline": {
         if (caller.committee !== "G3") return forbidden("Only a G3 (DGM) committee member can act on this lead.");
-        extraFields = { handled_by_dgm_id: caller.id };
+        extraFields = { handled_by_dgm_id: caller.id, declined_from_status: leadRow.status };
         notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
         notifyTitle = "Lead returned by DGM";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
@@ -294,6 +317,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
       default:
         return jsonRes(req, 400, { error: `Unknown action "${action}".` });
+    }
+
+    // PIN is the last gate, after every action-specific authorization check
+    // above has already passed — a caller who isn't even allowed to take
+    // this action gets that error, not a confusing "wrong PIN".
+    if (REQUIRE_PIN.has(action)) {
+      const pinErr = await verifyActionPin(adminClient, caller.id, caller.pin_hash, pin);
+      if (pinErr) return jsonRes(req, 400, { error: pinErr });
     }
 
     // Guarded on the same status the transitions map was checked against —

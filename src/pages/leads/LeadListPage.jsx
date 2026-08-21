@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { leadCan, isActionRequiredForViewer } from "../../lib/leadPermissions";
+import { can } from "../../lib/roles";
+import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
@@ -16,6 +18,7 @@ import { canOpenProposal } from "../../lib/proposalPrep";
 import "../../styles/LeadListPage.css";
 
 const STATUS_OPTIONS = [{ value: "all", label: "All Statuses" }, ...Object.entries(STATUS_MAP).map(([value, cfg]) => ({ value, label: cfg.label }))];
+const PAGE_SIZE = 20;
 
 // "Action Required" depends on who's looking — a PMT member's queue is
 // pmt_review leads (org-wide), a PA-tier owner's is their own pa_review/
@@ -52,7 +55,13 @@ export default function LeadListPage() {
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [teamFilter, setTeamFilter] = useState("all");
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [page, setPage] = useState(1);
+
+  const canFilterTeam = can.viewAllTeams(profile?.role);
+  const teams = useTeamOptions();
+  const teamOptions = [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))];
 
   const fetchLeads = useCallback(async () => {
     // RLS (can_view_lead) scopes visible rows per role/team/committee/
@@ -90,13 +99,22 @@ export default function LeadListPage() {
     // Clicking the active card again clears it back to Total.
     setQuickFilter((current) => (current === key ? "all" : key));
     setStatusFilter("all");
+    setPage(1);
   }
 
   function selectStatusFilter(value) {
     setStatusFilter(value);
     setQuickFilter("all");
+    setPage(1);
   }
 
+  function selectTeamFilter(value) {
+    setTeamFilter(value);
+    setPage(1);
+  }
+
+  // Search runs over every matching lead, not just the current page — the
+  // page slice below is purely a display concern.
   const filtered = leads.filter((l) => {
     const q = search.toLowerCase();
     const matchSearch =
@@ -104,8 +122,17 @@ export default function LeadListPage() {
       (l.title || "").toLowerCase().includes(q) ||
       (l.client_name || "").toLowerCase().includes(q) ||
       (l.creator?.full_name || "").toLowerCase().includes(q);
-    return matchSearch && QUICK_FILTERS[quickFilter].match(l, profile) && (statusFilter === "all" || l.status === statusFilter);
+    return (
+      matchSearch &&
+      QUICK_FILTERS[quickFilter].match(l, profile) &&
+      (statusFilter === "all" || l.status === statusFilter) &&
+      (teamFilter === "all" || l.team === teamFilter)
+    );
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const canCreate = leadCan.create(profile);
 
@@ -166,8 +193,13 @@ export default function LeadListPage() {
               className="input ll-search"
               placeholder="Search by lead number, title, client, creator…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
+            {canFilterTeam && (
+              <div style={{ minWidth: 160 }}>
+                <Select options={teamOptions} value={teamFilter} onChange={selectTeamFilter} placeholder="All Teams" />
+              </div>
+            )}
             <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={statusFilter !== "all" ? 1 : 0} />
           </Card.Body>
         </Card>
@@ -185,7 +217,7 @@ export default function LeadListPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((l) => (
+                  {paged.map((l) => (
                     <tr key={l.id}>
                       <td><span className="ll-lead-number">{l.lead_number}</span></td>
                       <td className="ll-title" title={l.title}>{fmt(l.title)}</td>
@@ -224,7 +256,22 @@ export default function LeadListPage() {
           )}
         </Card>
 
-        <p className="ll-record-count">Showing {filtered.length} of {leads.length} leads</p>
+        <div className="ll-pagination">
+          <p className="ll-record-count">
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} leads
+          </p>
+          {totalPages > 1 && (
+            <div className="ll-pagination-controls">
+              <Button variant="secondary" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+                ← Previous
+              </Button>
+              <span className="ll-pagination-page">Page {currentPage} of {totalPages}</span>
+              <Button variant="secondary" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+                Next →
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={() => setStatusFilter("all")}>

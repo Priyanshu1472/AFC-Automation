@@ -6,7 +6,7 @@ export const AuthContext = createContext(null);
 async function fetchProfile(userId) {
   const { data, error } = await supabase
     .from("afc_users")
-    .select("id, full_name, email, role, team, office, committee, is_active, must_change_password")
+    .select("id, full_name, email, role, team, office, committee, is_active, must_change_password, pin_updated_at")
     .eq("id", userId)
     .maybeSingle();
 

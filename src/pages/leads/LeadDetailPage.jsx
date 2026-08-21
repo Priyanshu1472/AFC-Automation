@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
-import { LEAD_PA_TIER_ROLES } from "../../lib/roles";
+import { useToast } from "../../hooks/useToast";
+import { LEAD_PA_TIER_ROLES, ROLE_LABELS } from "../../lib/roles";
 import { canOpenProposal } from "../../lib/proposalPrep";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -10,9 +11,10 @@ import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import Select from "../../components/ui/Select";
+import Input from "../../components/ui/Input";
 import PageLoader from "../../components/ui/PageLoader";
 import LeadTimeline from "../../components/leads/LeadTimeline";
-import { STATUS_MAP, STATUS_FLOW } from "../../components/leads/leadStatus";
+import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS } from "../../components/leads/leadStatus";
 // Reuses the ar-* detail/action/timeline/document styles already defined
 // for Empanelment's review page — generic patterns (label/value rows,
 // stepper, action panel, doc list), no Lead-Gen-specific CSS needed yet.
@@ -43,47 +45,52 @@ function Row({ label, value }) {
 // Every action the caller *might* be entitled to for the lead's current
 // status — the server (advance-lead-stage) is the real authority; this is
 // UX only, filtered again below by the caller's actual tags/assignment.
+// requiresPin mirrors advance-lead-stage's REQUIRE_PIN exactly — every
+// committee/MD decision (accept, approve, escalate/forward, decline, drop)
+// except dgm_initial_decline, which is the one explicit exception (DGM
+// sending a lead back to the assignee doesn't need one), and never
+// edit/resubmit/claim/reject_reassign.
 const ACTIONS_BY_STATUS = {
   pa_review: [
-    { key: "accept", label: "Accept", variant: "primary" },
+    { key: "accept", label: "Accept", variant: "primary", requiresPin: true },
     { key: "__edit_resubmit", label: "Edit", variant: "secondary" },
     // "drop" (self-assigned creator, true drop) and "reject_reassign" (PR
     // who isn't the creator) are mutually exclusive per viewer — only one
     // of the two ever survives the availableActions() filter below.
-    { key: "drop", label: "Drop", variant: "danger" },
+    { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
     { key: "reject_reassign", label: "Reject", variant: "danger" },
   ],
   pa_dropped: [{ key: "claim", label: "Claim Lead", variant: "primary" }],
   dgm_initial_review: [
-    { key: "dgm_initial_approve", label: "Approve → PMT", variant: "primary", requiresReason: true },
+    { key: "dgm_initial_approve", label: "Approve → PMT", variant: "primary", requiresReason: true, requiresPin: true },
     { key: "dgm_initial_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger" },
+    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
   ],
   pmt_review: [
-    { key: "pmt_approve", label: "Approve → MD", variant: "primary", requiresReason: true },
-    { key: "pmt_escalate", label: "Escalate to PMT Extended", variant: "secondary", requiresReason: true },
-    { key: "pmt_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger" },
+    { key: "pmt_approve", label: "Approve → MD", variant: "primary", requiresReason: true, requiresPin: true },
+    { key: "pmt_escalate", label: "Escalate to PMT Extended", variant: "secondary", requiresReason: true, requiresPin: true },
+    { key: "pmt_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
+    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
   ],
   pmt_extended_review: [
-    { key: "pmt_extended_approve", label: "Approve → MD", variant: "primary", requiresReason: true },
-    { key: "pmt_extended_forward_dgm", label: "Forward to G3", variant: "secondary" },
-    { key: "pmt_extended_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger" },
+    { key: "pmt_extended_approve", label: "Approve → MD", variant: "primary", requiresReason: true, requiresPin: true },
+    { key: "pmt_extended_forward_dgm", label: "Forward to G3", variant: "secondary", requiresPin: true },
+    { key: "pmt_extended_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
+    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
   ],
   dgm_review: [
-    { key: "dgm_accept", label: "Accept → MD", variant: "primary", requiresReason: true },
-    { key: "dgm_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger" },
+    { key: "dgm_accept", label: "Accept → MD", variant: "primary", requiresReason: true, requiresPin: true },
+    { key: "dgm_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
+    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
   ],
   md_review: [
-    { key: "md_approve", label: "Approve", variant: "primary" },
-    { key: "md_decline", label: "Decline", variant: "danger", requiresReason: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger" },
+    { key: "md_approve", label: "Approve", variant: "primary", requiresPin: true },
+    { key: "md_decline", label: "Decline", variant: "danger", requiresReason: true, requiresPin: true },
+    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
   ],
   pa_action_required: [
     { key: "__edit_resubmit", label: "Edit & Resubmit", variant: "primary" },
-    { key: "drop", label: "Drop", variant: "danger" },
+    { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
   ],
 };
 
@@ -124,24 +131,25 @@ export default function LeadDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { showToast } = useToast();
 
   const [lead, setLead] = useState(null);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);
   const [reason, setReason] = useState("");
+  const [pin, setPin] = useState("");
   const [selectedBaId, setSelectedBaId] = useState("");
   const [baOptions, setBaOptions] = useState([]);
   const [selectedReassignId, setSelectedReassignId] = useState("");
   const [reassignOptions, setReassignOptions] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
-  const [banner, setBanner] = useState(null);
 
   const fetchLead = useCallback(async () => {
     const { data } = await supabase
       .from("leads")
       .select(
-        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name), reviewer:reviewer_id(full_name), authority:approval_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name)"
+        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name, role), reviewer:reviewer_id(full_name), authority:approval_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name)"
       )
       .eq("id", id)
       .maybeSingle();
@@ -182,6 +190,9 @@ export default function LeadDetailPage() {
         // PR at every other non-terminal status.
         case "drop":
           if (lead.status === "pa_review") return profile?.id === lead.created_by;
+          // DGM sent this back for changes — only they should re-review it,
+          // so there's no Withdraw here, only Edit & Resubmit.
+          if (lead.status === "pa_action_required" && lead.declined_from_status === "dgm_initial_review") return false;
           return profile?.id === lead.created_by || profile?.id === lead.person_responsible_id;
         // The PR rejecting a lead they didn't create — hands it to a
         // teammate instead of dropping it.
@@ -229,8 +240,8 @@ export default function LeadDetailPage() {
       navigate(`/leads/${id}/edit`);
       return;
     }
-    setBanner(null);
     setReason("");
+    setPin("");
     setSelectedBaId("");
     setSelectedReassignId("");
     setPendingAction(action);
@@ -254,15 +265,19 @@ export default function LeadDetailPage() {
   async function confirmAction() {
     if (!pendingAction) return;
     if (pendingAction.requiresReason && !reason.trim()) {
-      setBanner({ type: "danger", text: "Comment/Description is required" });
+      showToast("Comment/Description is required", "danger");
+      return;
+    }
+    if (pendingAction.requiresPin && !/^\d{5}$/.test(pin)) {
+      showToast("Enter your 5-digit PIN.", "danger");
       return;
     }
     if (needsBaSelection && !selectedBaId) {
-      setBanner({ type: "danger", text: "Select a BA" });
+      showToast("Select a BA", "danger");
       return;
     }
     if (needsReassignSelection && !selectedReassignId) {
-      setBanner({ type: "danger", text: "Select a team member to assign this lead to." });
+      showToast("Select a team member to assign this lead to.", "danger");
       return;
     }
     setActionLoading(true);
@@ -272,31 +287,33 @@ export default function LeadDetailPage() {
           lead_id: id,
           action: pendingAction.key,
           comment: reason.trim(),
+          ...(pendingAction.requiresPin ? { pin } : {}),
           ...(needsBaSelection ? { assigned_ba_id: selectedBaId } : {}),
           ...(needsReassignSelection ? { reassign_to_id: selectedReassignId } : {}),
         },
       });
       if (error) {
-        setBanner({ type: "danger", text: await extractFunctionErrorMessage(error, "Action failed.") });
+        showToast(await extractFunctionErrorMessage(error, "Action failed."), "danger");
         return;
       }
       if (!data?.success) {
-        setBanner({ type: "danger", text: data?.error || "Action failed." });
+        showToast(data?.error || "Action failed.", "danger");
         return;
       }
-      setBanner({
-        type: "success",
-        text: needsReassignSelection
+      showToast(
+        needsReassignSelection
           ? "Lead reassigned successfully."
           : `Lead moved to "${(STATUS_MAP[data.status] || { label: data.status }).label}".`,
-      });
+        "success"
+      );
       setPendingAction(null);
       setReason("");
+      setPin("");
       setSelectedBaId("");
       setSelectedReassignId("");
       fetchLead();
     } catch (err) {
-      setBanner({ type: "danger", text: err.message || "Something went wrong." });
+      showToast(err.message || "Something went wrong.", "danger");
     } finally {
       setActionLoading(false);
     }
@@ -325,12 +342,6 @@ export default function LeadDetailPage() {
         <div className="ar-page">
           <button className="ar-back-btn" onClick={() => navigate("/leads")}>← Back to Leads</button>
 
-          {banner && (
-            <Alert variant={banner.type} onClose={() => setBanner(null)}>
-              {banner.text}
-            </Alert>
-          )}
-
           <Card className="ar-header-card">
             <Card.Body className="ar-header-body">
               <div className="ar-header-left">
@@ -351,20 +362,25 @@ export default function LeadDetailPage() {
               <Card.Body className="ar-stepper-body">
                 <p className="ar-stepper-heading">Lead Progress</p>
                 <div className="ar-stepper">
-                  {STATUS_FLOW.map((step, i) => (
-                    <div key={step.key} className={`ar-step-outer${i < currentFlowIdx ? " ar-step-done-outer" : ""}`}>
-                      <div className="ar-step">
-                        <div className={["ar-step-dot", i === currentFlowIdx ? "ar-step-current" : "", i < currentFlowIdx ? "ar-step-done" : ""].filter(Boolean).join(" ")} />
-                        <span className={["ar-step-label", i === currentFlowIdx ? "ar-step-label-current" : "", i < currentFlowIdx ? "ar-step-label-done" : ""].filter(Boolean).join(" ")}>{step.label}</span>
+                  {STATUS_FLOW.map((step, i) => {
+                    // The first step is generically "PA" in the shared config,
+                    // but here we know exactly who accepted it — show their
+                    // actual designation instead.
+                    const label = step.key === "pa_review" && lead.assignee?.role
+                      ? ROLE_LABELS[lead.assignee.role] || step.label
+                      : step.label;
+                    return (
+                      <div key={step.key} className={`ar-step-outer${i < currentFlowIdx ? " ar-step-done-outer" : ""}`}>
+                        <div className="ar-step">
+                          <div className={["ar-step-dot", i === currentFlowIdx ? "ar-step-current" : "", i < currentFlowIdx ? "ar-step-done" : ""].filter(Boolean).join(" ")} />
+                          <span className={["ar-step-label", i === currentFlowIdx ? "ar-step-label-current" : "", i < currentFlowIdx ? "ar-step-label-done" : ""].filter(Boolean).join(" ")}>{label}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </Card.Body>
             </Card>
-          )}
-          {["pmt_extended_review", "dgm_review"].includes(lead.status) && (
-            <Alert variant="info">This lead is on an escalated review path ({statusCfg.label}).</Alert>
           )}
 
           <div className="ar-grid">
@@ -379,7 +395,7 @@ export default function LeadDetailPage() {
                   <Row label="Client / Department" value={fmt(lead.client_name)} />
                   <Row label="State" value={fmt(lead.state)} />
                   <Row label="Last Date of Submission" value={fmtDate(lead.submission_deadline)} />
-                  <Row label="Delivery Type" value={lead.delivery_type ? lead.delivery_type.replace(/\b\w/g, (c) => c.toUpperCase()) : null} />
+                  <Row label="Delivery Type" value={lead.delivery_type ? DELIVERY_TYPE_LABELS[lead.delivery_type] || lead.delivery_type : null} />
                   <Row label="Remark" value={fmt(lead.remark)} />
                 </Card.Body>
               </Card>
@@ -455,6 +471,21 @@ export default function LeadDetailPage() {
                             placeholder={pendingAction.requiresReason ? "Explain why…" : "Optional comment…"}
                           />
                         </div>
+                        {pendingAction.requiresPin && (
+                          <div className="ar-field">
+                            <Input
+                              label="Your Action PIN"
+                              required
+                              type="password"
+                              inputMode="numeric"
+                              placeholder="5 digits"
+                              value={pin}
+                              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                              disabled={actionLoading}
+                              hint="Confirms it's really you — set or change this from My Profile."
+                            />
+                          </div>
+                        )}
                         <Button variant={pendingAction.variant} block loading={actionLoading} onClick={confirmAction}>
                           Confirm: {pendingAction.label}
                         </Button>

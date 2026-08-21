@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import AppHeader from "../../components/shared/AppHeader";
 import Alert from "../../components/ui/Alert";
+import Button from "../../components/ui/Button";
 import PageLoader from "../../components/ui/PageLoader";
 import LeadForm from "./LeadForm";
 
@@ -42,6 +43,9 @@ export default function EditLeadPage() {
               <h1>{isResubmit ? "Edit & Resubmit Lead" : "Edit Lead"}</h1>
               {lead && <p>{lead.lead_number} — {lead.title}</p>}
             </div>
+            <Button variant="secondary" onClick={() => navigate(lead ? `/leads/${lead.id}` : "/leads")}>
+              ← Back
+            </Button>
           </div>
         </div>
 

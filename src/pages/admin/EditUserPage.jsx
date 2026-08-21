@@ -12,6 +12,7 @@ import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import FieldTooltip from "../../components/FieldTooltip";
+import ResetPinModal from "./ResetPinModal";
 import "../../styles/CreateUserPage.css";
 
 const FIELD_HELP = {
@@ -51,12 +52,13 @@ export default function EditUserPage() {
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState("");
   const [success, setSuccess] = useState(false);
+  const [showResetPin, setShowResetPin] = useState(false);
 
   const fetchUser = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("afc_users")
-      .select("id, full_name, email, role, team, office, committee")
+      .select("id, full_name, email, role, team, office, committee, pin_updated_at")
       .eq("id", id)
       .maybeSingle();
     if (error || !data) {
@@ -212,6 +214,19 @@ export default function EditUserPage() {
                     </div>
                   )
                 )}
+                {profile?.role === "admin" && (
+                  <div className="field">
+                    <label className="field-label">
+                      Action PIN <FieldTooltip text="The 5-digit PIN this user uses to confirm lead-workflow decisions. One-way hashed — even Admin can't view the current value, only reset it to a new one." />
+                    </label>
+                    <p className="text-sm text-secondary" style={{ paddingTop: 9, display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                      {target.pin_updated_at ? "Set" : "Not set"}
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setShowResetPin(true)}>
+                        {target.pin_updated_at ? "Reset PIN" : "Set PIN"}
+                      </Button>
+                    </p>
+                  </div>
+                )}
               </div>
             </Card.Body>
             <Card.Footer>
@@ -221,6 +236,20 @@ export default function EditUserPage() {
             </Card.Footer>
           </form>
         </Card>
+
+        {showResetPin && (
+          <ResetPinModal
+            targetUserId={target.id}
+            targetName={target.full_name}
+            onClose={() => setShowResetPin(false)}
+            onSuccess={() => {
+              setShowResetPin(false);
+              setSuccess(true);
+              setBanner(`PIN reset for ${target.full_name}.`);
+              fetchUser();
+            }}
+          />
+        )}
       </div>
     </div>
   );

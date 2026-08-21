@@ -55,3 +55,42 @@ export async function getPaTierHolders(admin: AdminClient, team: string): Promis
   }
   return (data || []).map((u: { id: string }) => u.id);
 }
+
+type ViewerCaller = { id: string; role: string; team: string | null; committee: string | null };
+type ViewableLead = {
+  status: string;
+  team: string;
+  created_by: string;
+  person_responsible_id: string;
+  reviewer_id: string;
+  approval_authority_id: string;
+  handled_by_dgm_id: string | null;
+  assigned_ba_id: string | null;
+};
+
+// JS mirror of the DB's can_view_lead() — needed anywhere a service-role
+// client (which bypasses RLS) has to re-derive the same visibility rule,
+// e.g. signing a document URL. Keep this in lockstep with can_view_lead()
+// in the migrations — the two drifting apart is exactly the kind of gap
+// that let get-lead-document-url stay on the old team-wide rule after
+// can_view_lead() itself had already been narrowed.
+//   - md/admin/cfo/cs: every lead, org-wide.
+//   - dgm: every lead on their own team.
+//   - project_assistant/project_officer/associate_consultant: every lead
+//     on their own team.
+//   - agm/srm: only leads they're actually named on.
+//   - PMT/PMT Extended/G3 committee membership: org-wide, only while the
+//     lead is at the stage that committee reviews.
+//   - Always: creator/Person Responsible/Reviewer/Approval Authority/
+//     handling DGM, or the assigned Business Associate.
+export function canViewLead(caller: ViewerCaller, lead: ViewableLead): boolean {
+  if (["md", "admin", "cfo", "cs"].includes(caller.role)) return true;
+  if (caller.role === "dgm" && caller.team === lead.team) return true;
+  if (["project_assistant", "project_officer", "associate_consultant"].includes(caller.role) && caller.team === lead.team) return true;
+  if (["dgm_initial_review", "dgm_review"].includes(lead.status) && caller.committee === "G3") return true;
+  if (lead.status === "pmt_review" && caller.committee === "PMT") return true;
+  if (lead.status === "pmt_extended_review" && caller.committee === "PMT Extended") return true;
+  if ([lead.created_by, lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id, lead.handled_by_dgm_id].includes(caller.id)) return true;
+  if (caller.role === "business_associate" && lead.assigned_ba_id === caller.id) return true;
+  return false;
+}

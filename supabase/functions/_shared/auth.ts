@@ -35,6 +35,7 @@ export type CallerProfile = {
   committee: string | null;
   is_active: boolean;
   email: string;
+  pin_hash: string | null;
 };
 
 export type CallerResult =
@@ -60,7 +61,7 @@ export async function getCallerProfile(
 
   const { data: caller, error } = await adminClient
     .from("afc_users")
-    .select("id, role, team, office, committee, is_active, email")
+    .select("id, role, team, office, committee, is_active, email, pin_hash")
     .eq("id", payload.sub)
     .single();
 

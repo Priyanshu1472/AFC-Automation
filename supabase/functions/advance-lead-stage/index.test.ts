@@ -1,13 +1,20 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { handleRequest } from "./index.ts";
 import { authedReq, createFakeAdminClient, fakeJwt, FakeResult } from "../_shared/testHelpers.ts";
+import { hashPin } from "../_shared/pin.ts";
 
 const CALLER_ID = "caller-1";
 const LEAD_ID = "lead-1";
 const TEAM = "BPDD";
 
+// Every PIN-gated action test goes through req(), which already attaches a
+// valid PIN by default — tests that care about PIN behavior specifically
+// (see the "PIN gate" section) override it explicitly.
+const CALLER_PIN = "54321";
+const CALLER_PIN_HASH = await hashPin(CALLER_PIN, CALLER_ID);
+
 function callerRow(overrides: Record<string, unknown> = {}) {
-  return { id: CALLER_ID, role: "project_officer", team: TEAM, office: "delhi", committee: null, is_active: true, email: "caller@afc.com", ...overrides };
+  return { id: CALLER_ID, role: "project_officer", team: TEAM, office: "delhi", committee: null, is_active: true, email: "caller@afc.com", pin_hash: CALLER_PIN_HASH, ...overrides };
 }
 
 function leadRow(overrides: Record<string, unknown> = {}) {
@@ -46,7 +53,7 @@ function buildClient(opts: {
 }
 
 function req(body: Record<string, unknown>) {
-  return authedReq("https://x.com/advance-lead-stage", { token: fakeJwt({ sub: CALLER_ID }), body });
+  return authedReq("https://x.com/advance-lead-stage", { token: fakeJwt({ sub: CALLER_ID }), body: { pin: CALLER_PIN, ...body } });
 }
 
 Deno.test("handleRequest - OPTIONS returns ok without auth", async () => {
@@ -425,6 +432,59 @@ Deno.test("md_decline - requires a reason and moves to md_declined (terminal)", 
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "md_decline", comment: "not aligned" }), client as never);
   assertEquals(res.status, 200);
   assertEquals((await res.json()).status, "md_declined");
+});
+
+// ── PIN gate ────────────────────────────────────────────────
+Deno.test("PIN gate - accept fails authorization before the PIN is even checked", async () => {
+  // Wrong PR *and* no PIN — should fail on authorization (403), not PIN (400).
+  const client = buildClient({ lead: leadRow({ person_responsible_id: "someone-else" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", pin: "" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("PIN gate - accept rejects a missing/malformed PIN once authorized", async () => {
+  const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", pin: "12" }), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "Enter your 5-digit PIN.");
+});
+
+Deno.test("PIN gate - accept rejects a caller with no PIN set yet", async () => {
+  const client = buildClient({ caller: callerRow({ pin_hash: null }), lead: leadRow({ assigned_ba_id: "existing-ba" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "You haven't set an action PIN yet — set one from My Profile before you can do this.");
+});
+
+Deno.test("PIN gate - accept rejects the wrong PIN", async () => {
+  const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", pin: "00000" }), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "Incorrect PIN.");
+});
+
+Deno.test("PIN gate - accept succeeds with the correct PIN", async () => {
+  const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("PIN gate - dgm_initial_decline (DGM sending it back) does NOT require a PIN", async () => {
+  const client = buildClient({ caller: callerRow({ committee: "G3", pin_hash: null }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_decline", comment: "needs more detail", pin: "" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("PIN gate - claim does NOT require a PIN", async () => {
+  const client = buildClient({ caller: callerRow({ role: "agm", pin_hash: null }), lead: leadRow({ status: "pa_dropped" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "claim", pin: "" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("PIN gate - drop returned-by-DGM leads with no Withdraw option, even with a valid PIN", async () => {
+  const client = buildClient({ lead: leadRow({ status: "pa_action_required", declined_from_status: "dgm_initial_review", created_by: CALLER_ID }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
+  assertEquals(res.status, 403);
 });
 
 // ── Concurrency ─────────────────────────────────────────────

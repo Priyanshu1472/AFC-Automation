@@ -8,6 +8,7 @@ import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import SetPasswordForm from "./SetPasswordForm";
+import SetPinForm from "./SetPinForm";
 
 // Self-service page for both AFC staff and Business Associate portal
 // accounts — name can be corrected here (email/role/team/office stay
@@ -124,6 +125,10 @@ export default function MyProfilePage() {
             hookOptions={{ requireMarkChanged: false, redirectTo: null, requireCurrentPassword: true }}
             successMessage="Password updated successfully."
           />
+        </div>
+
+        <div id="pin" style={{ marginTop: "var(--space-6)", scrollMarginTop: 90 }}>
+          <SetPinForm hasPin={!!profile.pin_updated_at} />
         </div>
       </div>
     </div>

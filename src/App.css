@@ -877,25 +877,49 @@ select.input {
 
 .toast-stack {
   position: fixed;
-  top: var(--space-5);
+  bottom: var(--space-5);
   right: var(--space-5);
   z-index: var(--z-toast);
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: var(--space-2);
   width: min(360px, calc(100vw - var(--space-8)));
   pointer-events: none;
 }
 
 .toast {
+  position: relative;
+  overflow: hidden;
   box-shadow: var(--shadow-lg);
   pointer-events: auto;
-  animation: slideInRight var(--duration-normal) var(--ease-out);
+  animation: slideInUp var(--duration-normal) var(--ease-out);
 }
 
-@keyframes slideInRight {
-  from { transform: translateX(24px); opacity: 0; }
-  to   { transform: translateX(0);    opacity: 1; }
+/* Countdown bar along the bottom edge — shrinks from 100% to 0% width over
+   the toast's own duration, so there's a visible cue of exactly how long is
+   left before it auto-dismisses. Color matches the toast's own variant via
+   currentColor, same trick .alert-icon already relies on. */
+.toast-countdown {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: currentColor;
+  opacity: 0.45;
+  transform-origin: left;
+  animation: toastCountdown linear forwards;
+  animation-duration: var(--toast-duration, 5000ms);
+}
+
+@keyframes toastCountdown {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+@keyframes slideInUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
 
 @media (max-width: 480px) {
