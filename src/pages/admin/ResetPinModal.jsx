@@ -1,4 +1,4 @@
-// Admin-only: sets a new 5-digit action PIN for another user. The PIN is
+// Admin-only: sets a new 4-digit action PIN for another user. The PIN is
 // one-way hashed server-side — nobody, including Admin, can ever view the
 // current value, only reset it to a new one. Gated by the ADMIN'S OWN
 // password (re-verified via supabase.auth.signInWithPassword, same pattern
@@ -9,15 +9,12 @@ import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import Modal from "../../components/ui/Modal";
 import Input from "../../components/ui/Input";
+import PinInput from "../../components/ui/PinInput";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import { LockIcon } from "../../components/icons";
 
-const PIN_PATTERN = /^\d{5}$/;
-
-function onlyDigits(v) {
-  return v.replace(/\D/g, "").slice(0, 5);
-}
+const PIN_PATTERN = /^\d{4}$/;
 
 export default function ResetPinModal({ targetUserId, targetName, onClose, onSuccess }) {
   const { profile } = useAuth();
@@ -30,7 +27,7 @@ export default function ResetPinModal({ targetUserId, targetName, onClose, onSuc
   async function handleSubmit() {
     setError("");
     if (!adminPassword) return setError("Enter your own password to confirm.");
-    if (!PIN_PATTERN.test(pin)) return setError("PIN must be exactly 5 digits.");
+    if (!PIN_PATTERN.test(pin)) return setError("PIN must be exactly 4 digits.");
     if (pin !== confirmPin) return setError("PINs do not match.");
 
     setLoading(true);
@@ -75,35 +72,13 @@ export default function ResetPinModal({ targetUserId, targetName, onClose, onSuc
             required
             disabled={loading}
           />
-          <Input
-            label="New PIN"
-            type="password"
-            inputMode="numeric"
-            placeholder="5 digits"
-            value={pin}
-            onChange={(e) => setPin(onlyDigits(e.target.value))}
-            icon={<LockIcon />}
-            autoComplete="off"
-            required
-            disabled={loading}
-          />
-          <Input
-            label="Confirm new PIN"
-            type="password"
-            inputMode="numeric"
-            placeholder="Re-enter the 5 digits"
-            value={confirmPin}
-            onChange={(e) => setConfirmPin(onlyDigits(e.target.value))}
-            icon={<LockIcon />}
-            autoComplete="off"
-            required
-            disabled={loading}
-          />
+          <PinInput label="New PIN" value={pin} onChange={setPin} required disabled={loading} />
+          <PinInput label="Confirm new PIN" value={confirmPin} onChange={setConfirmPin} required disabled={loading} />
         </div>
       </Modal.Body>
       <Modal.Footer>
         <Button variant="secondary" disabled={loading} onClick={onClose}>Cancel</Button>
-        <Button variant="primary" loading={loading} disabled={loading || pin.length !== 5 || confirmPin.length !== 5 || !adminPassword} onClick={handleSubmit}>
+        <Button variant="primary" loading={loading} disabled={loading || pin.length !== 4 || confirmPin.length !== 4 || !adminPassword} onClick={handleSubmit}>
           Reset PIN
         </Button>
       </Modal.Footer>

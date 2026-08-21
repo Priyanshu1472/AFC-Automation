@@ -5,6 +5,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+import { DEFAULT_PIN, hashPin } from "../_shared/pin.ts";
 
 // Deploy-preview / branch-deploy subdomains are generated per-PR by
 // Netlify and can't be enumerated in advance, so we match by suffix
@@ -296,6 +297,10 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     const finalTeam = (body.team as string) || null;
     const finalOffice = (body.office as string) || null;
     const finalCommittee = (committee as string) || null;
+    // Every account starts with the same default action PIN ("1234") so a
+    // new user can act on PIN-gated lead actions immediately — same idea as
+    // the generated temp password, changeable any time from My Profile.
+    const defaultPinHash = await hashPin(DEFAULT_PIN, newAuthUser.user.id);
 
     const { error: insertErr } = await adminClient.from("afc_users").insert([
       {
@@ -310,6 +315,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         must_change_password: true,
         created_by: caller.id,
         managed_by_dgm: null,
+        pin_hash: defaultPinHash,
+        pin_updated_at: new Date().toISOString(),
       },
     ]);
 

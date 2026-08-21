@@ -10,7 +10,7 @@ const TEAM = "BPDD";
 // Every PIN-gated action test goes through req(), which already attaches a
 // valid PIN by default — tests that care about PIN behavior specifically
 // (see the "PIN gate" section) override it explicitly.
-const CALLER_PIN = "54321";
+const CALLER_PIN = "5432";
 const CALLER_PIN_HASH = await hashPin(CALLER_PIN, CALLER_ID);
 
 function callerRow(overrides: Record<string, unknown> = {}) {
@@ -21,7 +21,12 @@ function leadRow(overrides: Record<string, unknown> = {}) {
   return {
     id: LEAD_ID, lead_number: "LH-2026-000001", title: "Test Lead", status: "pa_review", team: TEAM,
     created_by: "creator-1", person_responsible_id: CALLER_ID, reviewer_id: "reviewer-1",
-    approval_authority_id: "authority-1", handled_by_dgm_id: null, ...overrides,
+    approval_authority_id: "authority-1", handled_by_dgm_id: null,
+    // Present by default since the Lead Approval Note is a precondition for
+    // "accept" — tests specifically covering that precondition override it
+    // back to null.
+    approval_note_data: { nature_of_lead: "Nomination" },
+    ...overrides,
   };
 }
 
@@ -88,6 +93,13 @@ Deno.test("accept - rejects a caller who isn't Person Responsible", async () => 
   const client = buildClient({ lead: leadRow({ person_responsible_id: "someone-else" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
   assertEquals(res.status, 403);
+});
+
+Deno.test("accept - requires the Lead Approval Note to be generated first", async () => {
+  const client = buildClient({ lead: leadRow({ approval_note_data: null, assigned_ba_id: "existing-ba" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "Generate the Lead Approval Note before submitting for DGM approval.");
 });
 
 Deno.test("accept - success moves to dgm_initial_review when the lead already has a BA", async () => {
@@ -446,7 +458,7 @@ Deno.test("PIN gate - accept rejects a missing/malformed PIN once authorized", a
   const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", pin: "12" }), client as never);
   assertEquals(res.status, 400);
-  assertEquals((await res.json()).error, "Enter your 5-digit PIN.");
+  assertEquals((await res.json()).error, "Enter your 4-digit PIN.");
 });
 
 Deno.test("PIN gate - accept rejects a caller with no PIN set yet", async () => {
@@ -458,7 +470,7 @@ Deno.test("PIN gate - accept rejects a caller with no PIN set yet", async () => 
 
 Deno.test("PIN gate - accept rejects the wrong PIN", async () => {
   const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba" }) });
-  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", pin: "00000" }), client as never);
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", pin: "0000" }), client as never);
   assertEquals(res.status, 400);
   assertEquals((await res.json()).error, "Incorrect PIN.");
 });

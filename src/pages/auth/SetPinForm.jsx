@@ -3,17 +3,14 @@ import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
+import PinInput from "../../components/ui/PinInput";
 import Card from "../../components/ui/Card";
 import Alert from "../../components/ui/Alert";
 import { LockIcon, ArrowRightIcon, ShowHideButton } from "../../components/icons";
 
-const PIN_PATTERN = /^\d{5}$/;
+const PIN_PATTERN = /^\d{4}$/;
 
-function onlyDigits(v) {
-  return v.replace(/\D/g, "").slice(0, 5);
-}
-
-// A 5-digit action PIN, separate from the login password — gates every
+// A 4-digit action PIN, separate from the login password — gates every
 // committee/MD decision in Lead Generation (accept/approve/decline/
 // escalate/forward/drop). Mirrors SetPasswordForm's shape: re-verify the
 // current password first (supabase.auth.signInWithPassword — the same
@@ -35,7 +32,7 @@ export default function SetPinForm({ hasPin }) {
     setSuccess(false);
 
     if (!currentPassword) return setError("Please enter your current password.");
-    if (!PIN_PATTERN.test(pin)) return setError("PIN must be exactly 5 digits.");
+    if (!PIN_PATTERN.test(pin)) return setError("PIN must be exactly 4 digits.");
     if (pin !== confirmPin) return setError("PINs do not match.");
 
     setLoading(true);
@@ -70,7 +67,7 @@ export default function SetPinForm({ hasPin }) {
           <div className="login-form-heading">
             <h2>{hasPin ? "Change Action PIN" : "Set Action PIN"}</h2>
             <p>
-              A 5-digit PIN used to confirm decisions on leads (accept, approve, decline, escalate, forward, withdraw) —
+              A 4-digit PIN used to confirm decisions on leads (accept, approve, decline, escalate, forward, withdraw) —
               separate from your login password, and known only to you.
             </p>
           </div>
@@ -79,27 +76,15 @@ export default function SetPinForm({ hasPin }) {
           {error && <Alert variant="danger">{error}</Alert>}
 
           <div className="login-fields">
-            <Input
-              label="Current password"
-              type={show ? "text" : "password"}
-              placeholder="Enter your current password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              icon={<LockIcon />}
-              autoComplete="current-password"
-              required
-              disabled={loading}
-            />
             <div style={{ position: "relative" }}>
               <Input
-                label={hasPin ? "New PIN" : "PIN"}
+                label="Current password"
                 type={show ? "text" : "password"}
-                inputMode="numeric"
-                placeholder="5 digits"
-                value={pin}
-                onChange={(e) => setPin(onlyDigits(e.target.value))}
+                placeholder="Enter your current password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
                 icon={<LockIcon />}
-                autoComplete="off"
+                autoComplete="current-password"
                 required
                 disabled={loading}
               />
@@ -107,15 +92,17 @@ export default function SetPinForm({ hasPin }) {
                 <ShowHideButton show={show} onToggle={() => setShow((p) => !p)} />
               </div>
             </div>
-            <Input
+            <PinInput
+              label={hasPin ? "New PIN" : "PIN"}
+              value={pin}
+              onChange={setPin}
+              required
+              disabled={loading}
+            />
+            <PinInput
               label="Confirm PIN"
-              type={show ? "text" : "password"}
-              inputMode="numeric"
-              placeholder="Re-enter the 5 digits"
               value={confirmPin}
-              onChange={(e) => setConfirmPin(onlyDigits(e.target.value))}
-              icon={<LockIcon />}
-              autoComplete="off"
+              onChange={setConfirmPin}
               required
               disabled={loading}
             />
@@ -126,7 +113,7 @@ export default function SetPinForm({ hasPin }) {
             variant="primary"
             block
             loading={loading}
-            disabled={loading || pin.length !== 5 || confirmPin.length !== 5 || !currentPassword}
+            disabled={loading || pin.length !== 4 || confirmPin.length !== 4 || !currentPassword}
             iconRight={!loading && <ArrowRightIcon />}
           >
             {loading ? "Saving…" : hasPin ? "Update PIN" : "Set PIN"}

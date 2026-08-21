@@ -1,5 +1,5 @@
 // supabase/functions/set-own-pin/index.ts
-// JWT must be ON. Sets/changes the CALLER'S OWN 5-digit action PIN — used
+// JWT must be ON. Sets/changes the CALLER'S OWN 4-digit action PIN — used
 // to gate committee/MD decisions on leads (see _shared/pin.ts). Mirrors
 // MyProfilePage's voluntary password change: the client re-verifies the
 // caller's current password via supabase.auth.signInWithPassword() before
@@ -29,7 +29,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   }
 
   const newPin = body.new_pin;
-  if (!isValidPin(newPin)) return jsonRes(req, 400, { error: "PIN must be exactly 5 digits." });
+  if (!isValidPin(newPin)) return jsonRes(req, 400, { error: "PIN must be exactly 4 digits." });
 
   try {
     const pinHash = await hashPin(newPin, caller.id);

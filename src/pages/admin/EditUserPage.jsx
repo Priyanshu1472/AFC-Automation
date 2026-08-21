@@ -217,7 +217,7 @@ export default function EditUserPage() {
                 {profile?.role === "admin" && (
                   <div className="field">
                     <label className="field-label">
-                      Action PIN <FieldTooltip text="The 5-digit PIN this user uses to confirm lead-workflow decisions. One-way hashed — even Admin can't view the current value, only reset it to a new one." />
+                      Action PIN <FieldTooltip text="The 4-digit PIN this user uses to confirm lead-workflow decisions. One-way hashed — even Admin can't view the current value, only reset it to a new one." />
                     </label>
                     <p className="text-sm text-secondary" style={{ paddingTop: 9, display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                       {target.pin_updated_at ? "Set" : "Not set"}

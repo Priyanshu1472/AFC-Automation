@@ -1,18 +1,22 @@
 // supabase/functions/_shared/pin.ts
-// A reusable 5-digit action PIN (separate from the login password) that
+// A reusable 4-digit action PIN (separate from the login password) that
 // gates every committee/MD decision on a lead. One-way SHA-256 hash,
 // salted with the user's own id — nobody, including Admin, can recover
 // the actual digits, only reset them. The hash isn't really the security
-// boundary here (5 digits = 100,000 possibilities, trivially brute-forced
+// boundary here (4 digits = 10,000 possibilities, trivially brute-forced
 // offline against a stolen hash) — rate-limited verification is, so
-// verifyPin always checks that first.
+// verifyPin always checks that first. Every account gets the same default
+// PIN ("1234") set at creation time (create-staff-user) and backfilled onto
+// pre-existing accounts (see migration 20260824000000) — a user changes it
+// from My Profile whenever they want, same as a default password.
 
 import { createAdminClient } from "./auth.ts";
 import { checkRateLimit } from "./publicAccess.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-const PIN_PATTERN = /^\d{5}$/;
+export const DEFAULT_PIN = "1234";
+const PIN_PATTERN = /^\d{4}$/;
 
 export function isValidPin(pin: unknown): pin is string {
   return typeof pin === "string" && PIN_PATTERN.test(pin);
@@ -31,7 +35,7 @@ export async function verifyActionPin(admin: AdminClient, userId: string, pinHas
   const rate = await checkRateLimit(admin, `lead_action_pin:${userId}`, 5, 15 * 60);
   if (!rate.allowed) return `Too many incorrect PIN attempts. Try again in about ${rate.waitMinutes} minute(s).`;
 
-  if (!isValidPin(candidatePin)) return "Enter your 5-digit PIN.";
+  if (!isValidPin(candidatePin)) return "Enter your 4-digit PIN.";
   if (!pinHash) return "You haven't set an action PIN yet — set one from My Profile before you can do this.";
 
   const candidateHash = await hashPin(candidatePin, userId);

@@ -15,6 +15,7 @@ import { logLeadActivity } from "../_shared/leadActivity.ts";
 import { PA_TIER_ROLES, getOrgWideHolders, getTargetUser } from "../_shared/leadAuth.ts";
 import { validateBusinessAssociate } from "../_shared/leadEligibility.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
+import { regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -31,7 +32,20 @@ type LeadRow = {
   handled_by_dgm_id: string | null;
   assigned_ba_id: string | null;
   declined_from_status: string | null;
+  approval_note_data: unknown;
 };
+
+// Every action that stamps a fresh signature/remark onto the (still
+// in-progress) Lead Approval Note — every committee approve/escalate/
+// forward, but not declines (those just return to the assignee, nothing
+// new to sign) and not md_approve (handled separately below, in "final"
+// mode). Regeneration is best-effort and never blocks the actual decision.
+const REGENERATE_DRAFT_NOTE_ON = new Set([
+  "dgm_initial_approve",
+  "pmt_approve", "pmt_escalate",
+  "pmt_extended_approve", "pmt_extended_forward_dgm",
+  "dgm_accept",
+]);
 
 // (from_status -> action -> to_status) — the single source of truth for
 // valid transitions, checked before any authorization logic runs.
@@ -100,7 +114,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, approval_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status")
+    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, approval_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -134,6 +148,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     switch (action) {
       case "accept": {
         if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can accept this lead.");
+        // "Accept" is now "Submit for DGM Approval" on the Lead Approval
+        // Note workflow — the note must exist (generated via
+        // generate-lead-approval-note) before the lead can move on.
+        if (!leadRow.approval_note_data) {
+          return jsonRes(req, 400, { error: "Generate the Lead Approval Note before submitting for DGM approval." });
+        }
         // A Business Associate is optional at creation, but required before
         // a lead can move on to PMT review — the Person Responsible picks
         // one here (or confirms the one already set) as part of accepting.
@@ -345,6 +365,18 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     }
 
     await logLeadActivity(adminClient, leadRow.id, caller.id, caller.role, action, leadRow.status, expectedTo, trimmedComment || null);
+
+    // Stamps this stage's remark/signature onto the Lead Approval Note —
+    // best-effort, after the activity row above so the note picks up the
+    // remark that was just logged. A PDF hiccup here must never undo or
+    // block the decision that already succeeded.
+    if (REGENERATE_DRAFT_NOTE_ON.has(action)) {
+      const result = await regenerateApprovalNote(adminClient, leadRow.id, "draft");
+      if (!result.ok) console.error(`Approval Note regeneration failed for lead ${leadRow.id}:`, result.error);
+    } else if (action === "md_approve") {
+      const result = await regenerateApprovalNote(adminClient, leadRow.id, "final");
+      if (!result.ok) console.error(`MD Approval Note generation failed for lead ${leadRow.id}:`, result.error);
+    }
 
     if (notifyTargetIds.length) {
       await notifyUsers(adminClient, notifyTargetIds, {

@@ -498,6 +498,12 @@ verify_jwt = true
 import_map = "./functions/advance-lead-stage/deno.json"
 entrypoint = "./functions/advance-lead-stage/index.ts"
 
+[functions.generate-lead-approval-note]
+enabled = true
+verify_jwt = true
+import_map = "./functions/generate-lead-approval-note/deno.json"
+entrypoint = "./functions/generate-lead-approval-note/index.ts"
+
 [functions.get-lead-document-url]
 enabled = true
 verify_jwt = true

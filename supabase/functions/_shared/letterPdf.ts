@@ -264,3 +264,153 @@ export async function newPdfDoc() {
   const fontBold = await pdf.embedFont(StandardFonts.TimesRomanBold);
   return { pdf, fonts: { reg: fontReg, bold: fontBold } };
 }
+
+// ── Bordered tables ──────────────────────────────────────────────
+// Generic table-drawing helpers, added for the Lead Approval Note (a
+// heavily tabular form) — not specific to that document, so any future
+// letter/note needing a bordered table can reuse these instead of hand-
+// drawing rectangles again.
+
+const RULE_GRAY = rgb(0.45, 0.45, 0.45);
+const HEADER_FILL = rgb(0.92, 0.94, 0.92);
+
+// deno-lint-ignore no-explicit-any
+function wrapLine(font: any, text: string, size: number, maxWidth: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    const test = cur ? `${cur} ${w}` : w;
+    if (font.widthOfTextAtSize(test, size) > maxWidth && cur) {
+      out.push(cur);
+      cur = w;
+    } else {
+      cur = test;
+    }
+  }
+  if (cur) out.push(cur);
+  return out.length ? out : [""];
+}
+
+// Splits on explicit newlines first (so callers can pass pre-formatted
+// paragraphs/bullet lists), then word-wraps each line independently.
+// deno-lint-ignore no-explicit-any
+export function wrapMultiline(font: any, text: string | null | undefined, size: number, maxWidth: number): string[] {
+  const paragraphs = String(text ?? "").split("\n");
+  const lines: string[] = [];
+  for (const p of paragraphs) {
+    if (!p) { lines.push(""); continue; }
+    lines.push(...wrapLine(font, p, size, maxWidth));
+  }
+  return lines.length ? lines : [""];
+}
+
+export interface KeyValueRow { label: string; value: string; }
+
+// A bordered two-column table: bold label cell | wrapped value cell, one
+// row per entry, row height auto-sized to whichever column wraps taller.
+// Paginates automatically (a row is never split across pages).
+export async function drawKeyValueTable(
+  e: PageEngine,
+  rows: KeyValueRow[],
+  opts: { labelWidth?: number; fontSize?: number; lineH?: number; padX?: number; padY?: number } = {}
+) {
+  const fontSize = opts.fontSize ?? 9;
+  const lineH = opts.lineH ?? 12;
+  const padX = opts.padX ?? 6;
+  const padY = opts.padY ?? 5;
+  const labelWidth = opts.labelWidth ?? 150;
+  const valueWidth = e.MAX_W - labelWidth;
+
+  for (const row of rows) {
+    const labelLines = wrapMultiline(e.fonts.bold, row.label, fontSize, labelWidth - 2 * padX);
+    const valueLines = wrapMultiline(e.fonts.reg, row.value || "—", fontSize, valueWidth - 2 * padX);
+    const nLines = Math.max(labelLines.length, valueLines.length);
+    const rowH = nLines * lineH + 2 * padY;
+
+    if (e.y - rowH < e.FOOTER_SAFE) await e.newPage();
+
+    const topY = e.y;
+    const x0 = e.LEFT;
+    const xMid = e.LEFT + labelWidth;
+    const x1 = e.RIGHT_EDGE;
+    const bottomY = topY - rowH;
+
+    e.currentPage.drawRectangle({ x: x0, y: bottomY, width: x1 - x0, height: rowH, borderColor: RULE_GRAY, borderWidth: 0.6 });
+    e.currentPage.drawLine({ start: { x: xMid, y: topY }, end: { x: xMid, y: bottomY }, thickness: 0.6, color: RULE_GRAY });
+
+    let ly = topY - padY - fontSize * 0.8;
+    for (const l of labelLines) {
+      e.currentPage.drawText(l, { x: x0 + padX, y: ly, size: fontSize, font: e.fonts.bold, color: BLACK });
+      ly -= lineH;
+    }
+    let vy = topY - padY - fontSize * 0.8;
+    for (const l of valueLines) {
+      e.currentPage.drawText(l, { x: xMid + padX, y: vy, size: fontSize, font: e.fonts.reg, color: BLACK });
+      vy -= lineH;
+    }
+
+    e.y = bottomY;
+  }
+}
+
+export interface GridColumn { header: string; width: number; }
+
+// A bordered multi-column grid table with a shaded header row, redrawn on
+// every new page a row overflows onto (like a real spreadsheet-style
+// table). `columns[].width` are proportional weights, scaled to fill the
+// page's content width.
+export async function drawGridTable(
+  e: PageEngine,
+  columns: GridColumn[],
+  rows: string[][],
+  opts: { fontSize?: number; lineH?: number; padX?: number; padY?: number } = {}
+) {
+  const fontSize = opts.fontSize ?? 8.5;
+  const lineH = opts.lineH ?? 11;
+  const padX = opts.padX ?? 5;
+  const padY = opts.padY ?? 4;
+  const totalW = columns.reduce((s, c) => s + c.width, 0);
+  const scale = e.MAX_W / totalW;
+  const widths = columns.map((c) => c.width * scale);
+
+  function drawRow(cells: string[], bold: boolean, fill: boolean) {
+    const cellLines = cells.map((text, i) => wrapMultiline(bold ? e.fonts.bold : e.fonts.reg, text, fontSize, widths[i] - 2 * padX));
+    const nLines = Math.max(...cellLines.map((l) => l.length));
+    const rowH = nLines * lineH + 2 * padY;
+    const topY = e.y;
+    let x = e.LEFT;
+    for (let i = 0; i < cells.length; i++) {
+      e.currentPage.drawRectangle({
+        x, y: topY - rowH, width: widths[i], height: rowH,
+        borderColor: RULE_GRAY, borderWidth: 0.6,
+        ...(fill ? { color: HEADER_FILL } : {}),
+      });
+      let ty = topY - padY - fontSize * 0.8;
+      for (const l of cellLines[i]) {
+        e.currentPage.drawText(l, { x: x + padX, y: ty, size: fontSize, font: bold ? e.fonts.bold : e.fonts.reg, color: BLACK });
+        ty -= lineH;
+      }
+      x += widths[i];
+    }
+    e.y = topY - rowH;
+  }
+
+  function headerHeight(): number {
+    const cellLines = columns.map((c, i) => wrapMultiline(e.fonts.bold, c.header, fontSize, widths[i] - 2 * padX));
+    return Math.max(...cellLines.map((l) => l.length)) * lineH + 2 * padY;
+  }
+
+  if (e.y - headerHeight() < e.FOOTER_SAFE) await e.newPage();
+  drawRow(columns.map((c) => c.header), true, true);
+
+  for (const row of rows) {
+    const cellLines = row.map((text, i) => wrapMultiline(e.fonts.reg, text, fontSize, widths[i] - 2 * padX));
+    const rowH = Math.max(...cellLines.map((l) => l.length)) * lineH + 2 * padY;
+    if (e.y - rowH < e.FOOTER_SAFE) {
+      await e.newPage();
+      drawRow(columns.map((c) => c.header), true, true);
+    }
+    drawRow(row, false, false);
+  }
+}

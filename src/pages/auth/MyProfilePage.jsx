@@ -107,6 +107,10 @@ export default function MyProfilePage() {
                     <p className="text-sm text-secondary" style={{ paddingTop: 9, textTransform: "capitalize" }}>{profile.office}</p>
                   </div>
                 )}
+                <div className="field">
+                  <label className="field-label">Committee</label>
+                  <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{profile.committee || "—"}</p>
+                </div>
               </div>
             </Card.Body>
             <Card.Footer>

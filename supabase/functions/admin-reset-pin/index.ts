@@ -1,5 +1,5 @@
 // supabase/functions/admin-reset-pin/index.ts
-// JWT must be ON. Admin-only: sets a new 5-digit action PIN for ANY user
+// JWT must be ON. Admin-only: sets a new 4-digit action PIN for ANY user
 // (the PIN is one-way hashed — there is no "view the current PIN", only
 // reset it to a new value). The client re-verifies the ADMIN's OWN
 // password via supabase.auth.signInWithPassword() before calling this,
@@ -31,7 +31,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   const userId = body.user_id;
   const newPin = body.new_pin;
   if (typeof userId !== "string" || !userId) return jsonRes(req, 400, { error: "user_id is required." });
-  if (!isValidPin(newPin)) return jsonRes(req, 400, { error: "PIN must be exactly 5 digits." });
+  if (!isValidPin(newPin)) return jsonRes(req, 400, { error: "PIN must be exactly 4 digits." });
 
   try {
     const { data: target, error: targetErr } = await adminClient.from("afc_users").select("id").eq("id", userId).maybeSingle();

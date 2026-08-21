@@ -11,7 +11,7 @@ import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import Select from "../../components/ui/Select";
-import Input from "../../components/ui/Input";
+import PinInput from "../../components/ui/PinInput";
 import PageLoader from "../../components/ui/PageLoader";
 import LeadTimeline from "../../components/leads/LeadTimeline";
 import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS } from "../../components/leads/leadStatus";
@@ -52,7 +52,10 @@ function Row({ label, value }) {
 // edit/resubmit/claim/reject_reassign.
 const ACTIONS_BY_STATUS = {
   pa_review: [
-    { key: "accept", label: "Accept", variant: "primary", requiresPin: true },
+    // Replaces the old one-click "Accept" — navigates to the Lead Approval
+    // Note form/preview flow, which itself invokes the same "accept" action
+    // (still PIN-gated) once the note has been generated.
+    { key: "lead_approval_note", label: "Lead Approval Note", variant: "primary" },
     { key: "__edit_resubmit", label: "Edit", variant: "secondary" },
     // "drop" (self-assigned creator, true drop) and "reject_reassign" (PR
     // who isn't the creator) are mutually exclusive per viewer — only one
@@ -139,8 +142,6 @@ export default function LeadDetailPage() {
   const [pendingAction, setPendingAction] = useState(null);
   const [reason, setReason] = useState("");
   const [pin, setPin] = useState("");
-  const [selectedBaId, setSelectedBaId] = useState("");
-  const [baOptions, setBaOptions] = useState([]);
   const [selectedReassignId, setSelectedReassignId] = useState("");
   const [reassignOptions, setReassignOptions] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
@@ -181,8 +182,11 @@ export default function LeadDetailPage() {
     const candidates = ACTIONS_BY_STATUS[lead.status] || [];
     return candidates.filter((a) => {
       switch (a.key) {
-        case "accept":
-          return lead.status === "pa_review" && profile?.id === lead.person_responsible_id;
+        // Generating/editing the note itself is open to creator or PR (same
+        // as Edit), but only PR can actually Submit for DGM Approval from
+        // the preview page — enforced there and, ultimately, server-side.
+        case "lead_approval_note":
+          return lead.status === "pa_review" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
         // A true drop, no reassignment. At pa_review, only the creator can
         // drop (whether or not they're also PR) — a non-creator PR has no
         // Drop here at all, only Accept/Reject; PR gains Drop once they've
@@ -227,10 +231,6 @@ export default function LeadDetailPage() {
     });
   }
 
-  // A BA is optional at creation but required before the Person Responsible
-  // can accept a lead into DGM review — only relevant for "accept" and only
-  // when the lead doesn't already have one.
-  const needsBaSelection = pendingAction?.key === "accept" && !lead?.assigned_ba_id;
   // Rejecting before PMT review (as PR, not the creator) hands the lead
   // straight to a chosen teammate instead of releasing it into an open pool.
   const needsReassignSelection = pendingAction?.key === "reject_reassign";
@@ -240,16 +240,14 @@ export default function LeadDetailPage() {
       navigate(`/leads/${id}/edit`);
       return;
     }
+    if (action.key === "lead_approval_note") {
+      navigate(`/leads/${id}/approval-note`);
+      return;
+    }
     setReason("");
     setPin("");
-    setSelectedBaId("");
     setSelectedReassignId("");
     setPendingAction(action);
-    if (action.key === "accept" && !lead?.assigned_ba_id && lead?.team) {
-      supabase
-        .rpc("get_team_business_associates", { p_team: lead.team })
-        .then(({ data }) => setBaOptions(data || []));
-    }
     if (action.key === "reject_reassign" && lead?.team) {
       supabase
         .from("afc_users")
@@ -268,12 +266,8 @@ export default function LeadDetailPage() {
       showToast("Comment/Description is required", "danger");
       return;
     }
-    if (pendingAction.requiresPin && !/^\d{5}$/.test(pin)) {
-      showToast("Enter your 5-digit PIN.", "danger");
-      return;
-    }
-    if (needsBaSelection && !selectedBaId) {
-      showToast("Select a BA", "danger");
+    if (pendingAction.requiresPin && !/^\d{4}$/.test(pin)) {
+      showToast("Enter your 4-digit PIN.", "danger");
       return;
     }
     if (needsReassignSelection && !selectedReassignId) {
@@ -288,7 +282,6 @@ export default function LeadDetailPage() {
           action: pendingAction.key,
           comment: reason.trim(),
           ...(pendingAction.requiresPin ? { pin } : {}),
-          ...(needsBaSelection ? { assigned_ba_id: selectedBaId } : {}),
           ...(needsReassignSelection ? { reassign_to_id: selectedReassignId } : {}),
         },
       });
@@ -309,7 +302,6 @@ export default function LeadDetailPage() {
       setPendingAction(null);
       setReason("");
       setPin("");
-      setSelectedBaId("");
       setSelectedReassignId("");
       fetchLead();
     } catch (err) {
@@ -334,6 +326,9 @@ export default function LeadDetailPage() {
   const isTerminal = ["md_approved", "md_declined", "pa_dropped"].includes(lead.status);
   const actions = availableActions();
   const currentFlowIdx = STATUS_FLOW.findIndex((s) => s.key === lead.status);
+  const allDocuments = lead.documents || [];
+  const leadRecords = allDocuments.filter((d) => d.category === "approval_note" || d.category === "final_approval_note");
+  const otherDocuments = allDocuments.filter((d) => d.category !== "approval_note" && d.category !== "final_approval_note");
 
   return (
     <div className="app-shell">
@@ -385,6 +380,15 @@ export default function LeadDetailPage() {
 
           <div className="ar-grid">
             <div className="ar-left">
+              {leadRecords.length > 0 && (
+                <Card>
+                  <Card.Header title="Lead Records" />
+                  <Card.Body>
+                    {leadRecords.map((doc, i) => <DocItem key={`${doc.path}-${i}`} doc={doc} leadId={lead.id} />)}
+                  </Card.Body>
+                </Card>
+              )}
+
               <Card>
                 <Card.Header title="Overview" />
                 <Card.Body className="ar-detail-body">
@@ -415,10 +419,10 @@ export default function LeadDetailPage() {
               <Card>
                 <Card.Header title="Documents" />
                 <Card.Body>
-                  {!lead.documents || lead.documents.length === 0 ? (
+                  {otherDocuments.length === 0 ? (
                     <p className="ar-empty-text">No documents uploaded.</p>
                   ) : (
-                    lead.documents.map((doc, i) => <DocItem key={`${doc.path}-${i}`} doc={doc} leadId={lead.id} />)
+                    otherDocuments.map((doc, i) => <DocItem key={`${doc.path}-${i}`} doc={doc} leadId={lead.id} />)
                   )}
                 </Card.Body>
               </Card>
@@ -431,20 +435,6 @@ export default function LeadDetailPage() {
                   <Card.Body className="ar-action-body">
                     {pendingAction ? (
                       <>
-                        {needsBaSelection && (
-                          <div className="ar-field">
-                            <label className="ar-label">
-                              Business Associate <span className="ar-required">*</span>
-                            </label>
-                            <Select
-                              options={baOptions.map((u) => ({ value: u.id, label: u.org_name }))}
-                              value={selectedBaId}
-                              onChange={setSelectedBaId}
-                              placeholder={baOptions.length ? "Select a BA" : "No active BAs found on your team."}
-                              disabled={actionLoading}
-                            />
-                          </div>
-                        )}
                         {needsReassignSelection && (
                           <div className="ar-field">
                             <label className="ar-label">
@@ -473,14 +463,11 @@ export default function LeadDetailPage() {
                         </div>
                         {pendingAction.requiresPin && (
                           <div className="ar-field">
-                            <Input
+                            <PinInput
                               label="Your Action PIN"
                               required
-                              type="password"
-                              inputMode="numeric"
-                              placeholder="5 digits"
                               value={pin}
-                              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                              onChange={setPin}
                               disabled={actionLoading}
                               hint="Confirms it's really you — set or change this from My Profile."
                             />

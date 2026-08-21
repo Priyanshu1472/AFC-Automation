@@ -33,6 +33,8 @@ import LeadListPage from "./pages/leads/LeadListPage";
 import CreateLeadPage from "./pages/leads/CreateLeadPage";
 import EditLeadPage from "./pages/leads/EditLeadPage";
 import LeadDetailPage from "./pages/leads/LeadDetailPage";
+import LeadApprovalNoteForm from "./pages/leads/LeadApprovalNoteForm";
+import LeadApprovalNotePreviewPage from "./pages/leads/LeadApprovalNotePreviewPage";
 import ProposalsListPage from "./pages/proposals/ProposalsListPage";
 import ProposalPreparationPage from "./pages/proposals/ProposalPreparationPage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -186,6 +188,22 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
                       <EditLeadPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/leads/:id/approval-note/preview"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <LeadApprovalNotePreviewPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/leads/:id/approval-note"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <LeadApprovalNoteForm />
                     </ProtectedRoute>
                   }
                 />
