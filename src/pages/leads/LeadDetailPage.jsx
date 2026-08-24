@@ -451,14 +451,14 @@ export default function LeadDetailPage() {
                         )}
                         <div className="ar-field">
                           <label className="ar-label">
-                            Reason / Comment {pendingAction.requiresReason && <span className="ar-required">*</span>}
+                            Remarks / Comment {pendingAction.requiresReason && <span className="ar-required">*</span>}
                           </label>
                           <textarea
                             className="input"
                             rows={4}
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            placeholder={pendingAction.requiresReason ? "Explain why…" : "Optional comment…"}
+                            placeholder={pendingAction.requiresReason ? "Enter Remarks" : "Optional comment…"}
                           />
                         </div>
                         {pendingAction.requiresPin && (
