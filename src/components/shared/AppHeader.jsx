@@ -80,12 +80,6 @@ export default function AppHeader() {
               Empanelment
             </NavLink>
           )}
-          {canSeeEmpanelment && (
-            <NavDropdown label="Dashboard" items={[{ to: "/dashboard/empanelment", label: "Empanelment" }]} onNavigate={closeMenu} />
-          )}
-          {canSeeEmpanelment && (
-            <NavDropdown label="Reports" items={[{ to: "/reports/empanelment", label: "Empanelment" }]} onNavigate={closeMenu} />
-          )}
           {canSeeKnowledge && (
             <NavLink
               to="/knowledge"
@@ -114,6 +108,18 @@ export default function AppHeader() {
             <NavLink to="/audit-logs" className={navLinkClass} onClick={closeMenu}>
               Audit Logs
             </NavLink>
+          )}
+        </div>
+
+        {/* Dashboard / Reports dropdowns — kept as their own group, pushed to
+            the far right of the module links (see .app-header-nav-dropdowns),
+            so they read as reporting tools rather than another module button. */}
+        <div className="app-header-nav-dropdowns">
+          {canSeeEmpanelment && (
+            <NavDropdown label="Dashboard" items={[{ to: "/dashboard/empanelment", label: "Empanelment" }]} onNavigate={closeMenu} />
+          )}
+          {canSeeEmpanelment && (
+            <NavDropdown label="Reports" items={[{ to: "/reports/empanelment", label: "Empanelment" }]} onNavigate={closeMenu} />
           )}
         </div>
 

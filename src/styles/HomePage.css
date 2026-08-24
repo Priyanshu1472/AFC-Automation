@@ -10,7 +10,7 @@
 
 .pending-action-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-3);
   width: 100%;
   text-align: left;
@@ -26,13 +26,16 @@
   background: var(--bg-surface-2);
 }
 
-.pending-action-dot {
+.pending-action-icon {
   flex-shrink: 0;
-  width: 8px;
-  height: 8px;
-  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: var(--warning);
+  background: var(--warning-light);
+  color: var(--warning);
 }
 
 .pending-action-body {
@@ -40,6 +43,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1;
 }
 
 .pending-action-title {
@@ -52,4 +56,22 @@
   font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.pending-action-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-tertiary);
+}
+
+.pending-action-time {
+  font-size: var(--text-xs);
+  white-space: nowrap;
 }

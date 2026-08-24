@@ -149,7 +149,7 @@ export default function ApplicationReviewPage() {
       .from("empanelment_activity_log")
       .select("*, actor:actor_id(full_name)")
       .eq("application_id", id)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false });
     setAuditLogs(logs || []);
     const { data: flags } = await supabase
       .from("compliance_flags")
@@ -224,10 +224,12 @@ export default function ApplicationReviewPage() {
     if (data) { showBanner("Recommended to MD."); setComment(""); fetchApp(); }
   }
   async function handleDGMSendBack() {
+    if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
     const data = await runAction("dgm_send_back");
     if (data) { showBanner("Sent back to Project Officer."); setComment(""); fetchApp(); }
   }
   async function handleMDSendBack() {
+    if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
     const data = await runAction("md_send_back");
     if (data) { showBanner("Sent back to DGM."); setComment(""); fetchApp(); }
   }
@@ -438,8 +440,8 @@ export default function ApplicationReviewPage() {
                         <label className="ar-label">Recommendation Comment <span className="ar-required">*</span></label>
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your recommendation..." rows={4} />
                       </div>
-                      <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleDGMRecommend}>{actionLoading ? "Sending..." : "Recommend to Managing Director"}</Button>
-                      <Button variant="secondary" block disabled={actionLoading} icon={<ArrowLeftIcon />} onClick={handleDGMSendBack}>Send Back to Project Officer</Button>
+                      <Button variant="primary" block disabled={!comment.trim() || actionLoading} loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleDGMRecommend}>{actionLoading ? "Sending..." : "Recommend to Managing Director"}</Button>
+                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleDGMSendBack}>Send Back to Project Officer</Button>
                     </>)}
 
                     {role === "md" && (<>
@@ -448,7 +450,7 @@ export default function ApplicationReviewPage() {
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your remarks along with the final decision..." rows={4} />
                       </div>
                       <Button variant="primary" block disabled={!comment.trim() || actionLoading} icon={<CheckIcon />} onClick={() => setShowAcceptOtp(true)}>Accept</Button>
-                      <Button variant="secondary" block disabled={actionLoading} icon={<ArrowLeftIcon />} onClick={handleMDSendBack}>Send Back to DGM</Button>
+                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleMDSendBack}>Send Back to DGM</Button>
                       <Button variant="danger" block disabled={actionLoading} icon={<XIcon />} onClick={() => setShowReject(true)}>Reject</Button>
                     </>)}
 

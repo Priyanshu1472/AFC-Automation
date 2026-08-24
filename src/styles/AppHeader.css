@@ -60,6 +60,16 @@
   text-decoration: none;
 }
 
+/* Dashboard / Reports — pushed to the far right of the module links (but
+   still left of the utility icons), so the module buttons stay grouped on
+   the left and these two read as a distinct reporting group. */
+.app-header-nav-dropdowns {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
 /* ── Nav dropdown (Reports / Dashboard) ─────────────────────── */
 .nav-dropdown-wrap {
   position: relative;
@@ -255,14 +265,29 @@
     transform: translateX(0);
   }
 
-  .app-header-nav-links {
+  .app-header-nav-links,
+  .app-header-nav-dropdowns {
     flex-direction: column;
     align-items: stretch;
     gap: var(--space-1);
+    margin-left: 0;
   }
 
   .app-header-nav-links a {
     padding: var(--space-3);
+  }
+
+  .app-header-nav-dropdowns .nav-dropdown-trigger {
+    padding: var(--space-3);
+  }
+
+  .app-header-nav-dropdowns .nav-dropdown-panel {
+    position: static;
+    box-shadow: none;
+    border: none;
+    background: none;
+    padding: 0 0 0 var(--space-3);
+    animation: none;
   }
 
   .app-header-nav-divider {
