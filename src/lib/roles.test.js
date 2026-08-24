@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ADMIN_CREATABLE_ROLES, AUDIT_LOG_ROLES, can, EMPANELMENT_ROLES, isAdminLevel, isTeamUser,
   isValidRole, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, LEAD_PA_TIER_ROLES,
-  MD_CREATABLE_ROLES, ROLES, USERS_PAGE_ROLES, VALID_ROLES,
+  ROLES, USERS_PAGE_ROLES, VALID_ROLES,
 } from "./roles";
 
 describe("Lead Generation — SRM has the same access as AGM", () => {
@@ -32,47 +32,36 @@ describe("ROLES / VALID_ROLES", () => {
   });
 });
 
-describe("bootstrap role-creation whitelists", () => {
-  it("MD can only create admin accounts", () => {
-    expect(MD_CREATABLE_ROLES).toEqual(["admin"]);
-  });
-
-  it("Admin's creatable roles never include admin or md (no self-replication, no MD minting)", () => {
+describe("Admin's creatable roles", () => {
+  it("never include admin or md (no self-replication, no MD minting)", () => {
     expect(ADMIN_CREATABLE_ROLES).not.toContain("admin");
     expect(ADMIN_CREATABLE_ROLES).not.toContain("md");
   });
 });
 
-describe("can.manageAllUsers / manageTeamUsers", () => {
-  it("only md and admin can manage all users", () => {
-    expect(can.manageAllUsers("md")).toBe(true);
+describe("user management is Admin-only", () => {
+  it("can.manageAllUsers is true only for admin", () => {
     expect(can.manageAllUsers("admin")).toBe(true);
+    expect(can.manageAllUsers("md")).toBe(false);
     expect(can.manageAllUsers("dgm")).toBe(false);
     expect(can.manageAllUsers("cfo")).toBe(false);
   });
 
-  it("only dgm manages team users", () => {
-    expect(can.manageTeamUsers("dgm")).toBe(true);
-    expect(can.manageTeamUsers("agm")).toBe(false);
-  });
-});
-
-describe("can.createUsers", () => {
-  it("admin and md can create users; nobody else can", () => {
+  it("can.createUsers is true only for admin", () => {
     expect(can.createUsers("admin")).toBe(true);
-    expect(can.createUsers("md")).toBe(true);
+    expect(can.createUsers("md")).toBe(false);
     expect(can.createUsers("dgm")).toBe(false);
     expect(can.createUsers("cfo")).toBe(false);
     expect(can.createUsers("business_associate")).toBe(false);
   });
-});
 
-describe("can.editUsers / editUserRole", () => {
-  it("admin, md, dgm can edit users; role changes are restricted to admin/md", () => {
-    expect(can.editUsers("dgm")).toBe(true);
-    expect(can.editUserRole("dgm")).toBe(false);
+  it("can.editUsers / editUserRole are true only for admin", () => {
+    expect(can.editUsers("admin")).toBe(true);
+    expect(can.editUsers("dgm")).toBe(false);
+    expect(can.editUsers("md")).toBe(false);
     expect(can.editUserRole("admin")).toBe(true);
-    expect(can.editUserRole("md")).toBe(true);
+    expect(can.editUserRole("md")).toBe(false);
+    expect(can.editUserRole("dgm")).toBe(false);
     expect(can.editUserRole("srm")).toBe(false);
   });
 });
@@ -110,12 +99,12 @@ describe("isTeamUser / isAdminLevel", () => {
 });
 
 describe("nav-visibility role lists", () => {
-  it("USERS_PAGE_ROLES is exactly md/dgm/admin", () => {
-    expect(USERS_PAGE_ROLES.sort()).toEqual(["admin", "dgm", "md"]);
+  it("USERS_PAGE_ROLES is admin-only", () => {
+    expect(USERS_PAGE_ROLES).toEqual(["admin"]);
   });
 
-  it("AUDIT_LOG_ROLES is MD-only", () => {
-    expect(AUDIT_LOG_ROLES).toEqual(["md"]);
+  it("AUDIT_LOG_ROLES is Admin-only", () => {
+    expect(AUDIT_LOG_ROLES).toEqual(["admin"]);
   });
 
   it("EMPANELMENT_ROLES and KNOWLEDGE_REPOSITORY_ROLES exclude business_associate but include every staff role", () => {

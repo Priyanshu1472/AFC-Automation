@@ -80,7 +80,7 @@ export default function UserListPage() {
   const [page, setPage] = useState(0);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
-  const canManage = can.manageAllUsers(profile?.role) || can.manageTeamUsers(profile?.role);
+  const canManage = can.manageAllUsers(profile?.role);
   const canCreate = can.createUsers(profile?.role);
 
   // MD looking at "All Teams" (the default) sees the whole roster grouped

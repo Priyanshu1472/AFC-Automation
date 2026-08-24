@@ -53,20 +53,23 @@ export function clampText(val: unknown, max = MAX_TEXT_LENGTH): string | null {
   return trimmed.slice(0, max);
 }
 
-// Person Responsible must be an active user on the lead's team — any role.
+// Person Responsible must be an active staff member on the lead's team —
+// any role except business_associate (BAs have a team too, for the BA-org
+// lookup, but aren't staff and can't own a lead's workflow).
 export async function validateAssignment(admin: AdminClient, personResponsibleId: string, team: string): Promise<string | null> {
   const user = await getTargetUser(admin, personResponsibleId);
-  if (!user || !user.is_active || user.team !== team) {
-    return "Person Responsible must be an active user on this team.";
+  if (!user || !user.is_active || user.team !== team || user.role === "business_associate") {
+    return "Person Responsible must be an active staff member on this team.";
   }
   return null;
 }
 
-// Reviewer must be an active user on the lead's team — any role.
+// Reviewer must be an active staff member on the lead's team — any role
+// except business_associate, same reasoning as Person Responsible above.
 export async function validateReviewer(admin: AdminClient, reviewerId: string, team: string): Promise<string | null> {
   const user = await getTargetUser(admin, reviewerId);
-  if (!user || !user.is_active || user.team !== team) {
-    return "Reviewer must be an active user on this team.";
+  if (!user || !user.is_active || user.team !== team || user.role === "business_associate") {
+    return "Reviewer must be an active staff member on this team.";
   }
   return null;
 }

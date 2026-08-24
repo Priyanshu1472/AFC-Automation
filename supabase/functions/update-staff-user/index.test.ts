@@ -48,28 +48,20 @@ Deno.test("update-staff-user - unknown target -> 404", async () => {
   assertEquals(res.status, 404);
 });
 
-Deno.test("update-staff-user - DGM can't edit a user outside their own team", async () => {
-  const res = await handleRequest(
-    req({ user_id: TARGET_ID, full_name: "Name" }),
-    client({ id: CALLER_ID, role: "dgm", team: "BPDD", office: "delhi", is_active: true }, { id: TARGET_ID, role: "srm", team: "CBBO" }) as never,
-  );
-  assertEquals(res.status, 403);
-});
-
-Deno.test("update-staff-user - DGM can't change a target's role", async () => {
-  const res = await handleRequest(
-    req({ user_id: TARGET_ID, full_name: "Name", role: "agm" }),
-    client({ id: CALLER_ID, role: "dgm", team: "BPDD", office: "delhi", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD" }) as never,
-  );
-  assertEquals(res.status, 403);
-});
-
-Deno.test("update-staff-user - DGM can rename a teammate, forcing team/office to their own", async () => {
+Deno.test("update-staff-user - DGM can no longer edit any user, even a teammate", async () => {
   const res = await handleRequest(
     req({ user_id: TARGET_ID, full_name: "Renamed" }),
     client({ id: CALLER_ID, role: "dgm", team: "BPDD", office: "delhi", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD" }) as never,
   );
-  assertEquals(res.status, 200);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("update-staff-user - MD can no longer edit any user", async () => {
+  const res = await handleRequest(
+    req({ user_id: TARGET_ID, full_name: "Renamed" }),
+    client({ id: CALLER_ID, role: "md", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD" }) as never,
+  );
+  assertEquals(res.status, 403);
 });
 
 Deno.test("update-staff-user - Admin can't set a target's role outside ADMIN_CREATABLE_ROLES (e.g. promote to admin)", async () => {

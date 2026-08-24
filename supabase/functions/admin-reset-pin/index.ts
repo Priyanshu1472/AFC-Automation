@@ -34,7 +34,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   if (!isValidPin(newPin)) return jsonRes(req, 400, { error: "PIN must be exactly 4 digits." });
 
   try {
-    const { data: target, error: targetErr } = await adminClient.from("afc_users").select("id").eq("id", userId).maybeSingle();
+    const { data: target, error: targetErr } = await adminClient.from("afc_users").select("id, full_name, email").eq("id", userId).maybeSingle();
     if (targetErr || !target) return jsonRes(req, 404, { error: "User not found." });
 
     const pinHash = await hashPin(newPin, userId);
@@ -48,7 +48,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       action_by: caller.id,
       action_by_role: caller.role,
       action: "user_pin_reset",
-      comment: `Reset the action PIN for user ${userId}.`,
+      comment: `Reset the action PIN for ${target.full_name} (${target.email}).`,
     });
 
     return jsonRes(req, 200, { success: true });

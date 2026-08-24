@@ -113,13 +113,25 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     }
     const fromStatus = lead.status as string;
     const isResubmit = fromStatus === "pa_action_required";
-    // Declined by DGM (the new first-line stage) -> resubmitting sends it
-    // straight back to DGM, since they're the ones who asked for changes.
-    // Every other decline source still funnels back into pmt_review, same
-    // as before.
+    // Resubmitting routes back to wherever declined it: DGM (first-line
+    // gate) sends it straight back to DGM; MD sends it straight back to MD
+    // (skipping every committee — MD already saw and cleared it once);
+    // every other decline source (PMT/PMT Extended/G3) funnels back into
+    // pmt_review, same as before.
     const toStatus = isResubmit
-      ? (lead.declined_from_status === "dgm_initial_review" ? "dgm_initial_review" : "pmt_review")
+      ? (lead.declined_from_status === "dgm_initial_review" ? "dgm_initial_review"
+        : lead.declined_from_status === "md_review" ? "md_review"
+        : "pmt_review")
       : "pa_review";
+    // Required only when resubmitting straight back to the MD — explains
+    // what changed since the MD's decline. Deliberately logged onto the
+    // "resubmitted" activity row only, never onto the lead itself, so it
+    // can't get pulled into the Lead/MD Approval Note PDF (that only reads
+    // specific committee/MD decision actions, never "resubmitted").
+    const resubmitComment = clampText(get("resubmit_comment"), 2000);
+    if (isResubmit && toStatus === "md_review" && !resubmitComment) {
+      return jsonRes(req, 400, { error: "Add a remark explaining the changes before resubmitting to the MD." });
+    }
 
     const { data: personResponsible, error: prErr } = await adminClient
       .from("afc_users")
@@ -187,15 +199,19 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
     await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "edited", fromStatus, fromStatus, null);
     if (isResubmit) {
-      await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "resubmitted", "pa_action_required", toStatus, null);
+      await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "resubmitted", "pa_action_required", toStatus, resubmitComment || null);
     }
 
     const resubmitTargetHolders = isResubmit
-      ? await getOrgWideHolders(adminClient, toStatus === "dgm_initial_review" ? { committee: "G3" } : { committee: "PMT" })
+      ? toStatus === "md_review"
+        ? await getOrgWideHolders(adminClient, { role: "md" })
+        : await getOrgWideHolders(adminClient, toStatus === "dgm_initial_review" ? { committee: "G3" } : { committee: "PMT" })
       : [];
     if (resubmitTargetHolders.length) {
       await notifyUsers(adminClient, resubmitTargetHolders, {
-        title: toStatus === "dgm_initial_review" ? "Lead resubmitted — awaiting DGM review" : "Lead resubmitted — awaiting PMT review",
+        title: toStatus === "dgm_initial_review" ? "Lead resubmitted — awaiting DGM review"
+          : toStatus === "md_review" ? "Lead resubmitted — awaiting MD approval"
+          : "Lead resubmitted — awaiting PMT review",
         sub_text: `${lead.lead_number} — "${lead.title}" was edited and resubmitted for review.`,
         type: "action_required",
         link: `/leads/${lead.id}`,

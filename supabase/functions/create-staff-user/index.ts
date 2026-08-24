@@ -48,10 +48,11 @@ function jsonRes(req: Request, status: number, body: unknown) {
   });
 }
 
-// MD can create ONLY admin accounts — a bootstrap allowance so there's a
-// way to create the very first Admin. Every other role is created by an
-// Admin (ADMIN_CREATABLE_ROLES). DGM can no longer create anyone.
-const MD_CREATABLE_ROLES = ["admin"];
+// User creation is Admin-only — MD's earlier bootstrap allowance to create
+// the first Admin account is retired now that Users management is
+// Admin-only everywhere (an Admin account already exists in every real
+// environment; recovering from zero Admins is an out-of-band ops task, not
+// a normal-flow UI capability).
 const ADMIN_CREATABLE_ROLES = ["cfo", "cs", "dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"];
 
 // Lead Generation review committees — an optional, independent tag on top
@@ -237,8 +238,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     if (callerErr || !caller) return jsonRes(req, 403, { error: "Caller account not found." });
     if (!caller.is_active) return jsonRes(req, 403, { error: "Your account is deactivated." });
-    if (!["md", "admin"].includes(caller.role)) {
-      return jsonRes(req, 403, { error: "Forbidden. Only Admin (or MD, to create the first Admin) can create user accounts." });
+    if (caller.role !== "admin") {
+      return jsonRes(req, 403, { error: "Forbidden. Only Admin can create user accounts." });
     }
 
     let body: Record<string, unknown>;
@@ -263,11 +264,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       return jsonRes(req, 400, { error: `Committee must be one of: ${LEAD_COMMITTEES.join(", ")}.` });
     }
 
-    if (caller.role === "admin" && !ADMIN_CREATABLE_ROLES.includes(role)) {
+    if (!ADMIN_CREATABLE_ROLES.includes(role)) {
       return jsonRes(req, 403, { error: `Admin can only create: ${ADMIN_CREATABLE_ROLES.join(", ")}.` });
-    }
-    if (caller.role === "md" && !MD_CREATABLE_ROLES.includes(role)) {
-      return jsonRes(req, 403, { error: `MD can only create: ${MD_CREATABLE_ROLES.join(", ")}.` });
     }
 
     const normalizedEmail = email.trim().toLowerCase();

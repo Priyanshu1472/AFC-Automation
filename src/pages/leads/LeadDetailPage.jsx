@@ -88,7 +88,7 @@ const ACTIONS_BY_STATUS = {
   ],
   md_review: [
     { key: "md_approve", label: "Approve", variant: "primary", requiresPin: true },
-    { key: "md_decline", label: "Decline", variant: "danger", requiresReason: true, requiresPin: true },
+    { key: "md_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
     { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
   ],
   pa_action_required: [

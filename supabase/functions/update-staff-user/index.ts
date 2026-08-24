@@ -1,12 +1,10 @@
 // supabase/functions/update-staff-user/index.ts
 // JWT must be ON. Fixes mistakes on an EXISTING afc_users row — distinct
-// from create-staff-user (which mints a new account). Admin/MD/DGM can all
-// edit; only Admin/MD can change the `role` field itself (see
-// can.editUserRole in src/lib/roles.js) and only within
-// ADMIN_CREATABLE_ROLES, the same whitelist create-staff-user enforces for
-// Admin — this stops a role edit from being used to promote someone to
-// md/admin. A DGM may only edit users on their own team, and can never
-// touch `role`.
+// from create-staff-user (which mints a new account). Admin-only — no other
+// role, including MD and DGM, can edit any user account. Role/committee
+// changes are restricted to ADMIN_CREATABLE_ROLES, the same whitelist
+// create-staff-user enforces — this stops a role edit from being used to
+// promote someone to md/admin.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -14,7 +12,7 @@ import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 
 const ADMIN_CREATABLE_ROLES = ["cfo", "cs", "dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"];
 
-// Lead Generation review committees — same admin/md-only gate as `role`
+// Lead Generation review committees — same admin-only gate as `role`
 // itself, since committee membership grants review/approval permission
 // just like a role does.
 const LEAD_COMMITTEES = ["PMT", "PMT Extended", "G3"];
@@ -27,8 +25,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
 
-  if (!["admin", "md", "dgm"].includes(caller.role)) {
-    return jsonRes(req, 403, { error: "Forbidden. Only Admin, MD, or DGM can edit user accounts." });
+  if (caller.role !== "admin") {
+    return jsonRes(req, 403, { error: "Forbidden. Only Admin can edit user accounts." });
   }
 
   let body: Record<string, unknown>;
@@ -50,50 +48,40 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
   const { data: target, error: targetErr } = await adminClient
     .from("afc_users")
-    .select("id, role, team, office")
+    .select("id, role, team, office, full_name, email")
     .eq("id", user_id)
     .maybeSingle();
   if (targetErr || !target) return jsonRes(req, 404, { error: "User not found." });
 
   const update: Record<string, unknown> = { full_name: full_name.trim() };
 
-  if (caller.role === "dgm") {
-    if (target.team !== caller.team) {
-      return jsonRes(req, 403, { error: "You can only edit users on your own team." });
+  // Only validate the role against the whitelist when it's actually
+  // changing — otherwise editing an existing md/admin account's name would
+  // be rejected just because their current role isn't in
+  // ADMIN_CREATABLE_ROLES (that list is for what a NEW role can be set to,
+  // not for what's already on the row).
+  if (role !== undefined && role !== target.role) {
+    if (typeof role !== "string" || !ADMIN_CREATABLE_ROLES.includes(role)) {
+      return jsonRes(req, 403, { error: `Role must be one of: ${ADMIN_CREATABLE_ROLES.join(", ")}.` });
     }
-    if (role !== undefined && role !== target.role) {
-      return jsonRes(req, 403, { error: "DGM cannot change a user's role — ask an Admin or MD." });
-    }
-    // A DGM's edits stay within their own team/office, same as creation.
-    update.team = caller.team;
-    update.office = caller.office;
-  } else {
-    // Admin / MD. Only validate the role against the whitelist when it's
-    // actually changing — otherwise editing an existing md/admin account's
-    // name would be rejected just because their current role isn't in
-    // ADMIN_CREATABLE_ROLES (that list is for what a NEW role can be set
-    // to, not for what's already on the row).
-    if (role !== undefined && role !== target.role) {
-      if (typeof role !== "string" || !ADMIN_CREATABLE_ROLES.includes(role)) {
-        return jsonRes(req, 403, { error: `Role must be one of: ${ADMIN_CREATABLE_ROLES.join(", ")}.` });
-      }
-      update.role = role;
-    }
-    // Same admin/md-only gate as role — a committee grants review/approval
-    // permission just like a role does.
-    if (committee !== undefined) update.committee = (committee as string) || null;
-    if (team !== undefined) update.team = (team as string) || null;
-    if (office !== undefined) update.office = (office as string) || null;
+    update.role = role;
   }
+  if (committee !== undefined) update.committee = (committee as string) || null;
+  if (team !== undefined) update.team = (team as string) || null;
+  if (office !== undefined) update.office = (office as string) || null;
 
   const { error: updateErr } = await adminClient.from("afc_users").update(update).eq("id", user_id);
   if (updateErr) return jsonRes(req, 500, { error: "Failed to update user." });
 
+  // Identifies the target by name/email, never their raw user id — the id
+  // is still recoverable from the row itself if ever needed directly in
+  // Supabase, but the portal's Audit Logs page should never have to show a
+  // bare UUID for an admin to make sense of an entry.
   await adminClient.from("application_audit_log").insert({
     action_by: caller.id,
     action_by_role: caller.role,
     action: "user_edited",
-    comment: `Edited user ${user_id} — ${JSON.stringify(update)}`,
+    comment: `Edited user ${target.full_name} (${target.email}) — ${JSON.stringify(update)}`,
   });
 
   return jsonRes(req, 200, { success: true });

@@ -50,6 +50,11 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     reviewer_id: lead?.reviewer_id || "",
     approval_authority_id: lead?.approval_authority_id || "",
   }));
+  // Only required when resubmitting a lead the MD sent back — explains what
+  // changed since the MD's decline. Logged onto the activity timeline only,
+  // never onto the lead itself, so it never ends up in the generated PDF.
+  const isMdReturn = isEdit && lead?.declined_from_status === "md_review";
+  const [resubmitComment, setResubmitComment] = useState("");
   const [file, setFile] = useState(null);
   const [personResponsibleOptions, setPersonResponsibleOptions] = useState([]);
   const [reviewerOptions, setReviewerOptions] = useState([]);
@@ -67,9 +72,11 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   // Person Responsible / Reviewer are informational contacts, not the
   // workflow gate — the actual PMT/PMT Extended authorization is org-wide
   // committee membership (checked server-side), not tied to this team, so
-  // both dropdowns just list this team's active members. Approval
-  // Authority is the one field still role-filtered: AGM, SRM (same
-  // permissions as AGM throughout Lead Generation), or DGM on the team.
+  // both dropdowns just list this team's active members — excluding
+  // Business Associates, who have a team (for the BA-org-name lookup below)
+  // but aren't staff and can't be assigned either role. Approval Authority
+  // is the one field still role-filtered: AGM, SRM (same permissions as AGM
+  // throughout Lead Generation), or DGM on the team.
   useEffect(() => {
     if (!team) return;
     supabase
@@ -77,6 +84,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       .select("id, full_name")
       .eq("team", team)
       .eq("is_active", true)
+      .neq("role", "business_associate")
       .order("full_name")
       .then(({ data }) => {
         const options = toOptions(data);
@@ -142,6 +150,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     if (!form.person_responsible_id) errs.person_responsible_id = "Person Responsible is required.";
     if (!form.reviewer_id) errs.reviewer_id = "Reviewer is required.";
     if (!form.approval_authority_id) errs.approval_authority_id = "Approval Authority is required.";
+    if (isMdReturn && !resubmitComment.trim()) errs.resubmit_comment = "Add a remark explaining the changes before resubmitting to the MD.";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -168,6 +177,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       fd.set("person_responsible_id", form.person_responsible_id);
       fd.set("reviewer_id", form.reviewer_id);
       fd.set("approval_authority_id", form.approval_authority_id);
+      if (isMdReturn) fd.set("resubmit_comment", resubmitComment.trim());
       if (file) fd.set("document", file, file.name);
 
       const { data, error } = await supabase.functions.invoke(mode === "create" ? "create-lead" : "update-lead", { body: fd });
@@ -303,6 +313,24 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
               disabled={submitting}
             />
           </div>
+
+          {isMdReturn && (
+            <div className="field">
+              <label className="field-label">
+                Remarks for MD <span className="required">*</span>
+              </label>
+              <textarea
+                className="input"
+                rows={3}
+                value={resubmitComment}
+                onChange={(e) => setResubmitComment(e.target.value)}
+                placeholder="Explain what changed since the MD's decline..."
+                disabled={submitting}
+              />
+              {errors.resubmit_comment && <span className="field-error">{errors.resubmit_comment}</span>}
+              <span className="field-hint">Shown to the MD alongside the resubmitted lead — not included in the generated PDF.</span>
+            </div>
+          )}
         </Card.Body>
       </Card>
 

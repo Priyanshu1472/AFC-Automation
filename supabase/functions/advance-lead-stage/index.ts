@@ -12,7 +12,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { notifyUsers } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
-import { PA_TIER_ROLES, getOrgWideHolders, getTargetUser } from "../_shared/leadAuth.ts";
+import { Committee, PA_TIER_ROLES, getOrgWideHolders, getTargetUser } from "../_shared/leadAuth.ts";
 import { validateBusinessAssociate } from "../_shared/leadEligibility.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
@@ -34,6 +34,33 @@ type LeadRow = {
   declined_from_status: string | null;
   approval_note_data: unknown;
 };
+
+// (action name -> the committee it means "sent this lead on to MD") — used
+// on md_decline to figure out which committee to send it back to, since
+// all three routes converge on md_review and the lead row itself doesn't
+// track which one it came through.
+const MD_SOURCE_ACTIONS: Record<string, Committee> = {
+  pmt_approve: "PMT",
+  pmt_extended_approve: "PMT Extended",
+  dgm_accept: "G3",
+};
+
+// Finds whichever committee most recently approved this lead into
+// md_review, by walking the activity log rather than the lead row (which
+// has no "how did this reach MD" column) — that's the committee md_decline
+// sends it back to, alongside the creator/Person Responsible.
+async function resolveCommitteeThatSentToMd(admin: AdminClient, leadId: string): Promise<Committee | null> {
+  const { data, error } = await admin
+    .from("lead_activity_log")
+    .select("action, created_at")
+    .eq("lead_id", leadId)
+    .in("action", Object.keys(MD_SOURCE_ACTIONS))
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return MD_SOURCE_ACTIONS[data.action as string] ?? null;
+}
 
 // Every action that stamps a fresh signature/remark onto the (still
 // in-progress) Lead Approval Note — every committee approve/escalate/
@@ -66,7 +93,11 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
   pmt_review: { pmt_approve: "md_review", pmt_escalate: "pmt_extended_review", pmt_decline: "pa_action_required", drop: "pa_dropped" },
   pmt_extended_review: { pmt_extended_approve: "md_review", pmt_extended_forward_dgm: "dgm_review", pmt_extended_decline: "pa_action_required", drop: "pa_dropped" },
   dgm_review: { dgm_accept: "md_review", dgm_decline: "pa_action_required", drop: "pa_dropped" },
-  md_review: { md_approve: "md_approved", md_decline: "md_declined", drop: "pa_dropped" },
+  // md_decline is no longer terminal — it returns the lead to the creator/
+  // PR for changes, same shape as every earlier-stage decline (see the
+  // "md_decline" case for who gets notified and how resubmission routes
+  // straight back to md_review, skipping every committee).
+  md_review: { md_approve: "md_approved", md_decline: "pa_action_required", drop: "pa_dropped" },
   pa_action_required: { drop: "pa_dropped" },
 };
 
@@ -328,10 +359,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
       case "md_decline": {
         if (caller.role !== "md") return forbidden("Only the MD can act on this lead.");
-        extraFields = { decided_at: new Date().toISOString() };
-        notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
-        notifyTitle = "Lead declined";
-        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was declined by the MD. Reason: ${trimmedComment}`;
+        extraFields = { declined_from_status: leadRow.status };
+        const sendingCommittee = await resolveCommitteeThatSentToMd(adminClient, leadRow.id);
+        const committeeHolders = sendingCommittee ? await getOrgWideHolders(adminClient, { committee: sendingCommittee }) : [];
+        notifyTargetIds = [...new Set([leadRow.created_by, leadRow.person_responsible_id, ...committeeHolders])];
+        notifyTitle = "Lead returned by MD";
+        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned by the MD. Reason: ${trimmedComment}`;
         break;
       }
 
@@ -382,7 +415,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       await notifyUsers(adminClient, notifyTargetIds, {
         title: notifyTitle,
         sub_text: notifySubText,
-        type: action === "md_approve" || action === "md_decline" ? "info" : "action_required",
+        type: action === "md_approve" ? "info" : "action_required",
         link: `/leads/${leadRow.id}`,
       });
     }

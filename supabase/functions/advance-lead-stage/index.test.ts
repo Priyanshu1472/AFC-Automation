@@ -439,11 +439,38 @@ Deno.test("md_approve - success moves to md_approved (terminal)", async () => {
   assertEquals((await res.json()).status, "md_approved");
 });
 
-Deno.test("md_decline - requires a reason and moves to md_declined (terminal)", async () => {
+Deno.test("md_decline - requires a reason and returns the lead to pa_action_required (not terminal)", async () => {
   const client = buildClient({ caller: callerRow({ role: "md" }), lead: leadRow({ status: "md_review" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "md_decline", comment: "not aligned" }), client as never);
   assertEquals(res.status, 200);
-  assertEquals((await res.json()).status, "md_declined");
+  assertEquals((await res.json()).status, "pa_action_required");
+});
+
+Deno.test("md_decline - notifies creator, PR, and whichever committee last sent it to MD", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ role: "md" }), error: null }, // getCallerProfile
+      { data: [{ id: "pmt-member-1" }, { id: "pmt-member-2" }], error: null }, // getOrgWideHolders(PMT)
+    ],
+    leads: [
+      { data: leadRow({ status: "md_review", created_by: "creator-1", person_responsible_id: "pr-1" }), error: null },
+      { data: { id: LEAD_ID }, error: null },
+    ],
+    lead_activity_log: [
+      { data: { action: "pmt_approve", created_at: "2026-01-01T00:00:00Z" }, error: null }, // resolveCommitteeThatSentToMd
+      { data: null, error: null }, // logLeadActivity insert (result unused)
+    ],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "md_decline", comment: "not aligned" }), client as never);
+  assertEquals(res.status, 200);
+  const notifyCall = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.find((l) => l.table === "notifications");
+  assertEquals(notifyCall !== undefined, true);
+});
+
+Deno.test("md_decline - a lead with no resolvable sending committee still returns to the creator/PR only", async () => {
+  const client = buildClient({ caller: callerRow({ role: "md" }), lead: leadRow({ status: "md_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "md_decline", comment: "not aligned" }), client as never);
+  assertEquals(res.status, 200);
 });
 
 // ── PIN gate ────────────────────────────────────────────────

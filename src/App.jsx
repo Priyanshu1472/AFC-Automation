@@ -101,7 +101,7 @@ export default function App() {
                 <Route
                   path="/create-user"
                   element={
-                    <ProtectedRoute allowedRoles={["md", "admin"]}>
+                    <ProtectedRoute allowedRoles={USERS_PAGE_ROLES}>
                       <CreateUserPage />
                     </ProtectedRoute>
                   }
@@ -117,7 +117,7 @@ export default function App() {
                 <Route
                   path="/users/:id/edit"
                   element={
-                    <ProtectedRoute allowedRoles={["md", "dgm", "admin"]}>
+                    <ProtectedRoute allowedRoles={USERS_PAGE_ROLES}>
                       <EditUserPage />
                     </ProtectedRoute>
                   }

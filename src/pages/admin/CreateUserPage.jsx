@@ -1,8 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { MD_CREATABLE_ROLES, ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, COMMITTEES } from "../../lib/roles";
-import { useAuth } from "../../hooks/useAuth";
+import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, COMMITTEES } from "../../lib/roles";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -15,7 +14,7 @@ import "../../styles/CreateUserPage.css";
 
 const FIELD_HELP = {
   email: "This becomes their login. They'll receive a temporary password here — make sure it's an address they can actually check.",
-  role: "Controls what this person can see and do. Admin can create any staff role except Admin/MD; MD can only create Admin accounts (to hand off ongoing user management).",
+  role: "Controls what this person can see and do. Admin can create any staff role except Admin/MD.",
   team: "The working group this person belongs to (e.g. BPDD, CBBO). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
   office: "The physical office this person is based out of.",
   committee: "Optional Lead Generation review committee. G3 is the DGM committee — membership grants DGM-level review/approval on leads, org-wide.",
@@ -28,13 +27,10 @@ function isValidEmail(val) {
 }
 
 export default function CreateUserPage() {
-  const { profile } = useAuth();
-  const isAdmin = profile?.role === "admin";
-
-  const roleOptions = useMemo(() => {
-    const roles = isAdmin ? ADMIN_CREATABLE_ROLES : MD_CREATABLE_ROLES;
-    return roles.map((r) => ({ value: r, label: ROLE_LABELS[r] || r }));
-  }, [isAdmin]);
+  const roleOptions = useMemo(
+    () => ADMIN_CREATABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] || r })),
+    []
+  );
 
   const officeOptions = OFFICES.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }));
   const teams = useTeamOptions();

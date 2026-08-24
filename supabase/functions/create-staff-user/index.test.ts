@@ -52,7 +52,7 @@ Deno.test("create-staff-user - rejects a role Admin isn't allowed to create (e.g
   assertEquals(res.status, 403);
 });
 
-Deno.test("create-staff-user - MD's bootstrap allowance is limited to creating admin accounts only", async () => {
+Deno.test("create-staff-user - MD can no longer create any accounts (Admin-only now)", async () => {
   const res = await handleRequest(
     req({ email: "new@afc.com", full_name: "New Person", role: "cfo" }),
     client({ caller: { id: CALLER_ID, role: "md", is_active: true } }) as never,
@@ -60,18 +60,12 @@ Deno.test("create-staff-user - MD's bootstrap allowance is limited to creating a
   assertEquals(res.status, 403);
 });
 
-Deno.test("create-staff-user - MD can create the first admin account", async () => {
-  const original = globalThis.fetch;
-  globalThis.fetch = okFetch;
-  try {
-    const res = await handleRequest(
-      req({ email: "new-admin@afc.com", full_name: "New Admin", role: "admin" }),
-      client({ caller: { id: CALLER_ID, role: "md", is_active: true } }) as never,
-    );
-    assertEquals(res.status, 200);
-  } finally {
-    globalThis.fetch = original;
-  }
+Deno.test("create-staff-user - DGM can no longer create any accounts", async () => {
+  const res = await handleRequest(
+    req({ email: "new@afc.com", full_name: "New Person", role: "project_officer" }),
+    client({ caller: { id: CALLER_ID, role: "dgm", team: "BPDD", is_active: true } }) as never,
+  );
+  assertEquals(res.status, 403);
 });
 
 Deno.test("create-staff-user - rejects an invalid email", async () => {
