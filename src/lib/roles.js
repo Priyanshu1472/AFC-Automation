@@ -131,5 +131,8 @@ export const LEAD_PA_TIER_ROLES = ["project_assistant", "project_officer", "asso
 
 // Route-level gating only (who can even reach /leads*) — every actual
 // create/accept/review permission is re-derived from afc_users.role/
-// committee/team, never from this list.
-export const LEAD_GENERATION_NAV_ROLES = ["project_assistant", "project_officer", "associate_consultant", "agm", "srm", "dgm", "md", "admin"];
+// committee/team, never from this list. cfo/cs are view-only here: they
+// already have org-wide row visibility via can_view_lead(), but have no
+// action branch anywhere in advance-lead-stage — included so they can
+// actually reach the pages, not because they can act on anything yet.
+export const LEAD_GENERATION_NAV_ROLES = ["project_assistant", "project_officer", "associate_consultant", "agm", "srm", "dgm", "md", "admin", "cfo", "cs"];

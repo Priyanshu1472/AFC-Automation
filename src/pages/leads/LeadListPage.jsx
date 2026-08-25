@@ -212,7 +212,7 @@ export default function LeadListPage() {
               <table className="table ll-table">
                 <thead>
                   <tr>
-                    <th>Lead Number</th><th>Title</th><th>Creator</th><th>Team</th>
+                    <th>Lead Number</th><th>Title</th><th>Creator</th>{canFilterTeam && <th>Team</th>}
                     <th>Assignee</th><th>Status</th><th>Created</th><th>Actions</th>
                   </tr>
                 </thead>
@@ -222,7 +222,7 @@ export default function LeadListPage() {
                       <td><span className="ll-lead-number">{l.lead_number}</span></td>
                       <td className="ll-title" title={l.title}>{fmt(l.title)}</td>
                       <td>{fmt(l.creator?.full_name)}</td>
-                      <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>
+                      {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>}
                       <td>{fmt(l.assignee?.full_name)}</td>
                       <td><StatusBadge status={l.status} /></td>
                       <td className="ll-date">{fmtDate(l.created_at)}</td>

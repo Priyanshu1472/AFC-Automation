@@ -40,7 +40,7 @@ const STATUS_OPTIONS = [
 
 function StatusBadge({ status }) {
   const config = STATUS_MAP[status] || { label: status, variant: "neutral" };
-  return <Badge variant={config.variant} dot>{config.label}</Badge>;
+  return <Badge variant={config.variant} dot className="bl-status-badge">{config.label}</Badge>;
 }
 
 function SearchIcon() {
@@ -191,9 +191,9 @@ export default function EmpanelmentListPage() {
 
   const stats = useMemo(() => ({
     total: applications.length,
-    filled: applications.filter((a) => a.ba_reg).length,
     inReview: applications.filter((a) => ["po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "on_hold"].includes(a.status)).length,
     accepted: applications.filter((a) => a.status === "accepted").length,
+    rejected: applications.filter((a) => a.status === "rejected").length,
   }), [applications]);
 
   const filtered = applications.filter((a) => {
@@ -236,9 +236,9 @@ export default function EmpanelmentListPage() {
 
           <div className="bl-stats-grid">
             <StatCard label="Total" value={stats.total} colorClass="blue" loading={loading} />
-            <StatCard label="Forms Filled" value={stats.filled} colorClass="amber" loading={loading} />
             <StatCard label="In Review" value={stats.inReview} colorClass="purple" loading={loading} />
             <StatCard label="Accepted" value={stats.accepted} colorClass="green" loading={loading} />
+            <StatCard label="Rejected" value={stats.rejected} colorClass="red" loading={loading} />
           </div>
 
           <Card className="bl-filter-card">

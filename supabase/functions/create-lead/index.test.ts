@@ -38,6 +38,7 @@ function buildClient(opts: {
   prTarget?: FakeResult;
   reviewerTarget?: FakeResult;
   authorityTarget?: FakeResult;
+  baTarget?: FakeResult;
   routes?: Record<string, FakeResult[]>;
   rpc?: Record<string, FakeResult>;
 }) {
@@ -49,6 +50,7 @@ function buildClient(opts: {
     opts.reviewerTarget ?? { data: { id: REVIEWER_ID, role: "associate_consultant", team: TEAM, committee: "PMT", is_active: true }, error: null },
     opts.authorityTarget ?? { data: { id: AUTHORITY_ID, role: "agm", team: TEAM, committee: "PMT Extended", is_active: true }, error: null },
   ];
+  if (opts.baTarget) routes.afc_users.push(opts.baTarget);
   routes.leads = routes.leads ?? [{ data: { id: "new-lead-1", lead_number: "LH-2026-000001", status: "pa_review" }, error: null }];
   return createFakeAdminClient(routes, { rpc: { next_lead_number: { data: "LH-2026-000001", error: null }, ...(opts.rpc || {}) } });
 }
@@ -74,10 +76,37 @@ Deno.test("handleRequest - missing title -> 400", async () => {
   assertEquals(res.status, 400);
 });
 
-Deno.test("handleRequest - only rfp/in_house are accepted this phase", async () => {
+Deno.test("handleRequest - eoi lead_type is accepted", async () => {
   const client = buildClient({});
   const res = await handleRequest(formReq(baseFields({ lead_type: "eoi" })), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("handleRequest - an invalid lead_type is rejected", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(formReq(baseFields({ lead_type: "bogus" })), client as never);
   assertEquals(res.status, 400);
+});
+
+Deno.test("handleRequest - an invalid source is rejected", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(formReq(baseFields({ source: "bogus" })), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("handleRequest - ba source without assigned_ba_id is rejected", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(formReq(baseFields({ source: "ba" })), client as never);
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "Select a Business Associate for a BA Source lead.");
+});
+
+Deno.test("handleRequest - ba source with a valid assigned_ba_id succeeds", async () => {
+  const BA_ID = "ba-1";
+  const client = buildClient({ baTarget: { data: { id: BA_ID, role: "business_associate", team: TEAM, is_active: true }, error: null } });
+  const res = await handleRequest(formReq(baseFields({ source: "ba", assigned_ba_id: BA_ID })), client as never);
+  assertEquals(res.status, 200);
 });
 
 Deno.test("handleRequest - MD cannot create a lead directly", async () => {

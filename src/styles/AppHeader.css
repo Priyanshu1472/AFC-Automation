@@ -29,6 +29,7 @@
   align-items: center;
   flex: 1;
   margin-left: var(--space-6);
+  gap: var(--space-1);
 }
 
 .app-header-nav-links {
@@ -60,14 +61,14 @@
   text-decoration: none;
 }
 
-/* Dashboard / Reports — pushed to the far right of the module links (but
-   still left of the utility icons), so the module buttons stay grouped on
-   the left and these two read as a distinct reporting group. */
+/* Dashboard / Reports — sit right after the module links with the same
+   gap as every other nav item, so the whole row reads as one continuous
+   group; .app-header-nav-utilities' own margin-left: auto still pushes the
+   utility icons to the far right past this group. */
 .app-header-nav-dropdowns {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  margin-left: auto;
 }
 
 /* ── Nav dropdown (Reports / Dashboard) ─────────────────────── */

@@ -52,6 +52,14 @@
 .bl-stat-amber::before  { background: var(--warning); }
 .bl-stat-purple::before { background: #7c3aed; }
 .bl-stat-green::before  { background: var(--success); }
+.bl-stat-red::before    { background: var(--danger); }
+
+/* ── Status badge (table) — fixed width so "Sent" and "CFO/CS Review"
+   render the same size ────────────────────────────────────────── */
+.bl-status-badge {
+  min-width: 130px;
+  justify-content: center;
+}
 
 .bl-stat-value {
   font-family: var(--font-display);

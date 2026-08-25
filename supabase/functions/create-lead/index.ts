@@ -1,9 +1,10 @@
 // supabase/functions/create-lead/index.ts
-// JWT must be ON. Creates an In-House RFP lead directly into `pa_review`
-// (the real intake form has one "Save Lead" action, no separate draft/submit
-// step). Mirrors submit-ba-form's multipart handling for the optional
-// RFP/Tender document upload, and advance-empanelment-stage's
-// authorization-then-mutate-then-log shape for everything else.
+// JWT must be ON. Creates a lead (RFP or EOI; In-House or BA Source)
+// directly into `pa_review` (the real intake form has one "Save Lead"
+// action, no separate draft/submit step). Mirrors submit-ba-form's
+// multipart handling for the optional RFP/Tender document upload, and
+// advance-empanelment-stage's authorization-then-mutate-then-log shape for
+// everything else.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -87,6 +88,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
 
   const assignedBaId = get("assigned_ba_id") || null;
+  if (input.source === "ba" && !assignedBaId) {
+    return jsonRes(req, 400, { error: "Select a Business Associate for a BA Source lead." });
+  }
 
   try {
     // Team is derived from Person Responsible's own team — not a field the
@@ -147,8 +151,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .insert({
         id: leadId,
         lead_number: leadNumberData,
-        lead_type: "rfp",
-        source: "in_house",
+        lead_type: input.lead_type,
+        source: input.source,
         title: input.title.trim(),
         portal_name: clampText(get("portal_name"), 200),
         bid_number: clampText(get("bid_number"), 200),

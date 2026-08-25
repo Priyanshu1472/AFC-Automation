@@ -150,6 +150,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     if (!form.person_responsible_id) errs.person_responsible_id = "Person Responsible is required.";
     if (!form.reviewer_id) errs.reviewer_id = "Reviewer is required.";
     if (!form.approval_authority_id) errs.approval_authority_id = "Approval Authority is required.";
+    if (form.source === "ba" && !form.assigned_ba_id) errs.assigned_ba_id = "Business Associate is required for a BA Source lead.";
     if (isMdReturn && !resubmitComment.trim()) errs.resubmit_comment = "Add a remark explaining the changes before resubmitting to the MD.";
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -164,8 +165,8 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       const fd = new FormData();
       if (mode === "edit") fd.set("lead_id", lead.id);
       fd.set("title", form.title.trim());
-      fd.set("lead_type", "rfp");
-      fd.set("source", "in_house");
+      fd.set("lead_type", form.lead_type);
+      fd.set("source", form.source);
       fd.set("portal_name", form.portal_name);
       fd.set("bid_number", form.bid_number);
       fd.set("client_name", form.client_name);
@@ -208,14 +209,43 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
             <label className="field-label">Lead Type &amp; Source</label>
             <div className="lf-toggle-row">
               <div className="lf-toggle-group">
-                <button type="button" className="lf-toggle lf-toggle-active">RFP</button>
-                <button type="button" className="lf-toggle" disabled title="EOI leads aren't available yet">EOI</button>
+                <button
+                  type="button"
+                  className={`lf-toggle${form.lead_type === "rfp" ? " lf-toggle-active" : ""}`}
+                  disabled={submitting || isEdit}
+                  onClick={() => set("lead_type", "rfp")}
+                >
+                  RFP
+                </button>
+                <button
+                  type="button"
+                  className={`lf-toggle${form.lead_type === "eoi" ? " lf-toggle-active" : ""}`}
+                  disabled={submitting || isEdit}
+                  onClick={() => set("lead_type", "eoi")}
+                >
+                  EOI
+                </button>
               </div>
               <div className="lf-toggle-group">
-                <button type="button" className="lf-toggle lf-toggle-active">In-House</button>
-                <button type="button" className="lf-toggle" disabled title="BA Source leads aren't available yet">BA Source</button>
+                <button
+                  type="button"
+                  className={`lf-toggle${form.source === "in_house" ? " lf-toggle-active" : ""}`}
+                  disabled={submitting || isEdit}
+                  onClick={() => set("source", "in_house")}
+                >
+                  In-House
+                </button>
+                <button
+                  type="button"
+                  className={`lf-toggle${form.source === "ba" ? " lf-toggle-active" : ""}`}
+                  disabled={submitting || isEdit}
+                  onClick={() => set("source", "ba")}
+                >
+                  BA Source
+                </button>
               </div>
             </div>
+            {isEdit && <span className="field-hint">Locked once a lead is created — cannot be changed.</span>}
           </div>
 
           <Input
@@ -338,14 +368,22 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
         <Card.Header title="Assignment" />
         <Card.Body>
           <div className="field">
-            <label className="field-label">Business Associate (optional)</label>
+            <label className="field-label">
+              {form.source === "ba" ? (
+                <>Business Associate <span className="required">*</span></>
+              ) : (
+                "Business Associate (optional)"
+              )}
+            </label>
             <Select
               options={baOptions}
               value={form.assigned_ba_id}
               onChange={(v) => set("assigned_ba_id", v)}
               placeholder={baOptions.length ? "— Select BA —" : "No empanelled BA found on your team."}
+              error={errors.assigned_ba_id}
               disabled={submitting}
             />
+            {errors.assigned_ba_id && <span className="field-error">{errors.assigned_ba_id}</span>}
             {baOptions.length === 0 && (
               <span className="field-hint">No MD-approved (empanelled) Business Associate found on your team yet.</span>
             )}

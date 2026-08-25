@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
-import { LEAD_PA_TIER_ROLES, ROLE_LABELS } from "../../lib/roles";
+import { LEAD_PA_TIER_ROLES, ROLE_LABELS, can } from "../../lib/roles";
 import { canOpenProposal } from "../../lib/proposalPrep";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -346,7 +346,9 @@ export default function LeadDetailPage() {
                 </div>
                 <h1 className="ar-header-email">{lead.title}</h1>
                 <p className="ar-header-meta">
-                  {lead.lead_number} · Team: <strong>{lead.team}</strong> · Created: <strong>{fmtDate(lead.created_at)}</strong>
+                  {lead.lead_number}
+                  {can.viewAllTeams(profile?.role) && <> · Team: <strong>{lead.team}</strong></>}
+                  {" "}· Created: <strong>{fmtDate(lead.created_at)}</strong>
                 </p>
               </div>
             </Card.Body>

@@ -38,11 +38,10 @@ export function validateRequiredFields(input: LeadFieldInput): string | null {
   if (typeof input.reviewer_id !== "string" || !input.reviewer_id) return "Reviewer is required.";
   if (typeof input.approval_authority_id !== "string" || !input.approval_authority_id) return "Approval Authority is required.";
   if (input.delivery_type != null && !DELIVERY_TYPES.has(String(input.delivery_type))) return "Invalid delivery type.";
-  // Only RFP / In-House is active in this phase — reject anything else
-  // outright rather than silently coercing, so a stale/tampered client
-  // can't slip a lead into an unimplemented path.
-  if (input.lead_type != null && input.lead_type !== "rfp") return "Only RFP leads can be created at this time.";
-  if (input.source != null && input.source !== "in_house") return "Only In-House leads can be created at this time.";
+  // RFP/EOI and In-House/BA Source are active; "suo_moto" isn't exposed in
+  // the UI yet, so it's still rejected here rather than silently coerced.
+  if (input.lead_type != null && !["rfp", "eoi"].includes(String(input.lead_type))) return "Invalid lead type.";
+  if (input.source != null && !["in_house", "ba"].includes(String(input.source))) return "Invalid lead source.";
   return null;
 }
 
