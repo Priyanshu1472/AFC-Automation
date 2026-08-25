@@ -29,7 +29,7 @@ export const PROPOSAL_DOCUMENT_TYPES = [
 ];
 
 export const CLIENT_RESPONSE_LABELS = {
-  pending: "Awaiting Client Response",
+  pending: "Pending",
   awarded: "Awarded",
   rejected: "Rejected",
 };

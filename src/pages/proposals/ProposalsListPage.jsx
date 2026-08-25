@@ -1,9 +1,9 @@
 // Proposal Prep landing page — every MD-approved lead visible to the
 // caller (RLS-scoped via can_view_lead, same as LeadListPage), with a
-// quick look at fee-note progress and lock/outcome state. "Open" only
-// appears for md/admin or the lead's three assignees, same rule as
-// LeadListPage/LeadDetailPage's row action — this page exists so that rule
-// has somewhere to be browsed from besides the Leads table itself.
+// quick look at lock/outcome state. "Open" only appears for md/admin or
+// the lead's three assignees, same rule as LeadListPage/LeadDetailPage's
+// row action — this page exists so that rule has somewhere to be browsed
+// from besides the Leads table itself.
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
@@ -11,10 +11,10 @@ import { useAuth } from "../../hooks/useAuth";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
-import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
-import { FEE_NOTE_TYPES, FEE_NOTE_STATUS_VARIANTS, CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS, canOpenProposal } from "../../lib/proposalPrep";
+import { ArrowRightIcon } from "../../components/icons";
+import { CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS, canOpenProposal } from "../../lib/proposalPrep";
 import "../../styles/ProposalPreparationPage.css";
 
 function fmtDate(d) {
@@ -28,7 +28,6 @@ export default function ProposalsListPage() {
 
   const [leads, setLeads] = useState([]);
   const [proposalByLead, setProposalByLead] = useState({});
-  const [feeNotesByProposal, setFeeNotesByProposal] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -51,16 +50,6 @@ export default function ProposalsListPage() {
     const propByLead = Object.fromEntries((proposalRows || []).map((p) => [p.lead_id, p]));
     setProposalByLead(propByLead);
 
-    const proposalIds = (proposalRows || []).map((p) => p.id);
-    if (proposalIds.length > 0) {
-      const { data: feeNoteRows } = await supabase.from("fee_notes").select("*").in("proposal_id", proposalIds);
-      const byProposal = {};
-      for (const n of feeNoteRows || []) (byProposal[n.proposal_id] ||= []).push(n);
-      setFeeNotesByProposal(byProposal);
-    } else {
-      setFeeNotesByProposal({});
-    }
-
     setLoading(false);
   }, []);
 
@@ -70,7 +59,7 @@ export default function ProposalsListPage() {
     if (!search) return true;
     const s = search.toLowerCase();
     return (
-      (l.title || "").toLowerCase().includes(s) ||
+      (l.lead_number || "").toLowerCase().includes(s) ||
       (l.client_name || "").toLowerCase().includes(s) ||
       (l.ba?.full_name || "").toLowerCase().includes(s)
     );
@@ -96,7 +85,7 @@ export default function ProposalsListPage() {
 
           <Card className="pp-filter-card">
             <Card.Body className="pp-filters">
-              <input type="text" className="input pp-search" placeholder="Search by title, client, or BA…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <input type="text" className="input pp-search" placeholder="Search by lead number, client, or BA…" value={search} onChange={(e) => setSearch(e.target.value)} />
             </Card.Body>
           </Card>
 
@@ -107,48 +96,39 @@ export default function ProposalsListPage() {
               <div className="pp-table-wrap">
                 <table className="table">
                   <thead>
-                    <tr><th>Title</th><th>Client</th><th>BA</th><th>Person Responsible</th><th>Submission Date</th><th>Fee Notes</th><th>Status</th><th>Outcome</th><th>Actions</th></tr>
+                    <tr><th>Lead Number</th><th>Client</th><th>BA</th><th>Person Responsible</th><th>Submission Date</th><th>Status</th><th>Outcome</th><th>Actions</th></tr>
                   </thead>
                   <tbody>
                     {filtered.map((l) => {
                       const proposal = proposalByLead[l.id];
-                      const feeNotes = proposal ? (feeNotesByProposal[proposal.id] || []) : [];
-                      const feeByType = Object.fromEntries(feeNotes.map((n) => [n.note_type, n]));
                       const overdue = !!l.submission_deadline && new Date(l.submission_deadline) < new Date() && !proposal?.locked;
                       const canOpen = canOpenProposal(l, profile);
                       return (
                         <tr key={l.id}>
                           <td>
-                            <div className="pp-td-title" title={l.title}>{l.title}</div>
-                            {l.portal_name && <div className="pp-td-sub">{l.portal_name}</div>}
+                            <button type="button" className="pp-lead-number-link" onClick={() => navigate(`/leads/${l.id}`)}>
+                              {l.lead_number}
+                            </button>
                           </td>
                           <td>{l.client_name || <span className="pp-td-muted">—</span>}</td>
                           <td className="pp-td-muted">{l.ba?.full_name || "—"}</td>
                           <td className="pp-td-muted">{l.pr?.full_name || "—"}</td>
                           <td className={overdue ? "pp-td-date--overdue" : ""}>{fmtDate(l.submission_deadline)}</td>
                           <td>
-                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                              {FEE_NOTE_TYPES.map((t) => {
-                                const note = feeByType[t.key];
-                                if (!note) return null;
-                                return (
-                                  <Badge key={t.key} variant={FEE_NOTE_STATUS_VARIANTS[note.status]} title={`${t.label}: ${note.status}`}>
-                                    {t.label.split(" ")[0]}
-                                  </Badge>
-                                );
-                              })}
-                              {feeNotes.length === 0 && <span className="pp-td-muted">—</span>}
-                            </div>
+                            <Badge className="pp-status-badge" variant={proposal?.locked ? "neutral" : "success"}>{proposal?.locked ? "Locked" : proposal ? "In Progress" : "Not Started"}</Badge>
                           </td>
                           <td>
-                            <Badge variant={proposal?.locked ? "neutral" : "success"}>{proposal?.locked ? "Locked" : proposal ? "In Progress" : "Not Started"}</Badge>
-                          </td>
-                          <td>
-                            {proposal ? <Badge variant={CLIENT_RESPONSE_VARIANTS[proposal.client_response]}>{CLIENT_RESPONSE_LABELS[proposal.client_response]}</Badge> : <span className="pp-td-muted">—</span>}
+                            {proposal ? (
+                              <Badge className="pp-outcome-badge" variant={CLIENT_RESPONSE_VARIANTS[proposal.client_response]}>{CLIENT_RESPONSE_LABELS[proposal.client_response]}</Badge>
+                            ) : (
+                              <span className="pp-td-muted">—</span>
+                            )}
                           </td>
                           <td>
                             {canOpen ? (
-                              <Button variant="secondary" size="sm" onClick={() => navigate(`/proposals/${l.id}`)}>Open</Button>
+                              <button type="button" className="pp-icon-btn" title="Open Proposal" aria-label="Open proposal" onClick={() => navigate(`/proposals/${l.id}`)}>
+                                <ArrowRightIcon />
+                              </button>
                             ) : (
                               <span className="pp-td-muted">—</span>
                             )}
