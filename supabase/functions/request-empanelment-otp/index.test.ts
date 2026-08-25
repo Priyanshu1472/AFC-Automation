@@ -88,7 +88,7 @@ Deno.test("request-empanelment-otp - provisional_letter rejects a non-DGM caller
 Deno.test("request-empanelment-otp - provisional_letter rejects a DGM from a different team", async () => {
   const res = await handleRequest(
     req({ application_id: APP_ID, action: "provisional_letter" }),
-    client(callerRow({ role: "dgm", team: "CBBO" }), { id: APP_ID, status: "filled", team: "BPDD", provisional_letter_sent: false }) as never,
+    client(callerRow({ role: "dgm", team: "BIID" }), { id: APP_ID, status: "filled", team: "BPDD", provisional_letter_sent: false }) as never,
   );
   assertEquals(res.status, 403);
 });

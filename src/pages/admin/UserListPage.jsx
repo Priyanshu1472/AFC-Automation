@@ -72,6 +72,12 @@ export default function UserListPage() {
   const [users, setUsers] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Only the very first load shows the full-page loader — every later
+  // refetch (typing in Search, changing a filter/page) must NOT unmount
+  // the page (and with it, the focused search Input): doing so on every
+  // keystroke was dropping the cursor/focus the moment results emptied out
+  // and the old `loading && users.length === 0` gate kicked back in.
+  const [initialLoad, setInitialLoad] = useState(true);
   const [banner, setBanner] = useState("");
   const [togglingId, setTogglingId] = useState(null);
   const [search, setSearch] = useState("");
@@ -142,6 +148,7 @@ export default function UserListPage() {
         setTotalCount(count || 0);
       }
       setLoading(false);
+      setInitialLoad(false);
     },
     [profile?.role, fetchUsersFlat, fetchUsersGrouped]
   );
@@ -214,7 +221,7 @@ export default function UserListPage() {
   const to = Math.min((page + 1) * PAGE_SIZE, totalCount);
   const hasNextPage = to < totalCount;
 
-  if (loading && users.length === 0) return <PageLoader text="Loading users…" />;
+  if (initialLoad) return <PageLoader text="Loading users…" />;
 
   return (
     <div className="app-shell">

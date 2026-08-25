@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { TEAMS } from "../lib/roles";
 
-// TEAMS in lib/roles.js is just the original seed pair (BPDD, CBBO) — team
+// TEAMS in lib/roles.js is just the original seed pair (BPDD, BIID) — team
 // is a free-text column (no CHECK constraint), so any team typed into a
 // creatable Select (see CreateUserPage/EditUserPage) becomes real the
 // moment a user is saved with it. This hook merges that static seed list

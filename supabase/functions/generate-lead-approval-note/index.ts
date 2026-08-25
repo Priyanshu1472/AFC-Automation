@@ -14,7 +14,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
 import { clampText } from "../_shared/leadEligibility.ts";
-import { regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
+import { regenerateApprovalNote, SCRUTINY_PARAMETERS } from "../_shared/leadApprovalPdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -24,6 +24,20 @@ function sanitizeScopeOfWork(input: unknown): string[] {
     .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
     .slice(0, 20)
     .map((v) => v.trim().slice(0, 300));
+}
+
+// Parameters themselves are fixed (SCRUTINY_PARAMETERS) — only Yes/No and
+// remarks come from the client, and lenient like every other field here:
+// an invalid/missing entry just falls back to a safe default rather than
+// hard-failing the whole submission.
+function sanitizeScrutiny(input: unknown): { yes_no: "Yes" | "No"; remarks: string }[] {
+  const arr = Array.isArray(input) ? input : [];
+  return SCRUTINY_PARAMETERS.map((param, i) => {
+    const entry = (arr[i] && typeof arr[i] === "object" ? arr[i] : {}) as Record<string, unknown>;
+    const yesNo = entry.yes_no === "No" ? "No" : "Yes";
+    const remarks = clampText(entry.remarks, 500) || param.defaultRemark;
+    return { yes_no: yesNo, remarks };
+  });
 }
 
 export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
@@ -68,11 +82,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     scope_of_work: sanitizeScopeOfWork(body.scope_of_work),
     project_timeline: clampText(body.project_timeline, 100),
     financial_requirement: {
-      document_fee_emd_pbg: clampText(financialInput.document_fee_emd_pbg, 300),
+      document_fee: clampText(financialInput.document_fee, 150),
+      pbg: clampText(financialInput.pbg, 150),
       emd: clampText(financialInput.emd, 100),
       processing_fee: clampText(financialInput.processing_fee, 100),
     },
     revenue_sharing: clampText(body.revenue_sharing, 300),
+    scrutiny: sanitizeScrutiny(body.scrutiny),
+    justification: clampText(body.justification, 3000),
   };
 
   try {

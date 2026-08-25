@@ -15,9 +15,11 @@ import { logLeadActivity } from "../_shared/leadActivity.ts";
 import { Committee, PA_TIER_ROLES, getOrgWideHolders, getTargetUser } from "../_shared/leadAuth.ts";
 import { validateBusinessAssociate } from "../_shared/leadEligibility.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
-import { regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
+import { LeadDocument, regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
+
+const LEAD_DOCUMENTS_BUCKET = "lead-documents";
 
 type LeadRow = {
   id: string;
@@ -33,6 +35,7 @@ type LeadRow = {
   assigned_ba_id: string | null;
   declined_from_status: string | null;
   approval_note_data: unknown;
+  documents: LeadDocument[];
 };
 
 // (action name -> the committee it means "sent this lead on to MD") — used
@@ -66,8 +69,14 @@ async function resolveCommitteeThatSentToMd(admin: AdminClient, leadId: string):
 // in-progress) Lead Approval Note — every committee approve/escalate/
 // forward, but not declines (those just return to the assignee, nothing
 // new to sign) and not md_approve (handled separately below, in "final"
-// mode). Regeneration is best-effort and never blocks the actual decision.
+// mode). "accept" is here too, but for a different reason: it's the one
+// that flips the stored document from "-- Draft" to its final filename
+// (see leadApprovalPdf.ts's isPreSubmission) the instant the lead actually
+// leaves pa_review/pa_action_required — nothing else about the PDF changes
+// at that step. Regeneration is best-effort and never blocks the actual
+// decision.
 const REGENERATE_DRAFT_NOTE_ON = new Set([
+  "accept",
   "dgm_initial_approve",
   "pmt_approve", "pmt_escalate",
   "pmt_extended_approve", "pmt_extended_forward_dgm",
@@ -98,7 +107,13 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
   // "md_decline" case for who gets notified and how resubmission routes
   // straight back to md_review, skipping every committee).
   md_review: { md_approve: "md_approved", md_decline: "pa_action_required", drop: "pa_dropped" },
-  pa_action_required: { drop: "pa_dropped" },
+  // "accept" also reaches pa_action_required -> dgm_initial_review — a
+  // resubmission after DGM's decline follows the exact same
+  // generate-note-then-accept procedure as the very first submission (see
+  // the "accept" case, which further restricts this to only the
+  // DGM-declined case via declined_from_status). Every other decline
+  // source still resubmits through update-lead's plain Edit & Resubmit.
+  pa_action_required: { drop: "pa_dropped", accept: "dgm_initial_review" },
 };
 
 const REQUIRE_COMMENT = new Set([
@@ -145,7 +160,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, approval_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data")
+    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, approval_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data, documents")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -175,10 +190,21 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     let notifyTargetIds: string[] = [];
     let notifyTitle = "";
     let notifySubText = "";
+    // Storage objects to best-effort delete AFTER the status update below
+    // succeeds — currently just the stale draft note removed on DGM decline
+    // (see "dgm_initial_decline").
+    let storageCleanupPaths: string[] = [];
 
     switch (action) {
       case "accept": {
         if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can accept this lead.");
+        // From pa_action_required, "accept" is only a valid resubmission
+        // when DGM was the one who declined it — every other decline
+        // source resubmits through update-lead instead (see the
+        // LEAD_TRANSITIONS comment above).
+        if (leadRow.status === "pa_action_required" && leadRow.declined_from_status !== "dgm_initial_review") {
+          return jsonRes(req, 400, { error: "This lead wasn't returned by DGM — use Edit & Resubmit instead." });
+        }
         // "Accept" is now "Submit for DGM Approval" on the Lead Approval
         // Note workflow — the note must exist (generated via
         // generate-lead-approval-note) before the lead can move on.
@@ -267,7 +293,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
       case "dgm_initial_decline": {
         if (caller.committee !== "G3") return forbidden("Only a G3 (DGM) committee member can act on this lead.");
-        extraFields = { handled_by_dgm_id: caller.id, declined_from_status: leadRow.status };
+        // The stale draft note reflected the version DGM just rejected —
+        // pull it off the lead immediately so nothing outdated is shown
+        // while the Person Responsible reworks it; a fresh one is generated
+        // (and reattached) the next time they submit the Lead Approval Note.
+        const staleNote = (leadRow.documents || []).find((d) => d.category === "approval_note");
+        const documentsWithoutNote = (leadRow.documents || []).filter((d) => d.category !== "approval_note");
+        if (staleNote) storageCleanupPaths = [staleNote.path];
+        extraFields = { handled_by_dgm_id: caller.id, declined_from_status: leadRow.status, documents: documentsWithoutNote };
         notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
         notifyTitle = "Lead returned by DGM";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
@@ -398,6 +431,10 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     }
 
     await logLeadActivity(adminClient, leadRow.id, caller.id, caller.role, action, leadRow.status, expectedTo, trimmedComment || null);
+
+    for (const path of storageCleanupPaths) {
+      await adminClient.storage.from(LEAD_DOCUMENTS_BUCKET).remove([path]).catch(() => {});
+    }
 
     // Stamps this stage's remark/signature onto the Lead Approval Note —
     // best-effort, after the activity row above so the note picks up the

@@ -10,13 +10,20 @@ import Select from "../../components/ui/Select";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
+import { SCRUTINY_PARAMETERS, defaultScrutinyEntries } from "../../lib/leadApprovalNote";
 import "../../styles/LeadForm.css";
 
+const YES_NO_OPTIONS = [
+  { value: "Yes", label: "Yes" },
+  { value: "No", label: "No" },
+];
+
 const NATURE_OF_LEAD_OPTIONS = [
-  { value: "New Assignment", label: "New Assignment" },
+  { value: "Tender", label: "Tender" },
   { value: "Nomination", label: "Nomination" },
-  { value: "Repeat Assignment", label: "Repeat Assignment" },
-  { value: "Other", label: "Other" },
+  { value: "Suo Moto", label: "Suo Moto" },
+  { value: "Empanelment", label: "Empanelment" },
+  { value: "Expression of Interest (EOI)", label: "Expression of Interest (EOI)" },
 ];
 
 function fmtDate(v) {
@@ -31,10 +38,13 @@ function emptyForm() {
     objectives: "",
     scope_of_work: "",
     project_timeline: "",
-    document_fee_emd_pbg: "",
+    document_fee: "",
+    pbg: "",
     emd: "",
     processing_fee: "",
     revenue_sharing: "",
+    scrutiny: defaultScrutinyEntries(),
+    justification: "",
   };
 }
 
@@ -65,10 +75,16 @@ export default function LeadApprovalNoteForm() {
         objectives: d.objectives || "",
         scope_of_work: (d.scope_of_work || []).join("\n"),
         project_timeline: d.project_timeline || "",
-        document_fee_emd_pbg: d.financial_requirement?.document_fee_emd_pbg || "",
+        document_fee: d.financial_requirement?.document_fee || "",
+        pbg: d.financial_requirement?.pbg || "",
         emd: d.financial_requirement?.emd || "",
         processing_fee: d.financial_requirement?.processing_fee || "",
         revenue_sharing: d.revenue_sharing || "",
+        scrutiny: SCRUTINY_PARAMETERS.map((p, i) => ({
+          yes_no: d.scrutiny?.[i]?.yes_no === "No" ? "No" : "Yes",
+          remarks: d.scrutiny?.[i]?.remarks || p.defaultRemark,
+        })),
+        justification: d.justification || "",
       });
     }
     if (data?.assigned_ba_id && data?.team) {
@@ -86,6 +102,13 @@ export default function LeadApprovalNoteForm() {
     setForm((p) => ({ ...p, [field]: value }));
   }
 
+  function setScrutinyField(index, field, value) {
+    setForm((p) => {
+      const scrutiny = p.scrutiny.map((row, i) => (i === index ? { ...row, [field]: value } : row));
+      return { ...p, scrutiny };
+    });
+  }
+
   async function handleGenerate(e) {
     e.preventDefault();
     setSubmitting(true);
@@ -99,11 +122,14 @@ export default function LeadApprovalNoteForm() {
           scope_of_work: form.scope_of_work.split("\n").map((s) => s.trim()).filter(Boolean),
           project_timeline: form.project_timeline,
           financial_requirement: {
-            document_fee_emd_pbg: form.document_fee_emd_pbg,
+            document_fee: form.document_fee,
+            pbg: form.pbg,
             emd: form.emd,
             processing_fee: form.processing_fee,
           },
           revenue_sharing: form.revenue_sharing,
+          scrutiny: form.scrutiny,
+          justification: form.justification,
         },
       });
       if (error) {
@@ -224,12 +250,13 @@ export default function LeadApprovalNoteForm() {
                 <div className="field">
                   <label className="field-label">Financial Requirement</label>
                   <Input
-                    label="Document fee / EMD / PBG & modalities"
-                    value={form.document_fee_emd_pbg}
-                    onChange={(e) => set("document_fee_emd_pbg", e.target.value)}
+                    label="Document Fee / Tender Fee"
+                    value={form.document_fee}
+                    onChange={(e) => set("document_fee", e.target.value)}
                     placeholder="NA"
                     disabled={submitting}
                   />
+                  <Input label="PBG" value={form.pbg} onChange={(e) => set("pbg", e.target.value)} placeholder="NA" disabled={submitting} />
                   <Input label="EMD" value={form.emd} onChange={(e) => set("emd", e.target.value)} placeholder="NA" disabled={submitting} />
                   <Input
                     label="Processing Fee"
@@ -249,6 +276,48 @@ export default function LeadApprovalNoteForm() {
                   placeholder="NA"
                   disabled={submitting}
                 />
+              </Card.Body>
+            </Card>
+
+            <Card>
+              <Card.Header title="Preliminary Scrutiny by Office" />
+              <Card.Body>
+                {SCRUTINY_PARAMETERS.map((param, i) => (
+                  <div key={param.key} className="lan-scrutiny-row">
+                    <div className="lan-scrutiny-label">{param.label}</div>
+                    <div className="lan-scrutiny-yesno">
+                      <label className="field-label">Yes/No</label>
+                      <Select
+                        options={YES_NO_OPTIONS}
+                        value={form.scrutiny[i].yes_no}
+                        onChange={(v) => setScrutinyField(i, "yes_no", v)}
+                        disabled={submitting}
+                      />
+                    </div>
+                    <div className="lan-scrutiny-remarks">
+                      <label className="field-label">Justification / Remarks</label>
+                      <textarea
+                        className="input"
+                        rows={2}
+                        value={form.scrutiny[i].remarks}
+                        onChange={(e) => setScrutinyField(i, "remarks", e.target.value)}
+                        disabled={submitting}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                <div className="field">
+                  <label className="field-label">Justification</label>
+                  <textarea
+                    className="input"
+                    rows={4}
+                    value={form.justification}
+                    onChange={(e) => set("justification", e.target.value)}
+                    disabled={submitting}
+                    placeholder="Overall justification for taking up this lead — appears on the PDF just under the Preliminary Scrutiny table."
+                  />
+                </div>
               </Card.Body>
             </Card>
 

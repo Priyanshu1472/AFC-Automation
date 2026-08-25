@@ -92,7 +92,7 @@ const ACTIONS_BY_STATUS = {
     { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
   ],
   pa_action_required: [
-    { key: "__edit_resubmit", label: "Edit & Resubmit", variant: "primary" },
+    { key: "__edit_resubmit", label: "Resubmit Lead Approval Form", variant: "primary" },
     { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
   ],
 };
@@ -237,6 +237,13 @@ export default function LeadDetailPage() {
 
   function startAction(action) {
     if (action.key === "__edit_resubmit") {
+      // DGM's decline is of the Lead Approval Note itself — resubmitting
+      // means editing that note (not the plain lead-fields form) and
+      // sending it straight back to DGM.
+      if (lead.status === "pa_action_required" && lead.declined_from_status === "dgm_initial_review") {
+        navigate(`/leads/${id}/approval-note`);
+        return;
+      }
       navigate(`/leads/${id}/edit`);
       return;
     }

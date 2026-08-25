@@ -102,6 +102,37 @@ Deno.test("handleRequest - surfaces a clean error when the letterhead logo can't
   });
 });
 
+Deno.test("handleRequest - malformed/partial scrutiny input doesn't fail the request (falls back to defaults)", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow(), error: null },
+      { data: { full_name: "Priya Sharma", role: "project_officer" }, error: null },
+    ],
+    leads: [
+      { data: leadRow(), error: null },
+      { data: {}, error: null },
+      {
+        data: {
+          id: LEAD_ID, lead_number: "AFC/Lead/2026/001", title: "Test Lead", client_name: "A Client",
+          submission_deadline: null, assigned_ba_id: null, person_responsible_id: CALLER_ID, team: TEAM,
+          documents: [], approval_note_data: {},
+        },
+        error: null,
+      },
+      { data: {}, error: null },
+    ],
+    lead_activity_log: [{ data: [], error: null }],
+  });
+
+  await withFetch(logoOkFetch, async () => {
+    const res = await handleRequest(
+      req({ lead_id: LEAD_ID, scrutiny: "not-an-array", justification: "Strong strategic fit for our BPDD pipeline." }),
+      client as never
+    );
+    assertEquals(res.status, 200);
+  });
+});
+
 Deno.test("handleRequest - full success: saves approval_note_data, generates and stores the PDF", async () => {
   const client = createFakeAdminClient({
     afc_users: [
@@ -113,7 +144,7 @@ Deno.test("handleRequest - full success: saves approval_note_data, generates and
       { data: {}, error: null }, // approval_note_data update
       { // regenerateApprovalNote's own fresh fetch
         data: {
-          id: LEAD_ID, lead_number: "AFC/Lead/2026/001", title: "Test Lead", client_name: "A Client",
+          id: LEAD_ID, lead_number: "AFC/Lead/2026/001", title: "Test Lead", status: "pa_review", client_name: "A Client",
           submission_deadline: null, assigned_ba_id: null, person_responsible_id: CALLER_ID, team: TEAM,
           documents: [], approval_note_data: { nature_of_lead: "Nomination" },
         },
@@ -133,6 +164,9 @@ Deno.test("handleRequest - full success: saves approval_note_data, generates and
     const body = await res.json();
     assertEquals(body.success, true);
     assertEquals(body.document.category, "approval_note");
-    assertEquals(body.document.name, "Lead Approval Note.pdf");
+    // Not yet actually submitted for DGM review (still pa_review) — the
+    // single stored document is labeled "-- Draft" until "accept" moves it
+    // to dgm_initial_review (see advance-lead-stage's REGENERATE_DRAFT_NOTE_ON).
+    assertEquals(body.document.name, "Lead Approval Note -- Draft.pdf");
   });
 });

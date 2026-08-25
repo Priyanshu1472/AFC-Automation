@@ -356,7 +356,13 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     // Only ever return the plaintext password when email delivery failed —
     // it is never logged and never returned otherwise.
-    return jsonRes(req, 200, emailSent ? { success: true, email_sent: true } : { success: true, email_sent: false, password: tempPassword });
+    return jsonRes(
+      req,
+      200,
+      emailSent
+        ? { success: true, email_sent: true, id: newAuthUser.user.id }
+        : { success: true, email_sent: false, password: tempPassword, id: newAuthUser.user.id }
+    );
   } catch (err) {
     console.error("Unhandled error:", (err as Error).message);
     return jsonRes(req, 500, { error: "Internal server error." });

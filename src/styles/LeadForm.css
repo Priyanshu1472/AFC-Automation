@@ -88,3 +88,35 @@
     flex-direction: column;
   }
 }
+
+/* ── Preliminary Scrutiny by Office (LeadApprovalNoteForm) ─────────── */
+
+.lan-scrutiny-row {
+  display: grid;
+  grid-template-columns: 1fr 110px 2fr;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.lan-scrutiny-row:first-child {
+  padding-top: 0;
+}
+
+.lan-scrutiny-row:last-child {
+  border-bottom: none;
+}
+
+.lan-scrutiny-label {
+  padding-top: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+@media (max-width: 720px) {
+  .lan-scrutiny-row {
+    grid-template-columns: 1fr;
+  }
+}

@@ -177,7 +177,7 @@ Deno.test("po_final_forward - specific DGM assigned notifies that user directly"
 
 // ── dgm_recommend / dgm_send_back ────────────────────────────
 Deno.test("dgm_recommend - rejects a DGM from a different team", async () => {
-  const client = buildClient({ caller: callerRow({ role: "dgm", team: "CBBO" }), app: appRow({ status: "dgm_review", team: "BPDD" }) });
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: "BIID" }), app: appRow({ status: "dgm_review", team: "BPDD" }) });
   const res = await handleRequest(req({ application_id: APP_ID, action: "dgm_recommend", comment: "ok" }), client as never);
   assertEquals(res.status, 403);
 });

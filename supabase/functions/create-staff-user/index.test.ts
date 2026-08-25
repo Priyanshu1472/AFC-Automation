@@ -95,7 +95,7 @@ Deno.test("create-staff-user - success path returns email_sent true and never ec
     const res = await handleRequest(req({ email: "new@afc.com", full_name: "New Person", role: "cfo" }), client({}) as never);
     const json = await res.json();
     assertEquals(res.status, 200);
-    assertEquals(json, { success: true, email_sent: true });
+    assertEquals(json, { success: true, email_sent: true, id: "new-user-1" });
   } finally {
     globalThis.fetch = original;
   }

@@ -569,3 +569,15 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/admin-reset-pin/deno.json"
 entrypoint = "./functions/admin-reset-pin/index.ts"
+
+[functions.upload-user-signature]
+enabled = true
+verify_jwt = true
+import_map = "./functions/upload-user-signature/deno.json"
+entrypoint = "./functions/upload-user-signature/index.ts"
+
+[functions.get-user-signature-url]
+enabled = true
+verify_jwt = true
+import_map = "./functions/get-user-signature-url/deno.json"
+entrypoint = "./functions/get-user-signature-url/index.ts"

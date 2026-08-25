@@ -31,7 +31,8 @@ export default function LeadApprovalNotePreviewPage() {
     const { data } = await supabase.from("leads").select("*").eq("id", id).maybeSingle();
     setLead(data);
     setLoading(false);
-    if (data?.status === "pa_review" && !data.assigned_ba_id && data.team) {
+    const isResubmittable = data?.status === "pa_action_required" && data?.declined_from_status === "dgm_initial_review";
+    if ((data?.status === "pa_review" || isResubmittable) && !data.assigned_ba_id && data.team) {
       supabase.rpc("get_team_business_associates", { p_team: data.team }).then(({ data: list }) => setBaOptions(list || []));
     }
     return data;
@@ -56,7 +57,11 @@ export default function LeadApprovalNotePreviewPage() {
     fetchLead().then((data) => data && loadPdfUrl(data));
   }, [fetchLead, loadPdfUrl]);
 
-  const needsBaSelection = lead?.status === "pa_review" && !lead?.assigned_ba_id;
+  // A resubmission after DGM's decline goes through the exact same
+  // "accept" action/PIN gate as the very first submission — advance-lead-
+  // stage restricts it to leads DGM itself declined.
+  const isResubmit = lead?.status === "pa_action_required" && lead?.declined_from_status === "dgm_initial_review";
+  const needsBaSelection = (lead?.status === "pa_review" || isResubmit) && !lead?.assigned_ba_id;
 
   async function submitForDgmApproval() {
     if (!/^\d{4}$/.test(pin)) {
@@ -101,7 +106,7 @@ export default function LeadApprovalNotePreviewPage() {
     lead &&
     (lead.status === "pa_review" || lead.status === "pa_action_required") &&
     (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
-  const canSubmit = lead?.status === "pa_review" && profile?.id === lead.person_responsible_id;
+  const canSubmit = (lead?.status === "pa_review" || isResubmit) && profile?.id === lead.person_responsible_id;
 
   return (
     <div className="app-shell">
@@ -174,7 +179,7 @@ export default function LeadApprovalNotePreviewPage() {
                           />
                         </div>
                         <Button variant="primary" block loading={submitting} disabled={submitting} onClick={submitForDgmApproval}>
-                          Submit for DGM Approval
+                          {isResubmit ? "Resubmit for DGM Approval" : "Submit for DGM Approval"}
                         </Button>
                       </>
                     )}

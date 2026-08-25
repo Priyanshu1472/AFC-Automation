@@ -105,7 +105,7 @@ export function isAdminLevel(role) {
 
 // ─── Org structure ─────────────────────────────────────────────
 export const OFFICES = ["delhi", "mumbai", "lucknow"];
-export const TEAMS = ["BPDD", "CBBO"];
+export const TEAMS = ["BPDD", "BIID"];
 
 // ─── Whitelist of valid roles — validate any role value from the DB before trusting it ──
 export const VALID_ROLES = new Set(Object.keys(ROLES));

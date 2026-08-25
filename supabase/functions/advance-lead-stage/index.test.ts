@@ -173,6 +173,117 @@ Deno.test("dgm_initial_decline - requires a reason and returns to pa_action_requ
   assertEquals((await res.json()).status, "pa_action_required");
 });
 
+Deno.test("dgm_initial_decline - strips the stale approval_note document off the lead", async () => {
+  const staleDoc = { name: "Lead Approval Note.pdf", path: `${LEAD_ID}/old.pdf`, size: 10, uploaded_at: "2026-08-01T00:00:00Z", category: "approval_note" };
+  const otherDoc = { name: "RFP.pdf", path: `${LEAD_ID}/rfp.pdf`, size: 20, uploaded_at: "2026-08-01T00:00:00Z" };
+  const client = buildClient({
+    caller: callerRow({ committee: "G3" }),
+    lead: leadRow({ status: "dgm_initial_review", documents: [staleDoc, otherDoc] }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_decline", comment: "not viable" }), client as never);
+  assertEquals(res.status, 200);
+
+  const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+  const updateCall = leadsLog[1].calls.find((c) => c[0] === "update");
+  const updatedFields = JSON.parse(updateCall![1]);
+  assertEquals(updatedFields.documents, [otherDoc]);
+});
+
+// Resubmission after a DGM decline reuses "accept" — the exact same
+// action/PIN gate as the very first submission — restricted to leads DGM
+// itself declined (see the "accept" case's declined_from_status check).
+Deno.test("accept (resubmit) - rejects a pa_action_required lead that wasn't declined by DGM", async () => {
+  const client = buildClient({
+    lead: leadRow({ status: "pa_action_required", declined_from_status: "md_review", assigned_ba_id: "existing-ba" }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("accept (resubmit) - only the Person Responsible can resubmit", async () => {
+  const client = buildClient({
+    lead: leadRow({
+      status: "pa_action_required", declined_from_status: "dgm_initial_review",
+      person_responsible_id: "someone-else", assigned_ba_id: "existing-ba",
+    }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("accept (resubmit) - requires the Lead Approval Note to already be regenerated", async () => {
+  const client = buildClient({
+    lead: leadRow({
+      status: "pa_action_required", declined_from_status: "dgm_initial_review",
+      approval_note_data: null, assigned_ba_id: "existing-ba",
+    }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("accept (resubmit) - success sends the lead straight back to dgm_initial_review", async () => {
+  const client = buildClient({
+    lead: leadRow({ status: "pa_action_required", declined_from_status: "dgm_initial_review", assigned_ba_id: "existing-ba" }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "dgm_initial_review");
+});
+
+Deno.test("PIN gate - accept (resubmit after DGM decline) still requires a PIN, same as the first submission", async () => {
+  const client = buildClient({
+    caller: callerRow({ pin_hash: null }),
+    lead: leadRow({ status: "pa_action_required", declined_from_status: "dgm_initial_review", assigned_ba_id: "existing-ba" }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", pin: "" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("accept - regenerating the note on submission drops the '-- Draft' suffix, replacing (not duplicating) the stored document", async () => {
+  const originalFetch = globalThis.fetch;
+  const TINY_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+  globalThis.fetch = (() =>
+    Promise.resolve(new Response(Uint8Array.from(atob(TINY_PNG_BASE64), (c) => c.charCodeAt(0)), { status: 200 }))) as unknown as typeof fetch;
+
+  try {
+    const staleDraft = { name: "Lead Approval Note -- Draft.pdf", path: `${LEAD_ID}/draft.pdf`, size: 5, uploaded_at: "2026-08-01T00:00:00Z", category: "approval_note" };
+    const client = createFakeAdminClient({
+      afc_users: [
+        { data: callerRow(), error: null }, // getCallerProfile (PR)
+        { data: [], error: null }, // getOrgWideHolders notify fan-out
+        { data: { full_name: "Priya Sharma", role: "project_officer", signature_path: null }, error: null }, // regenerateApprovalNote's PR lookup
+      ],
+      leads: [
+        { data: leadRow({ assigned_ba_id: "existing-ba", documents: [staleDraft] }), error: null }, // initial fetch
+        { data: { id: LEAD_ID }, error: null }, // guarded status update
+        { // regenerateApprovalNote's own fresh fetch — status already flipped to dgm_initial_review
+          data: {
+            id: LEAD_ID, lead_number: "LH-2026-000001", title: "Test Lead", status: "dgm_initial_review",
+            client_name: null, submission_deadline: null, assigned_ba_id: "existing-ba", person_responsible_id: CALLER_ID,
+            team: TEAM, documents: [staleDraft], approval_note_data: { nature_of_lead: "Nomination" },
+          },
+          error: null,
+        },
+        { data: {}, error: null }, // documents write-back
+      ],
+      lead_activity_log: [{ data: [], error: null }],
+    });
+
+    const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+    assertEquals(res.status, 200);
+
+    const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+    const documentsUpdateCall = leadsLog[3].calls.find((c) => c[0] === "update");
+    const updatedFields = JSON.parse(documentsUpdateCall![1]);
+    assertEquals(updatedFields.documents.length, 1);
+    assertEquals(updatedFields.documents[0].name, "Lead Approval Note.pdf");
+    assertEquals(updatedFields.documents[0].category, "approval_note");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 // "drop" (true, no-reassignment withdrawal) is creator-only at pa_review —
 // a non-creator PR must use "reject_reassign" instead.
 Deno.test("drop - a non-creator (even the PR) can't drop at pa_review", async () => {

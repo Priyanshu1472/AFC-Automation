@@ -15,12 +15,14 @@ import "../../styles/CreateUserPage.css";
 const FIELD_HELP = {
   email: "This becomes their login. They'll receive a temporary password here — make sure it's an address they can actually check.",
   role: "Controls what this person can see and do. Admin can create any staff role except Admin/MD.",
-  team: "The working group this person belongs to (e.g. BPDD, CBBO). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
+  team: "The working group this person belongs to (e.g. BPDD, BIID). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
   office: "The physical office this person is based out of.",
   committee: "Optional Lead Generation review committee. G3 is the DGM committee — membership grants DGM-level review/approval on leads, org-wide.",
+  signature: "Optional. If provided, this image is embedded as this person's signature on generated PDFs (e.g. the Lead Approval Note) instead of a blank signature line.",
 };
 
 const EMPTY_FORM = { full_name: "", email: "", role: "", team: "", office: "", committee: "" };
+const SIGNATURE_TYPES = ["image/png", "image/jpeg"];
 
 function isValidEmail(val) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
@@ -42,6 +44,19 @@ export default function CreateUserPage() {
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null); // { emailSent, password? }
   const [banner, setBanner] = useState("");
+  const [signatureFile, setSignatureFile] = useState(null);
+  const [signatureError, setSignatureError] = useState("");
+
+  function handleSignatureChange(e) {
+    const file = e.target.files?.[0] || null;
+    setSignatureError("");
+    if (file && !SIGNATURE_TYPES.includes(file.type)) {
+      setSignatureError("Signature must be a PNG or JPEG image.");
+      setSignatureFile(null);
+      return;
+    }
+    setSignatureFile(file);
+  }
 
   function set(field, value) {
     setForm((p) => ({ ...p, [field]: value }));
@@ -89,6 +104,17 @@ export default function CreateUserPage() {
         setResult({ emailSent: data.email_sent, password: data.password });
         setBanner(`Account created for ${form.full_name.trim()}.`);
         setForm(EMPTY_FORM);
+
+        if (signatureFile && data.id) {
+          const fd = new FormData();
+          fd.set("user_id", data.id);
+          fd.set("file", signatureFile, signatureFile.name);
+          const { error: sigError } = await supabase.functions.invoke("upload-user-signature", { body: fd });
+          if (sigError) {
+            setBanner(`Account created for ${form.full_name.trim()}, but the signature upload failed — add it from Edit User.`);
+          }
+        }
+        setSignatureFile(null);
       } catch (err) {
         setBanner(err.message || "Something went wrong. Please try again.");
       } finally {
@@ -214,6 +240,16 @@ export default function CreateUserPage() {
                     placeholder="— None —"
                     disabled={saving}
                   />
+                </div>
+                <div className="field full">
+                  <label className="field-label">
+                    Signature <FieldTooltip text={FIELD_HELP.signature} />
+                  </label>
+                  <label className="cup-file-drop">
+                    <input type="file" accept="image/png,image/jpeg" onChange={handleSignatureChange} disabled={saving} />
+                    {signatureFile ? signatureFile.name : "Click to upload a signature image (PNG or JPEG, optional)"}
+                  </label>
+                  {signatureError && <span className="field-error">{signatureError}</span>}
                 </div>
               </div>
             </Card.Body>

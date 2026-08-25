@@ -13,11 +13,12 @@ import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import FieldTooltip from "../../components/FieldTooltip";
 import ResetPinModal from "./ResetPinModal";
+import SignatureUploadModal from "./SignatureUploadModal";
 import "../../styles/CreateUserPage.css";
 
 const FIELD_HELP = {
   role: "Changing a role controls what this person can see and do going forward. Only Admin and MD can change a role.",
-  team: "The working group this person belongs to (e.g. BPDD, CBBO). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
+  team: "The working group this person belongs to (e.g. BPDD, BIID). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
   office: "The physical office this person is based out of.",
   committee: "Optional Lead Generation review committee. G3 is the DGM committee — membership grants DGM-level review/approval on leads, org-wide. Only Admin and MD can change this.",
 };
@@ -53,12 +54,14 @@ export default function EditUserPage() {
   const [banner, setBanner] = useState("");
   const [success, setSuccess] = useState(false);
   const [showResetPin, setShowResetPin] = useState(false);
+  const [showSignatureUpload, setShowSignatureUpload] = useState(false);
+  const [signatureUrl, setSignatureUrl] = useState(null);
 
   const fetchUser = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("afc_users")
-      .select("id, full_name, email, role, team, office, committee, pin_updated_at")
+      .select("id, full_name, email, role, team, office, committee, pin_updated_at, signature_path")
       .eq("id", id)
       .maybeSingle();
     if (error || !data) {
@@ -68,6 +71,11 @@ export default function EditUserPage() {
     }
     setTarget(data);
     setForm({ full_name: data.full_name || "", role: data.role || "", team: data.team || "", office: data.office || "", committee: data.committee || "" });
+    setSignatureUrl(null);
+    if (data.signature_path) {
+      const { data: signed } = await supabase.functions.invoke("get-user-signature-url", { body: { user_id: id } });
+      if (signed?.url) setSignatureUrl(signed.url);
+    }
     setLoading(false);
   }, [id]);
 
@@ -227,6 +235,23 @@ export default function EditUserPage() {
                     </p>
                   </div>
                 )}
+                {profile?.role === "admin" && (
+                  <div className="field full">
+                    <label className="field-label">
+                      Signature <FieldTooltip text="Embedded as this person's signature on generated PDFs (e.g. the Lead Approval Note)." />
+                    </label>
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
+                      {signatureUrl ? (
+                        <img src={signatureUrl} alt={`${target.full_name}'s signature`} className="cup-signature-preview" />
+                      ) : (
+                        <span className="text-sm text-secondary">Not set</span>
+                      )}
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setShowSignatureUpload(true)}>
+                        {signatureUrl ? "Replace Signature" : "Upload Signature"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </Card.Body>
             <Card.Footer>
@@ -246,6 +271,20 @@ export default function EditUserPage() {
               setShowResetPin(false);
               setSuccess(true);
               setBanner(`PIN reset for ${target.full_name}.`);
+              fetchUser();
+            }}
+          />
+        )}
+
+        {showSignatureUpload && (
+          <SignatureUploadModal
+            targetUserId={target.id}
+            targetName={target.full_name}
+            onClose={() => setShowSignatureUpload(false)}
+            onSuccess={() => {
+              setShowSignatureUpload(false);
+              setSuccess(true);
+              setBanner(`Signature uploaded for ${target.full_name}.`);
               fetchUser();
             }}
           />

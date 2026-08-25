@@ -35,12 +35,18 @@ export interface Segment { text: string; bold: boolean; }
 export const plain = (t: string): Segment => ({ text: t, bold: false });
 export const bold = (t: string): Segment => ({ text: t, bold: true });
 
+// Embeds an image of either supported raster format, trying PNG first
+// (pdf-lib has no format-sniffing embed() — every image on this letterhead
+// is either a PNG logo or a PNG/JPEG signature upload).
+// deno-lint-ignore no-explicit-any
+export async function embedImageAuto(pdf: any, bytes: Uint8Array) {
+  try { return await pdf.embedPng(bytes); }
+  catch (_) { return await pdf.embedJpg(bytes); }
+}
+
 // deno-lint-ignore no-explicit-any
 export async function drawHeader(pdf: any, page: any, logoBytes: Uint8Array, fonts: { reg: any; bold: any }, H: number) {
-  // deno-lint-ignore no-explicit-any
-  let logo: any;
-  try { logo = await pdf.embedPng(logoBytes); }
-  catch (_) { logo = await pdf.embedJpg(logoBytes); }
+  const logo = await embedImageAuto(pdf, logoBytes);
 
   const logoDims = logo.scale(1);
   const logoH = 78;
@@ -271,7 +277,7 @@ export async function newPdfDoc() {
 // letter/note needing a bordered table can reuse these instead of hand-
 // drawing rectangles again.
 
-const RULE_GRAY = rgb(0.45, 0.45, 0.45);
+export const RULE_GRAY = rgb(0.45, 0.45, 0.45);
 const HEADER_FILL = rgb(0.92, 0.94, 0.92);
 
 // deno-lint-ignore no-explicit-any
