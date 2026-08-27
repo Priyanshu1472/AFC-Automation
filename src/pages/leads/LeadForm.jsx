@@ -27,6 +27,10 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   const { profile } = useAuth();
   const { showToast } = useToast();
   const isEdit = mode === "edit";
+  // Suo Moto has its own field set (Name of the Proposal / Date of
+  // Submission / Client-Ministry-Department / Date of Presentation / Date
+  // of follow-up) in place of the RFP/EOI-oriented fields (Portal, Bid No.,
+  // State, Delivery Type) — lead_type (RFP/EOI) doesn't apply here at all.
 
   // The lead's working team: fixed to the existing lead's team on edit, or
   // the caller's own team on create — matches the real form (no Team
@@ -44,12 +48,15 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     state: lead?.state || "",
     submission_deadline: lead?.submission_deadline || "",
     delivery_type: lead?.delivery_type || "",
+    presentation_date: lead?.presentation_date || "",
+    followup_date: lead?.followup_date || "",
     remark: lead?.remark || "",
     assigned_ba_id: lead?.assigned_ba_id || "",
     person_responsible_id: lead?.person_responsible_id || profile?.id || "",
     reviewer_id: lead?.reviewer_id || "",
     approval_authority_id: lead?.approval_authority_id || "",
   }));
+  const isSuoMoto = form.source === "suo_moto";
   // Only required when resubmitting a lead the MD sent back — explains what
   // changed since the MD's decline. Logged onto the activity timeline only,
   // never onto the lead itself, so it never ends up in the generated PDF.
@@ -151,6 +158,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     if (!form.reviewer_id) errs.reviewer_id = "Reviewer is required.";
     if (!form.approval_authority_id) errs.approval_authority_id = "Approval Authority is required.";
     if (form.source === "ba" && !form.assigned_ba_id) errs.assigned_ba_id = "Business Associate is required for a BA Source lead.";
+    if (isSuoMoto && !form.assigned_ba_id) errs.assigned_ba_id = "Business Associate is required for a Suo Moto lead.";
     if (isMdReturn && !resubmitComment.trim()) errs.resubmit_comment = "Add a remark explaining the changes before resubmitting to the MD.";
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -173,6 +181,8 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       fd.set("state", form.state);
       fd.set("submission_deadline", form.submission_deadline);
       fd.set("delivery_type", form.delivery_type);
+      fd.set("presentation_date", form.presentation_date);
+      fd.set("followup_date", form.followup_date);
       fd.set("remark", form.remark);
       fd.set("assigned_ba_id", form.assigned_ba_id);
       fd.set("person_responsible_id", form.person_responsible_id);
@@ -208,24 +218,29 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
           <div className="field">
             <label className="field-label">Lead Type &amp; Source</label>
             <div className="lf-toggle-row">
-              <div className="lf-toggle-group">
-                <button
-                  type="button"
-                  className={`lf-toggle${form.lead_type === "rfp" ? " lf-toggle-active" : ""}`}
-                  disabled={submitting || isEdit}
-                  onClick={() => set("lead_type", "rfp")}
-                >
-                  RFP
-                </button>
-                <button
-                  type="button"
-                  className={`lf-toggle${form.lead_type === "eoi" ? " lf-toggle-active" : ""}`}
-                  disabled={submitting || isEdit}
-                  onClick={() => set("lead_type", "eoi")}
-                >
-                  EOI
-                </button>
-              </div>
+              {/* lead_type (RFP/EOI) doesn't apply to a Suo Moto lead — hidden
+                  once Suo Moto is selected; form.lead_type just stays at its
+                  default "rfp" underneath, unused. */}
+              {!isSuoMoto && (
+                <div className="lf-toggle-group">
+                  <button
+                    type="button"
+                    className={`lf-toggle${form.lead_type === "rfp" ? " lf-toggle-active" : ""}`}
+                    disabled={submitting || isEdit}
+                    onClick={() => set("lead_type", "rfp")}
+                  >
+                    RFP
+                  </button>
+                  <button
+                    type="button"
+                    className={`lf-toggle${form.lead_type === "eoi" ? " lf-toggle-active" : ""}`}
+                    disabled={submitting || isEdit}
+                    onClick={() => set("lead_type", "eoi")}
+                  >
+                    EOI
+                  </button>
+                </div>
+              )}
               <div className="lf-toggle-group">
                 <button
                   type="button"
@@ -243,17 +258,25 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
                 >
                   BA Source
                 </button>
+                <button
+                  type="button"
+                  className={`lf-toggle${form.source === "suo_moto" ? " lf-toggle-active" : ""}`}
+                  disabled={submitting || isEdit}
+                  onClick={() => set("source", "suo_moto")}
+                >
+                  Suo Moto
+                </button>
               </div>
             </div>
             {isEdit && <span className="field-hint">Locked once a lead is created — cannot be changed.</span>}
           </div>
 
           <Input
-            label="Name of Assignment"
+            label={isSuoMoto ? "Name of the Proposal" : "Name of Assignment"}
             required
             value={form.title}
             onChange={(e) => set("title", e.target.value)}
-            placeholder="e.g. Preparation of DPR for Smart City Project, Nagpur"
+            placeholder={isSuoMoto ? "e.g. Suo Moto proposal for Smart City Project, Nagpur" : "e.g. Preparation of DPR for Smart City Project, Nagpur"}
             error={errors.title}
             disabled={submitting || isEdit}
             hint={isEdit ? "Locked once a lead is created — cannot be changed." : undefined}
@@ -270,67 +293,114 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
             </Alert>
           )}
 
-          <div className="field">
-            <label className="field-label">Portal / Source of Information</label>
-            <Select
-              options={PORTAL_OPTIONS}
-              value={form.portal_name}
-              onChange={(v) => set("portal_name", v)}
-              placeholder="Select a portal"
-              disabled={submitting || isEdit}
-            />
-            {isEdit && <span className="field-hint">Locked once a lead is created — cannot be changed.</span>}
-          </div>
+          {!isSuoMoto && (
+            <>
+              <div className="field">
+                <label className="field-label">Portal / Source of Information</label>
+                <Select
+                  options={PORTAL_OPTIONS}
+                  value={form.portal_name}
+                  onChange={(v) => set("portal_name", v)}
+                  placeholder="Select a portal"
+                  disabled={submitting || isEdit}
+                />
+                {isEdit && <span className="field-hint">Locked once a lead is created — cannot be changed.</span>}
+              </div>
 
-          <Input
-            label={bidNumberLabel}
-            value={form.bid_number}
-            onChange={(e) => set("bid_number", e.target.value)}
-            placeholder={`Enter ${bidNumberLabel}`}
-            hint={isEdit ? "Locked once a lead is created — cannot be changed." : "Used for duplicate detection."}
-            disabled={submitting || isEdit}
-          />
+              <Input
+                label={bidNumberLabel}
+                value={form.bid_number}
+                onChange={(e) => set("bid_number", e.target.value)}
+                placeholder={`Enter ${bidNumberLabel}`}
+                hint={isEdit ? "Locked once a lead is created — cannot be changed." : "Used for duplicate detection."}
+                disabled={submitting || isEdit}
+              />
+            </>
+          )}
 
-          <div className="grid-2">
-            <Input
-              label="Client / Department"
-              value={form.client_name}
-              onChange={(e) => set("client_name", e.target.value)}
-              placeholder="Enter client / department"
-              disabled={submitting}
-            />
-            <div className="field">
-              <label className="field-label">State</label>
-              <Select
-                options={STATE_OPTIONS}
-                value={form.state}
-                onChange={(v) => set("state", v)}
-                placeholder="Select state"
-                disabled={submitting}
-              />
-            </div>
-          </div>
+          {isSuoMoto ? (
+            <>
+              <div className="grid-2">
+                <Input
+                  label="Client / Ministry / Department"
+                  value={form.client_name}
+                  onChange={(e) => set("client_name", e.target.value)}
+                  placeholder="Enter client / ministry / department"
+                  disabled={submitting}
+                />
+                <div className="field">
+                  <label className="field-label">Date of Submission</label>
+                  <DatePickerCalendar
+                    value={form.submission_deadline}
+                    onChange={(v) => set("submission_deadline", v)}
+                    placeholder="Select submission date"
+                  />
+                </div>
+              </div>
 
-          <div className="grid-2">
-            <div className="field">
-              <label className="field-label">Last Date of Submission</label>
-              <DatePickerCalendar
-                value={form.submission_deadline}
-                onChange={(v) => set("submission_deadline", v)}
-                placeholder="Select submission date"
-              />
-            </div>
-            <div className="field">
-              <label className="field-label">Delivery Type</label>
-              <Select
-                options={DELIVERY_TYPE_OPTIONS}
-                value={form.delivery_type}
-                onChange={(v) => set("delivery_type", v)}
-                placeholder="Select"
-                disabled={submitting}
-              />
-            </div>
-          </div>
+              <div className="grid-2">
+                <div className="field">
+                  <label className="field-label">Date of Presentation</label>
+                  <DatePickerCalendar
+                    value={form.presentation_date}
+                    onChange={(v) => set("presentation_date", v)}
+                    placeholder="Select presentation date"
+                  />
+                </div>
+                <div className="field">
+                  <label className="field-label">Date of follow-up</label>
+                  <DatePickerCalendar
+                    value={form.followup_date}
+                    onChange={(v) => set("followup_date", v)}
+                    placeholder="Select follow-up date"
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid-2">
+                <Input
+                  label="Client / Department"
+                  value={form.client_name}
+                  onChange={(e) => set("client_name", e.target.value)}
+                  placeholder="Enter client / department"
+                  disabled={submitting}
+                />
+                <div className="field">
+                  <label className="field-label">State</label>
+                  <Select
+                    options={STATE_OPTIONS}
+                    value={form.state}
+                    onChange={(v) => set("state", v)}
+                    placeholder="Select state"
+                    disabled={submitting}
+                  />
+                </div>
+              </div>
+
+              <div className="grid-2">
+                <div className="field">
+                  <label className="field-label">Last Date of Submission</label>
+                  <DatePickerCalendar
+                    value={form.submission_deadline}
+                    onChange={(v) => set("submission_deadline", v)}
+                    placeholder="Select submission date"
+                  />
+                </div>
+                <div className="field">
+                  <label className="field-label">Delivery Type</label>
+                  <Select
+                    options={DELIVERY_TYPE_OPTIONS}
+                    value={form.delivery_type}
+                    onChange={(v) => set("delivery_type", v)}
+                    placeholder="Select"
+                    disabled={submitting}
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="field">
             <label className="field-label">Remark</label>
@@ -369,7 +439,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
         <Card.Body>
           <div className="field">
             <label className="field-label">
-              {form.source === "ba" ? (
+              {form.source === "ba" || isSuoMoto ? (
                 <>Business Associate <span className="required">*</span></>
               ) : (
                 "Business Associate (optional)"
@@ -445,7 +515,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
         <Card.Header title="Documents" />
         <Card.Body>
           <div className="field">
-            <label className="field-label">RFP / Tender Document</label>
+            <label className="field-label">{isSuoMoto ? "Supporting Document (optional)" : "RFP / Tender Document"}</label>
             <label className="lf-file-drop">
               <input
                 type="file"

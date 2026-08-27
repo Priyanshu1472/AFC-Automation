@@ -489,6 +489,14 @@
 /* ── Activity Timeline Accordion ─────────────────────────── */
 .ar-timeline-body { padding: 0 !important; }
 
+/* Lead Detail's timeline only (not Empanelment's, which also reuses
+   ar-timeline-body) — fixed-size scrollable box instead of growing with
+   the number of activity entries. */
+.ar-timeline-body.ar-lead-timeline-body {
+  height: 400px;
+  overflow-y: auto;
+}
+
 .ar-accordion {
   display: flex;
   flex-direction: column;

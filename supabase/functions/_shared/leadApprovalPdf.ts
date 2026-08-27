@@ -9,7 +9,7 @@
 // pixel-perfect reproduction, so expect a follow-up tightening pass once an
 // authoritative reference document is available.
 
-import { BLACK, GREEN, PageEngine, RULE_GRAY, drawGridTable, drawKeyValueTable, embedImageAuto, formatDateDDMMYYYY, newPdfDoc, wrapMultiline } from "./letterPdf.ts";
+import { BLACK, GREEN, PageEngine, RULE_GRAY, drawGridTable, drawKeyValueTable, drawSimpleFooter, drawSimpleHeader, embedImageAuto, formatDateDDMMYYYY, newPdfDoc, wrapMultiline } from "./letterPdf.ts";
 import { createAdminClient } from "./auth.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -252,11 +252,24 @@ export async function buildLeadApprovalNotePdf(opts: {
   mode: "draft" | "final";
 }): Promise<Uint8Array> {
   const { pdf, fonts } = await newPdfDoc();
-  const e = new PageEngine(pdf, fonts, opts.logoBytes);
+  // Plain logo + "AFC India Ltd." header/footer (drawSimpleHeader/Footer),
+  // not the full external-letter AFC letterhead — matches the reference
+  // Business Lead Approval Note form. contentTop/footerSafe are pulled in
+  // to match the much shorter header/footer.
+  const e = new PageEngine(pdf, fonts, opts.logoBytes, {
+    drawHeader: drawSimpleHeader,
+    drawFooter: drawSimpleFooter,
+    contentTop: 735,
+    footerSafe: 70,
+  });
   const data = opts.approvalNoteData || {};
   const financial = data.financial_requirement || {};
 
   const dgmRow = latestByAction(opts.activityRows, DGM_APPROVE_ACTIONS);
+  // The Person Responsible's signing date is when they actually submitted
+  // the note for DGM approval — the most recent "accept" (covers the first
+  // submission and any DGM-decline resubmission alike).
+  const prAcceptRow = latestByAction(opts.activityRows, ["accept"]);
 
   const prSignatureImage = opts.personResponsibleSignatureBytes ? await embedImageAuto(pdf, opts.personResponsibleSignatureBytes).catch(() => null) : null;
   const dgmSignatureImage = opts.dgmSignatureBytes ? await embedImageAuto(pdf, opts.dgmSignatureBytes).catch(() => null) : null;
@@ -333,6 +346,7 @@ export async function buildLeadApprovalNotePdf(opts: {
       roleLine: "Project Coordinator",
       teamLine: opts.team,
       name: opts.personResponsibleName,
+      date: prAcceptRow ? fmtDate(prAcceptRow.created_at) : null,
       signatureImage: prSignatureImage,
     },
     {

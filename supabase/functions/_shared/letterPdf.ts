@@ -133,6 +133,61 @@ export function drawFooter(page: any, fonts: { reg: any; bold: any }) {
   drawCentered("& CMMI level 3 Certified Company", 32, 6.5);
 }
 
+// deno-lint-ignore no-explicit-any
+export type HeaderFn = (pdf: any, page: any, logoBytes: Uint8Array, fonts: { reg: any; bold: any }, H: number) => Promise<void>;
+// deno-lint-ignore no-explicit-any
+export type FooterFn = (page: any, fonts: { reg: any; bold: any }, pageNumber: number) => void;
+
+const SIMPLE_MARGIN_X = 40;
+const RULE_GRAY_LIGHT = rgb(0.55, 0.55, 0.55);
+
+// Plain logo + italic "AFC India Ltd." header used by the Lead/MD Approval
+// Note — deliberately much lighter than drawHeader (the full letterhead
+// used for external Empanelment letters): just the logo top-left, the
+// company name top-right, and a thin separator rule below both, matching
+// the reference form. Only this header/footer pair uses the italic font
+// (embedded here, not added to the shared `fonts` object, so it can't leak
+// into any other document's body text).
+// deno-lint-ignore no-explicit-any
+export async function drawSimpleHeader(pdf: any, page: any, logoBytes: Uint8Array, fonts: { reg: any; bold: any }, H: number) {
+  const logo = await embedImageAuto(pdf, logoBytes);
+  const logoDims = logo.scale(1);
+  const logoH = 46;
+  const logoW = (logoDims.width / logoDims.height) * logoH;
+  const topY = H - 40;
+  const logoBottomY = topY - logoH + 6;
+
+  page.drawImage(logo, { x: SIMPLE_MARGIN_X, y: logoBottomY, width: logoW, height: logoH });
+
+  const italicFont = await pdf.embedFont(StandardFonts.TimesRomanItalic);
+  const text = "AFC India Ltd.";
+  const size = 13;
+  const w = italicFont.widthOfTextAtSize(text, size);
+  page.drawText(text, { x: 595 - SIMPLE_MARGIN_X - w, y: topY - 6, size, font: italicFont, color: BLACK });
+
+  const ruleY = logoBottomY - 8;
+  page.drawLine({
+    start: { x: SIMPLE_MARGIN_X, y: ruleY },
+    end: { x: 595 - SIMPLE_MARGIN_X, y: ruleY },
+    thickness: 0.75,
+    color: RULE_GRAY_LIGHT,
+  });
+}
+
+// Thin separator rule + "<page> | Page" footer to match drawSimpleHeader —
+// no contact/CIN block, just the rule and a page counter, bottom-left.
+// deno-lint-ignore no-explicit-any
+export function drawSimpleFooter(page: any, fonts: { reg: any; bold: any }, pageNumber: number) {
+  const ruleY = 48;
+  page.drawLine({
+    start: { x: SIMPLE_MARGIN_X, y: ruleY },
+    end: { x: 595 - SIMPLE_MARGIN_X, y: ruleY },
+    thickness: 0.75,
+    color: RULE_GRAY_LIGHT,
+  });
+  page.drawText(`${pageNumber} | Page`, { x: SIMPLE_MARGIN_X, y: ruleY - 15, size: 8.5, font: fonts.reg, color: BLACK });
+}
+
 export class PageEngine {
   // deno-lint-ignore no-explicit-any
   pdf: any;
@@ -142,26 +197,42 @@ export class PageEngine {
   W = 595; H = 842;
   LEFT = 58;
   RIGHT_EDGE = 537;
-  CONTENT_TOP = 715;
-  FOOTER_SAFE = 100;
+  CONTENT_TOP: number;
+  FOOTER_SAFE: number;
   MAX_W: number;
   y = 0;
   LINE_H = 13.5;
+  pageNumber = 0;
+  headerFn: HeaderFn;
+  footerFn: FooterFn;
   // deno-lint-ignore no-explicit-any
   currentPage: any = null;
 
-  // deno-lint-ignore no-explicit-any
-  constructor(pdf: any, fonts: { reg: any; bold: any }, logoBytes: Uint8Array) {
+  constructor(
+    // deno-lint-ignore no-explicit-any
+    pdf: any,
+    fonts: { reg: any; bold: any },
+    logoBytes: Uint8Array,
+    // Defaults to the full AFC letterhead (used by Empanelment's letters);
+    // pass overrides for a document that needs a different header/footer,
+    // like the Lead/MD Approval Note's plain logo+title header.
+    opts: { drawHeader?: HeaderFn; drawFooter?: FooterFn; contentTop?: number; footerSafe?: number } = {}
+  ) {
     this.pdf = pdf;
     this.fonts = fonts;
     this.logoBytes = logoBytes;
     this.MAX_W = this.RIGHT_EDGE - this.LEFT;
+    this.headerFn = opts.drawHeader ?? drawHeader;
+    this.footerFn = opts.drawFooter ?? ((page, f) => drawFooter(page, f));
+    this.CONTENT_TOP = opts.contentTop ?? 715;
+    this.FOOTER_SAFE = opts.footerSafe ?? 100;
   }
 
   async newPage() {
     const page = this.pdf.addPage([this.W, this.H]);
-    await drawHeader(this.pdf, page, this.logoBytes, this.fonts, this.H);
-    drawFooter(page, this.fonts);
+    this.pageNumber += 1;
+    await this.headerFn(this.pdf, page, this.logoBytes, this.fonts, this.H);
+    this.footerFn(page, this.fonts, this.pageNumber);
     this.currentPage = page;
     this.y = this.CONTENT_TOP;
   }

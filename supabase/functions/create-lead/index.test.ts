@@ -109,6 +109,34 @@ Deno.test("handleRequest - ba source with a valid assigned_ba_id succeeds", asyn
   assertEquals(res.status, 200);
 });
 
+Deno.test("handleRequest - suo_moto source without assigned_ba_id is rejected", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(formReq(baseFields({ source: "suo_moto" })), client as never);
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "Select a Business Associate for a Suo Moto lead.");
+});
+
+Deno.test("handleRequest - suo_moto source with a valid assigned_ba_id succeeds and stores the Suo-Moto-only dates", async () => {
+  const BA_ID = "ba-1";
+  const client = buildClient({ baTarget: { data: { id: BA_ID, role: "business_associate", team: TEAM, is_active: true }, error: null } });
+  const res = await handleRequest(
+    formReq(baseFields({
+      source: "suo_moto", assigned_ba_id: BA_ID,
+      presentation_date: "2026-09-01", followup_date: "2026-09-15",
+    })),
+    client as never
+  );
+  assertEquals(res.status, 200);
+
+  const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+  const insertCall = leadsLog[0].calls.find((c) => c[0] === "insert");
+  const inserted = JSON.parse(insertCall![1]);
+  assertEquals(inserted.source, "suo_moto");
+  assertEquals(inserted.presentation_date, "2026-09-01");
+  assertEquals(inserted.followup_date, "2026-09-15");
+});
+
 Deno.test("handleRequest - MD cannot create a lead directly", async () => {
   const client = buildClient({ caller: callerRow({ role: "md" }) });
   const res = await handleRequest(formReq(baseFields()), client as never);

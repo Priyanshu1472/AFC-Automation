@@ -178,6 +178,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         state: clampText(get("state"), 100),
         submission_deadline: get("submission_deadline") || null,
         delivery_type: input.delivery_type,
+        presentation_date: get("presentation_date") || null,
+        followup_date: get("followup_date") || null,
         remark: clampText(get("remark")),
         documents,
         team,

@@ -1,6 +1,6 @@
 // supabase/functions/create-lead/index.ts
-// JWT must be ON. Creates a lead (RFP or EOI; In-House or BA Source)
-// directly into `pa_review` (the real intake form has one "Save Lead"
+// JWT must be ON. Creates a lead (RFP or EOI; In-House, BA Source, or Suo
+// Moto) directly into `pa_review` (the real intake form has one "Save Lead"
 // action, no separate draft/submit step). Mirrors submit-ba-form's
 // multipart handling for the optional RFP/Tender document upload, and
 // advance-empanelment-stage's authorization-then-mutate-then-log shape for
@@ -91,6 +91,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (input.source === "ba" && !assignedBaId) {
     return jsonRes(req, 400, { error: "Select a Business Associate for a BA Source lead." });
   }
+  // Name of BA is mandatory for a Suo Moto lead too, per product decision —
+  // unlike In-House, where it's optional.
+  if (input.source === "suo_moto" && !assignedBaId) {
+    return jsonRes(req, 400, { error: "Select a Business Associate for a Suo Moto lead." });
+  }
 
   try {
     // Team is derived from Person Responsible's own team — not a field the
@@ -160,6 +165,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         state: clampText(get("state"), 100),
         submission_deadline: get("submission_deadline") || null,
         delivery_type: input.delivery_type,
+        // Suo-Moto-only dates ("Date of Presentation"/"Date of follow-up") —
+        // null for every other lead type, same pattern as portal_name/
+        // bid_number/state/delivery_type being irrelevant outside RFP/EOI.
+        presentation_date: get("presentation_date") || null,
+        followup_date: get("followup_date") || null,
         remark: clampText(get("remark")),
         documents,
         team,

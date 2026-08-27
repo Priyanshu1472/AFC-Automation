@@ -38,10 +38,12 @@ export function validateRequiredFields(input: LeadFieldInput): string | null {
   if (typeof input.reviewer_id !== "string" || !input.reviewer_id) return "Reviewer is required.";
   if (typeof input.approval_authority_id !== "string" || !input.approval_authority_id) return "Approval Authority is required.";
   if (input.delivery_type != null && !DELIVERY_TYPES.has(String(input.delivery_type))) return "Invalid delivery type.";
-  // RFP/EOI and In-House/BA Source are active; "suo_moto" isn't exposed in
-  // the UI yet, so it's still rejected here rather than silently coerced.
+  // lead_type (RFP/EOI) doesn't apply to a Suo Moto lead — the frontend just
+  // sends a fixed placeholder value for it in that case, so this stays
+  // rfp/eoi only. source now covers all three: In-House, BA Source, and
+  // Suo Moto.
   if (input.lead_type != null && !["rfp", "eoi"].includes(String(input.lead_type))) return "Invalid lead type.";
-  if (input.source != null && !["in_house", "ba"].includes(String(input.source))) return "Invalid lead source.";
+  if (input.source != null && !["in_house", "ba", "suo_moto"].includes(String(input.source))) return "Invalid lead source.";
   return null;
 }
 

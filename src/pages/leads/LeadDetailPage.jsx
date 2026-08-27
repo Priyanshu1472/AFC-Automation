@@ -160,7 +160,7 @@ export default function LeadDetailPage() {
       .from("lead_activity_log")
       .select("*, actor:actor_id(full_name)")
       .eq("lead_id", id)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false });
     setLogs(activity || []);
     setLoading(false);
   }, [id]);
@@ -337,9 +337,10 @@ export default function LeadDetailPage() {
   const isTerminal = ["md_approved", "md_declined", "pa_dropped"].includes(lead.status);
   const actions = availableActions();
   const currentFlowIdx = STATUS_FLOW.findIndex((s) => s.key === lead.status);
-  const allDocuments = lead.documents || [];
-  const leadRecords = allDocuments.filter((d) => d.category === "approval_note" || d.category === "final_approval_note");
-  const otherDocuments = allDocuments.filter((d) => d.category !== "approval_note" && d.category !== "final_approval_note");
+  // Every uploaded/generated document lives under Lead Records now — the
+  // separate Documents card was merged in here, no more approval_note vs.
+  // "everything else" split.
+  const leadRecords = lead.documents || [];
 
   return (
     <div className="app-shell">
@@ -393,26 +394,39 @@ export default function LeadDetailPage() {
 
           <div className="ar-grid">
             <div className="ar-left">
-              {leadRecords.length > 0 && (
-                <Card>
-                  <Card.Header title="Lead Records" />
-                  <Card.Body>
-                    {leadRecords.map((doc, i) => <DocItem key={`${doc.path}-${i}`} doc={doc} leadId={lead.id} />)}
-                  </Card.Body>
-                </Card>
-              )}
+              <Card>
+                <Card.Header title="Lead Records" />
+                <Card.Body>
+                  {leadRecords.length === 0 ? (
+                    <p className="ar-empty-text">No documents uploaded.</p>
+                  ) : (
+                    leadRecords.map((doc, i) => <DocItem key={`${doc.path}-${i}`} doc={doc} leadId={lead.id} />)
+                  )}
+                </Card.Body>
+              </Card>
 
               <Card>
                 <Card.Header title="Overview" />
                 <Card.Body className="ar-detail-body">
                   <Row label="Lead Number" value={lead.lead_number} />
-                  <Row label="Lead Type" value="RFP" />
-                  <Row label="Portal" value={fmt(lead.portal_name)} />
-                  <Row label="Bid / Ref. No." value={fmt(lead.bid_number)} />
-                  <Row label="Client / Department" value={fmt(lead.client_name)} />
-                  <Row label="State" value={fmt(lead.state)} />
-                  <Row label="Last Date of Submission" value={fmtDate(lead.submission_deadline)} />
-                  <Row label="Delivery Type" value={lead.delivery_type ? DELIVERY_TYPE_LABELS[lead.delivery_type] || lead.delivery_type : null} />
+                  <Row label="Lead Type" value={lead.source === "suo_moto" ? "Suo Moto" : (lead.lead_type || "rfp").toUpperCase()} />
+                  {lead.source === "suo_moto" ? (
+                    <>
+                      <Row label="Client / Ministry / Department" value={fmt(lead.client_name)} />
+                      <Row label="Date of Submission" value={fmtDate(lead.submission_deadline)} />
+                      <Row label="Date of Presentation" value={fmtDate(lead.presentation_date)} />
+                      <Row label="Date of follow-up" value={fmtDate(lead.followup_date)} />
+                    </>
+                  ) : (
+                    <>
+                      <Row label="Portal" value={fmt(lead.portal_name)} />
+                      <Row label="Bid / Ref. No." value={fmt(lead.bid_number)} />
+                      <Row label="Client / Department" value={fmt(lead.client_name)} />
+                      <Row label="State" value={fmt(lead.state)} />
+                      <Row label="Last Date of Submission" value={fmtDate(lead.submission_deadline)} />
+                      <Row label="Delivery Type" value={lead.delivery_type ? DELIVERY_TYPE_LABELS[lead.delivery_type] || lead.delivery_type : null} />
+                    </>
+                  )}
                   <Row label="Remark" value={fmt(lead.remark)} />
                 </Card.Body>
               </Card>
@@ -429,16 +443,6 @@ export default function LeadDetailPage() {
                 </Card.Body>
               </Card>
 
-              <Card>
-                <Card.Header title="Documents" />
-                <Card.Body>
-                  {otherDocuments.length === 0 ? (
-                    <p className="ar-empty-text">No documents uploaded.</p>
-                  ) : (
-                    otherDocuments.map((doc, i) => <DocItem key={`${doc.path}-${i}`} doc={doc} leadId={lead.id} />)
-                  )}
-                </Card.Body>
-              </Card>
             </div>
 
             <div className="ar-right">
@@ -534,7 +538,7 @@ export default function LeadDetailPage() {
 
               <Card>
                 <Card.Header title="Timeline" />
-                <Card.Body className="ar-timeline-body">
+                <Card.Body className="ar-timeline-body ar-lead-timeline-body">
                   <LeadTimeline logs={logs} />
                 </Card.Body>
               </Card>
