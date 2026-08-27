@@ -510,6 +510,12 @@ verify_jwt = true
 import_map = "./functions/get-lead-document-url/deno.json"
 entrypoint = "./functions/get-lead-document-url/index.ts"
 
+[functions.send-lead-chat-message]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-lead-chat-message/deno.json"
+entrypoint = "./functions/send-lead-chat-message/index.ts"
+
 [functions.create-proposal-preparation]
 enabled = true
 verify_jwt = true

@@ -138,6 +138,26 @@
   border-color: var(--danger);
 }
 
+.ll-icon-btn.ll-icon-chat {
+  position: relative;
+}
+
+.ll-icon-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-full);
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
 .ll-empty {
   padding: var(--space-10);
   text-align: center;

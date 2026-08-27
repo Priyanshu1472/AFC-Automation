@@ -12,7 +12,7 @@ import Button from "../../components/ui/Button";
 import Select from "../../components/ui/Select";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
-import { EyeIcon, PencilIcon, TrashIcon, ArrowRightIcon } from "../../components/icons";
+import { EyeIcon, ChatIcon, PencilIcon, TrashIcon, ArrowRightIcon } from "../../components/icons";
 import { STATUS_MAP } from "../../components/leads/leadStatus";
 import { canOpenProposal } from "../../lib/proposalPrep";
 import "../../styles/LeadListPage.css";
@@ -52,6 +52,9 @@ export default function LeadListPage() {
 
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
+  // { [lead_id]: unread_count } for the current viewer, across every lead
+  // they're a chat participant on — powers the badge on the chat icon.
+  const [unreadCounts, setUnreadCounts] = useState({});
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -75,17 +78,26 @@ export default function LeadListPage() {
     setLoading(false);
   }, []);
 
+  const fetchUnreadCounts = useCallback(async () => {
+    const { data } = await supabase.rpc("lead_chat_unread_counts");
+    const map = {};
+    for (const row of data || []) map[row.lead_id] = row.unread_count;
+    setUnreadCounts(map);
+  }, []);
+
   useEffect(() => {
     fetchLeads();
-  }, [fetchLeads]);
+    fetchUnreadCounts();
+  }, [fetchLeads, fetchUnreadCounts]);
 
   useEffect(() => {
     const channel = supabase
       .channel("leads-list")
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => fetchLeads())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "lead_chat_messages" }, () => fetchUnreadCounts())
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [fetchLeads]);
+  }, [fetchLeads, fetchUnreadCounts]);
 
   const stats = useMemo(() => {
     const result = {};
@@ -231,6 +243,20 @@ export default function LeadListPage() {
                           <button type="button" className="ll-icon-btn" title="View" aria-label="View lead" onClick={() => navigate(`/leads/${l.id}`)}>
                             <EyeIcon />
                           </button>
+                          {l.chat_opened_at && (
+                            <button
+                              type="button"
+                              className="ll-icon-btn ll-icon-chat"
+                              title="Discussion"
+                              aria-label={unreadCounts[l.id] > 0 ? `Discussion, ${unreadCounts[l.id]} unread` : "Discussion"}
+                              onClick={() => navigate(`/leads/${l.id}`)}
+                            >
+                              <ChatIcon />
+                              {unreadCounts[l.id] > 0 && (
+                                <span className="ll-icon-badge">{unreadCounts[l.id] > 9 ? "9+" : unreadCounts[l.id]}</span>
+                              )}
+                            </button>
+                          )}
                           {leadCan.editResubmit(profile, l) && (
                             <button type="button" className="ll-icon-btn" title="Edit" aria-label="Edit lead" onClick={() => navigate(`/leads/${l.id}/edit`)}>
                               <PencilIcon />

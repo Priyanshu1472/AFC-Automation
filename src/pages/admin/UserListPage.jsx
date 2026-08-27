@@ -32,6 +32,8 @@ const ROLE_VARIANT = {
 
 const PAGE_SIZE = 25;
 
+const COMMITTEE_OPTIONS = ["PMT", "PMT Extended", "G3"];
+
 function ToggleButton({ user, isSelf, togglingId, onToggle }) {
   if (isSelf) return null;
   return (
@@ -83,6 +85,7 @@ export default function UserListPage() {
   const [search, setSearch] = useState("");
   const [teamFilter, setTeamFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [committeeFilter, setCommitteeFilter] = useState("all");
   const [page, setPage] = useState(0);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
@@ -101,19 +104,24 @@ export default function UserListPage() {
   );
   const teams = useTeamOptions();
   const teamFilterOptions = useMemo(() => [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))], [teams]);
+  const committeeFilterOptions = useMemo(
+    () => [{ value: "all", label: "All Committees" }, ...COMMITTEE_OPTIONS.map((c) => ({ value: c, label: c }))],
+    []
+  );
 
-  const fetchUsersFlat = useCallback(async (currentPage, currentSearch, currentTeam, currentRole) => {
+  const fetchUsersFlat = useCallback(async (currentPage, currentSearch, currentTeam, currentRole, currentCommittee) => {
     // RLS scopes the visible rows automatically: md/cfo/cs see everyone,
     // dgm sees their own team, everyone else sees only themselves.
     let query = supabase
       .from("afc_users")
-      .select("id, full_name, email, role, team, office, is_active", { count: "exact" })
+      .select("id, full_name, email, role, team, office, committee, is_active", { count: "exact" })
       .order("created_at", { ascending: false });
 
     const trimmed = currentSearch.trim();
     if (trimmed) query = query.or(`full_name.ilike.%${trimmed}%,email.ilike.%${trimmed}%`);
     if (currentTeam !== "all") query = query.eq("team", currentTeam);
     if (currentRole !== "all") query = query.eq("role", currentRole);
+    if (currentCommittee !== "all") query = query.eq("committee", currentCommittee);
 
     const from = currentPage * PAGE_SIZE;
     query = query.range(from, from + PAGE_SIZE - 1);
@@ -122,26 +130,27 @@ export default function UserListPage() {
 
   // Grouped view needs every matching row at once (to group + count
   // accurately per team) rather than one page at a time.
-  const fetchUsersGrouped = useCallback(async (currentSearch, currentRole) => {
+  const fetchUsersGrouped = useCallback(async (currentSearch, currentRole, currentCommittee) => {
     let query = supabase
       .from("afc_users")
-      .select("id, full_name, email, role, team, office, is_active", { count: "exact" })
+      .select("id, full_name, email, role, team, office, committee, is_active", { count: "exact" })
       .order("team", { ascending: true })
       .order("full_name", { ascending: true });
 
     const trimmed = currentSearch.trim();
     if (trimmed) query = query.or(`full_name.ilike.%${trimmed}%,email.ilike.%${trimmed}%`);
     if (currentRole !== "all") query = query.eq("role", currentRole);
+    if (currentCommittee !== "all") query = query.eq("committee", currentCommittee);
     return query;
   }, []);
 
   const fetchUsers = useCallback(
-    async (currentPage, currentSearch, currentTeam, currentRole) => {
+    async (currentPage, currentSearch, currentTeam, currentRole, currentCommittee) => {
       setLoading(true);
       const { data, error, count } =
         profile?.role === "md" && currentTeam === "all"
-          ? await fetchUsersGrouped(currentSearch, currentRole)
-          : await fetchUsersFlat(currentPage, currentSearch, currentTeam, currentRole);
+          ? await fetchUsersGrouped(currentSearch, currentRole, currentCommittee)
+          : await fetchUsersFlat(currentPage, currentSearch, currentTeam, currentRole, currentCommittee);
       if (error) setBanner(error.message);
       else {
         setUsers(data || []);
@@ -154,8 +163,8 @@ export default function UserListPage() {
   );
 
   useEffect(() => {
-    fetchUsers(page, search, teamFilter, roleFilter);
-  }, [fetchUsers, page, search, teamFilter, roleFilter]);
+    fetchUsers(page, search, teamFilter, roleFilter, committeeFilter);
+  }, [fetchUsers, page, search, teamFilter, roleFilter, committeeFilter]);
 
   const groupedSections = useMemo(() => {
     if (!groupedByTeam) return null;
@@ -182,11 +191,16 @@ export default function UserListPage() {
     setRoleFilter(value);
     setPage(0);
   }
-  const activeFilterCount = [teamFilter !== "all", roleFilter !== "all"].filter(Boolean).length;
+  function handleCommitteeFilterChange(value) {
+    setCommitteeFilter(value);
+    setPage(0);
+  }
+  const activeFilterCount = [teamFilter !== "all", roleFilter !== "all", committeeFilter !== "all"].filter(Boolean).length;
   const hasActiveFilters = activeFilterCount > 0;
   function clearFilters() {
     setTeamFilter("all");
     setRoleFilter("all");
+    setCommitteeFilter("all");
     setPage(0);
   }
 
@@ -205,7 +219,7 @@ export default function UserListPage() {
         setBanner(data?.error || "Failed to update user status.");
         return;
       }
-      await fetchUsers(page, search, teamFilter, roleFilter);
+      await fetchUsers(page, search, teamFilter, roleFilter, committeeFilter);
     } catch (err) {
       setBanner(err.message || "Failed to update user status.");
     } finally {
@@ -274,6 +288,7 @@ export default function UserListPage() {
                       <th>Email</th>
                       <th>Role</th>
                       <th>Office</th>
+                      <th>Committee</th>
                       <th>Status</th>
                       {canManage && <th>Actions</th>}
                     </tr>
@@ -281,7 +296,7 @@ export default function UserListPage() {
                   {groupedSections.map(({ team, users: teamUsers }) => (
                     <tbody key={team}>
                       <tr className="ul-team-sep-row">
-                        <td colSpan={canManage ? 6 : 5}>
+                        <td colSpan={canManage ? 7 : 6}>
                           <span className="ul-team-sep-name">{team}</span>
                           <span className="ul-team-sep-count">{teamUsers.length}</span>
                         </td>
@@ -292,6 +307,7 @@ export default function UserListPage() {
                           <td>{u.email}</td>
                           <td><Badge variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge></td>
                           <td>{u.office ? u.office.charAt(0).toUpperCase() + u.office.slice(1) : "—"}</td>
+                          <td>{u.committee ? <Badge variant="neutral">{u.committee}</Badge> : "—"}</td>
                           <td><Badge variant={u.is_active ? "success" : "danger"} dot>{u.is_active ? "Active" : "Inactive"}</Badge></td>
                           {canManage && (
                             <td>
@@ -327,6 +343,7 @@ export default function UserListPage() {
                         <div className="ul-mobile-card-meta">
                           <Badge variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
                           {u.office && <span className="text-xs text-tertiary">{u.office.charAt(0).toUpperCase() + u.office.slice(1)}</span>}
+                          {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
                         </div>
                         {canManage && (
                           <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }}>
@@ -356,6 +373,7 @@ export default function UserListPage() {
                       </th>
                       <th>Office</th>
                       <th>Team</th>
+                      <th>Committee</th>
                       <th>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           Status <FieldTooltip text="Inactive accounts cannot sign in, but their Supabase login itself is kept intact and can be reactivated at any time." />
@@ -374,6 +392,7 @@ export default function UserListPage() {
                         </td>
                         <td>{u.office ? u.office.charAt(0).toUpperCase() + u.office.slice(1) : "—"}</td>
                         <td>{u.team || "—"}</td>
+                        <td>{u.committee ? <Badge variant="neutral">{u.committee}</Badge> : "—"}</td>
                         <td>
                           <Badge variant={u.is_active ? "success" : "danger"} dot>
                             {u.is_active ? "Active" : "Inactive"}
@@ -410,6 +429,7 @@ export default function UserListPage() {
                       <Badge variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
                       {u.office && <span className="text-xs text-tertiary">{u.office.charAt(0).toUpperCase() + u.office.slice(1)}</span>}
                       {u.team && <span className="text-xs text-tertiary">{u.team}</span>}
+                      {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
                     </div>
                     {canManage && (
                       <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }}>
@@ -454,6 +474,9 @@ export default function UserListPage() {
         )}
         <FilterField label="Role">
           <Select options={roleFilterOptions} value={roleFilter} onChange={handleRoleFilterChange} placeholder="All Roles" />
+        </FilterField>
+        <FilterField label="Committee">
+          <Select options={committeeFilterOptions} value={committeeFilter} onChange={handleCommitteeFilterChange} placeholder="All Committees" />
         </FilterField>
       </FilterDrawer>
     </div>

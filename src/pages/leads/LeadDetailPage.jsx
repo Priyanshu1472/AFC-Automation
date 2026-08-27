@@ -14,6 +14,7 @@ import Select from "../../components/ui/Select";
 import PinInput from "../../components/ui/PinInput";
 import PageLoader from "../../components/ui/PageLoader";
 import LeadTimeline from "../../components/leads/LeadTimeline";
+import LeadChatPanel from "../../components/leads/LeadChatPanel";
 import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS } from "../../components/leads/leadStatus";
 // Reuses the ar-* detail/action/timeline/document styles already defined
 // for Empanelment's review page — generic patterns (label/value rows,
@@ -204,9 +205,12 @@ export default function LeadDetailPage() {
           return lead.status === "pa_review" && profile?.id === lead.person_responsible_id && profile?.id !== lead.created_by;
         case "claim":
           return LEAD_PA_TIER_ROLES.includes(profile?.role) && profile?.team === lead.team;
+        // This initial DGM gate is the lead's own team's DGM (role + team
+        // match) — NOT the org-wide G3 committee (that only applies to the
+        // later PMT-Extended-escalated dgm_review stage, see below).
         case "dgm_initial_approve":
         case "dgm_initial_decline":
-          return profile?.committee === "G3";
+          return profile?.role === "dgm" && profile?.team === lead.team;
         // PMT / PMT Extended / G3 are all org-wide committees (each spans
         // all 4 teams) — membership alone qualifies, no team match needed.
         case "pmt_approve":
@@ -515,6 +519,15 @@ export default function LeadDetailPage() {
                         Open Proposal
                       </Button>
                     )}
+                  </Card.Body>
+                </Card>
+              )}
+
+              {lead.chat_opened_at && (
+                <Card>
+                  <Card.Header title="Discussion" />
+                  <Card.Body>
+                    <LeadChatPanel leadId={lead.id} chatOpenedAt={lead.chat_opened_at} locked={lead.status === "md_approved"} />
                   </Card.Body>
                 </Card>
               )}

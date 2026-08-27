@@ -45,6 +45,19 @@ export async function getOrgWideHolders(admin: AdminClient, opts: { role?: strin
   return (data || []).map((u: { id: string }) => u.id);
 }
 
+// Bulk-adds the given users to a lead's chat roster (lead_chat_participants)
+// — upsert with ignoreDuplicates so re-syncing an already-present member
+// (e.g. re-running the PMT roster on a resubmission) is a no-op rather than
+// an error. Called from advance-lead-stage whenever a lead enters a
+// committee stage; every current member of that committee is added at
+// once, not just whoever eventually acts.
+export async function addLeadChatParticipants(admin: AdminClient, leadId: string, userIds: string[], roleAtAdd: string): Promise<void> {
+  const rows = [...new Set(userIds)].filter(Boolean).map((user_id) => ({ lead_id: leadId, user_id, role_at_add: roleAtAdd }));
+  if (!rows.length) return;
+  const { error } = await admin.from("lead_chat_participants").upsert(rows, { onConflict: "lead_id,user_id", ignoreDuplicates: true });
+  if (error) console.error("addLeadChatParticipants failed:", error.message);
+}
+
 // Team-scoped PA-tier role holders — used to notify a team when a lead is
 // dropped and becomes available to claim.
 export async function getPaTierHolders(admin: AdminClient, team: string): Promise<string[]> {

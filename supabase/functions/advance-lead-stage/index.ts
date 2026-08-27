@@ -12,7 +12,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { notifyUsers } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
-import { Committee, PA_TIER_ROLES, getOrgWideHolders, getTargetUser } from "../_shared/leadAuth.ts";
+import { Committee, PA_TIER_ROLES, addLeadChatParticipants, getOrgWideHolders, getTargetUser } from "../_shared/leadAuth.ts";
 import { validateBusinessAssociate } from "../_shared/leadEligibility.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { LeadDocument, regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
@@ -36,6 +36,7 @@ type LeadRow = {
   declined_from_status: string | null;
   approval_note_data: unknown;
   documents: LeadDocument[];
+  chat_opened_at: string | null;
 };
 
 // (action name -> the committee it means "sent this lead on to MD") — used
@@ -160,7 +161,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, approval_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data, documents")
+    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, approval_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data, documents, chat_opened_at")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -190,6 +191,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     let notifyTargetIds: string[] = [];
     let notifyTitle = "";
     let notifySubText = "";
+    // Chat-roster bulk-adds to perform once the status update below actually
+    // succeeds — never applied on a rejected/failed action. Each entry is a
+    // whole committee (or the fixed named trio) added at once, not just
+    // whoever acts — see addLeadChatParticipants.
+    const chatRosterSyncs: { userIds: string[]; roleAtAdd: string }[] = [];
     // Storage objects to best-effort delete AFTER the status update below
     // succeeds — currently just the stale draft note removed on DGM decline
     // (see "dgm_initial_decline").
@@ -280,19 +286,31 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         break;
       }
 
-      // New first-line DGM (G3) gate, ahead of PMT — same org-wide G3 pool
-      // that also works the later PMT-Extended-escalated dgm_review stage.
+      // New first-line DGM gate, ahead of PMT — this initial review is done
+      // by the lead's own team's DGM (role + team match), NOT the org-wide
+      // G3 committee pool. G3 only comes in later, if PMT Extended escalates
+      // (see "dgm_accept"/"dgm_decline" further down).
       case "dgm_initial_approve": {
-        if (caller.committee !== "G3") return forbidden("Only a G3 (DGM) committee member can act on this lead.");
+        if (caller.role !== "dgm" || caller.team !== leadRow.team) return forbidden("Only this lead's team DGM can act on this lead.");
         extraFields = { handled_by_dgm_id: caller.id };
-        notifyTargetIds = await getOrgWideHolders(adminClient, { committee: "PMT" });
+        // Chat opens here — the first time this lead clears DGM and reaches
+        // PMT — and only here; never overwritten on a later pass through
+        // this same case (e.g. a resubmission), so it keeps the timestamp
+        // of when it first opened.
+        if (!leadRow.chat_opened_at) extraFields.chat_opened_at = new Date().toISOString();
+        const pmtHolders = await getOrgWideHolders(adminClient, { committee: "PMT" });
+        notifyTargetIds = pmtHolders;
         notifyTitle = "Lead awaiting PMT review";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was cleared by DGM. ${trimmedComment}`;
+        chatRosterSyncs.push(
+          { userIds: [leadRow.person_responsible_id, leadRow.reviewer_id, leadRow.approval_authority_id], roleAtAdd: "named" },
+          { userIds: pmtHolders, roleAtAdd: "PMT" }
+        );
         break;
       }
 
       case "dgm_initial_decline": {
-        if (caller.committee !== "G3") return forbidden("Only a G3 (DGM) committee member can act on this lead.");
+        if (caller.role !== "dgm" || caller.team !== leadRow.team) return forbidden("Only this lead's team DGM can act on this lead.");
         // The stale draft note reflected the version DGM just rejected —
         // pull it off the lead immediately so nothing outdated is shown
         // while the Person Responsible reworks it; a fresh one is generated
@@ -312,17 +330,21 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       // the action, regardless of the lead's team or the member's own team.
       case "pmt_approve": {
         if (caller.committee !== "PMT") return forbidden("Only a PMT committee member can act on this lead.");
-        notifyTargetIds = await getOrgWideHolders(adminClient, { role: "md" });
+        const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
+        notifyTargetIds = mdHolders;
         notifyTitle = "Lead awaiting MD approval";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was cleared by PMT. ${trimmedComment}`;
+        chatRosterSyncs.push({ userIds: mdHolders, roleAtAdd: "md" });
         break;
       }
 
       case "pmt_escalate": {
         if (caller.committee !== "PMT") return forbidden("Only a PMT committee member can act on this lead.");
-        notifyTargetIds = await getOrgWideHolders(adminClient, { committee: "PMT Extended" });
+        const pmtExtendedHolders = await getOrgWideHolders(adminClient, { committee: "PMT Extended" });
+        notifyTargetIds = pmtExtendedHolders;
         notifyTitle = "Lead awaiting PMT Extended review";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was escalated by PMT for further review.`;
+        chatRosterSyncs.push({ userIds: pmtExtendedHolders, roleAtAdd: "PMT Extended" });
         break;
       }
 
@@ -337,17 +359,21 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
       case "pmt_extended_approve": {
         if (caller.committee !== "PMT Extended") return forbidden("Only a PMT Extended committee member can act on this lead.");
-        notifyTargetIds = await getOrgWideHolders(adminClient, { role: "md" });
+        const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
+        notifyTargetIds = mdHolders;
         notifyTitle = "Lead awaiting MD approval";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was cleared by PMT Extended. ${trimmedComment}`;
+        chatRosterSyncs.push({ userIds: mdHolders, roleAtAdd: "md" });
         break;
       }
 
       case "pmt_extended_forward_dgm": {
         if (caller.committee !== "PMT Extended") return forbidden("Only a PMT Extended committee member can act on this lead.");
-        notifyTargetIds = await getOrgWideHolders(adminClient, { committee: "G3" });
+        const g3Holders = await getOrgWideHolders(adminClient, { committee: "G3" });
+        notifyTargetIds = g3Holders;
         notifyTitle = "Lead awaiting DGM (G3) review";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was forwarded for DGM review.`;
+        chatRosterSyncs.push({ userIds: g3Holders, roleAtAdd: "G3" });
         break;
       }
 
@@ -366,9 +392,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       case "dgm_accept": {
         if (caller.committee !== "G3") return forbidden("Only a G3 (DGM) committee member can act on this lead.");
         extraFields = { handled_by_dgm_id: caller.id };
-        notifyTargetIds = await getOrgWideHolders(adminClient, { role: "md" });
+        const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
+        notifyTargetIds = mdHolders;
         notifyTitle = "Lead awaiting MD approval";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was accepted by DGM. ${trimmedComment}`;
+        chatRosterSyncs.push({ userIds: mdHolders, roleAtAdd: "md" });
         break;
       }
 
@@ -431,6 +459,10 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     }
 
     await logLeadActivity(adminClient, leadRow.id, caller.id, caller.role, action, leadRow.status, expectedTo, trimmedComment || null);
+
+    for (const sync of chatRosterSyncs) {
+      await addLeadChatParticipants(adminClient, leadRow.id, sync.userIds, sync.roleAtAdd);
+    }
 
     for (const path of storageCleanupPaths) {
       await adminClient.storage.from(LEAD_DOCUMENTS_BUCKET).remove([path]).catch(() => {});
