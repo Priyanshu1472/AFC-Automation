@@ -17,6 +17,10 @@
   flex-shrink: 0;
 }
 
+.app-header-brand:hover{
+  text-decoration: none;  
+}
+
 .app-header-logo {
   height: 50px;
   width: auto;
