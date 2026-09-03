@@ -796,14 +796,132 @@
 }
 
 /* ── Lead chat ───────────────────────────────────────────── */
-/* Fixed total height for the whole widget — the input row (below) grows a
-   little as you type, but ar-chat-messages (flex: 1) shrinks to absorb
-   that, so the box as a whole never resizes. */
-.ar-chat {
+/* Floating bubble, fixed to the viewport corner, that pops the thread open
+   above it — same pattern as a typical website chat widget — instead of an
+   inline card embedded in the page flow. */
+.ar-chat-widget {
+  position: fixed;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.ar-chat-fab {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--brand-600);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.ar-chat-fab:hover {
+  transform: scale(1.06);
+}
+
+.ar-chat-fab svg {
+  width: 24px;
+  height: 24px;
+}
+
+.ar-chat-fab-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  border: 2px solid var(--bg-page);
+}
+
+/* Fixed total height for the popup — the input row (below) grows a little
+   as you type, but ar-chat-messages (flex: 1) shrinks to absorb that, so
+   the popup as a whole never resizes. */
+.ar-chat-popup {
+  width: 360px;
+  max-width: calc(100vw - var(--space-8));
+  height: 440px;
+  max-height: calc(100vh - 140px);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  height: 440px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-4);
+  animation: ar-chat-pop-in var(--duration-fast) var(--ease-out);
+}
+
+@keyframes ar-chat-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ar-chat-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+}
+
+.ar-chat-popup-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ar-chat-popup-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.ar-chat-popup-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+@media (max-width: 480px) {
+  .ar-chat-widget {
+    right: var(--space-4);
+    bottom: var(--space-4);
+  }
+
+  .ar-chat-popup {
+    width: calc(100vw - var(--space-8));
+  }
 }
 
 .ar-chat-messages {

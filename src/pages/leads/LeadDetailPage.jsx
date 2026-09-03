@@ -409,7 +409,14 @@ export default function LeadDetailPage() {
                 <Card.Header title="Overview" />
                 <Card.Body className="ar-detail-body">
                   <Row label="Lead Number" value={lead.lead_number} />
-                  <Row label="Lead Type" value={lead.source === "suo_moto" ? "Suo Moto" : (lead.lead_type || "rfp").toUpperCase()} />
+                  <Row
+                    label="Lead Type"
+                    value={
+                      lead.source === "suo_moto"
+                        ? "Suo Moto"
+                        : `${(lead.lead_type || "rfp").toUpperCase()} (${lead.source === "ba" ? "BA Source" : "In House"})`
+                    }
+                  />
                   {lead.source === "suo_moto" ? (
                     <>
                       <Row label="Client / Ministry / Department" value={fmt(lead.client_name)} />
@@ -527,14 +534,10 @@ export default function LeadDetailPage() {
                 </Card>
               )}
 
-              {lead.chat_opened_at && (
-                <Card>
-                  <Card.Header title="Discussion" />
-                  <Card.Body>
-                    <LeadChatPanel leadId={lead.id} chatOpenedAt={lead.chat_opened_at} locked={lead.status === "md_approved"} />
-                  </Card.Body>
-                </Card>
-              )}
+              {/* Floating bubble (portaled to <body>) rather than an inline
+                  card — LeadChatPanel renders nothing itself when the chat
+                  hasn't opened yet. */}
+              <LeadChatPanel leadId={lead.id} chatOpenedAt={lead.chat_opened_at} locked={lead.status === "md_approved"} />
 
               <Card>
                 <Card.Header title="Timeline" />

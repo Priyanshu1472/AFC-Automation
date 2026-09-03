@@ -44,27 +44,43 @@ beforeEach(() => {
   rpc.mockResolvedValue({ data: null, error: null });
 });
 
+// The widget starts collapsed to a floating bubble — every test that needs
+// to see the thread has to open it first, same as a real click.
+function openWidget() {
+  fireEvent.click(screen.getByRole("button", { name: "Open chat" }));
+}
+
 describe("LeadChatPanel", () => {
   it("renders nothing when chatOpenedAt is null (chat hasn't opened yet)", () => {
     const { container } = render(<LeadChatPanel leadId="lead-1" chatOpenedAt={null} locked={false} />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("renders messages with sender names once chat is open", async () => {
+  it("renders only a floating bubble until clicked", async () => {
     render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked={false} />);
+    expect(screen.getByRole("button", { name: "Open chat" })).toBeInTheDocument();
+    expect(screen.queryByText("Hello team")).not.toBeInTheDocument();
+    expect(order).not.toHaveBeenCalled();
+  });
+
+  it("renders messages with sender names once the bubble is opened", async () => {
+    render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked={false} />);
+    openWidget();
     await waitFor(() => expect(screen.getByText("Hello team")).toBeInTheDocument());
     expect(screen.getByText("Jane Doe")).toBeInTheDocument();
     expect(screen.getByText("Bob Smith")).toBeInTheDocument();
     expect(screen.getByText("Looks good")).toBeInTheDocument();
   });
 
-  it("marks the chat read for this lead once messages are fetched", async () => {
+  it("marks the chat read for this lead once the bubble is opened", async () => {
     render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked={false} />);
+    openWidget();
     await waitFor(() => expect(rpc).toHaveBeenCalledWith("mark_lead_chat_read", { p_lead_id: "lead-1" }));
   });
 
   it("shows a locked message and hides the input once the lead is approved", async () => {
     render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked />);
+    openWidget();
     await waitFor(() => expect(screen.getByText("Hello team")).toBeInTheDocument());
     expect(screen.getByText("Chat closed — this lead has been approved.")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Type a message…")).not.toBeInTheDocument();
@@ -72,6 +88,7 @@ describe("LeadChatPanel", () => {
 
   it("sends a message via send-lead-chat-message with the right body", async () => {
     render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked={false} />);
+    openWidget();
     await waitFor(() => expect(screen.getByText("Hello team")).toBeInTheDocument());
 
     const textarea = screen.getByPlaceholderText("Type a message…");
@@ -85,6 +102,7 @@ describe("LeadChatPanel", () => {
 
   it("the Send button is disabled when the draft is empty", async () => {
     render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked={false} />);
+    openWidget();
     await waitFor(() => expect(screen.getByText("Hello team")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   });

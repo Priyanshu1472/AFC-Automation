@@ -12,6 +12,13 @@ import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import "../../styles/ApplicationReviewPage.css";
 
+// Not a real business_associates row — picking this just flags that the BA
+// is still undecided. It never reaches the backend: submitForDgmApproval
+// treats it the same as nothing being selected, since assigned_ba_id is a
+// real FK and advance-lead-stage requires an actual, validated BA before a
+// lead can move on to DGM/PMT review.
+const TBD_BA_VALUE = "__tbd__";
+
 export default function LeadApprovalNotePreviewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -68,7 +75,7 @@ export default function LeadApprovalNotePreviewPage() {
       showToast("Enter your 4-digit PIN.", "danger");
       return;
     }
-    if (needsBaSelection && !selectedBaId) {
+    if (needsBaSelection && (!selectedBaId || selectedBaId === TBD_BA_VALUE)) {
       showToast("Select a BA", "danger");
       return;
     }
@@ -160,7 +167,10 @@ export default function LeadApprovalNotePreviewPage() {
                               Business Associate <span className="ar-required">*</span>
                             </label>
                             <Select
-                              options={baOptions.map((u) => ({ value: u.id, label: u.org_name }))}
+                              options={[
+                                ...(lead.source === "in_house" ? [{ value: TBD_BA_VALUE, label: "To be Decided" }] : []),
+                                ...baOptions.map((u) => ({ value: u.id, label: u.org_name })),
+                              ]}
                               value={selectedBaId}
                               onChange={setSelectedBaId}
                               placeholder={baOptions.length ? "Select a BA" : "No active BAs found on your team."}
