@@ -2,7 +2,7 @@
 // LeadDetailPage so the label/color for a given status never drifts
 // between the two.
 export const STATUS_MAP = {
-  pa_review: { label: "PA Review", variant: "warning" },
+  pa_review: { label: "PR Review", variant: "warning" },
   dgm_initial_review: { label: "DGM", variant: "warning" },
   pmt_review: { label: "PMT", variant: "info" },
   pmt_extended_review: { label: "PMT Extended", variant: "info" },

@@ -527,7 +527,7 @@ async function regenerateApprovalNoteInner(
 ): Promise<{ ok: true; document: LeadDocument } | { ok: false; error: string }> {
   const { data: lead, error: leadErr } = await admin
     .from("leads")
-    .select("id, lead_number, title, status, client_name, submission_deadline, assigned_ba_id, person_responsible_id, team, documents, approval_note_data")
+    .select("id, lead_number, title, status, client_name, submission_deadline, assigned_ba_id, person_responsible_id, team, documents, approval_note_data, approval_note_pr_reviewed")
     .eq("id", leadId)
     .maybeSingle();
   if (leadErr || !lead) return { ok: false, error: "Lead not found." };
@@ -560,8 +560,12 @@ async function regenerateApprovalNoteInner(
   }));
 
   const dgmActivityRow = latestByAction(flatActivity, DGM_APPROVE_ACTIONS);
+  // Blank ("pending") until the Person Responsible has actually reviewed
+  // this note themselves — set once they generate/edit it directly, or
+  // explicitly Accept a draft the creator produced (pr_review_accept in
+  // advance-lead-stage). Never auto-stamped just because a note exists.
   const [personResponsibleSignatureBytes, dgmSignatureBytes] = await Promise.all([
-    fetchSignatureBytes(admin, pr?.signature_path),
+    lead.approval_note_pr_reviewed ? fetchSignatureBytes(admin, pr?.signature_path) : Promise.resolve(null),
     fetchSignatureBytes(admin, dgmActivityRow?.actor_signature_path),
   ]);
 
@@ -585,13 +589,15 @@ async function regenerateApprovalNoteInner(
     mode,
   });
 
-  // Still pa_review/pa_action_required — the Person Responsible has
-  // generated/edited the note but hasn't actually submitted it for DGM
-  // review yet, so the single stored document is labeled "-- Draft" to
-  // make that unambiguous. The moment "accept" transitions the lead to
-  // dgm_initial_review (accept is in REGENERATE_DRAFT_NOTE_ON), this same
-  // regeneration runs again and drops the suffix — replacing, never
-  // duplicating, the stored document (see saveApprovalNoteDocument).
+  // Still pa_review/pa_action_required — the note hasn't actually been
+  // submitted for DGM review yet (whether it's mid-edit or sitting with the
+  // Person Responsible for their Accept/Edit/Reject — that's tracked via
+  // approval_note_pending_pr_review, not a status change), so the single
+  // stored document is labeled "-- Draft" to make that unambiguous. The
+  // moment "accept" transitions the lead to dgm_initial_review (accept is
+  // in REGENERATE_DRAFT_NOTE_ON), this same regeneration runs again and
+  // drops the suffix — replacing, never duplicating, the stored document
+  // (see saveApprovalNoteDocument).
   const isPreSubmission = lead.status === "pa_review" || lead.status === "pa_action_required";
   const category = mode === "final" ? "final_approval_note" : "approval_note";
   const filename = mode === "final" ? "MD Approval Note.pdf" : isPreSubmission ? "Lead Approval Note -- Draft.pdf" : "Lead Approval Note.pdf";

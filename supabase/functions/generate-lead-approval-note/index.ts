@@ -60,7 +60,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, status, created_by, person_responsible_id")
+    .select("id, status, created_by, person_responsible_id, approval_note_pending_pr_review")
     .eq("id", leadId)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -72,6 +72,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     return jsonRes(req, 400, {
       error: `This lead is in "${lead.status}" status — the Approval Note can only be generated/edited before it's submitted for DGM approval, or while it's been returned for changes.`,
     });
+  }
+  // A creator-drafted note sitting with the PR for Accept/Edit/Reject can't
+  // be edited out from under them by the creator — the PR either Accepts,
+  // Edits it themselves (which calls pr_review_accept first, clearing this
+  // flag, before ever reaching this endpoint), or Rejects it, at which
+  // point this flag clears and the creator can edit again.
+  if (lead.approval_note_pending_pr_review && caller.id !== lead.person_responsible_id) {
+    return jsonRes(req, 400, { error: "This note is awaiting the Person Responsible's review — wait for their Accept/Edit/Reject." });
   }
 
   const financialInput = (body.financial_requirement && typeof body.financial_requirement === "object" ? body.financial_requirement : {}) as Record<string, unknown>;
@@ -93,7 +101,15 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   };
 
   try {
-    const { error: updateErr } = await adminClient.from("leads").update({ approval_note_data: approvalNoteData }).eq("id", leadId);
+    // Only counts as "PR-reviewed" (and therefore eligible for the PR's
+    // signature on the PDF) when the PR is the one actually generating it —
+    // the creator filling this in is always a draft awaiting PR review, see
+    // regenerateApprovalNoteInner in leadApprovalPdf.ts.
+    const isPersonResponsible = caller.id === lead.person_responsible_id;
+    const { error: updateErr } = await adminClient
+      .from("leads")
+      .update({ approval_note_data: approvalNoteData, approval_note_pr_reviewed: isPersonResponsible })
+      .eq("id", leadId);
     if (updateErr) return jsonRes(req, 500, { error: "Failed to save the Approval Note fields." });
 
     const result = await regenerateApprovalNote(adminClient, leadId, "draft");

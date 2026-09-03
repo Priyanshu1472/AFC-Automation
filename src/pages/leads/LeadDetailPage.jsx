@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
-import { LEAD_PA_TIER_ROLES, ROLE_LABELS, can } from "../../lib/roles";
+import { LEAD_PA_TIER_ROLES, can } from "../../lib/roles";
 import { canOpenProposal } from "../../lib/proposalPrep";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -98,6 +98,20 @@ const ACTIONS_BY_STATUS = {
   ],
 };
 
+// The creator filled the Lead Approval Note themselves — it's a Draft
+// awaiting the Person Responsible's Accept/Edit/Reject before it can go to
+// DGM. Not tied to a status (see approval_note_pending_pr_review on the
+// lead row — the status stays pa_review/pa_action_required throughout);
+// availableActions() below swaps this in for the normal status-driven list
+// whenever that flag is set. Accept and Edit both call the same
+// pr_review_accept action (the PR becomes the reviewer of record either
+// way) and only differ in where they navigate afterward — see startAction.
+const PR_REVIEW_ACTIONS = [
+  { key: "pr_review_accept", label: "Accept", variant: "primary" },
+  { key: "pr_review_edit", label: "Edit", variant: "secondary" },
+  { key: "pr_review_reject", label: "Reject", variant: "danger", requiresReason: true },
+];
+
 function DocItem({ doc, leadId }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(false);
@@ -146,6 +160,10 @@ export default function LeadDetailPage() {
   const [selectedReassignId, setSelectedReassignId] = useState("");
   const [reassignOptions, setReassignOptions] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
+  // Which top-level action button is mid-flight — only PR-review Accept/
+  // Edit call the backend directly from this list (every other action
+  // opens the reason/PIN panel via pendingAction instead).
+  const [quickActionKey, setQuickActionKey] = useState(null);
 
   const fetchLead = useCallback(async () => {
     const { data } = await supabase
@@ -180,6 +198,14 @@ export default function LeadDetailPage() {
 
   function availableActions() {
     if (!lead) return [];
+    // A creator-drafted note is sitting with the PR for Accept/Edit/Reject
+    // — swap in that trio (PR only; everyone else, including the creator,
+    // sees "Viewing only" until the PR acts) instead of the normal
+    // status-driven list. Not a status change, so this can happen at
+    // pa_review or pa_action_required alike.
+    if (lead.approval_note_pending_pr_review) {
+      return PR_REVIEW_ACTIONS.filter(() => profile?.id === lead.person_responsible_id);
+    }
     const candidates = ACTIONS_BY_STATUS[lead.status] || [];
     return candidates.filter((a) => {
       switch (a.key) {
@@ -239,6 +265,31 @@ export default function LeadDetailPage() {
   // straight to a chosen teammate instead of releasing it into an open pool.
   const needsReassignSelection = pendingAction?.key === "reject_reassign";
 
+  // The PR taking ownership of a creator-drafted note — Accept and Edit
+  // both call the exact same backend transition (they're now the reviewer
+  // of record either way) and only differ in where they land afterward.
+  async function runPrReviewTakeover(nextRoute, key) {
+    setQuickActionKey(key);
+    try {
+      const { data, error } = await supabase.functions.invoke("advance-lead-stage", {
+        body: { lead_id: id, action: "pr_review_accept", comment: "" },
+      });
+      if (error) {
+        showToast(await extractFunctionErrorMessage(error, "Action failed."), "danger");
+        return;
+      }
+      if (!data?.success) {
+        showToast(data?.error || "Action failed.", "danger");
+        return;
+      }
+      navigate(nextRoute);
+    } catch (err) {
+      showToast(err.message || "Something went wrong.", "danger");
+    } finally {
+      setQuickActionKey(null);
+    }
+  }
+
   function startAction(action) {
     if (action.key === "__edit_resubmit") {
       // DGM's decline is of the Lead Approval Note itself — resubmitting
@@ -253,6 +304,14 @@ export default function LeadDetailPage() {
     }
     if (action.key === "lead_approval_note") {
       navigate(`/leads/${id}/approval-note`);
+      return;
+    }
+    if (action.key === "pr_review_accept") {
+      runPrReviewTakeover(`/leads/${id}/approval-note/preview`, action.key);
+      return;
+    }
+    if (action.key === "pr_review_edit") {
+      runPrReviewTakeover(`/leads/${id}/approval-note`, action.key);
       return;
     }
     setReason("");
@@ -307,6 +366,8 @@ export default function LeadDetailPage() {
       showToast(
         needsReassignSelection
           ? "Lead reassigned successfully."
+          : pendingAction.key === "pr_review_reject"
+          ? "Lead Approval Note returned to the creator."
           : `Lead moved to "${(STATUS_MAP[data.status] || { label: data.status }).label}".`,
         "success"
       );
@@ -372,12 +433,10 @@ export default function LeadDetailPage() {
                 <p className="ar-stepper-heading">Lead Progress</p>
                 <div className="ar-stepper">
                   {STATUS_FLOW.map((step, i) => {
-                    // The first step is generically "PA" in the shared config,
-                    // but here we know exactly who accepted it — show their
-                    // actual designation instead.
-                    const label = step.key === "pa_review" && lead.assignee?.role
-                      ? ROLE_LABELS[lead.assignee.role] || step.label
-                      : step.label;
+                    // The first step is generically "PA" in the shared config
+                    // — show it as "Person Responsible" here instead, same
+                    // label used everywhere else this role is surfaced.
+                    const label = step.key === "pa_review" ? "Person Responsible" : step.label;
                     return (
                       <div key={step.key} className={`ar-step-outer${i < currentFlowIdx ? " ar-step-done-outer" : ""}`}>
                         <div className="ar-step">
@@ -506,7 +565,14 @@ export default function LeadDetailPage() {
                       </>
                     ) : (
                       actions.map((a) => (
-                        <Button key={a.key} variant={a.variant} block onClick={() => startAction(a)}>
+                        <Button
+                          key={a.key}
+                          variant={a.variant}
+                          block
+                          loading={quickActionKey === a.key}
+                          disabled={!!quickActionKey && quickActionKey !== a.key}
+                          onClick={() => startAction(a)}
+                        >
                           {a.label}
                         </Button>
                       ))

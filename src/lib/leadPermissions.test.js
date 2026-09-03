@@ -85,6 +85,15 @@ describe("leadCan", () => {
     expect(leadCan.pmtExtendedReview({ ...user, committee: "PMT" }, lead)).toBe(false);
   });
 
+  it("prReviewAccept/prReviewReject apply only while a note is pending PR review, to the assigned Person Responsible", () => {
+    const lead = { status: "pa_review", person_responsible_id: "user-1", approval_note_pending_pr_review: true };
+    expect(leadCan.prReviewAccept(user, lead)).toBe(true);
+    expect(leadCan.prReviewReject(user, lead)).toBe(true);
+    expect(leadCan.prReviewAccept({ id: "someone-else" }, lead)).toBe(false);
+    expect(leadCan.prReviewReject({ id: "someone-else" }, lead)).toBe(false);
+    expect(leadCan.prReviewAccept(user, { ...lead, approval_note_pending_pr_review: false })).toBe(false);
+  });
+
   it("dgmInitialReview (G3, ahead of PMT) is org-wide — any team matches", () => {
     const profile = { ...user, committee: "G3", team: "BPDD" };
     const lead = { status: "dgm_initial_review", team: "SomeOtherTeam" };
@@ -119,6 +128,12 @@ describe("isActionRequiredForViewer", () => {
     expect(isActionRequiredForViewer(profile, { status: "pa_review", person_responsible_id: "user-1" })).toBe(true);
     expect(isActionRequiredForViewer(profile, { status: "pa_review", person_responsible_id: "someone-else" })).toBe(false);
     expect(isActionRequiredForViewer(profile, { status: "pa_action_required", created_by: "user-1", person_responsible_id: "someone-else" })).toBe(true);
+  });
+
+  it("matches the Person Responsible against a lead with a note pending their review", () => {
+    const profile = { id: "user-1", role: "project_officer", team: "BPDD" };
+    expect(isActionRequiredForViewer(profile, { status: "pa_review", person_responsible_id: "user-1", approval_note_pending_pr_review: true })).toBe(true);
+    expect(isActionRequiredForViewer(profile, { status: "pa_review", person_responsible_id: "someone-else", approval_note_pending_pr_review: true })).toBe(false);
   });
 
   it("matches MD against md_review leads only", () => {

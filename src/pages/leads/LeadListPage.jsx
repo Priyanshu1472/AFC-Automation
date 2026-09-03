@@ -46,6 +46,19 @@ function fmtDate(v) {
   return new Date(v).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// Restores search/filter/page state after a trip out to a lead's detail
+// page and back — sessionStorage rather than the URL, since "Back to
+// Leads" pushes a bare /leads (see LeadDetailPage's back button), and this
+// survives that regardless of how the user actually navigates back.
+const FILTER_STORAGE_KEY = "leadListFilters";
+function loadStoredFilters() {
+  try {
+    return JSON.parse(sessionStorage.getItem(FILTER_STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
 export default function LeadListPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -55,12 +68,20 @@ export default function LeadListPage() {
   // { [lead_id]: unread_count } for the current viewer, across every lead
   // they're a chat participant on — powers the badge on the chat icon.
   const [unreadCounts, setUnreadCounts] = useState({});
-  const [search, setSearch] = useState("");
-  const [quickFilter, setQuickFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [teamFilter, setTeamFilter] = useState("all");
+  const [search, setSearch] = useState(() => loadStoredFilters().search || "");
+  const [quickFilter, setQuickFilter] = useState(() => loadStoredFilters().quickFilter || "all");
+  const [statusFilter, setStatusFilter] = useState(() => loadStoredFilters().statusFilter || "all");
+  const [teamFilter, setTeamFilter] = useState(() => loadStoredFilters().teamFilter || "all");
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => loadStoredFilters().page || 1);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ search, quickFilter, statusFilter, teamFilter, page }));
+    } catch {
+      // Private browsing / storage disabled — filters just won't persist.
+    }
+  }, [search, quickFilter, statusFilter, teamFilter, page]);
 
   const canFilterTeam = can.viewAllTeams(profile?.role);
   const teams = useTeamOptions();
@@ -225,7 +246,7 @@ export default function LeadListPage() {
                 <thead>
                   <tr>
                     <th>Lead Number</th><th>Title</th><th>Creator</th>{canFilterTeam && <th>Team</th>}
-                    <th>Assignee</th><th>Status</th><th>Created</th><th>Actions</th>
+                    <th>Person Responsible</th><th>Status</th><th>Created</th><th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>

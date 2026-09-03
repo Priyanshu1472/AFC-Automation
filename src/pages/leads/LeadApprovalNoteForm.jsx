@@ -140,7 +140,27 @@ export default function LeadApprovalNoteForm() {
         showToast(data?.error || "Failed to generate the Approval Note.", "danger");
         return;
       }
-      navigate(`/leads/${id}/approval-note/preview`);
+      // The Person Responsible filling this in goes straight to DGM
+      // submission, same as before. The creator filling it in is always a
+      // draft awaiting the PR's review first — hand it off instead of
+      // navigating to the page only the PR can actually submit from.
+      if (profile?.id === lead.person_responsible_id) {
+        navigate(`/leads/${id}/approval-note/preview`);
+        return;
+      }
+      const { data: submitData, error: submitError } = await supabase.functions.invoke("advance-lead-stage", {
+        body: { lead_id: id, action: "submit_for_pr_review", comment: "" },
+      });
+      if (submitError) {
+        showToast(await extractFunctionErrorMessage(submitError, "Failed to send for Person Responsible review."), "danger");
+        return;
+      }
+      if (!submitData?.success) {
+        showToast(submitData?.error || "Failed to send for Person Responsible review.", "danger");
+        return;
+      }
+      showToast("Sent for Person Responsible review.", "success");
+      navigate(`/leads/${id}`);
     } catch (err) {
       showToast(err.message || "Something went wrong.", "danger");
     } finally {
@@ -323,7 +343,7 @@ export default function LeadApprovalNoteForm() {
 
             <div className="lf-actions">
               <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
-                Generate PDF
+                {profile?.id === lead.person_responsible_id ? "Generate PDF" : "Send for Person Responsible Review"}
               </Button>
               <Button type="button" variant="secondary" disabled={submitting} onClick={() => navigate(`/leads/${id}`)}>
                 Cancel

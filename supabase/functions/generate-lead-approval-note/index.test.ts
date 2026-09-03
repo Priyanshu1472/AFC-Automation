@@ -93,6 +93,29 @@ Deno.test("handleRequest - the Person Responsible (not creator) can generate the
   });
 });
 
+// approval_note_pr_reviewed gates whether the PR's signature gets embedded
+// on the PDF (see leadApprovalPdf.ts) — it must reflect who actually filled
+// this form in, not just that a note now exists.
+Deno.test("handleRequest - marks approval_note_pr_reviewed true when the Person Responsible generates the note", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: "someone-else", person_responsible_id: CALLER_ID }) });
+  await withFetch(logoFailsFetch, async () => {
+    await handleRequest(req({ lead_id: LEAD_ID }), client as never);
+  });
+  const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+  const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
+  assertEquals(updatedFields.approval_note_pr_reviewed, true);
+});
+
+Deno.test("handleRequest - marks approval_note_pr_reviewed false when the creator (not PR) generates the note", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: "someone-else" }) });
+  await withFetch(logoFailsFetch, async () => {
+    await handleRequest(req({ lead_id: LEAD_ID }), client as never);
+  });
+  const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+  const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
+  assertEquals(updatedFields.approval_note_pr_reviewed, false);
+});
+
 Deno.test("handleRequest - surfaces a clean error when the letterhead logo can't be loaded", async () => {
   const client = buildClient({});
   await withFetch(logoFailsFetch, async () => {

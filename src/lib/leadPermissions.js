@@ -36,6 +36,13 @@ export const leadCan = {
   editResubmit: (profile, lead) =>
     (lead.status === "pa_review" || lead.status === "pa_action_required") &&
     (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id),
+  // The PR reviewing a creator-drafted Lead Approval Note (Accept/Edit/
+  // Reject) before it can be submitted for DGM approval — tracked via a
+  // flag, not a status, so the lead stays visibly pa_review/
+  // pa_action_required the whole time (see advance-lead-stage's
+  // pr_review_accept/pr_review_reject).
+  prReviewAccept: (profile, lead) => !!lead.approval_note_pending_pr_review && profile?.id === lead.person_responsible_id,
+  prReviewReject: (profile, lead) => !!lead.approval_note_pending_pr_review && profile?.id === lead.person_responsible_id,
   // First-line DGM gate, ahead of PMT — same G3 committee as the later
   // PMT-Extended-escalated dgmReview below, just a different status.
   dgmInitialReview: (profile, lead) => lead.status === "dgm_initial_review" && profile?.committee === "G3",
@@ -54,6 +61,7 @@ export function isActionRequiredForViewer(profile, lead) {
   return (
     leadCan.accept(profile, lead) ||
     (lead.status === "pa_action_required" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id)) ||
+    leadCan.prReviewAccept(profile, lead) ||
     leadCan.dgmInitialReview(profile, lead) ||
     leadCan.pmtReview(profile, lead) ||
     leadCan.pmtExtendedReview(profile, lead) ||

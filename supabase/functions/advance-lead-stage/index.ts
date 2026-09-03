@@ -35,6 +35,8 @@ type LeadRow = {
   assigned_ba_id: string | null;
   declined_from_status: string | null;
   approval_note_data: unknown;
+  approval_note_pr_reviewed: boolean;
+  approval_note_pending_pr_review: boolean;
   documents: LeadDocument[];
   chat_opened_at: string | null;
 };
@@ -78,6 +80,10 @@ async function resolveCommitteeThatSentToMd(admin: AdminClient, leadId: string):
 // decision.
 const REGENERATE_DRAFT_NOTE_ON = new Set([
   "accept",
+  // The PR taking ownership of a creator-drafted note — regenerates
+  // immediately so the PDF picks up their now-eligible signature (see
+  // approval_note_pr_reviewed / regenerateApprovalNoteInner).
+  "pr_review_accept",
   "dgm_initial_approve",
   "pmt_approve", "pmt_escalate",
   "pmt_extended_approve", "pmt_extended_forward_dgm",
@@ -97,7 +103,18 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
   // Accept now routes to DGM (G3) first, ahead of PMT — dgm_initial_review
   // is a distinct status from dgm_review (the PMT-Extended escalation
   // target further down), so the two don't collide in this map.
-  pa_review: { accept: "dgm_initial_review", drop: "pa_dropped", reject_reassign: "pa_review" },
+  // submit_for_pr_review / pr_review_accept / pr_review_reject are all
+  // same-status transitions, same idea as reject_reassign above — the PR
+  // review of a creator-drafted note is tracked entirely via the
+  // approval_note_pending_pr_review / approval_note_pr_reviewed flags on
+  // the lead row (see their case bodies below), never a status change, so
+  // the lead stays visibly "PA Review" (or "Action Required") the whole
+  // time it's cycling through creator-drafts -> PR-reviews -> Accept/Edit/
+  // Reject.
+  pa_review: {
+    accept: "dgm_initial_review", drop: "pa_dropped", reject_reassign: "pa_review",
+    submit_for_pr_review: "pa_review", pr_review_accept: "pa_review", pr_review_reject: "pa_review",
+  },
   dgm_initial_review: { dgm_initial_approve: "pmt_review", dgm_initial_decline: "pa_action_required", drop: "pa_dropped" },
   pa_dropped: { claim: "pa_review" },
   pmt_review: { pmt_approve: "md_review", pmt_escalate: "pmt_extended_review", pmt_decline: "pa_action_required", drop: "pa_dropped" },
@@ -114,7 +131,10 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
   // the "accept" case, which further restricts this to only the
   // DGM-declined case via declined_from_status). Every other decline
   // source still resubmits through update-lead's plain Edit & Resubmit.
-  pa_action_required: { drop: "pa_dropped", accept: "dgm_initial_review" },
+  pa_action_required: {
+    drop: "pa_dropped", accept: "dgm_initial_review",
+    submit_for_pr_review: "pa_action_required", pr_review_accept: "pa_action_required", pr_review_reject: "pa_action_required",
+  },
 };
 
 const REQUIRE_COMMENT = new Set([
@@ -123,6 +143,7 @@ const REQUIRE_COMMENT = new Set([
   "pmt_extended_approve", "pmt_extended_decline",
   "dgm_accept", "dgm_decline",
   "md_decline",
+  "pr_review_reject",
 ]);
 
 // Every committee/MD decision requires the caller's own 5-digit action
@@ -161,7 +182,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, approval_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data, documents, chat_opened_at")
+    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, approval_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data, approval_note_pr_reviewed, approval_note_pending_pr_review, documents, chat_opened_at")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -217,6 +238,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         if (!leadRow.approval_note_data) {
           return jsonRes(req, 400, { error: "Generate the Lead Approval Note before submitting for DGM approval." });
         }
+        // The PR submitting is itself the strongest possible review signal
+        // — always true here regardless of whether they got here via the
+        // explicit pr_review_accept button first (e.g. a PR who lands
+        // straight on the preview page and submits a note that's still
+        // technically "pending" their review — see generate-lead-approval-
+        // note's pending-review guard for why that's otherwise blocked).
+        extraFields = { approval_note_pr_reviewed: true, approval_note_pending_pr_review: false };
         // A Business Associate is optional at creation, but required before
         // a lead can move on to PMT review — the Person Responsible picks
         // one here (or confirms the one already set) as part of accepting.
@@ -225,11 +253,69 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           if (!baId) return jsonRes(req, 400, { error: "Select a BA" });
           const baErr = await validateBusinessAssociate(adminClient, baId, leadRow.team);
           if (baErr) return jsonRes(req, 400, { error: baErr });
-          extraFields = { assigned_ba_id: baId };
+          extraFields.assigned_ba_id = baId;
         }
         notifyTargetIds = await getOrgWideHolders(adminClient, { committee: "G3" });
         notifyTitle = "Lead awaiting DGM review";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was accepted and needs your review.`;
+        break;
+      }
+
+      // The creator (never the PR — they'd just Accept straight through)
+      // filled the Lead Approval Note and is sending it to the PR for
+      // review before it can go to DGM. Same-status transition — the lead
+      // stays exactly where it is (pa_review or pa_action_required); only
+      // approval_note_pending_pr_review flips on, which is what drives the
+      // Draft label and the PR's Accept/Edit/Reject prompt on the lead page.
+      case "submit_for_pr_review": {
+        if (caller.id === leadRow.person_responsible_id) {
+          return forbidden("You're the Person Responsible — submit for DGM approval directly instead.");
+        }
+        if (caller.id !== leadRow.created_by) return forbidden("Only the lead's creator can send it for Person Responsible review.");
+        if (!leadRow.approval_note_data) {
+          return jsonRes(req, 400, { error: "Generate the Lead Approval Note before sending it for review." });
+        }
+        if (leadRow.approval_note_pending_pr_review) {
+          return jsonRes(req, 400, { error: "This note is already awaiting the Person Responsible's review." });
+        }
+        extraFields = { approval_note_pending_pr_review: true };
+        notifyTargetIds = [leadRow.person_responsible_id];
+        notifyTitle = "Lead Approval Note awaiting your review";
+        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was drafted and needs your Accept/Edit/Reject.`;
+        break;
+      }
+
+      // The PR reviewing a creator-drafted note — LeadDetailPage's Accept
+      // and Edit buttons both call this action directly (identical
+      // transition, they only differ in where the client navigates
+      // afterward: straight to DGM submission, or into the form to edit
+      // first). Either way the PR is now the reviewer of record, so their
+      // signature becomes eligible on the PDF (approval_note_pr_reviewed,
+      // regenerated immediately via REGENERATE_DRAFT_NOTE_ON above), and
+      // there's nothing left pending their review.
+      case "pr_review_accept": {
+        if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can review this lead's note.");
+        if (!leadRow.approval_note_pending_pr_review) return jsonRes(req, 400, { error: "There's no draft awaiting your review." });
+        extraFields = { approval_note_pr_reviewed: true, approval_note_pending_pr_review: false };
+        notifyTargetIds = [leadRow.created_by];
+        notifyTitle = "Lead Approval Note reviewed";
+        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was reviewed by the Person Responsible and is on its way to DGM approval.`;
+        break;
+      }
+
+      // Bounces the draft back to the creator to rework — same idea as
+      // dgm_initial_decline, just one stage earlier, by the PR instead of
+      // DGM, and without a status change: the creator sees the ordinary
+      // Edit/"Send for Person Responsible Review" flow again the moment
+      // approval_note_pending_pr_review clears, no separate resubmit path
+      // needed.
+      case "pr_review_reject": {
+        if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can review this lead's note.");
+        if (!leadRow.approval_note_pending_pr_review) return jsonRes(req, 400, { error: "There's no draft awaiting your review." });
+        extraFields = { approval_note_pending_pr_review: false };
+        notifyTargetIds = [leadRow.created_by];
+        notifyTitle = "Lead Approval Note returned";
+        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned by the Person Responsible. Reason: ${trimmedComment}`;
         break;
       }
 

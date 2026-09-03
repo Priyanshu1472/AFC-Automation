@@ -305,6 +305,149 @@ Deno.test("PIN gate - accept (resubmit after DGM decline) still requires a PIN, 
   assertEquals(res.status, 400);
 });
 
+// ── submit_for_pr_review / pr_review_accept / pr_review_reject ──
+// The creator (not the PR) filling the note routes it to the PR for
+// Accept/Edit/Reject before it can be submitted to DGM — the PR's
+// signature must never be auto-stamped on a note they haven't reviewed
+// (see approval_note_pr_reviewed / leadApprovalPdf.ts). All three are
+// same-status transitions — the lead never leaves pa_review/
+// pa_action_required, only the approval_note_pending_pr_review /
+// approval_note_pr_reviewed flags move.
+Deno.test("submit_for_pr_review - rejects the Person Responsible themselves (they'd Accept directly instead)", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: CALLER_ID }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("submit_for_pr_review - rejects a caller who isn't the lead's creator", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: "someone-else", person_responsible_id: "pr-1" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("submit_for_pr_review - requires the Lead Approval Note to already be generated", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: "pr-1", approval_note_data: null }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("submit_for_pr_review - rejects sending it for review twice in a row", async () => {
+  const client = buildClient({
+    lead: leadRow({ created_by: CALLER_ID, person_responsible_id: "pr-1", approval_note_pending_pr_review: true }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("submit_for_pr_review - not valid from any status other than pa_review/pa_action_required", async () => {
+  const client = buildClient({ lead: leadRow({ status: "dgm_initial_review", created_by: CALLER_ID, person_responsible_id: "pr-1" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("submit_for_pr_review - success leaves the status untouched and sets approval_note_pending_pr_review", async () => {
+  for (const status of ["pa_review", "pa_action_required"]) {
+    const client = buildClient({ lead: leadRow({ status, created_by: CALLER_ID, person_responsible_id: "pr-1" }) });
+    const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+    assertEquals(res.status, 200, `expected 200 from status=${status}`);
+    assertEquals((await res.json()).status, status, `expected status to stay ${status}`);
+
+    const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+    const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
+    assertEquals(updatedFields.approval_note_pending_pr_review, true);
+  }
+});
+
+Deno.test("submit_for_pr_review - notifies the Person Responsible", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: "pr-1" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 200);
+
+  const notifyLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "notifications");
+  assertEquals(notifyLog.length, 1);
+  const rows = JSON.parse(notifyLog[0].calls.find((c) => c[0] === "insert")![1]);
+  assertEquals(rows.map((r: { user_id: string }) => r.user_id), ["pr-1"]);
+});
+
+Deno.test("pr_review_accept - rejects a caller who isn't the Person Responsible", async () => {
+  const client = buildClient({ lead: leadRow({ person_responsible_id: "someone-else", approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_accept" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("pr_review_accept - rejects when nothing is actually pending review", async () => {
+  const client = buildClient({ lead: leadRow({ approval_note_pending_pr_review: false }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_accept" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("pr_review_accept - success leaves the status untouched, clears pending, and marks the note PR-reviewed", async () => {
+  const client = buildClient({ lead: leadRow({ approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_accept" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pa_review");
+
+  const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+  const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
+  assertEquals(updatedFields.approval_note_pr_reviewed, true);
+  assertEquals(updatedFields.approval_note_pending_pr_review, false);
+});
+
+Deno.test("pr_review_accept - does not require a PIN", async () => {
+  const client = buildClient({ caller: callerRow({ pin_hash: null }), lead: leadRow({ approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_accept", pin: "" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("pr_review_reject - rejects a caller who isn't the Person Responsible", async () => {
+  const client = buildClient({ lead: leadRow({ person_responsible_id: "someone-else", approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_reject", comment: "needs more detail" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("pr_review_reject - rejects when nothing is actually pending review", async () => {
+  const client = buildClient({ lead: leadRow({ approval_note_pending_pr_review: false }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_reject", comment: "needs more detail" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("pr_review_reject - requires a comment, and leaves the status untouched while clearing the pending flag", async () => {
+  const client = buildClient({ lead: leadRow({ approval_note_pending_pr_review: true }) });
+  const missingReason = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_reject" }), client as never);
+  assertEquals(missingReason.status, 400);
+
+  const client2 = buildClient({ lead: leadRow({ approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_reject", comment: "needs more detail" }), client2 as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pa_review");
+
+  const leadsLog = (client2 as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+  const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
+  assertEquals(updatedFields.approval_note_pending_pr_review, false);
+  assertEquals("declined_from_status" in updatedFields, false);
+});
+
+Deno.test("pr_review_reject - notifies the creator", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: "creator-1", approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_reject", comment: "needs more detail" }), client as never);
+  assertEquals(res.status, 200);
+
+  const notifyLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "notifications");
+  const rows = JSON.parse(notifyLog[0].calls.find((c) => c[0] === "insert")![1]);
+  assertEquals(rows.map((r: { user_id: string }) => r.user_id), ["creator-1"]);
+});
+
+Deno.test("accept - a Person Responsible submitting directly (even one that skipped the explicit Accept step) always marks the note PR-reviewed", async () => {
+  const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba", approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 200);
+
+  const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+  const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
+  assertEquals(updatedFields.approval_note_pr_reviewed, true);
+  assertEquals(updatedFields.approval_note_pending_pr_review, false);
+});
+
 Deno.test("accept - regenerating the note on submission drops the '-- Draft' suffix, replacing (not duplicating) the stored document", async () => {
   const originalFetch = globalThis.fetch;
   const TINY_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";

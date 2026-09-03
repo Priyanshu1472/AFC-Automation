@@ -115,11 +115,25 @@ export default function AppHeader() {
             the far right of the module links (see .app-header-nav-dropdowns),
             so they read as reporting tools rather than another module button. */}
         <div className="app-header-nav-dropdowns">
-          {canSeeEmpanelment && (
-            <NavDropdown label="Dashboard" items={[{ to: "/dashboard/empanelment", label: "Empanelment" }]} onNavigate={closeMenu} />
+          {(canSeeEmpanelment || canSeeLeads) && (
+            <NavDropdown
+              label="Dashboard"
+              items={[
+                ...(canSeeEmpanelment ? [{ to: "/dashboard/empanelment", label: "Empanelment" }] : []),
+                ...(canSeeLeads ? [{ to: "/dashboard/leads", label: "Leads" }] : []),
+              ]}
+              onNavigate={closeMenu}
+            />
           )}
-          {canSeeEmpanelment && (
-            <NavDropdown label="Reports" items={[{ to: "/reports/empanelment", label: "Empanelment" }]} onNavigate={closeMenu} />
+          {(canSeeEmpanelment || canSeeLeads) && (
+            <NavDropdown
+              label="Reports"
+              items={[
+                ...(canSeeEmpanelment ? [{ to: "/reports/empanelment", label: "Empanelment" }] : []),
+                ...(canSeeLeads ? [{ to: "/reports/leads", label: "Leads" }] : []),
+              ]}
+              onNavigate={closeMenu}
+            />
           )}
         </div>
 
