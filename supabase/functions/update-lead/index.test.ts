@@ -119,57 +119,40 @@ Deno.test("handleRequest - accepts an SRM Approval Authority (same permissions a
   assertEquals(res.status, 200);
 });
 
-Deno.test("handleRequest - success moves the lead back to pmt_review", async () => {
+// A pa_action_required lead is a plain in-place edit, same as pa_review —
+// saving never resubmits it into the approval pipeline (that's a separate,
+// deliberate action via the Lead Approval Note's Accept flow). Checked
+// against every decline source, since this used to route differently
+// depending on which stage declined it.
+for (const declinedFrom of ["dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review"]) {
+  Deno.test(`handleRequest - editing a lead declined from ${declinedFrom} leaves it at pa_action_required, does not resubmit`, async () => {
+    const client = buildClient({ lead: leadRow({ declined_from_status: declinedFrom }) });
+    const res = await handleRequest(formReq(baseFields()), client as never);
+    assertEquals(res.status, 200);
+    const body = await res.json();
+    assertEquals(body.success, true);
+    assertEquals(body.status, "pa_action_required");
+  });
+}
+
+Deno.test("handleRequest - editing a pa_action_required lead only logs 'edited', never 'resubmitted'", async () => {
   const client = buildClient({});
   const res = await handleRequest(formReq(baseFields()), client as never);
   assertEquals(res.status, 200);
-  const body = await res.json();
-  assertEquals(body.success, true);
-  assertEquals(body.status, "pmt_review");
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const activityInsertCalls = log.filter((entry) => entry.table === "lead_activity_log").flatMap((entry) => entry.calls.filter((c) => c[0] === "insert"));
+  assertEquals(activityInsertCalls.length, 1);
+  assertEquals(activityInsertCalls[0][1]?.includes('"edited"'), true);
+  assertEquals(activityInsertCalls[0][1]?.includes("resubmitted"), false);
 });
 
-Deno.test("handleRequest - a lead declined by DGM resubmits straight back to dgm_initial_review, not pmt_review", async () => {
-  const client = buildClient({ lead: leadRow({ declined_from_status: "dgm_initial_review" }) });
-  const res = await handleRequest(formReq(baseFields()), client as never);
-  assertEquals(res.status, 200);
-  const body = await res.json();
-  assertEquals(body.status, "dgm_initial_review");
-});
-
-Deno.test("handleRequest - a lead declined by MD resubmits straight back to md_review, skipping every committee", async () => {
-  const client = buildClient({ lead: leadRow({ declined_from_status: "md_review" }) });
-  const res = await handleRequest(formReq(baseFields({ resubmit_comment: "Fixed the budget line per MD's note." })), client as never);
-  assertEquals(res.status, 200);
-  const body = await res.json();
-  assertEquals(body.status, "md_review");
-});
-
-Deno.test("handleRequest - resubmitting to md_review requires a remark", async () => {
-  const client = buildClient({ lead: leadRow({ declined_from_status: "md_review" }) });
-  const res = await handleRequest(formReq(baseFields()), client as never);
-  assertEquals(res.status, 400);
-  assertEquals((await res.json()).error, "Add a remark explaining the changes before resubmitting to the MD.");
-});
-
-Deno.test("handleRequest - the MD-resubmit remark is logged on the activity timeline only, never onto the lead row (so it can't reach the PDF)", async () => {
+Deno.test("handleRequest - a resubmit_comment field, if sent, is simply ignored (no such feature anymore)", async () => {
   const client = buildClient({ lead: leadRow({ declined_from_status: "md_review" }) });
   const res = await handleRequest(formReq(baseFields({ resubmit_comment: "Fixed the budget line." })), client as never);
   assertEquals(res.status, 200);
-
-  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
-  const leadsUpdateCall = log.find((entry) => entry.table === "leads" && entry.calls.some((c) => c[0] === "update"));
-  const leadsUpdatePayload = leadsUpdateCall?.calls.find((c) => c[0] === "update")?.[1] ?? "";
-  assertEquals(leadsUpdatePayload.includes("Fixed the budget line"), false);
-
-  const activityInsertCalls = log.filter((entry) => entry.table === "lead_activity_log").flatMap((entry) => entry.calls.filter((c) => c[0] === "insert"));
-  assertEquals(activityInsertCalls.some((c) => c[1]?.includes("Fixed the budget line")), true);
-});
-
-Deno.test("handleRequest - a lead declined by PMT/PMT Extended/G3 still resubmits to pmt_review without needing a remark", async () => {
-  const client = buildClient({ lead: leadRow({ declined_from_status: "pmt_review" }) });
-  const res = await handleRequest(formReq(baseFields()), client as never);
-  assertEquals(res.status, 200);
-  assertEquals((await res.json()).status, "pmt_review");
+  const body = await res.json();
+  assertEquals(body.status, "pa_action_required");
 });
 
 Deno.test("handleRequest - title/portal_name/bid_number in the request body are ignored — server keeps the lead's existing values", async () => {

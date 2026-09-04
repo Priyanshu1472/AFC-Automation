@@ -28,11 +28,13 @@ export const leadCan = {
   // instead of dropping it.
   rejectReassign: (profile, lead) =>
     lead.status === "pa_review" && profile?.id === lead.person_responsible_id && profile?.id !== lead.created_by,
-  claim: (profile, lead) => lead.status === "pa_dropped" && LEAD_PA_TIER_ROLES.includes(profile?.role) && profile?.team === lead.team,
-  // Edit is available before the PR has accepted (pa_review, in place — no
-  // status change) and again once returned for changes (pa_action_required,
-  // Edit & Resubmit back into pmt_review). Locked while actively under
-  // DGM/PMT/PMT Extended/G3/MD review.
+  claim: (profile, lead) => lead.status === "pa_dropped" && LEAD_PA_TIER_ROLES.includes(profile?.role) && !!profile?.teams?.includes(lead.team),
+  // A plain field edit — available before the PR has accepted (pa_review)
+  // and again once returned for changes (pa_action_required); status never
+  // changes as a result (see update-lead's own guarantee). Locked while
+  // actively under DGM/PMT/PMT Extended/G3/MD review. Getting a declined
+  // lead back into the approval pipeline is a separate, deliberate action —
+  // the Lead Approval Note's Accept flow, not this edit.
   editResubmit: (profile, lead) =>
     (lead.status === "pa_review" || lead.status === "pa_action_required") &&
     (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id),
@@ -43,9 +45,13 @@ export const leadCan = {
   // pr_review_accept/pr_review_reject).
   prReviewAccept: (profile, lead) => !!lead.approval_note_pending_pr_review && profile?.id === lead.person_responsible_id,
   prReviewReject: (profile, lead) => !!lead.approval_note_pending_pr_review && profile?.id === lead.person_responsible_id,
-  // First-line DGM gate, ahead of PMT — same G3 committee as the later
-  // PMT-Extended-escalated dgmReview below, just a different status.
-  dgmInitialReview: (profile, lead) => lead.status === "dgm_initial_review" && profile?.committee === "G3",
+  // First-line DGM gate, ahead of PMT — this is the lead's own team's DGM
+  // specifically (team membership), NOT the org-wide G3 committee pool that
+  // the later PMT-Extended-escalated dgmReview below uses. G3 org-wide
+  // access only starts once a lead actually reaches the committee pipeline
+  // (pmt_review onward) — mirrors can_view_lead()'s own exclusion of this
+  // status from its org-wide committee clause.
+  dgmInitialReview: (profile, lead) => lead.status === "dgm_initial_review" && profile?.role === "dgm" && !!profile?.teams?.includes(lead.team),
   pmtReview: (profile, lead) => lead.status === "pmt_review" && profile?.committee === "PMT",
   pmtExtendedReview: (profile, lead) => lead.status === "pmt_extended_review" && profile?.committee === "PMT Extended",
   dgmReview: (profile, lead) => lead.status === "dgm_review" && profile?.committee === "G3",

@@ -69,7 +69,26 @@ export async function getPaTierHolders(admin: AdminClient, team: string): Promis
   return (data || []).map((u: { id: string }) => u.id);
 }
 
-type ViewerCaller = { id: string; role: string; team: string | null; committee: string | null };
+// The team's own DGM(s) — used for the first-line DGM gate (dgm_initial_
+// approve/decline), which is a team match, NOT the org-wide G3 committee
+// pool (that only applies once a lead has been escalated past this stage,
+// see dgm_accept/dgm_decline). Checks afc_user_teams membership so a
+// multi-team DGM is included for every team they're actually assigned to,
+// not just their primary afc_users.team.
+export async function getTeamDgmHolders(admin: AdminClient, team: string): Promise<string[]> {
+  const { data: memberIds, error: memberErr } = await admin.from("afc_user_teams").select("user_id").eq("team", team);
+  if (memberErr) console.error("getTeamDgmHolders membership lookup failed:", memberErr.message);
+  const ids = [...new Set((memberIds || []).map((r: { user_id: string }) => r.user_id))];
+  if (!ids.length) return [];
+  const { data, error } = await admin.from("afc_users").select("id").eq("role", "dgm").eq("is_active", true).in("id", ids);
+  if (error) {
+    console.error("getTeamDgmHolders lookup failed:", error.message);
+    return [];
+  }
+  return (data || []).map((u: { id: string }) => u.id);
+}
+
+type ViewerCaller = { id: string; role: string; team: string | null; teams?: string[]; committee: string | null };
 type ViewableLead = {
   status: string;
   team: string;
@@ -97,9 +116,10 @@ type ViewableLead = {
 //   - Always: creator/Person Responsible/Reviewer/Approval Authority/
 //     handling DGM, or the assigned Business Associate.
 export function canViewLead(caller: ViewerCaller, lead: ViewableLead): boolean {
+  const callerTeams = caller.teams ?? (caller.team ? [caller.team] : []);
   if (["md", "admin", "cfo", "cs"].includes(caller.role)) return true;
-  if (caller.role === "dgm" && caller.team === lead.team) return true;
-  if (["project_assistant", "project_officer", "associate_consultant"].includes(caller.role) && caller.team === lead.team) return true;
+  if (caller.role === "dgm" && callerTeams.includes(lead.team)) return true;
+  if (["project_assistant", "project_officer", "associate_consultant"].includes(caller.role) && callerTeams.includes(lead.team)) return true;
   if (["dgm_initial_review", "dgm_review"].includes(lead.status) && caller.committee === "G3") return true;
   if (lead.status === "pmt_review" && caller.committee === "PMT") return true;
   if (lead.status === "pmt_extended_review" && caller.committee === "PMT Extended") return true;

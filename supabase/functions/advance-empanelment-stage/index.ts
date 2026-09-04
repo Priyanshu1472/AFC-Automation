@@ -7,7 +7,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 import { notifyUser, notifyRole, notifyTeam, emailRole, emailUser } from "../_shared/notify.ts";
 import { verifyOtp } from "../_shared/otp.ts";
@@ -502,7 +502,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "dgm_recommend": {
-        if (caller.role !== "dgm" || caller.team !== app.team) return forbidden("Only the team's DGM can act on this application.");
+        if (caller.role !== "dgm" || !isCallerOnTeam(caller, app.team)) return forbidden("Only the team's DGM can act on this application.");
         if (app.status !== "dgm_review") return badState("dgm_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "md_review", dgm_comment: trimmedComment }).eq("id", app.id);
@@ -521,7 +521,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "dgm_send_back": {
-        if (caller.role !== "dgm" || caller.team !== app.team) return forbidden("Only the team's DGM can act on this application.");
+        if (caller.role !== "dgm" || !isCallerOnTeam(caller, app.team)) return forbidden("Only the team's DGM can act on this application.");
         if (app.status !== "dgm_review") return badState("dgm_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "po_final_review" }).eq("id", app.id);

@@ -7,6 +7,7 @@ import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
+import TeamMultiSelect from "../../components/ui/TeamMultiSelect";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import FieldTooltip from "../../components/FieldTooltip";
@@ -21,7 +22,7 @@ const FIELD_HELP = {
   signature: "Optional. If provided, this image is embedded as this person's signature on generated PDFs (e.g. the Lead Approval Note) instead of a blank signature line.",
 };
 
-const EMPTY_FORM = { full_name: "", email: "", role: "", team: "", office: "", committee: "" };
+const EMPTY_FORM = { full_name: "", email: "", role: "", teams: [], office: "", committee: "" };
 const SIGNATURE_TYPES = ["image/png", "image/jpeg"];
 
 function isValidEmail(val) {
@@ -36,7 +37,6 @@ export default function CreateUserPage() {
 
   const officeOptions = OFFICES.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }));
   const teams = useTeamOptions();
-  const teamOptions = teams.map((t) => ({ value: t, label: t }));
   const committeeOptions = COMMITTEES.map((c) => ({ value: c, label: c }));
 
   const [form, setForm] = useState(EMPTY_FORM);
@@ -86,7 +86,7 @@ export default function CreateUserPage() {
             email: form.email.trim().toLowerCase(),
             full_name: form.full_name.trim(),
             role: form.role,
-            team: form.team || null,
+            teams: form.teams,
             office: form.office || null,
             committee: form.committee || null,
           },
@@ -204,12 +204,10 @@ export default function CreateUserPage() {
                   <label className="field-label">
                     Team <FieldTooltip text={FIELD_HELP.team} />
                   </label>
-                  <Select
-                    creatable
-                    options={teamOptions}
-                    value={form.team}
-                    onChange={(v) => set("team", v)}
-                    placeholder="Select or type a team"
+                  <TeamMultiSelect
+                    options={teams}
+                    value={form.teams}
+                    onChange={(v) => set("teams", v)}
                     disabled={saving}
                     error={errors.team}
                   />

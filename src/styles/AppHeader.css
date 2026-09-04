@@ -227,7 +227,8 @@
    chip + dropdown instead. */
 .app-header-nav-profile-mobile,
 .app-header-nav-profile-link-mobile,
-.app-header-nav-signout-mobile {
+.app-header-nav-signout-mobile,
+.app-header-nav-teams-mobile {
   display: none;
 }
 
@@ -364,6 +365,43 @@
   .app-header-nav-profile-role {
     font-size: var(--text-xs);
     color: var(--text-tertiary);
+  }
+
+  .app-header-nav-teams-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+    margin: var(--space-2) 0;
+  }
+
+  .app-header-nav-teams-label-mobile {
+    padding: var(--space-1) var(--space-1) var(--space-1);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+  }
+
+  .app-header-nav-team-item-mobile {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    background: none;
+    border: none;
+    padding: var(--space-2) var(--space-1);
+    cursor: pointer;
+  }
+
+  .app-header-nav-team-item-mobile-active {
+    color: var(--text-brand);
+    font-weight: 700;
   }
 
   .app-header-nav-profile-link-mobile {

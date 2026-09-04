@@ -64,7 +64,7 @@ const PAGE_SIZE = 20;
 function ActionBadge({ action, meta }) {
   const m = meta[action];
   if (!m) return <span className="al-action-raw">{action?.replace(/_/g, " ")}</span>;
-  return <Badge variant={m.variant}>{m.label}</Badge>;
+  return <Badge className="al-action-badge" variant={m.variant}>{m.label}</Badge>;
 }
 
 function fmtDateTime(iso) {
@@ -287,7 +287,7 @@ export default function AuditLogsPage() {
                         </td>
                         <td className="al-actor">{log.actor?.full_name || (isEmp ? "Business Associate" : "—")}</td>
                         <td>
-                          <Badge variant="info">{ROLE_LABELS[isEmp ? log.actor_role : log.action_by_role] || (isEmp ? log.actor_role : log.action_by_role) || "—"}</Badge>
+                          <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp ? log.actor_role : log.action_by_role] || (isEmp ? log.actor_role : log.action_by_role) || "—"}</Badge>
                         </td>
                         {isEmp ? (
                           <td className="al-team">{log.application?.application_code || "—"}</td>
@@ -322,7 +322,7 @@ export default function AuditLogsPage() {
                         {new Date(log.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} ·{" "}
                         {new Date(log.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                       </span>
-                      <Badge variant="info">{ROLE_LABELS[isEmp ? log.actor_role : log.action_by_role] || (isEmp ? log.actor_role : log.action_by_role) || "—"}</Badge>
+                      <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp ? log.actor_role : log.action_by_role] || (isEmp ? log.actor_role : log.action_by_role) || "—"}</Badge>
                       {isEmp && log.application?.application_code && <span className="text-xs text-tertiary">{log.application.application_code}</span>}
                       {!isEmp && log.actor?.team && <span className="text-xs text-tertiary">{log.actor.team}</span>}
                     </div>

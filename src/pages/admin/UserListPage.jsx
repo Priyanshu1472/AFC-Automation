@@ -34,6 +34,20 @@ const PAGE_SIZE = 25;
 
 const COMMITTEE_OPTIONS = ["PMT", "PMT Extended", "G3"];
 
+// Restores search/filter/page state after a trip out to a user's Edit page
+// and back — "Back to Users" (EditUserPage.jsx) pushes a bare /users, so
+// sessionStorage survives that regardless of how the admin navigates back
+// (that link, or the browser's own back button). Same pattern as
+// LeadListPage's FILTER_STORAGE_KEY.
+const FILTER_STORAGE_KEY = "userListFilters";
+function loadStoredFilters() {
+  try {
+    return JSON.parse(sessionStorage.getItem(FILTER_STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
 function ToggleButton({ user, isSelf, togglingId, onToggle }) {
   if (isSelf) return null;
   return (
@@ -82,12 +96,20 @@ export default function UserListPage() {
   const [initialLoad, setInitialLoad] = useState(true);
   const [banner, setBanner] = useState("");
   const [togglingId, setTogglingId] = useState(null);
-  const [search, setSearch] = useState("");
-  const [teamFilter, setTeamFilter] = useState("all");
-  const [roleFilter, setRoleFilter] = useState("all");
-  const [committeeFilter, setCommitteeFilter] = useState("all");
-  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState(() => loadStoredFilters().search || "");
+  const [teamFilter, setTeamFilter] = useState(() => loadStoredFilters().teamFilter || "all");
+  const [roleFilter, setRoleFilter] = useState(() => loadStoredFilters().roleFilter || "all");
+  const [committeeFilter, setCommitteeFilter] = useState(() => loadStoredFilters().committeeFilter || "all");
+  const [page, setPage] = useState(() => loadStoredFilters().page || 0);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ search, teamFilter, roleFilter, committeeFilter, page }));
+    } catch {
+      // Private browsing / storage disabled — filters just won't persist.
+    }
+  }, [search, teamFilter, roleFilter, committeeFilter, page]);
 
   const canManage = can.manageAllUsers(profile?.role);
   const canCreate = can.createUsers(profile?.role);
@@ -231,6 +253,16 @@ export default function UserListPage() {
     navigate(`/users/${user.id}/edit`);
   }
 
+  // Whole rows are clickable to open Edit — but only where the Edit button
+  // itself would actually show (same as EditButton's own isSelf/canManage
+  // gate), so this never offers a click target that leads nowhere.
+  function isRowClickable(user) {
+    return canManage && user.id !== profile.id;
+  }
+  function handleRowClick(user) {
+    if (isRowClickable(user)) handleEdit(user);
+  }
+
   const from = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
   const to = Math.min((page + 1) * PAGE_SIZE, totalCount);
   const hasNextPage = to < totalCount;
@@ -302,15 +334,15 @@ export default function UserListPage() {
                         </td>
                       </tr>
                       {teamUsers.map((u) => (
-                        <tr key={u.id}>
+                        <tr key={u.id} className={isRowClickable(u) ? "ul-row-clickable" : undefined} onClick={() => handleRowClick(u)}>
                           <td>{u.full_name}</td>
                           <td>{u.email}</td>
-                          <td><Badge variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge></td>
+                          <td><Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge></td>
                           <td>{u.office ? u.office.charAt(0).toUpperCase() + u.office.slice(1) : "—"}</td>
                           <td>{u.committee ? <Badge variant="neutral">{u.committee}</Badge> : "—"}</td>
                           <td><Badge variant={u.is_active ? "success" : "danger"} dot>{u.is_active ? "Active" : "Inactive"}</Badge></td>
                           {canManage && (
-                            <td>
+                            <td onClick={(e) => e.stopPropagation()}>
                               <div style={{ display: "flex", gap: 8 }}>
                                 <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                                 <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
@@ -332,7 +364,11 @@ export default function UserListPage() {
                       <span className="ul-team-sep-count">{teamUsers.length}</span>
                     </div>
                     {teamUsers.map((u) => (
-                      <div key={u.id} className="ul-mobile-card">
+                      <div
+                        key={u.id}
+                        className={`ul-mobile-card${isRowClickable(u) ? " ul-row-clickable" : ""}`}
+                        onClick={() => handleRowClick(u)}
+                      >
                         <div className="ul-mobile-card-top">
                           <div>
                             <div className="ul-mobile-name">{u.full_name}</div>
@@ -341,12 +377,12 @@ export default function UserListPage() {
                           <Badge variant={u.is_active ? "success" : "danger"} dot>{u.is_active ? "Active" : "Inactive"}</Badge>
                         </div>
                         <div className="ul-mobile-card-meta">
-                          <Badge variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
+                          <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
                           {u.office && <span className="text-xs text-tertiary">{u.office.charAt(0).toUpperCase() + u.office.slice(1)}</span>}
                           {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
                         </div>
                         {canManage && (
-                          <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }}>
+                          <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }} onClick={(e) => e.stopPropagation()}>
                             <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                             <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
                           </div>
@@ -384,11 +420,11 @@ export default function UserListPage() {
                   </thead>
                   <tbody>
                     {users.map((u) => (
-                      <tr key={u.id}>
+                      <tr key={u.id} className={isRowClickable(u) ? "ul-row-clickable" : undefined} onClick={() => handleRowClick(u)}>
                         <td>{u.full_name}</td>
                         <td>{u.email}</td>
                         <td>
-                          <Badge variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
+                          <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
                         </td>
                         <td>{u.office ? u.office.charAt(0).toUpperCase() + u.office.slice(1) : "—"}</td>
                         <td>{u.team || "—"}</td>
@@ -399,7 +435,7 @@ export default function UserListPage() {
                           </Badge>
                         </td>
                         {canManage && (
-                          <td>
+                          <td onClick={(e) => e.stopPropagation()}>
                             <div style={{ display: "flex", gap: 8 }}>
                               <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                               <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
@@ -415,7 +451,11 @@ export default function UserListPage() {
               {/* Narrow screens — stacked cards instead of a cramped table */}
               <div className="ul-mobile-list">
                 {users.map((u) => (
-                  <div key={u.id} className="ul-mobile-card">
+                  <div
+                    key={u.id}
+                    className={`ul-mobile-card${isRowClickable(u) ? " ul-row-clickable" : ""}`}
+                    onClick={() => handleRowClick(u)}
+                  >
                     <div className="ul-mobile-card-top">
                       <div>
                         <div className="ul-mobile-name">{u.full_name}</div>
@@ -426,13 +466,13 @@ export default function UserListPage() {
                       </Badge>
                     </div>
                     <div className="ul-mobile-card-meta">
-                      <Badge variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
+                      <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
                       {u.office && <span className="text-xs text-tertiary">{u.office.charAt(0).toUpperCase() + u.office.slice(1)}</span>}
                       {u.team && <span className="text-xs text-tertiary">{u.team}</span>}
                       {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
                     </div>
                     {canManage && (
-                      <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }}>
+                      <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }} onClick={(e) => e.stopPropagation()}>
                         <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                         <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
                       </div>

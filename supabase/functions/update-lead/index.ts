@@ -1,19 +1,19 @@
 // supabase/functions/update-lead/index.ts
 // JWT must be ON. Edit is available to the creator/Person Responsible at
 // two points: while a lead is still at `pa_review` (before the PR has
-// accepted it — a plain in-place edit, status unchanged), and once it's
-// `pa_action_required` (returned by PMT / PMT Extended / DGM with a note —
-// an Edit & Resubmit that moves it back into `pmt_review`, logging both
-// `edited` and `resubmitted` so the prior version's existence stays visible
-// in the timeline without a separate versioning table). Every other status
-// (accepted and under active review, or terminal) is locked.
+// accepted it) and once it's `pa_action_required` (returned by a
+// committee/DGM/MD decline) — a plain in-place field edit, status never
+// changes here either way. Resubmitting a declined lead back into the
+// approval pipeline is a SEPARATE, deliberate action — generate/edit the
+// Lead Approval Note, then "Accept" (see generate-lead-approval-note and
+// advance-lead-stage's "accept" case) — never a side effect of just editing
+// the lead's fields. Every other status (accepted and under active review,
+// or terminal) is locked.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
-import { notifyUsers } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
-import { getOrgWideHolders } from "../_shared/leadAuth.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
   validateApprovalAuthority, validateBusinessAssociate, clampText,
@@ -95,7 +95,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // are always what gets written back.
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, status, created_by, person_responsible_id, lead_number, documents, title, portal_name, bid_number, declined_from_status")
+      .select("id, status, created_by, person_responsible_id, lead_number, documents, title, portal_name, bid_number")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -111,27 +111,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         error: `This lead is in "${lead.status}" status and cannot be edited right now. It may have just been updated — refresh and try again.`,
       });
     }
+    // A plain field edit — status is never touched here, whether the lead
+    // is still at pa_review or has been returned as pa_action_required.
     const fromStatus = lead.status as string;
-    const isResubmit = fromStatus === "pa_action_required";
-    // Resubmitting routes back to wherever declined it: DGM (first-line
-    // gate) sends it straight back to DGM; MD sends it straight back to MD
-    // (skipping every committee — MD already saw and cleared it once);
-    // every other decline source (PMT/PMT Extended/G3) funnels back into
-    // pmt_review, same as before.
-    const toStatus = isResubmit
-      ? (lead.declined_from_status === "dgm_initial_review" ? "dgm_initial_review"
-        : lead.declined_from_status === "md_review" ? "md_review"
-        : "pmt_review")
-      : "pa_review";
-    // Required only when resubmitting straight back to the MD — explains
-    // what changed since the MD's decline. Deliberately logged onto the
-    // "resubmitted" activity row only, never onto the lead itself, so it
-    // can't get pulled into the Lead/MD Approval Note PDF (that only reads
-    // specific committee/MD decision actions, never "resubmitted").
-    const resubmitComment = clampText(get("resubmit_comment"), 2000);
-    if (isResubmit && toStatus === "md_review" && !resubmitComment) {
-      return jsonRes(req, 400, { error: "Add a remark explaining the changes before resubmitting to the MD." });
-    }
 
     const { data: personResponsible, error: prErr } = await adminClient
       .from("afc_users")
@@ -187,8 +169,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         reviewer_id: input.reviewer_id,
         approval_authority_id: input.approval_authority_id,
         assigned_ba_id: assignedBaId,
-        status: toStatus,
-        ...(isResubmit ? { submitted_at: new Date().toISOString() } : {}),
       })
       .eq("id", lead.id)
       .eq("status", fromStatus);
@@ -200,27 +180,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     }
 
     await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "edited", fromStatus, fromStatus, null);
-    if (isResubmit) {
-      await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "resubmitted", "pa_action_required", toStatus, resubmitComment || null);
-    }
 
-    const resubmitTargetHolders = isResubmit
-      ? toStatus === "md_review"
-        ? await getOrgWideHolders(adminClient, { role: "md" })
-        : await getOrgWideHolders(adminClient, toStatus === "dgm_initial_review" ? { committee: "G3" } : { committee: "PMT" })
-      : [];
-    if (resubmitTargetHolders.length) {
-      await notifyUsers(adminClient, resubmitTargetHolders, {
-        title: toStatus === "dgm_initial_review" ? "Lead resubmitted — awaiting DGM review"
-          : toStatus === "md_review" ? "Lead resubmitted — awaiting MD approval"
-          : "Lead resubmitted — awaiting PMT review",
-        sub_text: `${lead.lead_number} — "${lead.title}" was edited and resubmitted for review.`,
-        type: "action_required",
-        link: `/leads/${lead.id}`,
-      });
-    }
-
-    return jsonRes(req, 200, { success: true, id: lead.id, lead_number: lead.lead_number, status: toStatus });
+    return jsonRes(req, 200, { success: true, id: lead.id, lead_number: lead.lead_number, status: fromStatus });
   } catch (err) {
     console.error("Unhandled error:", (err as Error).message);
     return jsonRes(req, 500, { error: "Internal server error." });

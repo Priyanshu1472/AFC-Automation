@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
@@ -148,6 +148,11 @@ function DocItem({ doc, leadId }) {
 export default function LeadDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Opened from Home's "Needs your action" panel (see HomePage.jsx) — exit
+  // there instead of the Leads list, since that's where the user actually
+  // came from.
+  const backTo = location.state?.from === "home" ? "/home" : "/leads";
   const { profile } = useAuth();
   const { showToast } = useToast();
 
@@ -230,13 +235,15 @@ export default function LeadDetailPage() {
         case "reject_reassign":
           return lead.status === "pa_review" && profile?.id === lead.person_responsible_id && profile?.id !== lead.created_by;
         case "claim":
-          return LEAD_PA_TIER_ROLES.includes(profile?.role) && profile?.team === lead.team;
+          return LEAD_PA_TIER_ROLES.includes(profile?.role) && !!profile?.teams?.includes(lead.team);
         // This initial DGM gate is the lead's own team's DGM (role + team
-        // match) — NOT the org-wide G3 committee (that only applies to the
-        // later PMT-Extended-escalated dgm_review stage, see below).
+        // membership) — NOT the org-wide G3 committee (that only applies to
+        // the later PMT-Extended-escalated dgm_review stage, see below). A
+        // multi-team DGM is eligible on any of their assigned teams, not
+        // just their primary one.
         case "dgm_initial_approve":
         case "dgm_initial_decline":
-          return profile?.role === "dgm" && profile?.team === lead.team;
+          return profile?.role === "dgm" && !!profile?.teams?.includes(lead.team);
         // PMT / PMT Extended / G3 are all org-wide committees (each spans
         // all 4 teams) — membership alone qualifies, no team match needed.
         case "pmt_approve":
@@ -292,10 +299,14 @@ export default function LeadDetailPage() {
 
   function startAction(action) {
     if (action.key === "__edit_resubmit") {
-      // DGM's decline is of the Lead Approval Note itself — resubmitting
-      // means editing that note (not the plain lead-fields form) and
-      // sending it straight back to DGM.
-      if (lead.status === "pa_action_required" && lead.declined_from_status === "dgm_initial_review") {
+      // A decline at any stage (DGM, PMT, PMT Extended, G3, or MD) is a
+      // decline of the Lead Approval Note itself — by the time a lead has
+      // reached any of them, the note already exists and has been stamped
+      // with committee remarks, so resubmitting always means editing that
+      // note (not the plain lead-fields form) and sending it back through
+      // DGM again. Only pa_review (before any decline has ever happened)
+      // uses the plain lead-fields edit form.
+      if (lead.status === "pa_action_required") {
         navigate(`/leads/${id}/approval-note`);
         return;
       }
@@ -408,7 +419,7 @@ export default function LeadDetailPage() {
       <AppHeader />
       <div className="app-container">
         <div className="ar-page">
-          <button className="ar-back-btn" onClick={() => navigate("/leads")}>← Back to Leads</button>
+          <button className="ar-back-btn" onClick={() => navigate(backTo)}>← {backTo === "/home" ? "Back to Home" : "Back to Leads"}</button>
 
           <Card className="ar-header-card">
             <Card.Body className="ar-header-body">
@@ -502,8 +513,8 @@ export default function LeadDetailPage() {
                 <Card.Body className="ar-detail-body">
                   <Row label="Creator" value={fmt(lead.creator?.full_name)} />
                   <Row label="Person Responsible" value={fmt(lead.assignee?.full_name)} />
-                  <Row label="Reviewer (PMT)" value={fmt(lead.reviewer?.full_name)} />
-                  <Row label="Approval Authority (PMT Extended)" value={fmt(lead.authority?.full_name)} />
+                  <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
+                  <Row label="Approval Authority" value={fmt(lead.authority?.full_name)} />
                   <Row label="DGM" value={fmt(lead.dgm?.full_name)} />
                   <Row label="Business Associate" value={fmt(lead.ba?.full_name)} />
                 </Card.Body>

@@ -250,7 +250,7 @@ function DrillDownPanel({ title, leads, onClose, onView }) {
 }
 
 export default function LeadDashboardPage() {
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
   const navigate = useNavigate();
   const role = profile?.role;
 
@@ -302,8 +302,12 @@ export default function LeadDashboardPage() {
       list = list.filter((l) => new Date(l.created_at).getTime() >= cutoff);
     }
     if (canFilterTeam && teamFilter !== "all") list = list.filter((l) => l.team === teamFilter);
+    // A multi-team viewer with no visible team filter (team-scoped roles
+    // don't get one — see canFilterTeam) still needs narrowing down to
+    // their currently active team; a no-op for single-team/org-wide users.
+    else if (!canFilterTeam && activeTeam) list = list.filter((l) => l.team === activeTeam);
     return list;
-  }, [leads, dateRangeDays, teamFilter, canFilterTeam]);
+  }, [leads, dateRangeDays, teamFilter, canFilterTeam, activeTeam]);
 
   const total = filtered.length;
   const approved = filtered.filter((l) => l.status === "md_approved").length;

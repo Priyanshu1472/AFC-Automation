@@ -86,7 +86,7 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:@supabase/supabase-js@^2.110.7",
+        "npm:@supabase/supabase-js@^2.112.3",
         "npm:@testing-library/jest-dom@7",
         "npm:@testing-library/react@^16.3.2",
         "npm:@types/react-dom@^19.2.3",

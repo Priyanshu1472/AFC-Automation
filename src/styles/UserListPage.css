@@ -114,6 +114,16 @@
   background: var(--bg-surface-2);
 }
 
+.ul-row-clickable {
+  cursor: pointer;
+}
+
+/* Fixed-width role pills so the Role column reads as a clean aligned block
+   instead of every row's badge being a different width — same idea as
+   Empanelment's .bl-status-badge and Proposals' .pp-status-badge. Sized for
+   the longest label, "Assistant General Manager". */
+.ul-role-badge { min-width: 190px; justify-content: center; }
+
 .ul-mobile-card-top {
   display: flex;
   align-items: flex-start;

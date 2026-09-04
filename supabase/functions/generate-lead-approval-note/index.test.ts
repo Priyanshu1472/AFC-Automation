@@ -12,7 +12,25 @@ function callerRow(overrides: Record<string, unknown> = {}) {
 
 function leadRow(overrides: Record<string, unknown> = {}) {
   return {
-    id: LEAD_ID, status: "pa_review", created_by: CALLER_ID, person_responsible_id: CALLER_ID, ...overrides,
+    id: LEAD_ID, status: "pa_review", created_by: CALLER_ID, person_responsible_id: CALLER_ID,
+    client_name: "A Client", submission_deadline: "2026-12-01", source: "in_house", lead_type: "rfp", ...overrides,
+  };
+}
+
+// Every field validateRequired() checks for, filled in — the baseline for
+// any test that needs to get past validation and reach the actual work.
+// nature_of_lead is deliberately NOT here — it's derived server-side from
+// the lead's own source/lead_type, never taken from the request body.
+function validBody(overrides: Record<string, unknown> = {}) {
+  return {
+    lead_id: LEAD_ID,
+    client_address: "123 MG Road, Delhi",
+    objectives: "Grow rural livelihoods.",
+    scope_of_work: ["Step one", "Step two"],
+    project_timeline: "6 months",
+    justification: "Strong strategic fit for our BPDD pipeline.",
+    scrutiny: Array.from({ length: 8 }, () => ({ yes_no: "Yes", remarks: "Confirmed." })),
+    ...overrides,
   };
 }
 
@@ -85,7 +103,7 @@ Deno.test("handleRequest - rejects a lead that isn't pa_review or pa_action_requ
 Deno.test("handleRequest - the Person Responsible (not creator) can generate the note", async () => {
   const client = buildClient({ lead: leadRow({ created_by: "someone-else", person_responsible_id: CALLER_ID }) });
   await withFetch(logoFailsFetch, async () => {
-    const res = await handleRequest(req({ lead_id: LEAD_ID }), client as never);
+    const res = await handleRequest(req(validBody()), client as never);
     // Logo fetch fails in this test (no network access needed) -> the note
     // build fails gracefully with a 500, but this still proves the
     // permission check passed (a 403 would mean it never got this far).
@@ -99,7 +117,7 @@ Deno.test("handleRequest - the Person Responsible (not creator) can generate the
 Deno.test("handleRequest - marks approval_note_pr_reviewed true when the Person Responsible generates the note", async () => {
   const client = buildClient({ lead: leadRow({ created_by: "someone-else", person_responsible_id: CALLER_ID }) });
   await withFetch(logoFailsFetch, async () => {
-    await handleRequest(req({ lead_id: LEAD_ID }), client as never);
+    await handleRequest(req(validBody()), client as never);
   });
   const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
   const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
@@ -109,7 +127,7 @@ Deno.test("handleRequest - marks approval_note_pr_reviewed true when the Person 
 Deno.test("handleRequest - marks approval_note_pr_reviewed false when the creator (not PR) generates the note", async () => {
   const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: "someone-else" }) });
   await withFetch(logoFailsFetch, async () => {
-    await handleRequest(req({ lead_id: LEAD_ID }), client as never);
+    await handleRequest(req(validBody()), client as never);
   });
   const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
   const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
@@ -119,13 +137,19 @@ Deno.test("handleRequest - marks approval_note_pr_reviewed false when the creato
 Deno.test("handleRequest - surfaces a clean error when the letterhead logo can't be loaded", async () => {
   const client = buildClient({});
   await withFetch(logoFailsFetch, async () => {
-    const res = await handleRequest(req({ lead_id: LEAD_ID }), client as never);
+    const res = await handleRequest(req(validBody()), client as never);
     assertEquals(res.status, 500);
     assertEquals((await res.json()).error, "Could not load the AFC letterhead logo.");
   });
 });
 
-Deno.test("handleRequest - malformed/partial scrutiny input doesn't fail the request (falls back to defaults)", async () => {
+Deno.test("handleRequest - scrutiny array entirely missing/malformed -> 400 (remarks are required per row)", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(req(validBody({ scrutiny: "not-an-array" })), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("handleRequest - malformed yes_no on a scrutiny row falls back to defaults, remarks still required", async () => {
   const client = createFakeAdminClient({
     afc_users: [
       { data: callerRow(), error: null },
@@ -149,7 +173,7 @@ Deno.test("handleRequest - malformed/partial scrutiny input doesn't fail the req
 
   await withFetch(logoOkFetch, async () => {
     const res = await handleRequest(
-      req({ lead_id: LEAD_ID, scrutiny: "not-an-array", justification: "Strong strategic fit for our BPDD pipeline." }),
+      req(validBody({ scrutiny: Array.from({ length: 8 }, () => ({ yes_no: "maybe", remarks: "Confirmed." })) })),
       client as never
     );
     assertEquals(res.status, 200);
@@ -179,10 +203,7 @@ Deno.test("handleRequest - full success: saves approval_note_data, generates and
   });
 
   await withFetch(logoOkFetch, async () => {
-    const res = await handleRequest(
-      req({ lead_id: LEAD_ID, nature_of_lead: "Nomination", objectives: "Grow rural livelihoods.", scope_of_work: ["Step one", "Step two"] }),
-      client as never
-    );
+    const res = await handleRequest(req(validBody()), client as never);
     assertEquals(res.status, 200);
     const body = await res.json();
     assertEquals(body.success, true);
@@ -192,4 +213,71 @@ Deno.test("handleRequest - full success: saves approval_note_data, generates and
     // to dgm_initial_review (see advance-lead-stage's REGENERATE_DRAFT_NOTE_ON).
     assertEquals(body.document.name, "Lead Approval Note -- Draft.pdf");
   });
+});
+
+// nature_of_lead is derived from the lead's own source/lead_type, ignoring
+// whatever (if anything) the client sends for it — see deriveNatureOfLead.
+for (
+  const [source, leadType, expected] of [
+    ["suo_moto", "rfp", "Suo Moto"],
+    ["suo_moto", "eoi", "Suo Moto"],
+    ["in_house", "rfp", "Tender"],
+    ["ba", "rfp", "Tender"],
+    ["in_house", "eoi", "Expression of Interest (EOI)"],
+    ["ba", "eoi", "Expression of Interest (EOI)"],
+  ] as const
+) {
+  Deno.test(`handleRequest - derives nature_of_lead "${expected}" for source=${source}/lead_type=${leadType}`, async () => {
+    const client = buildClient({ lead: leadRow({ source, lead_type: leadType }) });
+    await withFetch(logoFailsFetch, async () => {
+      await handleRequest(req(validBody({ nature_of_lead: "Sneaky client-supplied value" })), client as never);
+    });
+    const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+    const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
+    assertEquals(updatedFields.approval_note_data.nature_of_lead, expected);
+  });
+}
+
+Deno.test("handleRequest - missing a required field (e.g. objectives) -> 400", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(req(validBody({ objectives: "" })), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("handleRequest - empty scope_of_work array -> 400", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(req(validBody({ scope_of_work: [] })), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("handleRequest - non-numeric financial field -> 400", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(
+    req(validBody({ financial_requirement: { document_fee: "not-a-number" } })),
+    client as never
+  );
+  assertEquals(res.status, 400);
+});
+
+Deno.test("handleRequest - blank financial fields are fine (optional)", async () => {
+  const client = buildClient({});
+  await withFetch(logoOkFetch, async () => {
+    const res = await handleRequest(
+      req(validBody({ financial_requirement: { document_fee: "", pbg: "", emd: "", processing_fee: "" } })),
+      client as never
+    );
+    assertEquals(res.status, 200);
+  });
+});
+
+Deno.test("handleRequest - lead missing client_name -> 400", async () => {
+  const client = buildClient({ lead: leadRow({ client_name: null }) });
+  const res = await handleRequest(req(validBody()), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("handleRequest - lead missing submission_deadline -> 400", async () => {
+  const client = buildClient({ lead: leadRow({ submission_deadline: null }) });
+  const res = await handleRequest(req(validBody()), client as never);
+  assertEquals(res.status, 400);
 });

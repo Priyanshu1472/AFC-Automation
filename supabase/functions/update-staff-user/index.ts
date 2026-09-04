@@ -36,7 +36,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     return jsonRes(req, 400, { error: "Invalid JSON body." });
   }
 
-  const { user_id, full_name, team, office, role, committee } = body;
+  const { user_id, full_name, team, teams, office, role, committee } = body;
   if (!user_id || typeof user_id !== "string") return jsonRes(req, 400, { error: "user_id is required." });
   if (!full_name || typeof full_name !== "string" || full_name.trim().length < 2) {
     return jsonRes(req, 400, { error: "Full name is required." });
@@ -67,11 +67,48 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     update.role = role;
   }
   if (committee !== undefined) update.committee = (committee as string) || null;
-  if (team !== undefined) update.team = (team as string) || null;
   if (office !== undefined) update.office = (office as string) || null;
+
+  // `teams` (plural) is the full assignment set for team-scoped roles —
+  // when sent, it's authoritative: afc_users.team becomes teams[0] (the
+  // primary/home team) and afc_user_teams is fully replaced with the given
+  // set. Falls back to the singular `team` field alone when `teams` isn't
+  // sent, so older callers/tests still work unchanged.
+  const rawTeams = Array.isArray(teams) ? teams : null;
+  const teamSet = rawTeams
+    ? rawTeams.filter((t): t is string => typeof t === "string" && t.trim().length > 0).map((t) => t.trim())
+    : null;
+  let finalTeam: string | null | undefined;
+  if (teamSet) {
+    finalTeam = teamSet[0] || null;
+    update.team = finalTeam;
+  } else if (team !== undefined) {
+    finalTeam = (team as string) || null;
+    update.team = finalTeam;
+  }
 
   const { error: updateErr } = await adminClient.from("afc_users").update(update).eq("id", user_id);
   if (updateErr) return jsonRes(req, 500, { error: "Failed to update user." });
+
+  if (teamSet) {
+    await adminClient.from("afc_user_teams").delete().eq("user_id", user_id);
+    if (teamSet.length) {
+      const { error: teamsErr } = await adminClient
+        .from("afc_user_teams")
+        .insert(teamSet.map((t) => ({ user_id, team: t })));
+      if (teamsErr) console.error("Failed to update afc_user_teams:", teamsErr.message);
+    }
+  } else if (finalTeam !== undefined) {
+    // Singular-only caller (no `teams` array) — keep afc_user_teams in sync
+    // with the single team so it stays the authoritative RLS-facing set.
+    await adminClient.from("afc_user_teams").delete().eq("user_id", user_id);
+    if (finalTeam) {
+      const { error: teamsErr } = await adminClient
+        .from("afc_user_teams")
+        .insert([{ user_id, team: finalTeam }]);
+      if (teamsErr) console.error("Failed to update afc_user_teams:", teamsErr.message);
+    }
+  }
 
   // Identifies the target by name/email, never their raw user id — the id
   // is still recoverable from the row itself if ever needed directly in

@@ -767,6 +767,10 @@ select.input {
   color: var(--text-primary);
   border-bottom: 1px solid var(--table-border);
   vertical-align: middle;
+  /* Fixed line-height so a bold cell (e.g. a lead number) next to a
+     normal-weight one doesn't compute a taller line box and make that one
+     row's divider sit slightly lower than every other row's. */
+  line-height: 1.3;
 }
 
 .table tbody tr:last-child td { border-bottom: none; }

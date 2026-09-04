@@ -14,7 +14,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
 import { clampText } from "../_shared/leadEligibility.ts";
-import { regenerateApprovalNote, SCRUTINY_PARAMETERS } from "../_shared/leadApprovalPdf.ts";
+import { regenerateApprovalNote, SCRUTINY_PARAMETERS, deriveNatureOfLead } from "../_shared/leadApprovalPdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -24,6 +24,45 @@ function sanitizeScopeOfWork(input: unknown): string[] {
     .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
     .slice(0, 20)
     .map((v) => v.trim().slice(0, 300));
+}
+
+// Document Fee / PBG / EMD / Processing Fee are the only optional fields on
+// this form — every other field checked in validateRequired below is
+// required. Numbers only when actually filled in; blank is fine and prints
+// as "NA" on the PDF (see leadApprovalPdf.ts, unchanged).
+const NUMERIC_FIELDS = ["document_fee", "pbg", "emd", "processing_fee"] as const;
+const NUMERIC_RE = /^\d+(\.\d+)?$/;
+
+function validateRequired(
+  body: Record<string, unknown>,
+  financialInput: Record<string, unknown>,
+  lead: { client_name: string | null; submission_deadline: string | null }
+): string | null {
+  const isBlank = (v: unknown) => typeof v !== "string" || v.trim().length === 0;
+  if (isBlank(body.client_address)) return "Enter the client's address.";
+  if (isBlank(body.objectives)) return "Enter the objectives.";
+  if (!sanitizeScopeOfWork(body.scope_of_work).length) return "Enter at least one scope of work item.";
+  if (isBlank(body.project_timeline)) return "Enter the project timeline.";
+  if (isBlank(body.justification)) return "Enter a justification.";
+  const scrutinyArr = Array.isArray(body.scrutiny) ? body.scrutiny : [];
+  for (let i = 0; i < SCRUTINY_PARAMETERS.length; i++) {
+    const entry = (scrutinyArr[i] && typeof scrutinyArr[i] === "object" ? scrutinyArr[i] : {}) as Record<string, unknown>;
+    if (isBlank(entry.remarks)) return `Enter a remark for "${SCRUTINY_PARAMETERS[i].label}".`;
+  }
+  for (const f of NUMERIC_FIELDS) {
+    const v = financialInput[f];
+    if (typeof v === "string" && v.trim() && !NUMERIC_RE.test(v.trim())) {
+      return `${f.replace(/_/g, " ")} must be a number.`;
+    }
+  }
+  // Title/client/deadline come from the lead itself, not this form's body
+  // — there's no field here to fix them on, so this just catches the gap
+  // (e.g. a lead type that didn't require them at creation) with a clear
+  // pointer back to the lead instead of silently generating an incomplete
+  // note.
+  if (!lead.client_name) return "This lead has no Client / Department set — edit the lead to add one before generating the Approval Note.";
+  if (!lead.submission_deadline) return "This lead has no Last Date for Submission set — edit the lead to add one before generating the Approval Note.";
+  return null;
 }
 
 // Parameters themselves are fixed (SCRUTINY_PARAMETERS) — only Yes/No and
@@ -60,7 +99,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, status, created_by, person_responsible_id, approval_note_pending_pr_review")
+    .select("id, status, created_by, person_responsible_id, approval_note_pending_pr_review, client_name, submission_deadline, source, lead_type")
     .eq("id", leadId)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -83,8 +122,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   }
 
   const financialInput = (body.financial_requirement && typeof body.financial_requirement === "object" ? body.financial_requirement : {}) as Record<string, unknown>;
+
+  const validationError = validateRequired(body, financialInput, lead);
+  if (validationError) return jsonRes(req, 400, { error: validationError });
+
   const approvalNoteData = {
-    nature_of_lead: clampText(body.nature_of_lead, 200),
+    // Derived from the lead's own source/lead_type, never the client body —
+    // see deriveNatureOfLead.
+    nature_of_lead: deriveNatureOfLead(lead.source as string, lead.lead_type as string),
     client_address: clampText(body.client_address, 500),
     objectives: clampText(body.objectives, 3000),
     scope_of_work: sanitizeScopeOfWork(body.scope_of_work),

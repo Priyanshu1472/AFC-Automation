@@ -650,13 +650,16 @@ function ReportPicker({ groups, selectedId, onSelect }) {
 }
 
 export default function LeadReportsPage() {
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
 
   const [leads, setLeads] = useState([]);
   const [reasonById, setReasonById] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filters, setFilters] = useState({ team: "all", status: "all", source: "all", leadType: "all", from: "", to: "" });
+  // A multi-team viewer with no visible team filter (only md/admin get one —
+  // see canFilterTeam below) still needs their reports scoped to their
+  // currently active team by default; a no-op for single-team/org-wide users.
+  const [filters, setFilters] = useState(() => ({ team: activeTeam || "all", status: "all", source: "all", leadType: "all", from: "", to: "" }));
   const [selectedId, setSelectedId] = useState(REPORTS[0].id);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pdfPreview, setPdfPreview] = useState(null);

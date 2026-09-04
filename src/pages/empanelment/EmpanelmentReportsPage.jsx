@@ -650,12 +650,16 @@ function ReportPicker({ groups, selectedId, onSelect }) {
 }
 
 export default function EmpanelmentReportsPage() {
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
 
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filters, setFilters] = useState({ team: "all", office: "all", status: "all", sector: "all", from: "", to: "" });
+  // A multi-team viewer with no visible team filter (only md/admin get one —
+  // see canFilterTeamOffice below) still needs their reports scoped to
+  // their currently active team by default; a no-op for single-team/
+  // org-wide users.
+  const [filters, setFilters] = useState(() => ({ team: activeTeam || "all", office: "all", status: "all", sector: "all", from: "", to: "" }));
   const [selectedId, setSelectedId] = useState(REPORTS[0].id);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pdfPreview, setPdfPreview] = useState(null);

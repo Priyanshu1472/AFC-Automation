@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { ROLE_LABELS } from "../../lib/roles";
@@ -113,6 +113,11 @@ function DocItem({ doc, applicationId }) {
 export default function ApplicationReviewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Opened from Home's "Needs your action" panel (see HomePage.jsx) — exit
+  // there instead of the Applications list, since that's where the user
+  // actually came from.
+  const backTo = location.state?.from === "home" ? "/home" : "/empanelment";
   const { profile } = useAuth();
   const role = profile?.role;
 
@@ -235,7 +240,7 @@ export default function ApplicationReviewPage() {
   }
   function handleAcceptOtpSuccess() {
     setShowAcceptOtp(false);
-    navigate("/empanelment");
+    navigate(backTo);
   }
   function handleRejectOtpSuccess(data) {
     setShowRejectOtp(false);
@@ -278,7 +283,7 @@ export default function ApplicationReviewPage() {
       <AppHeader />
       <div className="app-container">
         <div className="ar-page">
-          <button className="ar-back-btn" onClick={() => navigate("/empanelment")}><ArrowLeftIcon /> Back to Applications</button>
+          <button className="ar-back-btn" onClick={() => navigate(backTo)}><ArrowLeftIcon /> {backTo === "/home" ? "Back to Home" : "Back to Applications"}</button>
 
           {banner && (
             <Alert variant={banner.type === "danger" ? "danger" : banner.type === "warning" ? "warning" : "success"} onClose={() => setBanner(null)}>

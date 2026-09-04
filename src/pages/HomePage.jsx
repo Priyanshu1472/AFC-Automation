@@ -142,7 +142,10 @@ function PendingActionsPanel() {
   function handleClick(n) {
     setItems((prev) => prev.filter((it) => it.id !== n.id));
     markNotificationRead(n.id).catch(() => {});
-    if (n.link) navigate(n.link);
+    // Marks where we came from so the detail page's own "Back"/exit lands
+    // on Home instead of the module's list page — see LeadDetailPage's and
+    // ApplicationReviewPage's own back-button logic.
+    if (n.link) navigate(n.link, { state: { from: "home" } });
   }
 
   if (loading || items.length === 0) return null;

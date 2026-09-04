@@ -113,8 +113,10 @@ export default function MyProfilePage() {
                 </div>
                 {profile.team && (
                   <div className="field">
-                    <label className="field-label">Team</label>
-                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{profile.team}</p>
+                    <label className="field-label">{profile.teams?.length > 1 ? "Teams" : "Team"}</label>
+                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>
+                      {profile.teams?.length > 1 ? profile.teams.join(", ") : profile.team}
+                    </p>
                   </div>
                 )}
                 {profile.office && (

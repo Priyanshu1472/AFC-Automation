@@ -88,6 +88,27 @@
 
 .ll-table-scroll { overflow-x: auto; }
 .ll-table { min-width: 800px; }
+.ll-row-clickable { cursor: pointer; }
+
+/* Fixed-width status pills so the Status column reads as a clean aligned
+   block instead of every row's badge being a different width — same idea
+   as Empanelment's .bl-status-badge and Proposals' .pp-status-badge. Sized
+   for the longest label, "Action Required". */
+.ll-status-badge { min-width: 140px; justify-content: center; }
+
+/* Creator / Person Responsible — without this, a long full name wraps
+   onto a second line while every other row stays single-line, making that
+   one row taller and throwing off the otherwise-even row-divider rhythm
+   down the table. Truncates instead (full name still available via the
+   title tooltip), matching how every other variable-length column here
+   (.ll-title, and Empanelment's .bl-email/.bl-org/.bl-contact) already
+   behaves. */
+.ll-name-cell {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .ll-lead-number {
   font-family: var(--font-body);
@@ -97,13 +118,18 @@
   letter-spacing: 0.04em;
 }
 
+/* Applied directly to the <td> (not a nested span) — must stay a table
+   cell. "display: block" here used to knock it out of the table's cell
+   layout model entirely, detaching the column from its header/neighbors
+   (exactly the "Title column is not in place" symptom). overflow/
+   white-space/text-overflow truncate a table-cell element just fine
+   without it. */
 .ll-title {
   font-size: var(--text-sm);
   max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: block;
 }
 
 .ll-date { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }

@@ -193,7 +193,7 @@ export default function ProjectDetailsPage() {
 
   const canEdit =
     !!profile &&
-    (profile.id === project.created_by || profile.role === "md" || (profile.role === "dgm" && project.team === profile.team));
+    (profile.id === project.created_by || profile.role === "md" || (profile.role === "dgm" && !!profile.teams?.includes(project.team)));
 
   return (
     <div className="app-shell">

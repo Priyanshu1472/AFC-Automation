@@ -182,6 +182,19 @@ Deno.test("dgm_recommend - rejects a DGM from a different team", async () => {
   assertEquals(res.status, 403);
 });
 
+Deno.test("dgm_recommend - a multi-team DGM (afc_user_teams) can act on an application from their secondary team", async () => {
+  const client = buildClient({
+    caller: callerRow({ role: "dgm", team: "BPDD" }),
+    app: appRow({ status: "dgm_review", team: "BIID" }),
+    routes: {
+      afc_user_teams: [{ data: [{ team: "BPDD" }, { team: "BIID" }], error: null }],
+      afc_users: [{ data: [{ email: "md@afc.com" }], error: null }],
+    },
+  });
+  const res = await handleRequest(req({ application_id: APP_ID, action: "dgm_recommend", comment: "ok" }), client as never);
+  assertEquals(res.status, 200);
+});
+
 Deno.test("dgm_recommend - success moves to md_review", async () => {
   const client = buildClient({
     caller: callerRow({ role: "dgm", team: "BPDD" }),

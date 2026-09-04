@@ -292,7 +292,17 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       });
     }
 
-    const finalTeam = (body.team as string) || null;
+    // `teams` (plural) is the full assignment set for team-scoped roles —
+    // `team` (singular) stays the primary/home team, written to
+    // afc_users.team unchanged so every existing single-team-read call site
+    // keeps working. Falls back to the singular `team` field alone when
+    // `teams` isn't sent, so older callers/tests still work.
+    const rawTeams = Array.isArray(body.teams) ? body.teams : null;
+    const teamSet = (rawTeams
+      ? rawTeams.filter((t): t is string => typeof t === "string" && t.trim().length > 0).map((t) => t.trim())
+      : []
+    );
+    const finalTeam = teamSet[0] || (body.team as string) || null;
     const finalOffice = (body.office as string) || null;
     const finalCommittee = (committee as string) || null;
     // Every account starts with the same default action PIN ("1234") so a
@@ -323,6 +333,14 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       // can never pass ProtectedRoute's profile check anyway.
       await adminClient.auth.admin.deleteUser(newAuthUser.user.id);
       return jsonRes(req, 500, { error: "Failed to save user profile. Please try again." });
+    }
+
+    const teamsToAssign = teamSet.length ? teamSet : (finalTeam ? [finalTeam] : []);
+    if (teamsToAssign.length) {
+      const { error: teamsErr } = await adminClient
+        .from("afc_user_teams")
+        .insert(teamsToAssign.map((team) => ({ user_id: newAuthUser.user.id, team })));
+      if (teamsErr) console.error("Failed to insert afc_user_teams:", teamsErr.message);
     }
 
     // ── Notify the new user (best-effort — never fails account creation) ──

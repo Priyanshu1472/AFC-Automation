@@ -11,7 +11,7 @@ import logo from "../../images/Logo.png";
 import "../../styles/AppHeader.css";
 
 export default function AppHeader() {
-  const { profile, signOut } = useAuth();
+  const { profile, activeTeam, setActiveTeam, signOut } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -26,6 +26,16 @@ export default function AppHeader() {
     closeMenu();
     await signOut();
     navigate("/login", { replace: true });
+  }
+
+  function switchTeam(team) {
+    if (team === activeTeam) {
+      closeMenu();
+      return;
+    }
+    setActiveTeam(team);
+    closeMenu();
+    navigate("/home");
   }
 
   // Close on Escape — standard drawer a11y behavior.
@@ -48,6 +58,7 @@ export default function AppHeader() {
   const navLinkClass = ({ isActive }) => (isActive ? "active" : "");
   const roleLabel = ROLE_LABELS[profile.role] || profile.role;
   const initial = (profile.full_name || "?").trim().charAt(0).toUpperCase();
+  const teams = profile.teams || [];
 
   return (
     <header className="app-header">
@@ -155,6 +166,25 @@ export default function AppHeader() {
           <NotificationBell />
           <UserMenu />
         </div>
+
+        {/* Mobile-drawer-only — mirrors UserMenu's desktop team switcher
+            (see AppHeader's own profile block above, not UserMenu, since
+            UserMenu is hidden below this breakpoint). */}
+        {teams.length > 1 && (
+          <div className="app-header-nav-teams-mobile">
+            <span className="app-header-nav-teams-label-mobile">Switch Team</span>
+            {teams.map((team) => (
+              <button
+                key={team}
+                type="button"
+                className={`app-header-nav-team-item-mobile${team === activeTeam ? " app-header-nav-team-item-mobile-active" : ""}`}
+                onClick={() => switchTeam(team)}
+              >
+                {team}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Mobile-drawer-only — profile link + sign out, pinned to the
             bottom of the drawer so neither requires opening UserMenu's

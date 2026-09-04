@@ -35,6 +35,16 @@
 .al-row-clickable { cursor: pointer; }
 .al-row-clickable:hover { background: var(--table-row-hover); }
 
+/* Fixed-width pills so the Role/Action columns read as a clean aligned
+   block instead of every row's badge being a different width — same idea
+   as Empanelment's .bl-status-badge and Proposals' .pp-status-badge. Role
+   is sized for the longest label, "Assistant General Manager" (same as
+   UserListPage's .ul-role-badge); Action covers most labels — a rare very
+   long one (e.g. "User Created (email failed)") just grows past this
+   floor rather than being clipped. */
+.al-role-badge { min-width: 190px; justify-content: center; }
+.al-action-badge { min-width: 150px; justify-content: center; }
+
 /* ── Filter row ─────────────────────────────────────────── */
 .al-filter-row {
   display: flex;

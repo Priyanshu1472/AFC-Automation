@@ -151,7 +151,7 @@ function StatCard({ label, value, colorClass, loading }) {
 
 export default function EmpanelmentListPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
 
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -208,7 +208,11 @@ export default function EmpanelmentListPage() {
       (a.ba_reg?.core_expertise || "").toLowerCase().includes(q) ||
       sectorsServed.toLowerCase().includes(q) ||
       assignments.toLowerCase().includes(q);
-    return matchSearch && (statusFilter === "all" || a.status === statusFilter);
+    // Narrows a multi-team user's (already RLS-permitted) rows down to
+    // their currently active team — a no-op for single-team/org-wide users,
+    // since RLS already scoped everything to the one team they have.
+    const matchActiveTeam = !activeTeam || a.team === activeTeam;
+    return matchSearch && matchActiveTeam && (statusFilter === "all" || a.status === statusFilter);
   });
 
   const canSend = ["associate_consultant", "project_assistant"].includes(profile?.role);

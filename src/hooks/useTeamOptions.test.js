@@ -3,9 +3,17 @@ import { describe, expect, it, vi } from "vitest";
 import { useTeamOptions } from "./useTeamOptions";
 
 const select = vi.fn();
+let realtimeCallback;
 vi.mock("../lib/supabase", () => ({
   supabase: {
     from: () => ({ select: () => ({ not: (...a) => select(...a) }) }),
+    channel: () => ({
+      on: (_event, _filter, cb) => {
+        realtimeCallback = cb;
+        return { subscribe: () => ({}) };
+      },
+    }),
+    removeChannel: vi.fn(),
   },
 }));
 
@@ -33,5 +41,15 @@ describe("useTeamOptions", () => {
     const { result } = renderHook(() => useTeamOptions());
     await new Promise((r) => setTimeout(r, 10));
     expect(result.current).toEqual(["BPDD", "BIID"]);
+  });
+
+  it("re-fetches when an afc_users realtime change fires, not just on mount", async () => {
+    select.mockResolvedValueOnce({ data: [{ team: "BPDD" }], error: null });
+    const { result } = renderHook(() => useTeamOptions());
+    await waitFor(() => expect(result.current).toEqual(["BIID", "BPDD"]));
+
+    select.mockResolvedValueOnce({ data: [{ team: "BPDD" }, { team: "Mumbai-West" }], error: null });
+    realtimeCallback();
+    await waitFor(() => expect(result.current).toEqual(["BIID", "BPDD", "Mumbai-West"]));
   });
 });

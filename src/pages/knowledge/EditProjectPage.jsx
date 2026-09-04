@@ -81,7 +81,7 @@ export default function EditProjectPage() {
 
   const canEdit =
     !!profile &&
-    (profile.id === projectCreatedBy || profile.role === "md" || (profile.role === "dgm" && projectTeam === profile.team));
+    (profile.id === projectCreatedBy || profile.role === "md" || (profile.role === "dgm" && !!profile.teams?.includes(projectTeam)));
 
   const handleFormChange = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 

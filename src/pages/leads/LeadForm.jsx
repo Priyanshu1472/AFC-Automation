@@ -24,7 +24,7 @@ function toOptions(users) {
 // mode: "create" | "edit". `lead` is the existing row when editing/resubmitting.
 export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
   const { showToast } = useToast();
   const isEdit = mode === "edit";
   // Suo Moto has its own field set (Name of the Proposal / Date of
@@ -33,10 +33,10 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   // State, Delivery Type) — lead_type (RFP/EOI) doesn't apply here at all.
 
   // The lead's working team: fixed to the existing lead's team on edit, or
-  // the caller's own team on create — matches the real form (no Team
-  // selector; Person Responsible/Reviewer/Approval Authority are always
-  // picked from this one team).
-  const team = mode === "edit" ? lead?.team : profile?.team;
+  // the caller's own currently-active team on create — matches the real
+  // form (no Team selector; Person Responsible/Reviewer/Approval Authority
+  // are always picked from this one team).
+  const team = mode === "edit" ? lead?.team : (activeTeam ?? profile?.team);
 
   const [form, setForm] = useState(() => ({
     lead_type: lead?.lead_type || "rfp",
@@ -57,11 +57,6 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     approval_authority_id: lead?.approval_authority_id || "",
   }));
   const isSuoMoto = form.source === "suo_moto";
-  // Only required when resubmitting a lead the MD sent back — explains what
-  // changed since the MD's decline. Logged onto the activity timeline only,
-  // never onto the lead itself, so it never ends up in the generated PDF.
-  const isMdReturn = isEdit && lead?.declined_from_status === "md_review";
-  const [resubmitComment, setResubmitComment] = useState("");
   const [file, setFile] = useState(null);
   const [personResponsibleOptions, setPersonResponsibleOptions] = useState([]);
   const [reviewerOptions, setReviewerOptions] = useState([]);
@@ -159,7 +154,6 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     if (!form.approval_authority_id) errs.approval_authority_id = "Approval Authority is required.";
     if (form.source === "ba" && !form.assigned_ba_id) errs.assigned_ba_id = "Business Associate is required for a BA Source lead.";
     if (isSuoMoto && !form.assigned_ba_id) errs.assigned_ba_id = "Business Associate is required for a Suo Moto lead.";
-    if (isMdReturn && !resubmitComment.trim()) errs.resubmit_comment = "Add a remark explaining the changes before resubmitting to the MD.";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -188,7 +182,6 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       fd.set("person_responsible_id", form.person_responsible_id);
       fd.set("reviewer_id", form.reviewer_id);
       fd.set("approval_authority_id", form.approval_authority_id);
-      if (isMdReturn) fd.set("resubmit_comment", resubmitComment.trim());
       if (file) fd.set("document", file, file.name);
 
       const { data, error } = await supabase.functions.invoke(mode === "create" ? "create-lead" : "update-lead", { body: fd });
@@ -413,24 +406,6 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
               disabled={submitting}
             />
           </div>
-
-          {isMdReturn && (
-            <div className="field">
-              <label className="field-label">
-                Remarks for MD <span className="required">*</span>
-              </label>
-              <textarea
-                className="input"
-                rows={3}
-                value={resubmitComment}
-                onChange={(e) => setResubmitComment(e.target.value)}
-                placeholder="Explain what changed since the MD's decline..."
-                disabled={submitting}
-              />
-              {errors.resubmit_comment && <span className="field-error">{errors.resubmit_comment}</span>}
-              <span className="field-hint">Shown to the MD alongside the resubmitted lead — not included in the generated PDF.</span>
-            </div>
-          )}
         </Card.Body>
       </Card>
 

@@ -63,13 +63,19 @@ describe("leadCan", () => {
     expect(leadCan.editResubmit(user, { ...lead, status: "pmt_review" })).toBe(false);
   });
 
-  it("claim requires a PA-tier role on the lead's own team", () => {
-    const profile = { ...user, role: "agm", team: "BPDD" };
+  it("claim requires a PA-tier role on one of the caller's assigned teams", () => {
+    const profile = { ...user, role: "agm", team: "BPDD", teams: ["BPDD"] };
     const lead = { status: "pa_dropped", team: "BPDD" };
     expect(leadCan.claim(profile, lead)).toBe(true);
     expect(leadCan.claim(profile, { ...lead, team: "OtherTeam" })).toBe(false);
     expect(leadCan.claim(profile, { ...lead, status: "pa_review" })).toBe(false);
-    expect(leadCan.claim({ ...user, role: "cfo", team: "BPDD" }, lead)).toBe(false);
+    expect(leadCan.claim({ ...user, role: "cfo", team: "BPDD", teams: ["BPDD"] }, lead)).toBe(false);
+  });
+
+  it("claim recognizes a multi-team caller's secondary team, not just their primary", () => {
+    const profile = { ...user, role: "agm", team: "BPDD", teams: ["BPDD", "HO"] };
+    expect(leadCan.claim(profile, { status: "pa_dropped", team: "HO" })).toBe(true);
+    expect(leadCan.claim(profile, { status: "pa_dropped", team: "OtherTeam" })).toBe(false);
   });
 
   it("pmtReview requires committee=PMT — org-wide, no team match needed", () => {
@@ -94,12 +100,17 @@ describe("leadCan", () => {
     expect(leadCan.prReviewAccept(user, { ...lead, approval_note_pending_pr_review: false })).toBe(false);
   });
 
-  it("dgmInitialReview (G3, ahead of PMT) is org-wide — any team matches", () => {
-    const profile = { ...user, committee: "G3", team: "BPDD" };
-    const lead = { status: "dgm_initial_review", team: "SomeOtherTeam" };
-    expect(leadCan.dgmInitialReview(profile, lead)).toBe(true);
-    expect(leadCan.dgmInitialReview({ ...profile, committee: "PMT" }, lead)).toBe(false);
-    expect(leadCan.dgmInitialReview(profile, { ...lead, status: "dgm_review" })).toBe(false);
+  it("dgmInitialReview (first-line gate, ahead of PMT) is team-scoped, NOT the org-wide G3 pool", () => {
+    const profile = { ...user, role: "dgm", committee: "G3", team: "BPDD", teams: ["BPDD"] };
+    const ownTeamLead = { status: "dgm_initial_review", team: "BPDD" };
+    const otherTeamLead = { status: "dgm_initial_review", team: "SomeOtherTeam" };
+    expect(leadCan.dgmInitialReview(profile, ownTeamLead)).toBe(true);
+    // Holding the G3 committee alone is NOT enough — must be this lead's
+    // own team's DGM (mirrors can_view_lead()'s exclusion of this status
+    // from its org-wide committee clause).
+    expect(leadCan.dgmInitialReview(profile, otherTeamLead)).toBe(false);
+    expect(leadCan.dgmInitialReview({ ...profile, role: "project_officer" }, ownTeamLead)).toBe(false);
+    expect(leadCan.dgmInitialReview(profile, { ...ownTeamLead, status: "dgm_review" })).toBe(false);
   });
 
   it("dgmReview (G3) is org-wide — any team matches", () => {

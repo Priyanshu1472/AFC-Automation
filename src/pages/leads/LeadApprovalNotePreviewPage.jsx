@@ -38,7 +38,7 @@ export default function LeadApprovalNotePreviewPage() {
     const { data } = await supabase.from("leads").select("*").eq("id", id).maybeSingle();
     setLead(data);
     setLoading(false);
-    const isResubmittable = data?.status === "pa_action_required" && data?.declined_from_status === "dgm_initial_review";
+    const isResubmittable = data?.status === "pa_action_required";
     if ((data?.status === "pa_review" || isResubmittable) && !data.assigned_ba_id && data.team) {
       supabase.rpc("get_team_business_associates", { p_team: data.team }).then(({ data: list }) => setBaOptions(list || []));
     }
@@ -64,10 +64,10 @@ export default function LeadApprovalNotePreviewPage() {
     fetchLead().then((data) => data && loadPdfUrl(data));
   }, [fetchLead, loadPdfUrl]);
 
-  // A resubmission after DGM's decline goes through the exact same
-  // "accept" action/PIN gate as the very first submission — advance-lead-
-  // stage restricts it to leads DGM itself declined.
-  const isResubmit = lead?.status === "pa_action_required" && lead?.declined_from_status === "dgm_initial_review";
+  // A resubmission after a decline at any stage (DGM, PMT, PMT Extended,
+  // G3, or MD) goes through the exact same "accept" action/PIN gate as the
+  // very first submission — see advance-lead-stage's "accept" case.
+  const isResubmit = lead?.status === "pa_action_required";
   const needsBaSelection = (lead?.status === "pa_review" || isResubmit) && !lead?.assigned_ba_id;
 
   async function submitForDgmApproval() {

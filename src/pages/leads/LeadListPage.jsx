@@ -35,7 +35,7 @@ const QUICK_FILTERS = {
 
 function StatusBadge({ status }) {
   const cfg = STATUS_MAP[status] || { label: status, variant: "neutral" };
-  return <Badge variant={cfg.variant} dot>{cfg.label}</Badge>;
+  return <Badge className="ll-status-badge" variant={cfg.variant} dot>{cfg.label}</Badge>;
 }
 
 function fmt(v) {
@@ -61,7 +61,7 @@ function loadStoredFilters() {
 
 export default function LeadListPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
 
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +84,13 @@ export default function LeadListPage() {
   }, [search, quickFilter, statusFilter, teamFilter, page]);
 
   const canFilterTeam = can.viewAllTeams(profile?.role);
+  // Team-scoped roles (dgm/agm/srm/etc.) have no visible team filter — RLS
+  // already scopes their rows to their assigned team(s), but a multi-team
+  // user's rows now span every team they're on, so the "whole interface
+  // should be of <team>" switcher needs to actively narrow here too,
+  // reactively (never sessionStorage-persisted — that would go stale the
+  // instant the user switches teams and comes back to this page).
+  const effectiveTeamFilter = canFilterTeam ? teamFilter : (activeTeam || "all");
   const teams = useTeamOptions();
   const teamOptions = [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))];
 
@@ -120,13 +127,18 @@ export default function LeadListPage() {
     return () => supabase.removeChannel(channel);
   }, [fetchLeads, fetchUnreadCounts]);
 
+  // Scoped by team the same way the table below is (effectiveTeamFilter) —
+  // otherwise these tiles kept counting every RLS-permitted lead across all
+  // of a multi-team user's teams even while the table itself was correctly
+  // narrowed to just the active team.
   const stats = useMemo(() => {
+    const teamScoped = effectiveTeamFilter === "all" ? leads : leads.filter((l) => l.team === effectiveTeamFilter);
     const result = {};
     for (const [key, cfg] of Object.entries(QUICK_FILTERS)) {
-      result[key] = leads.filter((l) => cfg.match(l, profile)).length;
+      result[key] = teamScoped.filter((l) => cfg.match(l, profile)).length;
     }
     return result;
-  }, [leads, profile]);
+  }, [leads, profile, effectiveTeamFilter]);
 
   function selectQuickFilter(key) {
     // Clicking the active card again clears it back to Total.
@@ -159,7 +171,7 @@ export default function LeadListPage() {
       matchSearch &&
       QUICK_FILTERS[quickFilter].match(l, profile) &&
       (statusFilter === "all" || l.status === statusFilter) &&
-      (teamFilter === "all" || l.team === teamFilter)
+      (effectiveTeamFilter === "all" || l.team === effectiveTeamFilter)
     );
   });
 
@@ -251,15 +263,15 @@ export default function LeadListPage() {
                 </thead>
                 <tbody>
                   {paged.map((l) => (
-                    <tr key={l.id}>
+                    <tr key={l.id} className="ll-row-clickable" onClick={() => navigate(`/leads/${l.id}`)}>
                       <td><span className="ll-lead-number">{l.lead_number}</span></td>
                       <td className="ll-title" title={l.title}>{fmt(l.title)}</td>
-                      <td>{fmt(l.creator?.full_name)}</td>
+                      <td className="ll-name-cell" title={l.creator?.full_name || ""}>{fmt(l.creator?.full_name)}</td>
                       {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>}
-                      <td>{fmt(l.assignee?.full_name)}</td>
+                      <td className="ll-name-cell" title={l.assignee?.full_name || ""}>{fmt(l.assignee?.full_name)}</td>
                       <td><StatusBadge status={l.status} /></td>
                       <td className="ll-date">{fmtDate(l.created_at)}</td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <div className="ll-action-icons">
                           <button type="button" className="ll-icon-btn" title="View" aria-label="View lead" onClick={() => navigate(`/leads/${l.id}`)}>
                             <EyeIcon />

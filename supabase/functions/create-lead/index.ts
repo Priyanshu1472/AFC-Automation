@@ -145,7 +145,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       uploadedPath = uploaded.path;
     }
 
-    const { data: leadNumberData, error: numErr } = await adminClient.rpc("next_lead_number");
+    const { data: leadNumberData, error: numErr } = await adminClient.rpc("next_lead_number", { p_team: team });
     if (numErr || !leadNumberData) {
       if (uploadedPath) await adminClient.storage.from(BUCKET).remove([uploadedPath]).catch(() => {});
       return jsonRes(req, 500, { error: "Failed to generate a lead number. Please try again." });

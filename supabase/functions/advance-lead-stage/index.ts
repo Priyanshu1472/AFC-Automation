@@ -9,10 +9,10 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { notifyUsers } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
-import { Committee, PA_TIER_ROLES, addLeadChatParticipants, getOrgWideHolders, getTargetUser } from "../_shared/leadAuth.ts";
+import { Committee, PA_TIER_ROLES, addLeadChatParticipants, getOrgWideHolders, getTargetUser, getTeamDgmHolders } from "../_shared/leadAuth.ts";
 import { validateBusinessAssociate } from "../_shared/leadEligibility.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { LeadDocument, regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
@@ -122,15 +122,17 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
   dgm_review: { dgm_accept: "md_review", dgm_decline: "pa_action_required", drop: "pa_dropped" },
   // md_decline is no longer terminal — it returns the lead to the creator/
   // PR for changes, same shape as every earlier-stage decline (see the
-  // "md_decline" case for who gets notified and how resubmission routes
-  // straight back to md_review, skipping every committee).
+  // "md_decline" case for who gets notified).
   md_review: { md_approve: "md_approved", md_decline: "pa_action_required", drop: "pa_dropped" },
-  // "accept" also reaches pa_action_required -> dgm_initial_review — a
-  // resubmission after DGM's decline follows the exact same
-  // generate-note-then-accept procedure as the very first submission (see
-  // the "accept" case, which further restricts this to only the
-  // DGM-declined case via declined_from_status). Every other decline
-  // source still resubmits through update-lead's plain Edit & Resubmit.
+  // "accept" also reaches pa_action_required -> dgm_initial_review — every
+  // decline source (DGM, PMT, PMT Extended, G3, MD) resubmits through the
+  // exact same generate-note-then-accept procedure as the very first
+  // submission (see the "accept" case): edit the Lead Approval Note, then
+  // send it back through DGM again, never skipping ahead to whichever
+  // stage declined it. update-lead's own separate pa_action_required
+  // resubmit path (a "straight back to the declining stage" shortcut) is
+  // no longer reachable through the normal UI flow, which always routes
+  // here instead.
   pa_action_required: {
     drop: "pa_dropped", accept: "dgm_initial_review",
     submit_for_pr_review: "pa_action_required", pr_review_accept: "pa_action_required", pr_review_reject: "pa_action_required",
@@ -225,13 +227,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     switch (action) {
       case "accept": {
         if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can accept this lead.");
-        // From pa_action_required, "accept" is only a valid resubmission
-        // when DGM was the one who declined it — every other decline
-        // source resubmits through update-lead instead (see the
-        // LEAD_TRANSITIONS comment above).
-        if (leadRow.status === "pa_action_required" && leadRow.declined_from_status !== "dgm_initial_review") {
-          return jsonRes(req, 400, { error: "This lead wasn't returned by DGM — use Edit & Resubmit instead." });
-        }
+        // From pa_action_required, "accept" resubmits through DGM again —
+        // regardless of which stage (DGM, PMT, PMT Extended, G3, or MD)
+        // declined it. Every pa_action_required lead already has a Lead
+        // Approval Note that's been stamped with committee remarks, so
+        // resubmission always means editing that note and sending it back
+        // through the full committee chain, not skipping ahead to
+        // whichever stage declined it.
         // "Accept" is now "Submit for DGM Approval" on the Lead Approval
         // Note workflow — the note must exist (generated via
         // generate-lead-approval-note) before the lead can move on.
@@ -255,7 +257,10 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           if (baErr) return jsonRes(req, 400, { error: baErr });
           extraFields.assigned_ba_id = baId;
         }
-        notifyTargetIds = await getOrgWideHolders(adminClient, { committee: "G3" });
+        // First-line DGM gate is a team match (see dgm_initial_approve's own
+        // authorization check below), not the org-wide G3 committee pool —
+        // only this lead's own team's DGM(s) should be notified here.
+        notifyTargetIds = await getTeamDgmHolders(adminClient, leadRow.team);
         notifyTitle = "Lead awaiting DGM review";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was accepted and needs your review.`;
         break;
@@ -365,7 +370,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "claim": {
-        if (!PA_TIER_ROLES.includes(caller.role) || caller.team !== leadRow.team) {
+        if (!PA_TIER_ROLES.includes(caller.role) || !isCallerOnTeam(caller, leadRow.team)) {
           return forbidden("You must be a PA, Project Officer, Associate Consultant, AGM, or SRM on this team to claim this lead.");
         }
         extraFields = { person_responsible_id: caller.id };
@@ -377,7 +382,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       // G3 committee pool. G3 only comes in later, if PMT Extended escalates
       // (see "dgm_accept"/"dgm_decline" further down).
       case "dgm_initial_approve": {
-        if (caller.role !== "dgm" || caller.team !== leadRow.team) return forbidden("Only this lead's team DGM can act on this lead.");
+        if (caller.role !== "dgm" || !isCallerOnTeam(caller, leadRow.team)) return forbidden("Only this lead's team DGM can act on this lead.");
         extraFields = { handled_by_dgm_id: caller.id };
         // Chat opens here — the first time this lead clears DGM and reaches
         // PMT — and only here; never overwritten on a later pass through
@@ -396,7 +401,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "dgm_initial_decline": {
-        if (caller.role !== "dgm" || caller.team !== leadRow.team) return forbidden("Only this lead's team DGM can act on this lead.");
+        if (caller.role !== "dgm" || !isCallerOnTeam(caller, leadRow.team)) return forbidden("Only this lead's team DGM can act on this lead.");
         // The stale draft note reflected the version DGM just rejected —
         // pull it off the lead immediately so nothing outdated is shown
         // while the Person Responsible reworks it; a fresh one is generated

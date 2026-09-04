@@ -31,6 +31,16 @@ export const SCRUTINY_PARAMETERS: { label: string; defaultRemark: string }[] = [
   { label: "Risk Assessment", defaultRemark: "Low / Medium / High with brief justification." },
 ];
 
+// Nature of Lead is derived straight from the lead's own source/lead_type
+// (set once at creation, locked) — never a free client choice. Mirrored in
+// src/lib/leadApprovalNote.js for the frontend's display-only preview; this
+// is the actual source of truth, computed fresh from the lead row every
+// time the note is (re)generated.
+export function deriveNatureOfLead(source: string, leadType: string): string {
+  if (source === "suo_moto") return "Suo Moto";
+  return leadType === "eoi" ? "Expression of Interest (EOI)" : "Tender";
+}
+
 export type LeadDocument = { name: string; path: string; size: number; uploaded_at: string; category?: "approval_note" | "final_approval_note" };
 
 export type ApprovalNoteData = {

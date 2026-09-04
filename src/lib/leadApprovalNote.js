@@ -19,3 +19,13 @@ export const SCRUTINY_PARAMETERS = [
 export function defaultScrutinyEntries() {
   return SCRUTINY_PARAMETERS.map((p) => ({ yes_no: "Yes", remarks: p.defaultRemark }));
 }
+
+// Nature of Lead is no longer a free choice on the Approval Note form — it's
+// derived straight from how the lead itself was created (source/lead_type,
+// set once at creation and locked). Mirrored server-side in
+// supabase/functions/_shared/leadApprovalPdf.ts, which is the actual source
+// of truth stored on the note (this is display-only on the client).
+export function deriveNatureOfLead(source, leadType) {
+  if (source === "suo_moto") return "Suo Moto";
+  return leadType === "eoi" ? "Expression of Interest (EOI)" : "Tender";
+}

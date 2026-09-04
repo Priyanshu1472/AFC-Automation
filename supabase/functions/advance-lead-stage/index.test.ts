@@ -109,6 +109,23 @@ Deno.test("accept - success moves to dgm_initial_review when the lead already ha
   assertEquals(await res.json(), { success: true, status: "dgm_initial_review" });
 });
 
+Deno.test("accept - notifies only this lead's own team's DGM(s), not every G3 committee member org-wide", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow(), error: null }, // getCallerProfile
+      { data: [{ id: "team-dgm-1" }], error: null }, // getTeamDgmHolders' afc_users lookup, scoped to the membership ids below
+    ],
+    afc_user_teams: [{ data: [{ user_id: "team-dgm-1" }], error: null }], // only this team's members
+    leads: [{ data: leadRow({ assigned_ba_id: "existing-ba" }), error: null }, { data: { id: LEAD_ID }, error: null }],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 200);
+
+  const notifyLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "notifications");
+  const rows = JSON.parse(notifyLog[0].calls.find((c) => c[0] === "insert")![1]);
+  assertEquals(rows.map((r: { user_id: string }) => r.user_id), ["team-dgm-1"]);
+});
+
 Deno.test("accept - requires a BA when the lead has none and none is provided", async () => {
   const client = buildClient({});
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
@@ -155,6 +172,16 @@ Deno.test("dgm_initial_approve - rejects a DGM from a different team", async () 
   const client = buildClient({ caller: callerRow({ role: "dgm", team: "OtherTeam" }), lead: leadRow({ status: "dgm_initial_review", team: TEAM }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
   assertEquals(res.status, 403);
+});
+
+Deno.test("dgm_initial_approve - a multi-team DGM (afc_user_teams) can act on a lead from their secondary team, not just their primary", async () => {
+  const client = buildClient({
+    caller: callerRow({ role: "dgm", team: "BPDD" }),
+    lead: leadRow({ status: "dgm_initial_review", team: "HO" }),
+    routes: { afc_user_teams: [{ data: [{ team: "BPDD" }, { team: "HO" }], error: null }] },
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
 });
 
 Deno.test("dgm_initial_approve - G3 committee membership alone is NOT enough (must be the team's DGM)", async () => {
@@ -254,15 +281,19 @@ Deno.test("dgm_initial_decline - strips the stale approval_note document off the
   assertEquals(updatedFields.documents, [otherDoc]);
 });
 
-// Resubmission after a DGM decline reuses "accept" — the exact same
-// action/PIN gate as the very first submission — restricted to leads DGM
-// itself declined (see the "accept" case's declined_from_status check).
-Deno.test("accept (resubmit) - rejects a pa_action_required lead that wasn't declined by DGM", async () => {
-  const client = buildClient({
-    lead: leadRow({ status: "pa_action_required", declined_from_status: "md_review", assigned_ba_id: "existing-ba" }),
-  });
-  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
-  assertEquals(res.status, 400);
+// Resubmission after a decline reuses "accept" — the exact same
+// action/PIN gate as the very first submission — for a decline from *any*
+// stage (DGM, PMT, PMT Extended, G3, or MD), always routing back through
+// DGM again rather than skipping ahead to whichever stage declined it.
+Deno.test("accept (resubmit) - valid regardless of which stage declined it", async () => {
+  for (const declinedFrom of ["dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review"]) {
+    const client = buildClient({
+      lead: leadRow({ status: "pa_action_required", declined_from_status: declinedFrom, assigned_ba_id: "existing-ba" }),
+    });
+    const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+    assertEquals(res.status, 200, `expected 200 for declined_from_status=${declinedFrom}`);
+    assertEquals((await res.json()).status, "dgm_initial_review");
+  }
 });
 
 Deno.test("accept (resubmit) - only the Person Responsible can resubmit", async () => {
