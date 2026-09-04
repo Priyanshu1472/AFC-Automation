@@ -34,12 +34,6 @@ export const ROLE_LABELS = {
   admin: "Administrator",
 };
 
-// ─── MD can create ONLY admin accounts — this is a bootstrap allowance so
-// there's a way to create the very first Admin. Every other role is created
-// by an Admin (ADMIN_CREATABLE_ROLES below). DGM can no longer create
-// anyone. ─────────────────────────────────────────────────────
-export const MD_CREATABLE_ROLES = ["admin"];
-
 // ─── Admin can create any staff role except admin (avoid Admins silently
 // minting more Admins) and md (MD accounts aren't created through this
 // flow). ─────────────────────────────────────────────────────
@@ -54,14 +48,15 @@ export const ADMIN_CREATABLE_ROLES = [
   "project_assistant",
 ];
 
-// ─── Users page — nav visibility and the /users route's allowedRoles must
-// stay in sync, so both read from this single list. MD and DGM keep seeing
-// Users (and can edit existing accounts) even though they can no longer add
-// new ones — see can.createUsers. ──────────────────────────────
-export const USERS_PAGE_ROLES = ["md", "dgm", "admin"];
+// ─── Users page — nav visibility and every /users*/create-user route's
+// allowedRoles must stay in sync, so all of them read from this single
+// list. User management (view, create, edit, activate/deactivate) is
+// Admin-only — no other role, including MD and DGM, can see or reach it.
+// ──────────────────────────────────────────────
+export const USERS_PAGE_ROLES = ["admin"];
 
-// ─── Audit log — MD only. ──────────────────────────────────────────
-export const AUDIT_LOG_ROLES = ["md"];
+// ─── Audit log — Admin only. ──────────────────────────────────────────
+export const AUDIT_LOG_ROLES = ["admin"];
 
 // ─── Empanelment — visible to every staff role (not the business_associate
 // portal role, which has its own separate area). Only associate_consultant
@@ -80,18 +75,12 @@ export const KNOWLEDGE_REPOSITORY_ROLES = Object.keys(ROLES).filter((r) => r !==
 
 // ─── Permissions ──────────────────────────────────────────────
 export const can = {
-  // Activate/deactivate + full edit rights on any user account.
-  manageAllUsers: (role) => role === "md" || role === "admin",
-  // DGM can still manage (activate/deactivate/edit) accounts on their own team.
-  manageTeamUsers: (role) => role === "dgm",
-  // Only Admin can add new accounts day-to-day; MD keeps a narrow bootstrap
-  // allowance (see MD_CREATABLE_ROLES) to create the first Admin.
-  createUsers: (role) => role === "admin" || role === "md",
-  // MD/DGM/Admin can all fix mistakes on existing user records.
-  editUsers: (role) => ["admin", "md", "dgm"].includes(role),
-  // Changing a user's ROLE (not just name/team/office) is restricted to
-  // Admin and MD — a DGM editing a teammate's record can't promote them.
-  editUserRole: (role) => ["admin", "md"].includes(role),
+  // User management (view, create, edit, activate/deactivate, change role)
+  // is Admin-only — no other role, not even MD or DGM.
+  manageAllUsers: (role) => role === "admin",
+  createUsers: (role) => role === "admin",
+  editUsers: (role) => role === "admin",
+  editUserRole: (role) => role === "admin",
 
   viewAllTeams: (role) => ["md", "cfo", "cs", "admin"].includes(role),
   // Reports page's Team/Office filters — narrower than viewAllTeams: only MD
@@ -116,7 +105,7 @@ export function isAdminLevel(role) {
 
 // ─── Org structure ─────────────────────────────────────────────
 export const OFFICES = ["delhi", "mumbai", "lucknow"];
-export const TEAMS = ["BPDD", "CBBO"];
+export const TEAMS = ["BPDD", "BIID"];
 
 // ─── Whitelist of valid roles — validate any role value from the DB before trusting it ──
 export const VALID_ROLES = new Set(Object.keys(ROLES));
@@ -142,5 +131,8 @@ export const LEAD_PA_TIER_ROLES = ["project_assistant", "project_officer", "asso
 
 // Route-level gating only (who can even reach /leads*) — every actual
 // create/accept/review permission is re-derived from afc_users.role/
-// committee/team, never from this list.
-export const LEAD_GENERATION_NAV_ROLES = ["project_assistant", "project_officer", "associate_consultant", "agm", "srm", "dgm", "md", "admin"];
+// committee/team, never from this list. cfo/cs are view-only here: they
+// already have org-wide row visibility via can_view_lead(), but have no
+// action branch anywhere in advance-lead-stage — included so they can
+// actually reach the pages, not because they can act on anything yet.
+export const LEAD_GENERATION_NAV_ROLES = ["project_assistant", "project_officer", "associate_consultant", "agm", "srm", "dgm", "md", "admin", "cfo", "cs"];

@@ -260,7 +260,7 @@ function DrillDownPanel({ title, apps, onClose, onView }) {
 }
 
 export default function EmpanelmentDashboardPage() {
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
   const navigate = useNavigate();
   const role = profile?.role;
 
@@ -323,8 +323,12 @@ export default function EmpanelmentDashboardPage() {
       list = list.filter((a) => new Date(a.created_at).getTime() >= cutoff);
     }
     if (canFilterTeam && teamFilter !== "all") list = list.filter((a) => a.team === teamFilter);
+    // A multi-team viewer with no visible team filter (team-scoped roles
+    // don't get one — see canFilterTeam) still needs narrowing down to
+    // their currently active team; a no-op for single-team/org-wide users.
+    else if (!canFilterTeam && activeTeam) list = list.filter((a) => a.team === activeTeam);
     return list;
-  }, [apps, dateRangeDays, teamFilter, canFilterTeam]);
+  }, [apps, dateRangeDays, teamFilter, canFilterTeam, activeTeam]);
 
   const total = filtered.length;
   const accepted = filtered.filter((a) => a.status === "accepted").length;

@@ -17,9 +17,11 @@ function client(opts: {
   dgm?: Record<string, unknown> | null;
   existing?: Record<string, unknown> | null;
   insertResult?: { data: unknown; error: unknown };
+  teams?: string[];
 }) {
   return createFakeAdminClient({
     afc_users: [{ data: opts.caller ?? callerRow(), error: null }, { data: opts.po === undefined ? { id: PO_ID, full_name: "PO Person", email: "po@afc.com" } : opts.po, error: null }, { data: opts.dgm === undefined ? { id: "dgm-1", full_name: "DGM Person" } : opts.dgm, error: null }],
+    ...(opts.teams ? { afc_user_teams: [{ data: opts.teams.map((t) => ({ team: t })), error: null }] } : {}),
     empanelment_applications: [{ data: opts.existing ?? null, error: null }, opts.insertResult ?? { data: { id: "app-new-1" }, error: null }],
     empanelment_activity_log: [{ data: null, error: null }],
   });
@@ -90,6 +92,28 @@ Deno.test("send-empanelment-invite - succeeds even when the team has no DGM assi
   } finally {
     globalThis.fetch = original;
   }
+});
+
+Deno.test("send-empanelment-invite - a multi-team caller can target a non-primary assigned team via `team`", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = okFetch;
+  try {
+    const res = await handleRequest(
+      req({ ba_email: "ba@org.com", project_officer_id: PO_ID, team: "HO" }),
+      client({ caller: callerRow({ team: "BPDD" }), teams: ["BPDD", "HO"] }) as never,
+    );
+    assertEquals(res.status, 200);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("send-empanelment-invite - rejects a `team` the caller isn't assigned to", async () => {
+  const res = await handleRequest(
+    req({ ba_email: "ba@org.com", project_officer_id: PO_ID, team: "SomeOtherTeam" }),
+    client({ caller: callerRow({ team: "BPDD" }) }) as never,
+  );
+  assertEquals(res.status, 403);
 });
 
 Deno.test("send-empanelment-invite - success returns the new application_id and email_sent status", async () => {

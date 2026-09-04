@@ -7,7 +7,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 import { notifyUser, notifyRole, notifyTeam, emailRole, emailUser } from "../_shared/notify.ts";
 import { verifyOtp } from "../_shared/otp.ts";
@@ -502,7 +502,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "dgm_recommend": {
-        if (caller.role !== "dgm" || caller.team !== app.team) return forbidden("Only the team's DGM can act on this application.");
+        if (caller.role !== "dgm" || !isCallerOnTeam(caller, app.team)) return forbidden("Only the team's DGM can act on this application.");
         if (app.status !== "dgm_review") return badState("dgm_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "md_review", dgm_comment: trimmedComment }).eq("id", app.id);
@@ -521,10 +521,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "dgm_send_back": {
-        if (caller.role !== "dgm" || caller.team !== app.team) return forbidden("Only the team's DGM can act on this application.");
+        if (caller.role !== "dgm" || !isCallerOnTeam(caller, app.team)) return forbidden("Only the team's DGM can act on this application.");
         if (app.status !== "dgm_review") return badState("dgm_review");
+        if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "po_final_review" }).eq("id", app.id);
-        await logActivity(adminClient, app.id, caller.id, caller.role, "dgm_sent_back", trimmedComment || "Sent back to Project Officer for another look.");
+        await logActivity(adminClient, app.id, caller.id, caller.role, "dgm_sent_back", trimmedComment);
         await notifyUser(adminClient, app.project_officer_id, {
           title: "Empanelment application sent back",
           sub_text: `${orgName}'s application was sent back by the DGM for another look.`,
@@ -541,8 +542,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       case "md_send_back": {
         if (caller.role !== "md") return forbidden("Only the MD can act at this stage.");
         if (app.status !== "md_review") return badState("md_review");
+        if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "dgm_review" }).eq("id", app.id);
-        await logActivity(adminClient, app.id, caller.id, caller.role, "md_sent_back", trimmedComment || "Sent back to the DGM for another look.");
+        await logActivity(adminClient, app.id, caller.id, caller.role, "md_sent_back", trimmedComment);
         const sendBackPayload = {
           title: "Empanelment application sent back",
           sub_text: `${orgName}'s application was sent back by the MD for another look.`,

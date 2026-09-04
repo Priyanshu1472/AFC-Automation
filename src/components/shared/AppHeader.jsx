@@ -11,7 +11,7 @@ import logo from "../../images/Logo.png";
 import "../../styles/AppHeader.css";
 
 export default function AppHeader() {
-  const { profile, signOut } = useAuth();
+  const { profile, activeTeam, setActiveTeam, signOut } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -26,6 +26,16 @@ export default function AppHeader() {
     closeMenu();
     await signOut();
     navigate("/login", { replace: true });
+  }
+
+  function switchTeam(team) {
+    if (team === activeTeam) {
+      closeMenu();
+      return;
+    }
+    setActiveTeam(team);
+    closeMenu();
+    navigate("/home");
   }
 
   // Close on Escape — standard drawer a11y behavior.
@@ -48,6 +58,7 @@ export default function AppHeader() {
   const navLinkClass = ({ isActive }) => (isActive ? "active" : "");
   const roleLabel = ROLE_LABELS[profile.role] || profile.role;
   const initial = (profile.full_name || "?").trim().charAt(0).toUpperCase();
+  const teams = profile.teams || [];
 
   return (
     <header className="app-header">
@@ -80,12 +91,6 @@ export default function AppHeader() {
               Empanelment
             </NavLink>
           )}
-          {canSeeEmpanelment && (
-            <NavDropdown label="Dashboard" items={[{ to: "/dashboard/empanelment", label: "Empanelment" }]} onNavigate={closeMenu} />
-          )}
-          {canSeeEmpanelment && (
-            <NavDropdown label="Reports" items={[{ to: "/reports/empanelment", label: "Empanelment" }]} onNavigate={closeMenu} />
-          )}
           {canSeeKnowledge && (
             <NavLink
               to="/knowledge"
@@ -100,6 +105,11 @@ export default function AppHeader() {
               Leads
             </NavLink>
           )}
+          {canSeeLeads && (
+            <NavLink to="/proposals" className={navLinkClass} onClick={closeMenu}>
+              Proposals
+            </NavLink>
+          )}
           {canSeeUsers && (
             <NavLink to="/users" className={navLinkClass} onClick={closeMenu}>
               Users
@@ -109,6 +119,32 @@ export default function AppHeader() {
             <NavLink to="/audit-logs" className={navLinkClass} onClick={closeMenu}>
               Audit Logs
             </NavLink>
+          )}
+        </div>
+
+        {/* Dashboard / Reports dropdowns — kept as their own group, pushed to
+            the far right of the module links (see .app-header-nav-dropdowns),
+            so they read as reporting tools rather than another module button. */}
+        <div className="app-header-nav-dropdowns">
+          {(canSeeEmpanelment || canSeeLeads) && (
+            <NavDropdown
+              label="Dashboard"
+              items={[
+                ...(canSeeEmpanelment ? [{ to: "/dashboard/empanelment", label: "Empanelment" }] : []),
+                ...(canSeeLeads ? [{ to: "/dashboard/leads", label: "Leads" }] : []),
+              ]}
+              onNavigate={closeMenu}
+            />
+          )}
+          {(canSeeEmpanelment || canSeeLeads) && (
+            <NavDropdown
+              label="Reports"
+              items={[
+                ...(canSeeEmpanelment ? [{ to: "/reports/empanelment", label: "Empanelment" }] : []),
+                ...(canSeeLeads ? [{ to: "/reports/leads", label: "Leads" }] : []),
+              ]}
+              onNavigate={closeMenu}
+            />
           )}
         </div>
 
@@ -130,6 +166,25 @@ export default function AppHeader() {
           <NotificationBell />
           <UserMenu />
         </div>
+
+        {/* Mobile-drawer-only — mirrors UserMenu's desktop team switcher
+            (see AppHeader's own profile block above, not UserMenu, since
+            UserMenu is hidden below this breakpoint). */}
+        {teams.length > 1 && (
+          <div className="app-header-nav-teams-mobile">
+            <span className="app-header-nav-teams-label-mobile">Switch Team</span>
+            {teams.map((team) => (
+              <button
+                key={team}
+                type="button"
+                className={`app-header-nav-team-item-mobile${team === activeTeam ? " app-header-nav-team-item-mobile-active" : ""}`}
+                onClick={() => switchTeam(team)}
+              >
+                {team}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Mobile-drawer-only — profile link + sign out, pinned to the
             bottom of the drawer so neither requires opening UserMenu's

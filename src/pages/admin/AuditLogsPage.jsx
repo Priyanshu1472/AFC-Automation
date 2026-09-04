@@ -8,6 +8,7 @@ import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Select from "../../components/ui/Select";
 import Input from "../../components/ui/Input";
+import Modal from "../../components/ui/Modal";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import "../../styles/AuditLogsPage.css";
@@ -63,7 +64,55 @@ const PAGE_SIZE = 20;
 function ActionBadge({ action, meta }) {
   const m = meta[action];
   if (!m) return <span className="al-action-raw">{action?.replace(/_/g, " ")}</span>;
-  return <Badge variant={m.variant}>{m.label}</Badge>;
+  return <Badge className="al-action-badge" variant={m.variant}>{m.label}</Badge>;
+}
+
+function fmtDateTime(iso) {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} · ${d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+// Account-management entries only — the Empanelment Activity tab already
+// navigates to the full application review page on click, which shows
+// everything in far more depth than a modal could.
+function AuditLogDetailModal({ log, onClose }) {
+  if (!log) return null;
+  return (
+    <Modal onClose={onClose} size="lg">
+      <Modal.Header title="Audit Log Entry" subtitle={fmtDateTime(log.created_at)} onClose={onClose} />
+      <Modal.Body>
+        <div className="al-detail-grid">
+          <div className="al-detail-row">
+            <span className="al-detail-label">Actor</span>
+            <span className="al-detail-value">{log.actor?.full_name || "—"}</span>
+          </div>
+          <div className="al-detail-row">
+            <span className="al-detail-label">Role</span>
+            <span className="al-detail-value"><Badge variant="info">{ROLE_LABELS[log.action_by_role] || log.action_by_role || "—"}</Badge></span>
+          </div>
+          <div className="al-detail-row">
+            <span className="al-detail-label">Team</span>
+            <span className="al-detail-value">{log.actor?.team || "—"}</span>
+          </div>
+          <div className="al-detail-row">
+            <span className="al-detail-label">Office</span>
+            <span className="al-detail-value" style={{ textTransform: "capitalize" }}>{log.actor?.office || "—"}</span>
+          </div>
+          <div className="al-detail-row">
+            <span className="al-detail-label">Action</span>
+            <span className="al-detail-value"><ActionBadge action={log.action} meta={ACTION_META} /></span>
+          </div>
+          <div className="al-detail-row al-detail-row-full">
+            <span className="al-detail-label">Comment</span>
+            <p className="al-detail-comment">{log.comment || "—"}</p>
+          </div>
+        </div>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onClose}>Close</Button>
+      </Modal.Footer>
+    </Modal>
+  );
 }
 
 const TABS = [
@@ -85,6 +134,7 @@ export default function AuditLogsPage() {
   const [filterRole, setFilterRole] = useState("all");
   const [filterDate, setFilterDate] = useState("");
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [selectedLog, setSelectedLog] = useState(null);
 
   const isEmp = tab === "empanelment";
   const actionOptions = isEmp ? EMP_ACTION_OPTIONS : ACTION_OPTIONS;
@@ -224,8 +274,8 @@ export default function AuditLogsPage() {
                     {logs.map((log) => (
                       <tr
                         key={log.id}
-                        className={isEmp && log.application_id ? "al-row-clickable" : ""}
-                        onClick={isEmp && log.application_id ? () => navigate(`/empanelment/${log.application_id}`) : undefined}
+                        className={isEmp ? (log.application_id ? "al-row-clickable" : "") : "al-row-clickable"}
+                        onClick={isEmp ? (log.application_id ? () => navigate(`/empanelment/${log.application_id}`) : undefined) : () => setSelectedLog(log)}
                       >
                         <td className="al-date-cell">
                           <span className="al-date">
@@ -237,7 +287,7 @@ export default function AuditLogsPage() {
                         </td>
                         <td className="al-actor">{log.actor?.full_name || (isEmp ? "Business Associate" : "—")}</td>
                         <td>
-                          <Badge variant="info">{ROLE_LABELS[isEmp ? log.actor_role : log.action_by_role] || (isEmp ? log.actor_role : log.action_by_role) || "—"}</Badge>
+                          <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp ? log.actor_role : log.action_by_role] || (isEmp ? log.actor_role : log.action_by_role) || "—"}</Badge>
                         </td>
                         {isEmp ? (
                           <td className="al-team">{log.application?.application_code || "—"}</td>
@@ -261,7 +311,7 @@ export default function AuditLogsPage() {
                   <div
                     key={log.id}
                     className="al-mobile-card"
-                    onClick={isEmp && log.application_id ? () => navigate(`/empanelment/${log.application_id}`) : undefined}
+                    onClick={isEmp ? (log.application_id ? () => navigate(`/empanelment/${log.application_id}`) : undefined) : () => setSelectedLog(log)}
                   >
                     <div className="al-mobile-card-top">
                       <span className="al-actor">{log.actor?.full_name || (isEmp ? "Business Associate" : "—")}</span>
@@ -272,7 +322,7 @@ export default function AuditLogsPage() {
                         {new Date(log.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} ·{" "}
                         {new Date(log.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                       </span>
-                      <Badge variant="info">{ROLE_LABELS[isEmp ? log.actor_role : log.action_by_role] || (isEmp ? log.actor_role : log.action_by_role) || "—"}</Badge>
+                      <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp ? log.actor_role : log.action_by_role] || (isEmp ? log.actor_role : log.action_by_role) || "—"}</Badge>
                       {isEmp && log.application?.application_code && <span className="text-xs text-tertiary">{log.application.application_code}</span>}
                       {!isEmp && log.actor?.team && <span className="text-xs text-tertiary">{log.actor.team}</span>}
                     </div>
@@ -316,6 +366,8 @@ export default function AuditLogsPage() {
           />
         </FilterField>
       </FilterDrawer>
+
+      {selectedLog && <AuditLogDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />}
     </div>
   );
 }

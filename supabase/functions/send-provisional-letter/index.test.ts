@@ -67,7 +67,7 @@ Deno.test("send-provisional-letter - rejects a non-DGM caller", async () => {
 Deno.test("send-provisional-letter - rejects a DGM from a different team", async () => {
   const res = await handleRequest(
     req({ application_id: APP_ID, otp: "123456" }),
-    client({ caller: { id: CALLER_ID, role: "dgm", team: "CBBO", is_active: true }, app: appRow({ team: "BPDD" }) }) as never,
+    client({ caller: { id: CALLER_ID, role: "dgm", team: "BIID", is_active: true }, app: appRow({ team: "BPDD" }) }) as never,
   );
   assertEquals(res.status, 403);
 });

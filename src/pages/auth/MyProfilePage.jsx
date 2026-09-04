@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { ROLE_LABELS } from "../../lib/roles";
@@ -8,6 +8,8 @@ import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import SetPasswordForm from "./SetPasswordForm";
+import SetPinForm from "./SetPinForm";
+import "../../styles/CreateUserPage.css";
 
 // Self-service page for both AFC staff and Business Associate portal
 // accounts — name can be corrected here (email/role/team/office stay
@@ -19,6 +21,21 @@ export default function MyProfilePage() {
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState("");
   const [bannerVariant, setBannerVariant] = useState("success");
+  const [signatureUrl, setSignatureUrl] = useState(null);
+
+  useEffect(() => {
+    if (!profile?.signature_path) {
+      setSignatureUrl(null);
+      return;
+    }
+    let cancelled = false;
+    supabase.functions.invoke("get-user-signature-url", { body: { user_id: profile.id } }).then(({ data }) => {
+      if (!cancelled && data?.url) setSignatureUrl(data.url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id, profile?.signature_path]);
 
   if (!profile) return null;
 
@@ -96,8 +113,10 @@ export default function MyProfilePage() {
                 </div>
                 {profile.team && (
                   <div className="field">
-                    <label className="field-label">Team</label>
-                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{profile.team}</p>
+                    <label className="field-label">{profile.teams?.length > 1 ? "Teams" : "Team"}</label>
+                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>
+                      {profile.teams?.length > 1 ? profile.teams.join(", ") : profile.team}
+                    </p>
                   </div>
                 )}
                 {profile.office && (
@@ -106,6 +125,20 @@ export default function MyProfilePage() {
                     <p className="text-sm text-secondary" style={{ paddingTop: 9, textTransform: "capitalize" }}>{profile.office}</p>
                   </div>
                 )}
+                <div className="field">
+                  <label className="field-label">Committee</label>
+                  <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{profile.committee || "—"}</p>
+                </div>
+                <div className="field full">
+                  <label className="field-label">Signature</label>
+                  {signatureUrl ? (
+                    <img src={signatureUrl} alt="Your signature" className="cup-signature-preview" />
+                  ) : (
+                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>
+                      Not set <span className="text-tertiary">(ask Admin to upload one — it's used to sign your generated PDFs)</span>
+                    </p>
+                  )}
+                </div>
               </div>
             </Card.Body>
             <Card.Footer>
@@ -124,6 +157,10 @@ export default function MyProfilePage() {
             hookOptions={{ requireMarkChanged: false, redirectTo: null, requireCurrentPassword: true }}
             successMessage="Password updated successfully."
           />
+        </div>
+
+        <div id="pin" style={{ marginTop: "var(--space-6)", scrollMarginTop: 90 }}>
+          <SetPinForm hasPin={!!profile.pin_updated_at} />
         </div>
       </div>
     </div>

@@ -45,6 +45,19 @@ export async function getOrgWideHolders(admin: AdminClient, opts: { role?: strin
   return (data || []).map((u: { id: string }) => u.id);
 }
 
+// Bulk-adds the given users to a lead's chat roster (lead_chat_participants)
+// — upsert with ignoreDuplicates so re-syncing an already-present member
+// (e.g. re-running the PMT roster on a resubmission) is a no-op rather than
+// an error. Called from advance-lead-stage whenever a lead enters a
+// committee stage; every current member of that committee is added at
+// once, not just whoever eventually acts.
+export async function addLeadChatParticipants(admin: AdminClient, leadId: string, userIds: string[], roleAtAdd: string): Promise<void> {
+  const rows = [...new Set(userIds)].filter(Boolean).map((user_id) => ({ lead_id: leadId, user_id, role_at_add: roleAtAdd }));
+  if (!rows.length) return;
+  const { error } = await admin.from("lead_chat_participants").upsert(rows, { onConflict: "lead_id,user_id", ignoreDuplicates: true });
+  if (error) console.error("addLeadChatParticipants failed:", error.message);
+}
+
 // Team-scoped PA-tier role holders — used to notify a team when a lead is
 // dropped and becomes available to claim.
 export async function getPaTierHolders(admin: AdminClient, team: string): Promise<string[]> {
@@ -54,4 +67,63 @@ export async function getPaTierHolders(admin: AdminClient, team: string): Promis
     return [];
   }
   return (data || []).map((u: { id: string }) => u.id);
+}
+
+// The team's own DGM(s) — used for the first-line DGM gate (dgm_initial_
+// approve/decline), which is a team match, NOT the org-wide G3 committee
+// pool (that only applies once a lead has been escalated past this stage,
+// see dgm_accept/dgm_decline). Checks afc_user_teams membership so a
+// multi-team DGM is included for every team they're actually assigned to,
+// not just their primary afc_users.team.
+export async function getTeamDgmHolders(admin: AdminClient, team: string): Promise<string[]> {
+  const { data: memberIds, error: memberErr } = await admin.from("afc_user_teams").select("user_id").eq("team", team);
+  if (memberErr) console.error("getTeamDgmHolders membership lookup failed:", memberErr.message);
+  const ids = [...new Set((memberIds || []).map((r: { user_id: string }) => r.user_id))];
+  if (!ids.length) return [];
+  const { data, error } = await admin.from("afc_users").select("id").eq("role", "dgm").eq("is_active", true).in("id", ids);
+  if (error) {
+    console.error("getTeamDgmHolders lookup failed:", error.message);
+    return [];
+  }
+  return (data || []).map((u: { id: string }) => u.id);
+}
+
+type ViewerCaller = { id: string; role: string; team: string | null; teams?: string[]; committee: string | null };
+type ViewableLead = {
+  status: string;
+  team: string;
+  created_by: string;
+  person_responsible_id: string;
+  reviewer_id: string;
+  approval_authority_id: string;
+  handled_by_dgm_id: string | null;
+  assigned_ba_id: string | null;
+};
+
+// JS mirror of the DB's can_view_lead() — needed anywhere a service-role
+// client (which bypasses RLS) has to re-derive the same visibility rule,
+// e.g. signing a document URL. Keep this in lockstep with can_view_lead()
+// in the migrations — the two drifting apart is exactly the kind of gap
+// that let get-lead-document-url stay on the old team-wide rule after
+// can_view_lead() itself had already been narrowed.
+//   - md/admin/cfo/cs: every lead, org-wide.
+//   - dgm: every lead on their own team.
+//   - project_assistant/project_officer/associate_consultant: every lead
+//     on their own team.
+//   - agm/srm: only leads they're actually named on.
+//   - PMT/PMT Extended/G3 committee membership: org-wide, only while the
+//     lead is at the stage that committee reviews.
+//   - Always: creator/Person Responsible/Reviewer/Approval Authority/
+//     handling DGM, or the assigned Business Associate.
+export function canViewLead(caller: ViewerCaller, lead: ViewableLead): boolean {
+  const callerTeams = caller.teams ?? (caller.team ? [caller.team] : []);
+  if (["md", "admin", "cfo", "cs"].includes(caller.role)) return true;
+  if (caller.role === "dgm" && callerTeams.includes(lead.team)) return true;
+  if (["project_assistant", "project_officer", "associate_consultant"].includes(caller.role) && callerTeams.includes(lead.team)) return true;
+  if (["dgm_initial_review", "dgm_review"].includes(lead.status) && caller.committee === "G3") return true;
+  if (lead.status === "pmt_review" && caller.committee === "PMT") return true;
+  if (lead.status === "pmt_extended_review" && caller.committee === "PMT Extended") return true;
+  if ([lead.created_by, lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id, lead.handled_by_dgm_id].includes(caller.id)) return true;
+  if (caller.role === "business_associate" && lead.assigned_ba_id === caller.id) return true;
+  return false;
 }

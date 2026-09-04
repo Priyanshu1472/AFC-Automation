@@ -6,7 +6,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 import { notifyUser } from "../_shared/notify.ts";
 
@@ -43,9 +43,6 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   if (!["associate_consultant", "project_assistant"].includes(caller.role)) {
     return jsonRes(req, 403, { error: "Only Associate Consultants or Project Assistants can send empanelment invitations." });
   }
-  if (!caller.team) {
-    return jsonRes(req, 400, { error: "You are not assigned to a team. Please contact your DGM." });
-  }
 
   let body: Record<string, unknown>;
   try {
@@ -54,12 +51,25 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     return jsonRes(req, 400, { error: "Invalid JSON body." });
   }
 
-  const { ba_email, project_officer_id } = body;
+  const { ba_email, project_officer_id, team: requestedTeam } = body;
   if (!ba_email || typeof ba_email !== "string" || !isValidEmail(ba_email)) {
     return jsonRes(req, 400, { error: "A valid BA email is required." });
   }
   if (!project_officer_id || typeof project_officer_id !== "string") {
     return jsonRes(req, 400, { error: "Project Officer is required." });
+  }
+  // A multi-team caller can pick which of their assigned teams this invite
+  // is for (the client sends its currently active team) — falls back to
+  // the caller's primary team for older callers that don't send one.
+  let team = caller.team;
+  if (requestedTeam !== undefined && requestedTeam !== null) {
+    if (typeof requestedTeam !== "string" || !isCallerOnTeam(caller, requestedTeam)) {
+      return jsonRes(req, 403, { error: "You are not assigned to that team." });
+    }
+    team = requestedTeam;
+  }
+  if (!team) {
+    return jsonRes(req, 400, { error: "You are not assigned to a team. Please contact your DGM." });
   }
 
   const normalizedEmail = ba_email.trim().toLowerCase();
@@ -71,7 +81,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .select("id, full_name, email")
       .eq("id", project_officer_id)
       .eq("role", "project_officer")
-      .eq("team", caller.team)
+      .eq("team", team)
       .eq("is_active", true)
       .maybeSingle();
     if (poErr || !po) return jsonRes(req, 400, { error: "Invalid Project Officer for your team." });
@@ -80,7 +90,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .from("afc_users")
       .select("id, full_name")
       .eq("role", "dgm")
-      .eq("team", caller.team)
+      .eq("team", team)
       .eq("is_active", true)
       .maybeSingle();
 
@@ -106,7 +116,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         application_code: applicationCode,
         status: "sent",
         ba_email: normalizedEmail,
-        team: caller.team,
+        team,
         office: caller.office,
         sent_by: caller.id,
         project_officer_id: po.id,

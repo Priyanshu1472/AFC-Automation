@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "./useAuth";
 
 export function useShortlist() {
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
   const [shortlists, setShortlists] = useState([]);
   const [membership, setMembership] = useState({});
   const [loading, setLoading] = useState(true);
@@ -51,7 +51,7 @@ export function useShortlist() {
         .insert({
           name: name.trim(),
           created_by: profile?.id ?? null,
-          team: profile?.team ?? null,
+          team: activeTeam ?? profile?.team ?? null,
         })
         .select()
         .single();
@@ -59,7 +59,7 @@ export function useShortlist() {
       await refreshShortlists();
       return data;
     },
-    [profile, refreshShortlists]
+    [profile, activeTeam, refreshShortlists]
   );
 
   const addToShortlist = useCallback(

@@ -8,6 +8,7 @@ const TARGET_ID = "target-1";
 function client(caller: Record<string, unknown>, target: Record<string, unknown> | null) {
   return createFakeAdminClient({
     afc_users: [{ data: caller, error: null }, { data: target, error: null }],
+    afc_user_teams: [{ data: null, error: null }],
     application_audit_log: [{ data: null, error: null }],
   });
 }
@@ -48,28 +49,20 @@ Deno.test("update-staff-user - unknown target -> 404", async () => {
   assertEquals(res.status, 404);
 });
 
-Deno.test("update-staff-user - DGM can't edit a user outside their own team", async () => {
-  const res = await handleRequest(
-    req({ user_id: TARGET_ID, full_name: "Name" }),
-    client({ id: CALLER_ID, role: "dgm", team: "BPDD", office: "delhi", is_active: true }, { id: TARGET_ID, role: "srm", team: "CBBO" }) as never,
-  );
-  assertEquals(res.status, 403);
-});
-
-Deno.test("update-staff-user - DGM can't change a target's role", async () => {
-  const res = await handleRequest(
-    req({ user_id: TARGET_ID, full_name: "Name", role: "agm" }),
-    client({ id: CALLER_ID, role: "dgm", team: "BPDD", office: "delhi", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD" }) as never,
-  );
-  assertEquals(res.status, 403);
-});
-
-Deno.test("update-staff-user - DGM can rename a teammate, forcing team/office to their own", async () => {
+Deno.test("update-staff-user - DGM can no longer edit any user, even a teammate", async () => {
   const res = await handleRequest(
     req({ user_id: TARGET_ID, full_name: "Renamed" }),
     client({ id: CALLER_ID, role: "dgm", team: "BPDD", office: "delhi", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD" }) as never,
   );
-  assertEquals(res.status, 200);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("update-staff-user - MD can no longer edit any user", async () => {
+  const res = await handleRequest(
+    req({ user_id: TARGET_ID, full_name: "Renamed" }),
+    client({ id: CALLER_ID, role: "md", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD" }) as never,
+  );
+  assertEquals(res.status, 403);
 });
 
 Deno.test("update-staff-user - Admin can't set a target's role outside ADMIN_CREATABLE_ROLES (e.g. promote to admin)", async () => {
@@ -94,4 +87,39 @@ Deno.test("update-staff-user - Admin changing a target's role to a valid one suc
     client({ id: CALLER_ID, role: "admin", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD" }) as never,
   );
   assertEquals(res.status, 200);
+});
+
+Deno.test("update-staff-user - a multi-team `teams` array replaces afc_user_teams, and teams[0] becomes the primary afc_users.team", async () => {
+  const c = client({ id: CALLER_ID, role: "admin", is_active: true }, { id: TARGET_ID, role: "dgm", team: "BPDD" });
+  const res = await handleRequest(
+    req({ user_id: TARGET_ID, full_name: "Name", teams: ["HO", "BPDD"] }),
+    c as never,
+  );
+  assertEquals(res.status, 200);
+
+  const log = (c as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const profileUpdateLog = log.filter((l) => l.table === "afc_users").find((l) => l.calls[0]?.[0] === "update")!;
+  const updatedFields = JSON.parse(profileUpdateLog.calls[0][1]);
+  assertEquals(updatedFields.team, "HO");
+
+  const teamsInsertLog = log.filter((l) => l.table === "afc_user_teams").find((l) => l.calls[0]?.[0] === "insert")!;
+  const insertedTeams = JSON.parse(teamsInsertLog.calls[0][1]);
+  assertEquals(insertedTeams, [
+    { user_id: TARGET_ID, team: "HO" },
+    { user_id: TARGET_ID, team: "BPDD" },
+  ]);
+});
+
+Deno.test("update-staff-user - a singular `team` field (no `teams` array) still syncs afc_user_teams to one entry", async () => {
+  const c = client({ id: CALLER_ID, role: "admin", is_active: true }, { id: TARGET_ID, role: "dgm", team: "BPDD" });
+  const res = await handleRequest(
+    req({ user_id: TARGET_ID, full_name: "Name", team: "HO" }),
+    c as never,
+  );
+  assertEquals(res.status, 200);
+
+  const log = (c as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const teamsInsertLog = log.filter((l) => l.table === "afc_user_teams").find((l) => l.calls[0]?.[0] === "insert")!;
+  const insertedTeams = JSON.parse(teamsInsertLog.calls[0][1]);
+  assertEquals(insertedTeams, [{ user_id: TARGET_ID, team: "HO" }]);
 });

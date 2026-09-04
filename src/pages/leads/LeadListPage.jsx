@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { leadCan, isActionRequiredForViewer } from "../../lib/leadPermissions";
+import { can } from "../../lib/roles";
+import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
@@ -10,11 +12,13 @@ import Button from "../../components/ui/Button";
 import Select from "../../components/ui/Select";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
-import { EyeIcon, PencilIcon, TrashIcon } from "../../components/icons";
+import { EyeIcon, ChatIcon, PencilIcon, TrashIcon, ArrowRightIcon } from "../../components/icons";
 import { STATUS_MAP } from "../../components/leads/leadStatus";
+import { canOpenProposal } from "../../lib/proposalPrep";
 import "../../styles/LeadListPage.css";
 
 const STATUS_OPTIONS = [{ value: "all", label: "All Statuses" }, ...Object.entries(STATUS_MAP).map(([value, cfg]) => ({ value, label: cfg.label }))];
+const PAGE_SIZE = 20;
 
 // "Action Required" depends on who's looking — a PMT member's queue is
 // pmt_review leads (org-wide), a PA-tier owner's is their own pa_review/
@@ -23,7 +27,7 @@ const QUICK_FILTERS = {
   all: { label: "Total", match: () => true },
   in_review: {
     label: "In Review",
-    match: (l) => ["pa_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review"].includes(l.status),
+    match: (l) => ["pa_review", "dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review"].includes(l.status),
   },
   action_required: { label: "Action Required", match: (l, profile) => isActionRequiredForViewer(profile, l) },
   approved: { label: "Approved", match: (l) => l.status === "md_approved" },
@@ -31,7 +35,7 @@ const QUICK_FILTERS = {
 
 function StatusBadge({ status }) {
   const cfg = STATUS_MAP[status] || { label: status, variant: "neutral" };
-  return <Badge variant={cfg.variant} dot>{cfg.label}</Badge>;
+  return <Badge className="ll-status-badge" variant={cfg.variant} dot>{cfg.label}</Badge>;
 }
 
 function fmt(v) {
@@ -42,16 +46,53 @@ function fmtDate(v) {
   return new Date(v).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// Restores search/filter/page state after a trip out to a lead's detail
+// page and back — sessionStorage rather than the URL, since "Back to
+// Leads" pushes a bare /leads (see LeadDetailPage's back button), and this
+// survives that regardless of how the user actually navigates back.
+const FILTER_STORAGE_KEY = "leadListFilters";
+function loadStoredFilters() {
+  try {
+    return JSON.parse(sessionStorage.getItem(FILTER_STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
 export default function LeadListPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
 
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [quickFilter, setQuickFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  // { [lead_id]: unread_count } for the current viewer, across every lead
+  // they're a chat participant on — powers the badge on the chat icon.
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const [search, setSearch] = useState(() => loadStoredFilters().search || "");
+  const [quickFilter, setQuickFilter] = useState(() => loadStoredFilters().quickFilter || "all");
+  const [statusFilter, setStatusFilter] = useState(() => loadStoredFilters().statusFilter || "all");
+  const [teamFilter, setTeamFilter] = useState(() => loadStoredFilters().teamFilter || "all");
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [page, setPage] = useState(() => loadStoredFilters().page || 1);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ search, quickFilter, statusFilter, teamFilter, page }));
+    } catch {
+      // Private browsing / storage disabled — filters just won't persist.
+    }
+  }, [search, quickFilter, statusFilter, teamFilter, page]);
+
+  const canFilterTeam = can.viewAllTeams(profile?.role);
+  // Team-scoped roles (dgm/agm/srm/etc.) have no visible team filter — RLS
+  // already scopes their rows to their assigned team(s), but a multi-team
+  // user's rows now span every team they're on, so the "whole interface
+  // should be of <team>" switcher needs to actively narrow here too,
+  // reactively (never sessionStorage-persisted — that would go stale the
+  // instant the user switches teams and comes back to this page).
+  const effectiveTeamFilter = canFilterTeam ? teamFilter : (activeTeam || "all");
+  const teams = useTeamOptions();
+  const teamOptions = [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))];
 
   const fetchLeads = useCallback(async () => {
     // RLS (can_view_lead) scopes visible rows per role/team/committee/
@@ -65,37 +106,60 @@ export default function LeadListPage() {
     setLoading(false);
   }, []);
 
+  const fetchUnreadCounts = useCallback(async () => {
+    const { data } = await supabase.rpc("lead_chat_unread_counts");
+    const map = {};
+    for (const row of data || []) map[row.lead_id] = row.unread_count;
+    setUnreadCounts(map);
+  }, []);
+
   useEffect(() => {
     fetchLeads();
-  }, [fetchLeads]);
+    fetchUnreadCounts();
+  }, [fetchLeads, fetchUnreadCounts]);
 
   useEffect(() => {
     const channel = supabase
       .channel("leads-list")
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => fetchLeads())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "lead_chat_messages" }, () => fetchUnreadCounts())
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [fetchLeads]);
+  }, [fetchLeads, fetchUnreadCounts]);
 
+  // Scoped by team the same way the table below is (effectiveTeamFilter) —
+  // otherwise these tiles kept counting every RLS-permitted lead across all
+  // of a multi-team user's teams even while the table itself was correctly
+  // narrowed to just the active team.
   const stats = useMemo(() => {
+    const teamScoped = effectiveTeamFilter === "all" ? leads : leads.filter((l) => l.team === effectiveTeamFilter);
     const result = {};
     for (const [key, cfg] of Object.entries(QUICK_FILTERS)) {
-      result[key] = leads.filter((l) => cfg.match(l, profile)).length;
+      result[key] = teamScoped.filter((l) => cfg.match(l, profile)).length;
     }
     return result;
-  }, [leads, profile]);
+  }, [leads, profile, effectiveTeamFilter]);
 
   function selectQuickFilter(key) {
     // Clicking the active card again clears it back to Total.
     setQuickFilter((current) => (current === key ? "all" : key));
     setStatusFilter("all");
+    setPage(1);
   }
 
   function selectStatusFilter(value) {
     setStatusFilter(value);
     setQuickFilter("all");
+    setPage(1);
   }
 
+  function selectTeamFilter(value) {
+    setTeamFilter(value);
+    setPage(1);
+  }
+
+  // Search runs over every matching lead, not just the current page — the
+  // page slice below is purely a display concern.
   const filtered = leads.filter((l) => {
     const q = search.toLowerCase();
     const matchSearch =
@@ -103,8 +167,17 @@ export default function LeadListPage() {
       (l.title || "").toLowerCase().includes(q) ||
       (l.client_name || "").toLowerCase().includes(q) ||
       (l.creator?.full_name || "").toLowerCase().includes(q);
-    return matchSearch && QUICK_FILTERS[quickFilter].match(l, profile) && (statusFilter === "all" || l.status === statusFilter);
+    return (
+      matchSearch &&
+      QUICK_FILTERS[quickFilter].match(l, profile) &&
+      (statusFilter === "all" || l.status === statusFilter) &&
+      (effectiveTeamFilter === "all" || l.team === effectiveTeamFilter)
+    );
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const canCreate = leadCan.create(profile);
 
@@ -165,8 +238,13 @@ export default function LeadListPage() {
               className="input ll-search"
               placeholder="Search by lead number, title, client, creator…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
+            {canFilterTeam && (
+              <div style={{ minWidth: 160 }}>
+                <Select options={teamOptions} value={teamFilter} onChange={selectTeamFilter} placeholder="All Teams" />
+              </div>
+            )}
             <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={statusFilter !== "all" ? 1 : 0} />
           </Card.Body>
         </Card>
@@ -179,25 +257,39 @@ export default function LeadListPage() {
               <table className="table ll-table">
                 <thead>
                   <tr>
-                    <th>Lead Number</th><th>Title</th><th>Creator</th><th>Team</th>
-                    <th>Assignee</th><th>Status</th><th>Created</th><th>Actions</th>
+                    <th>Lead Number</th><th>Title</th><th>Creator</th>{canFilterTeam && <th>Team</th>}
+                    <th>Person Responsible</th><th>Status</th><th>Created</th><th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((l) => (
-                    <tr key={l.id}>
+                  {paged.map((l) => (
+                    <tr key={l.id} className="ll-row-clickable" onClick={() => navigate(`/leads/${l.id}`)}>
                       <td><span className="ll-lead-number">{l.lead_number}</span></td>
                       <td className="ll-title" title={l.title}>{fmt(l.title)}</td>
-                      <td>{fmt(l.creator?.full_name)}</td>
-                      <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>
-                      <td>{fmt(l.assignee?.full_name)}</td>
+                      <td className="ll-name-cell" title={l.creator?.full_name || ""}>{fmt(l.creator?.full_name)}</td>
+                      {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>}
+                      <td className="ll-name-cell" title={l.assignee?.full_name || ""}>{fmt(l.assignee?.full_name)}</td>
                       <td><StatusBadge status={l.status} /></td>
                       <td className="ll-date">{fmtDate(l.created_at)}</td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <div className="ll-action-icons">
                           <button type="button" className="ll-icon-btn" title="View" aria-label="View lead" onClick={() => navigate(`/leads/${l.id}`)}>
                             <EyeIcon />
                           </button>
+                          {l.chat_opened_at && (
+                            <button
+                              type="button"
+                              className="ll-icon-btn ll-icon-chat"
+                              title="Discussion"
+                              aria-label={unreadCounts[l.id] > 0 ? `Discussion, ${unreadCounts[l.id]} unread` : "Discussion"}
+                              onClick={() => navigate(`/leads/${l.id}`)}
+                            >
+                              <ChatIcon />
+                              {unreadCounts[l.id] > 0 && (
+                                <span className="ll-icon-badge">{unreadCounts[l.id] > 9 ? "9+" : unreadCounts[l.id]}</span>
+                              )}
+                            </button>
+                          )}
                           {leadCan.editResubmit(profile, l) && (
                             <button type="button" className="ll-icon-btn" title="Edit" aria-label="Edit lead" onClick={() => navigate(`/leads/${l.id}/edit`)}>
                               <PencilIcon />
@@ -206,6 +298,11 @@ export default function LeadListPage() {
                           {leadCan.drop(profile, l) && (
                             <button type="button" className="ll-icon-btn ll-icon-danger" title="Drop" aria-label="Drop lead" onClick={() => navigate(`/leads/${l.id}`)}>
                               <TrashIcon />
+                            </button>
+                          )}
+                          {l.status === "md_approved" && canOpenProposal(l, profile) && (
+                            <button type="button" className="ll-icon-btn" title="Open Proposal" aria-label="Open proposal" onClick={() => navigate(`/proposals/${l.id}`)}>
+                              <ArrowRightIcon />
                             </button>
                           )}
                         </div>
@@ -218,7 +315,22 @@ export default function LeadListPage() {
           )}
         </Card>
 
-        <p className="ll-record-count">Showing {filtered.length} of {leads.length} leads</p>
+        <div className="ll-pagination">
+          <p className="ll-record-count">
+            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} leads
+          </p>
+          {totalPages > 1 && (
+            <div className="ll-pagination-controls">
+              <Button variant="secondary" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+                ← Previous
+              </Button>
+              <span className="ll-pagination-page">Page {currentPage} of {totalPages}</span>
+              <Button variant="secondary" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+                Next →
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={() => setStatusFilter("all")}>

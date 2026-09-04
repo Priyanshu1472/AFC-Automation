@@ -1,9 +1,10 @@
 // supabase/functions/create-lead/index.ts
-// JWT must be ON. Creates an In-House RFP lead directly into `pa_review`
-// (the real intake form has one "Save Lead" action, no separate draft/submit
-// step). Mirrors submit-ba-form's multipart handling for the optional
-// RFP/Tender document upload, and advance-empanelment-stage's
-// authorization-then-mutate-then-log shape for everything else.
+// JWT must be ON. Creates a lead (RFP or EOI; In-House, BA Source, or Suo
+// Moto) directly into `pa_review` (the real intake form has one "Save Lead"
+// action, no separate draft/submit step). Mirrors submit-ba-form's
+// multipart handling for the optional RFP/Tender document upload, and
+// advance-empanelment-stage's authorization-then-mutate-then-log shape for
+// everything else.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -87,6 +88,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
 
   const assignedBaId = get("assigned_ba_id") || null;
+  if (input.source === "ba" && !assignedBaId) {
+    return jsonRes(req, 400, { error: "Select a Business Associate for a BA Source lead." });
+  }
+  // Name of BA is mandatory for a Suo Moto lead too, per product decision —
+  // unlike In-House, where it's optional.
+  if (input.source === "suo_moto" && !assignedBaId) {
+    return jsonRes(req, 400, { error: "Select a Business Associate for a Suo Moto lead." });
+  }
 
   try {
     // Team is derived from Person Responsible's own team — not a field the
@@ -136,7 +145,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       uploadedPath = uploaded.path;
     }
 
-    const { data: leadNumberData, error: numErr } = await adminClient.rpc("next_lead_number");
+    const { data: leadNumberData, error: numErr } = await adminClient.rpc("next_lead_number", { p_team: team });
     if (numErr || !leadNumberData) {
       if (uploadedPath) await adminClient.storage.from(BUCKET).remove([uploadedPath]).catch(() => {});
       return jsonRes(req, 500, { error: "Failed to generate a lead number. Please try again." });
@@ -147,8 +156,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .insert({
         id: leadId,
         lead_number: leadNumberData,
-        lead_type: "rfp",
-        source: "in_house",
+        lead_type: input.lead_type,
+        source: input.source,
         title: input.title.trim(),
         portal_name: clampText(get("portal_name"), 200),
         bid_number: clampText(get("bid_number"), 200),
@@ -156,6 +165,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         state: clampText(get("state"), 100),
         submission_deadline: get("submission_deadline") || null,
         delivery_type: input.delivery_type,
+        // Suo-Moto-only dates ("Date of Presentation"/"Date of follow-up") —
+        // null for every other lead type, same pattern as portal_name/
+        // bid_number/state/delivery_type being irrelevant outside RFP/EOI.
+        presentation_date: get("presentation_date") || null,
+        followup_date: get("followup_date") || null,
         remark: clampText(get("remark")),
         documents,
         team,

@@ -11,7 +11,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { sendResendEmail } from "../_shared/email.ts";
 import { notifyUser } from "../_shared/notify.ts";
 import { verifyOtp } from "../_shared/otp.ts";
@@ -206,7 +206,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
 
-  if (caller.team !== app.team) return jsonRes(req, 403, { error: "Only the team's DGM can send the provisional letter for this application." });
+  if (!isCallerOnTeam(caller, app.team)) return jsonRes(req, 403, { error: "Only the team's DGM can send the provisional letter for this application." });
   if (!ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: `The BA hasn't submitted their form yet, so there's nothing to send a letter for.` });
   if (app.provisional_letter_sent) return jsonRes(req, 400, { error: "A provisional letter has already been sent for this application." });
 

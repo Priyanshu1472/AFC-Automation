@@ -6,7 +6,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 import { isValidFieldKey, labelForFieldKey } from "../_shared/empanelmentFields.ts";
 import { notifyUser } from "../_shared/notify.ts";
@@ -53,7 +53,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
 
   if (caller.role === "project_officer" && caller.id !== app.project_officer_id) return jsonRes(req, 403, { error: "Only the assigned Project Officer can raise a hold on this application." });
-  if (caller.role === "dgm" && caller.team !== app.team) return jsonRes(req, 403, { error: "Only the team's DGM can raise a hold on this application." });
+  if (caller.role === "dgm" && !isCallerOnTeam(caller, app.team)) return jsonRes(req, 403, { error: "Only the team's DGM can raise a hold on this application." });
 
   const allowedStatuses = ALLOWED_STATUS_BY_ROLE[caller.role];
   if (!allowedStatuses.includes(app.status)) {

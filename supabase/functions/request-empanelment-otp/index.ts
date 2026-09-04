@@ -7,7 +7,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { issueOtp } from "../_shared/otp.ts";
 
 const OTP_ACTIONS = new Set(["md_accept", "md_reject", "provisional_letter"]);
@@ -52,7 +52,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   } else {
     // provisional_letter
     if (caller.role !== "dgm") return jsonRes(req, 403, { error: "Only a DGM can send the provisional empanelment letter." });
-    if (caller.team !== app.team) return jsonRes(req, 403, { error: "Only the team's DGM can send the provisional letter for this application." });
+    if (!isCallerOnTeam(caller, app.team)) return jsonRes(req, 403, { error: "Only the team's DGM can send the provisional letter for this application." });
     if (!PROVISIONAL_ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: "The BA hasn't submitted their form yet, so there's nothing to send a letter for." });
     if (app.provisional_letter_sent) return jsonRes(req, 400, { error: "A provisional letter has already been sent for this application." });
   }

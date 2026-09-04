@@ -40,7 +40,7 @@ const STATUS_OPTIONS = [
 
 function StatusBadge({ status }) {
   const config = STATUS_MAP[status] || { label: status, variant: "neutral" };
-  return <Badge variant={config.variant} dot>{config.label}</Badge>;
+  return <Badge variant={config.variant} dot className="bl-status-badge">{config.label}</Badge>;
 }
 
 function SearchIcon() {
@@ -151,7 +151,7 @@ function StatCard({ label, value, colorClass, loading }) {
 
 export default function EmpanelmentListPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
 
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -191,9 +191,9 @@ export default function EmpanelmentListPage() {
 
   const stats = useMemo(() => ({
     total: applications.length,
-    filled: applications.filter((a) => a.ba_reg).length,
     inReview: applications.filter((a) => ["po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "on_hold"].includes(a.status)).length,
     accepted: applications.filter((a) => a.status === "accepted").length,
+    rejected: applications.filter((a) => a.status === "rejected").length,
   }), [applications]);
 
   const filtered = applications.filter((a) => {
@@ -208,7 +208,11 @@ export default function EmpanelmentListPage() {
       (a.ba_reg?.core_expertise || "").toLowerCase().includes(q) ||
       sectorsServed.toLowerCase().includes(q) ||
       assignments.toLowerCase().includes(q);
-    return matchSearch && (statusFilter === "all" || a.status === statusFilter);
+    // Narrows a multi-team user's (already RLS-permitted) rows down to
+    // their currently active team — a no-op for single-team/org-wide users,
+    // since RLS already scoped everything to the one team they have.
+    const matchActiveTeam = !activeTeam || a.team === activeTeam;
+    return matchSearch && matchActiveTeam && (statusFilter === "all" || a.status === statusFilter);
   });
 
   const canSend = ["associate_consultant", "project_assistant"].includes(profile?.role);
@@ -236,9 +240,9 @@ export default function EmpanelmentListPage() {
 
           <div className="bl-stats-grid">
             <StatCard label="Total" value={stats.total} colorClass="blue" loading={loading} />
-            <StatCard label="Forms Filled" value={stats.filled} colorClass="amber" loading={loading} />
             <StatCard label="In Review" value={stats.inReview} colorClass="purple" loading={loading} />
             <StatCard label="Accepted" value={stats.accepted} colorClass="green" loading={loading} />
+            <StatCard label="Rejected" value={stats.rejected} colorClass="red" loading={loading} />
           </div>
 
           <Card className="bl-filter-card">

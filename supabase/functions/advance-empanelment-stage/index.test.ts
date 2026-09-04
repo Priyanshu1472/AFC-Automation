@@ -177,9 +177,22 @@ Deno.test("po_final_forward - specific DGM assigned notifies that user directly"
 
 // ── dgm_recommend / dgm_send_back ────────────────────────────
 Deno.test("dgm_recommend - rejects a DGM from a different team", async () => {
-  const client = buildClient({ caller: callerRow({ role: "dgm", team: "CBBO" }), app: appRow({ status: "dgm_review", team: "BPDD" }) });
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: "BIID" }), app: appRow({ status: "dgm_review", team: "BPDD" }) });
   const res = await handleRequest(req({ application_id: APP_ID, action: "dgm_recommend", comment: "ok" }), client as never);
   assertEquals(res.status, 403);
+});
+
+Deno.test("dgm_recommend - a multi-team DGM (afc_user_teams) can act on an application from their secondary team", async () => {
+  const client = buildClient({
+    caller: callerRow({ role: "dgm", team: "BPDD" }),
+    app: appRow({ status: "dgm_review", team: "BIID" }),
+    routes: {
+      afc_user_teams: [{ data: [{ team: "BPDD" }, { team: "BIID" }], error: null }],
+      afc_users: [{ data: [{ email: "md@afc.com" }], error: null }],
+    },
+  });
+  const res = await handleRequest(req({ application_id: APP_ID, action: "dgm_recommend", comment: "ok" }), client as never);
+  assertEquals(res.status, 200);
 });
 
 Deno.test("dgm_recommend - success moves to md_review", async () => {
@@ -193,9 +206,15 @@ Deno.test("dgm_recommend - success moves to md_review", async () => {
   assertEquals(await res.json(), { success: true, status: "md_review" });
 });
 
-Deno.test("dgm_send_back - returns application to po_final_review", async () => {
+Deno.test("dgm_send_back - requires a comment", async () => {
   const client = buildClient({ caller: callerRow({ role: "dgm", team: "BPDD" }), app: appRow({ status: "dgm_review" }) });
   const res = await handleRequest(req({ application_id: APP_ID, action: "dgm_send_back" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("dgm_send_back - returns application to po_final_review", async () => {
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: "BPDD" }), app: appRow({ status: "dgm_review" }) });
+  const res = await handleRequest(req({ application_id: APP_ID, action: "dgm_send_back", comment: "please recheck the GST details" }), client as never);
   assertEquals(res.status, 200);
   assertEquals(await res.json(), { success: true, status: "po_final_review" });
 });
@@ -218,13 +237,19 @@ Deno.test("md_send_back - rejects a non-MD caller", async () => {
   assertEquals(res.status, 403);
 });
 
+Deno.test("md_send_back - requires a comment", async () => {
+  const client = buildClient({ caller: callerRow({ role: "md" }), app: appRow({ status: "md_review", dgm_id: "dgm-1" }) });
+  const res = await handleRequest(req({ application_id: APP_ID, action: "md_send_back" }), client as never);
+  assertEquals(res.status, 400);
+});
+
 Deno.test("md_send_back - success returns application to dgm_review", async () => {
   const client = buildClient({
     caller: callerRow({ role: "md" }),
     app: appRow({ status: "md_review", dgm_id: "dgm-1" }),
     routes: { afc_users: [{ data: { email: "dgm@afc.com" }, error: null }] },
   });
-  const res = await handleRequest(req({ application_id: APP_ID, action: "md_send_back" }), client as never);
+  const res = await handleRequest(req({ application_id: APP_ID, action: "md_send_back", comment: "please recheck the financials" }), client as never);
   assertEquals(res.status, 200);
   assertEquals(await res.json(), { success: true, status: "dgm_review" });
 });

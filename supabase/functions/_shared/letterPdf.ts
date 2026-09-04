@@ -35,12 +35,18 @@ export interface Segment { text: string; bold: boolean; }
 export const plain = (t: string): Segment => ({ text: t, bold: false });
 export const bold = (t: string): Segment => ({ text: t, bold: true });
 
+// Embeds an image of either supported raster format, trying PNG first
+// (pdf-lib has no format-sniffing embed() — every image on this letterhead
+// is either a PNG logo or a PNG/JPEG signature upload).
+// deno-lint-ignore no-explicit-any
+export async function embedImageAuto(pdf: any, bytes: Uint8Array) {
+  try { return await pdf.embedPng(bytes); }
+  catch (_) { return await pdf.embedJpg(bytes); }
+}
+
 // deno-lint-ignore no-explicit-any
 export async function drawHeader(pdf: any, page: any, logoBytes: Uint8Array, fonts: { reg: any; bold: any }, H: number) {
-  // deno-lint-ignore no-explicit-any
-  let logo: any;
-  try { logo = await pdf.embedPng(logoBytes); }
-  catch (_) { logo = await pdf.embedJpg(logoBytes); }
+  const logo = await embedImageAuto(pdf, logoBytes);
 
   const logoDims = logo.scale(1);
   const logoH = 78;
@@ -127,6 +133,61 @@ export function drawFooter(page: any, fonts: { reg: any; bold: any }) {
   drawCentered("& CMMI level 3 Certified Company", 32, 6.5);
 }
 
+// deno-lint-ignore no-explicit-any
+export type HeaderFn = (pdf: any, page: any, logoBytes: Uint8Array, fonts: { reg: any; bold: any }, H: number) => Promise<void>;
+// deno-lint-ignore no-explicit-any
+export type FooterFn = (page: any, fonts: { reg: any; bold: any }, pageNumber: number) => void;
+
+const SIMPLE_MARGIN_X = 40;
+const RULE_GRAY_LIGHT = rgb(0.55, 0.55, 0.55);
+
+// Plain logo + italic "AFC India Ltd." header used by the Lead/MD Approval
+// Note — deliberately much lighter than drawHeader (the full letterhead
+// used for external Empanelment letters): just the logo top-left, the
+// company name top-right, and a thin separator rule below both, matching
+// the reference form. Only this header/footer pair uses the italic font
+// (embedded here, not added to the shared `fonts` object, so it can't leak
+// into any other document's body text).
+// deno-lint-ignore no-explicit-any
+export async function drawSimpleHeader(pdf: any, page: any, logoBytes: Uint8Array, fonts: { reg: any; bold: any }, H: number) {
+  const logo = await embedImageAuto(pdf, logoBytes);
+  const logoDims = logo.scale(1);
+  const logoH = 46;
+  const logoW = (logoDims.width / logoDims.height) * logoH;
+  const topY = H - 40;
+  const logoBottomY = topY - logoH + 6;
+
+  page.drawImage(logo, { x: SIMPLE_MARGIN_X, y: logoBottomY, width: logoW, height: logoH });
+
+  const italicFont = await pdf.embedFont(StandardFonts.TimesRomanItalic);
+  const text = "AFC India Ltd.";
+  const size = 13;
+  const w = italicFont.widthOfTextAtSize(text, size);
+  page.drawText(text, { x: 595 - SIMPLE_MARGIN_X - w, y: topY - 6, size, font: italicFont, color: BLACK });
+
+  const ruleY = logoBottomY - 8;
+  page.drawLine({
+    start: { x: SIMPLE_MARGIN_X, y: ruleY },
+    end: { x: 595 - SIMPLE_MARGIN_X, y: ruleY },
+    thickness: 0.75,
+    color: RULE_GRAY_LIGHT,
+  });
+}
+
+// Thin separator rule + "<page> | Page" footer to match drawSimpleHeader —
+// no contact/CIN block, just the rule and a page counter, bottom-left.
+// deno-lint-ignore no-explicit-any
+export function drawSimpleFooter(page: any, fonts: { reg: any; bold: any }, pageNumber: number) {
+  const ruleY = 48;
+  page.drawLine({
+    start: { x: SIMPLE_MARGIN_X, y: ruleY },
+    end: { x: 595 - SIMPLE_MARGIN_X, y: ruleY },
+    thickness: 0.75,
+    color: RULE_GRAY_LIGHT,
+  });
+  page.drawText(`${pageNumber} | Page`, { x: SIMPLE_MARGIN_X, y: ruleY - 15, size: 8.5, font: fonts.reg, color: BLACK });
+}
+
 export class PageEngine {
   // deno-lint-ignore no-explicit-any
   pdf: any;
@@ -136,26 +197,42 @@ export class PageEngine {
   W = 595; H = 842;
   LEFT = 58;
   RIGHT_EDGE = 537;
-  CONTENT_TOP = 715;
-  FOOTER_SAFE = 100;
+  CONTENT_TOP: number;
+  FOOTER_SAFE: number;
   MAX_W: number;
   y = 0;
   LINE_H = 13.5;
+  pageNumber = 0;
+  headerFn: HeaderFn;
+  footerFn: FooterFn;
   // deno-lint-ignore no-explicit-any
   currentPage: any = null;
 
-  // deno-lint-ignore no-explicit-any
-  constructor(pdf: any, fonts: { reg: any; bold: any }, logoBytes: Uint8Array) {
+  constructor(
+    // deno-lint-ignore no-explicit-any
+    pdf: any,
+    fonts: { reg: any; bold: any },
+    logoBytes: Uint8Array,
+    // Defaults to the full AFC letterhead (used by Empanelment's letters);
+    // pass overrides for a document that needs a different header/footer,
+    // like the Lead/MD Approval Note's plain logo+title header.
+    opts: { drawHeader?: HeaderFn; drawFooter?: FooterFn; contentTop?: number; footerSafe?: number } = {}
+  ) {
     this.pdf = pdf;
     this.fonts = fonts;
     this.logoBytes = logoBytes;
     this.MAX_W = this.RIGHT_EDGE - this.LEFT;
+    this.headerFn = opts.drawHeader ?? drawHeader;
+    this.footerFn = opts.drawFooter ?? ((page, f) => drawFooter(page, f));
+    this.CONTENT_TOP = opts.contentTop ?? 715;
+    this.FOOTER_SAFE = opts.footerSafe ?? 100;
   }
 
   async newPage() {
     const page = this.pdf.addPage([this.W, this.H]);
-    await drawHeader(this.pdf, page, this.logoBytes, this.fonts, this.H);
-    drawFooter(page, this.fonts);
+    this.pageNumber += 1;
+    await this.headerFn(this.pdf, page, this.logoBytes, this.fonts, this.H);
+    this.footerFn(page, this.fonts, this.pageNumber);
     this.currentPage = page;
     this.y = this.CONTENT_TOP;
   }
@@ -263,4 +340,154 @@ export async function newPdfDoc() {
   const fontReg = await pdf.embedFont(StandardFonts.TimesRoman);
   const fontBold = await pdf.embedFont(StandardFonts.TimesRomanBold);
   return { pdf, fonts: { reg: fontReg, bold: fontBold } };
+}
+
+// ── Bordered tables ──────────────────────────────────────────────
+// Generic table-drawing helpers, added for the Lead Approval Note (a
+// heavily tabular form) — not specific to that document, so any future
+// letter/note needing a bordered table can reuse these instead of hand-
+// drawing rectangles again.
+
+export const RULE_GRAY = rgb(0.45, 0.45, 0.45);
+const HEADER_FILL = rgb(0.92, 0.94, 0.92);
+
+// deno-lint-ignore no-explicit-any
+function wrapLine(font: any, text: string, size: number, maxWidth: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    const test = cur ? `${cur} ${w}` : w;
+    if (font.widthOfTextAtSize(test, size) > maxWidth && cur) {
+      out.push(cur);
+      cur = w;
+    } else {
+      cur = test;
+    }
+  }
+  if (cur) out.push(cur);
+  return out.length ? out : [""];
+}
+
+// Splits on explicit newlines first (so callers can pass pre-formatted
+// paragraphs/bullet lists), then word-wraps each line independently.
+// deno-lint-ignore no-explicit-any
+export function wrapMultiline(font: any, text: string | null | undefined, size: number, maxWidth: number): string[] {
+  const paragraphs = String(text ?? "").split("\n");
+  const lines: string[] = [];
+  for (const p of paragraphs) {
+    if (!p) { lines.push(""); continue; }
+    lines.push(...wrapLine(font, p, size, maxWidth));
+  }
+  return lines.length ? lines : [""];
+}
+
+export interface KeyValueRow { label: string; value: string; }
+
+// A bordered two-column table: bold label cell | wrapped value cell, one
+// row per entry, row height auto-sized to whichever column wraps taller.
+// Paginates automatically (a row is never split across pages).
+export async function drawKeyValueTable(
+  e: PageEngine,
+  rows: KeyValueRow[],
+  opts: { labelWidth?: number; fontSize?: number; lineH?: number; padX?: number; padY?: number } = {}
+) {
+  const fontSize = opts.fontSize ?? 9;
+  const lineH = opts.lineH ?? 12;
+  const padX = opts.padX ?? 6;
+  const padY = opts.padY ?? 5;
+  const labelWidth = opts.labelWidth ?? 150;
+  const valueWidth = e.MAX_W - labelWidth;
+
+  for (const row of rows) {
+    const labelLines = wrapMultiline(e.fonts.bold, row.label, fontSize, labelWidth - 2 * padX);
+    const valueLines = wrapMultiline(e.fonts.reg, row.value || "—", fontSize, valueWidth - 2 * padX);
+    const nLines = Math.max(labelLines.length, valueLines.length);
+    const rowH = nLines * lineH + 2 * padY;
+
+    if (e.y - rowH < e.FOOTER_SAFE) await e.newPage();
+
+    const topY = e.y;
+    const x0 = e.LEFT;
+    const xMid = e.LEFT + labelWidth;
+    const x1 = e.RIGHT_EDGE;
+    const bottomY = topY - rowH;
+
+    e.currentPage.drawRectangle({ x: x0, y: bottomY, width: x1 - x0, height: rowH, borderColor: RULE_GRAY, borderWidth: 0.6 });
+    e.currentPage.drawLine({ start: { x: xMid, y: topY }, end: { x: xMid, y: bottomY }, thickness: 0.6, color: RULE_GRAY });
+
+    let ly = topY - padY - fontSize * 0.8;
+    for (const l of labelLines) {
+      e.currentPage.drawText(l, { x: x0 + padX, y: ly, size: fontSize, font: e.fonts.bold, color: BLACK });
+      ly -= lineH;
+    }
+    let vy = topY - padY - fontSize * 0.8;
+    for (const l of valueLines) {
+      e.currentPage.drawText(l, { x: xMid + padX, y: vy, size: fontSize, font: e.fonts.reg, color: BLACK });
+      vy -= lineH;
+    }
+
+    e.y = bottomY;
+  }
+}
+
+export interface GridColumn { header: string; width: number; }
+
+// A bordered multi-column grid table with a shaded header row, redrawn on
+// every new page a row overflows onto (like a real spreadsheet-style
+// table). `columns[].width` are proportional weights, scaled to fill the
+// page's content width.
+export async function drawGridTable(
+  e: PageEngine,
+  columns: GridColumn[],
+  rows: string[][],
+  opts: { fontSize?: number; lineH?: number; padX?: number; padY?: number } = {}
+) {
+  const fontSize = opts.fontSize ?? 8.5;
+  const lineH = opts.lineH ?? 11;
+  const padX = opts.padX ?? 5;
+  const padY = opts.padY ?? 4;
+  const totalW = columns.reduce((s, c) => s + c.width, 0);
+  const scale = e.MAX_W / totalW;
+  const widths = columns.map((c) => c.width * scale);
+
+  function drawRow(cells: string[], bold: boolean, fill: boolean) {
+    const cellLines = cells.map((text, i) => wrapMultiline(bold ? e.fonts.bold : e.fonts.reg, text, fontSize, widths[i] - 2 * padX));
+    const nLines = Math.max(...cellLines.map((l) => l.length));
+    const rowH = nLines * lineH + 2 * padY;
+    const topY = e.y;
+    let x = e.LEFT;
+    for (let i = 0; i < cells.length; i++) {
+      e.currentPage.drawRectangle({
+        x, y: topY - rowH, width: widths[i], height: rowH,
+        borderColor: RULE_GRAY, borderWidth: 0.6,
+        ...(fill ? { color: HEADER_FILL } : {}),
+      });
+      let ty = topY - padY - fontSize * 0.8;
+      for (const l of cellLines[i]) {
+        e.currentPage.drawText(l, { x: x + padX, y: ty, size: fontSize, font: bold ? e.fonts.bold : e.fonts.reg, color: BLACK });
+        ty -= lineH;
+      }
+      x += widths[i];
+    }
+    e.y = topY - rowH;
+  }
+
+  function headerHeight(): number {
+    const cellLines = columns.map((c, i) => wrapMultiline(e.fonts.bold, c.header, fontSize, widths[i] - 2 * padX));
+    return Math.max(...cellLines.map((l) => l.length)) * lineH + 2 * padY;
+  }
+
+  if (e.y - headerHeight() < e.FOOTER_SAFE) await e.newPage();
+  drawRow(columns.map((c) => c.header), true, true);
+
+  for (const row of rows) {
+    const cellLines = row.map((text, i) => wrapMultiline(e.fonts.reg, text, fontSize, widths[i] - 2 * padX));
+    const rowH = Math.max(...cellLines.map((l) => l.length)) * lineH + 2 * padY;
+    if (e.y - rowH < e.FOOTER_SAFE) {
+      await e.newPage();
+      drawRow(columns.map((c) => c.header), true, true);
+    }
+    drawRow(row, false, false);
+  }
 }

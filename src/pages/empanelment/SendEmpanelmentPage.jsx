@@ -57,11 +57,11 @@ function StepBar({ current }) {
   );
 }
 
-function SenderInfoRow({ profile, dgmUser }) {
+function SenderInfoRow({ profile, team, dgmUser }) {
   const items = [
     { label: "Sent by", value: profile?.full_name },
     { label: "Advised by", value: dgmUser?.full_name || profile?.full_name },
-    { label: "Team", value: profile?.team, highlight: true },
+    { label: "Team", value: team, highlight: true },
     { label: "Office", value: capitalise(profile?.office) },
   ];
   return (
@@ -137,7 +137,8 @@ function SuccessScreen({ email, onSendAnother, onGoHome }) {
 
 export default function SendEmpanelmentPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
+  const team = activeTeam ?? profile?.team;
 
   const [form, setForm] = useState({ projectOfficer: "", baEmail: "" });
   const [fieldErrors, setFieldErrors] = useState({});
@@ -150,18 +151,18 @@ export default function SendEmpanelmentPage() {
   const [sentToEmail, setSentToEmail] = useState("");
 
   const fetchPOs = useCallback(async () => {
-    if (!profile?.team) {
+    if (!team) {
       setLoadingPOs(false);
       return;
     }
     const [{ data: pos }, { data: dgm }] = await Promise.all([
-      supabase.from("afc_users").select("id, full_name, email").eq("role", "project_officer").eq("team", profile.team).eq("is_active", true).order("full_name"),
-      supabase.from("afc_users").select("id, full_name, email").eq("role", "dgm").eq("team", profile.team).eq("is_active", true).limit(1).maybeSingle(),
+      supabase.from("afc_users").select("id, full_name, email").eq("role", "project_officer").eq("team", team).eq("is_active", true).order("full_name"),
+      supabase.from("afc_users").select("id, full_name, email").eq("role", "dgm").eq("team", team).eq("is_active", true).limit(1).maybeSingle(),
     ]);
     setProjectOfficers(pos || []);
     setDgmUser(dgm || null);
     setLoadingPOs(false);
-  }, [profile?.team]);
+  }, [team]);
 
   useEffect(() => {
     fetchPOs();
@@ -191,7 +192,7 @@ export default function SendEmpanelmentPage() {
     setSending(true);
     try {
       const { data, error } = await supabase.functions.invoke("send-empanelment-invite", {
-        body: { ba_email: form.baEmail.trim().toLowerCase(), project_officer_id: form.projectOfficer },
+        body: { ba_email: form.baEmail.trim().toLowerCase(), project_officer_id: form.projectOfficer, team },
       });
       if (error) {
         setSendError(await extractFunctionErrorMessage(error, "Failed to send invitation."));
@@ -218,7 +219,7 @@ export default function SendEmpanelmentPage() {
     setStep(0);
   }
 
-  if (!loadingPOs && !profile?.team) {
+  if (!loadingPOs && !team) {
     return (
       <div className="app-shell">
         <AppHeader />
@@ -243,13 +244,13 @@ export default function SendEmpanelmentPage() {
               <Card className="sef-main-card">
                 <Card.Header title="Send Empanelment Form" subtitle="Select a Project Officer and enter the BA's email address." action={<Badge variant="brand">Step 1 of 2</Badge>} />
                 <Card.Body className="sef-card-body">
-                  <SenderInfoRow profile={profile} dgmUser={dgmUser} />
+                  <SenderInfoRow profile={profile} team={team} dgmUser={dgmUser} />
                   <div className="sef-divider" />
 
                   <div className="sef-field">
                     <label className="sef-label" htmlFor="sef-po-select">Project Officer <span className="sef-required">*</span></label>
                     {projectOfficers.length === 0 ? (
-                      <Alert variant="warning">No active Project Officers found in team <strong>{profile?.team}</strong>.</Alert>
+                      <Alert variant="warning">No active Project Officers found in team <strong>{team}</strong>.</Alert>
                     ) : (
                       <Select id="sef-po-select" options={poOptions} value={form.projectOfficer} onChange={(val) => { setForm((p) => ({ ...p, projectOfficer: val })); setFieldErrors((e) => ({ ...e, projectOfficer: "" })); }} placeholder="Select a Project Officer" />
                     )}
@@ -290,7 +291,7 @@ export default function SendEmpanelmentPage() {
                     <div className="sef-summary-item"><span className="sef-summary-label">Project Officer</span><span className="sef-summary-value">{selectedPO?.full_name || "—"}</span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Advised by</span><span className="sef-summary-value">{advisedByName} <span className="sef-summary-role">({advisedByDesig})</span></span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Sent by</span><span className="sef-summary-value">{profile?.full_name}</span></div>
-                    <div className="sef-summary-item sef-summary-last"><span className="sef-summary-label">Team / Office</span><span className="sef-summary-value">{profile?.team} · {capitalise(profile?.office)}</span></div>
+                    <div className="sef-summary-item sef-summary-last"><span className="sef-summary-label">Team / Office</span><span className="sef-summary-value">{team} · {capitalise(profile?.office)}</span></div>
                   </div>
                   <div className="sef-summary-notice">The application code is generated and sent securely in the actual email — it is not shown in this preview.</div>
                   {sendError && <Alert variant="danger" onClose={() => setSendError("")}>{sendError}</Alert>}

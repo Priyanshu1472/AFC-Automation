@@ -19,7 +19,7 @@ function monthsBetween(start, end) {
 
 export default function AddProjectPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
 
   const [form, setForm] = useState({
     projectName: "", shortform: "", servicesDescription: "",
@@ -103,7 +103,7 @@ export default function AddProjectPage() {
         summary: summaryData,
         location: form.location || null,
         shortform: form.shortform || null,
-        team: profile?.team ?? null,
+        team: activeTeam ?? profile?.team ?? null,
         created_by: profile?.id ?? null,
       }])
       .select()

@@ -1,7 +1,8 @@
 // supabase/functions/set-user-status/index.ts
 // JWT must be ON. Flips afc_users.is_active only — the Supabase Auth
 // account itself is left intact (reversible; login is already blocked by
-// the is_active check in useLogin / ProtectedRoute).
+// the is_active check in useLogin / ProtectedRoute). Admin-only — no other
+// role, including MD and DGM, can activate/deactivate a user.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
@@ -40,8 +41,6 @@ function jsonRes(req: Request, status: number, body: unknown) {
     headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
   });
 }
-
-const DGM_CREATABLE_ROLES = ["agm", "srm", "project_officer", "associate_consultant", "project_assistant"];
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
@@ -89,8 +88,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     if (callerErr || !caller) return jsonRes(req, 403, { error: "Caller account not found." });
     if (!caller.is_active) return jsonRes(req, 403, { error: "Your account is deactivated." });
-    if (!["md", "dgm", "admin"].includes(caller.role)) {
-      return jsonRes(req, 403, { error: "Forbidden. Only Admin, MD, or DGM can change user status." });
+    if (caller.role !== "admin") {
+      return jsonRes(req, 403, { error: "Forbidden. Only Admin can change user status." });
     }
 
     let body: Record<string, unknown>;
@@ -107,20 +106,10 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const { data: target, error: targetErr } = await adminClient
       .from("afc_users")
-      .select("id, role, team, email, full_name")
+      .select("id, email, full_name")
       .eq("id", user_id)
       .single();
     if (targetErr || !target) return jsonRes(req, 404, { error: "User not found." });
-
-    if (caller.role === "dgm") {
-      if (target.team !== caller.team || !DGM_CREATABLE_ROLES.includes(target.role)) {
-        return jsonRes(req, 403, { error: "You can only manage users on your own team." });
-      }
-    } else if (["dgm", "cfo", "cs"].includes(target.role) && !["md", "admin"].includes(caller.role)) {
-      // Redundant given the caller.role gate above, but explicit: only
-      // MD/Admin may deactivate another senior role.
-      return jsonRes(req, 403, { error: "Only MD or Admin can change this user's status." });
-    }
 
     const { error: updateErr } = await adminClient
       .from("afc_users")

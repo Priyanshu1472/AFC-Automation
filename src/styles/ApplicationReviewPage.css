@@ -489,6 +489,14 @@
 /* ── Activity Timeline Accordion ─────────────────────────── */
 .ar-timeline-body { padding: 0 !important; }
 
+/* Lead Detail's timeline only (not Empanelment's, which also reuses
+   ar-timeline-body) — fixed-size scrollable box instead of growing with
+   the number of activity entries. */
+.ar-timeline-body.ar-lead-timeline-body {
+  height: 400px;
+  overflow-y: auto;
+}
+
 .ar-accordion {
   display: flex;
   flex-direction: column;
@@ -785,6 +793,231 @@
 /* Provisional card — not yet sent */
 .ar-provisional-card {
   border-color: rgba(52, 128, 245, 0.25) !important;
+}
+
+/* ── Lead chat ───────────────────────────────────────────── */
+/* Floating bubble, fixed to the viewport corner, that pops the thread open
+   above it — same pattern as a typical website chat widget — instead of an
+   inline card embedded in the page flow. */
+.ar-chat-widget {
+  position: fixed;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.ar-chat-fab {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--brand-600);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.ar-chat-fab:hover {
+  transform: scale(1.06);
+}
+
+.ar-chat-fab svg {
+  width: 24px;
+  height: 24px;
+}
+
+.ar-chat-fab-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  border: 2px solid var(--bg-page);
+}
+
+/* Fixed total height for the popup — the input row (below) grows a little
+   as you type, but ar-chat-messages (flex: 1) shrinks to absorb that, so
+   the popup as a whole never resizes. */
+.ar-chat-popup {
+  width: 360px;
+  max-width: calc(100vw - var(--space-8));
+  height: 440px;
+  max-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-4);
+  animation: ar-chat-pop-in var(--duration-fast) var(--ease-out);
+}
+
+@keyframes ar-chat-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ar-chat-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+}
+
+.ar-chat-popup-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ar-chat-popup-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.ar-chat-popup-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+@media (max-width: 480px) {
+  .ar-chat-widget {
+    right: var(--space-4);
+    bottom: var(--space-4);
+  }
+
+  .ar-chat-popup {
+    width: calc(100vw - var(--space-8));
+  }
+}
+
+.ar-chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.ar-chat-msg {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.ar-chat-msg-own {
+  justify-content: flex-end;
+}
+
+.ar-chat-bubble {
+  max-width: 80%;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ar-chat-msg-own .ar-chat-bubble {
+  background: var(--brand-100);
+  border-color: var(--border-brand);
+}
+
+[data-theme="dark"] .ar-chat-msg-own .ar-chat-bubble {
+  background: rgba(52, 128, 245, 0.2);
+}
+
+.ar-chat-sender {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--brand-600);
+}
+
+.ar-chat-text {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ar-chat-time {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  align-self: flex-end;
+}
+
+.ar-chat-input-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-end;
+}
+
+.ar-chat-input {
+  flex: 1;
+  resize: none;
+  height: 40px;
+  max-height: 120px;
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  padding: 9px var(--space-4);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-text);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.ar-chat-input:focus {
+  border-color: var(--input-border-focus);
+}
+
+.ar-chat-locked {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin: 0;
+  text-align: center;
+  padding: var(--space-2) 0;
 }
 
 /* Provisional card — already sent */

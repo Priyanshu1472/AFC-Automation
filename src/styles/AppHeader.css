@@ -17,6 +17,10 @@
   flex-shrink: 0;
 }
 
+.app-header-brand:hover{
+  text-decoration: none;  
+}
+
 .app-header-logo {
   height: 50px;
   width: auto;
@@ -29,6 +33,7 @@
   align-items: center;
   flex: 1;
   margin-left: var(--space-6);
+  gap: var(--space-1);
 }
 
 .app-header-nav-links {
@@ -58,6 +63,16 @@
   font-weight: 700;
   background: var(--bg-surface-3);
   text-decoration: none;
+}
+
+/* Dashboard / Reports — sit right after the module links with the same
+   gap as every other nav item, so the whole row reads as one continuous
+   group; .app-header-nav-utilities' own margin-left: auto still pushes the
+   utility icons to the far right past this group. */
+.app-header-nav-dropdowns {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 /* ── Nav dropdown (Reports / Dashboard) ─────────────────────── */
@@ -212,7 +227,8 @@
    chip + dropdown instead. */
 .app-header-nav-profile-mobile,
 .app-header-nav-profile-link-mobile,
-.app-header-nav-signout-mobile {
+.app-header-nav-signout-mobile,
+.app-header-nav-teams-mobile {
   display: none;
 }
 
@@ -255,14 +271,29 @@
     transform: translateX(0);
   }
 
-  .app-header-nav-links {
+  .app-header-nav-links,
+  .app-header-nav-dropdowns {
     flex-direction: column;
     align-items: stretch;
     gap: var(--space-1);
+    margin-left: 0;
   }
 
   .app-header-nav-links a {
     padding: var(--space-3);
+  }
+
+  .app-header-nav-dropdowns .nav-dropdown-trigger {
+    padding: var(--space-3);
+  }
+
+  .app-header-nav-dropdowns .nav-dropdown-panel {
+    position: static;
+    box-shadow: none;
+    border: none;
+    background: none;
+    padding: 0 0 0 var(--space-3);
+    animation: none;
   }
 
   .app-header-nav-divider {
@@ -334,6 +365,43 @@
   .app-header-nav-profile-role {
     font-size: var(--text-xs);
     color: var(--text-tertiary);
+  }
+
+  .app-header-nav-teams-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+    margin: var(--space-2) 0;
+  }
+
+  .app-header-nav-teams-label-mobile {
+    padding: var(--space-1) var(--space-1) var(--space-1);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+  }
+
+  .app-header-nav-team-item-mobile {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    background: none;
+    border: none;
+    padding: var(--space-2) var(--space-1);
+    cursor: pointer;
+  }
+
+  .app-header-nav-team-item-mobile-active {
+    color: var(--text-brand);
+    font-weight: 700;
   }
 
   .app-header-nav-profile-link-mobile {

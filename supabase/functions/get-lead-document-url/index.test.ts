@@ -68,6 +68,30 @@ Deno.test("handleRequest - a same-team user is authorized", async () => {
   assertEquals(res.status, 200);
 });
 
+Deno.test("handleRequest - an AGM on the same team is NOT authorized unless named on the lead", async () => {
+  const client = buildClient({ caller: callerRow({ role: "agm", team: TEAM }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, path: PATH }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("handleRequest - an AGM named as Approval Authority is authorized", async () => {
+  const client = buildClient({ caller: callerRow({ role: "agm", id: "authority-1", team: TEAM }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, path: PATH }, fakeJwt({ sub: "authority-1" })), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("handleRequest - CFO/CS have org-wide access even off-team", async () => {
+  const client = buildClient({ caller: callerRow({ role: "cfo", team: "SomeOtherTeam" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, path: PATH }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("handleRequest - a PMT committee member is authorized while the lead is at pmt_review, off-team", async () => {
+  const client = buildClient({ caller: callerRow({ team: "SomeOtherTeam", committee: "PMT" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, path: PATH }), client as never);
+  assertEquals(res.status, 200);
+});
+
 Deno.test("handleRequest - a G3 (DGM committee) member from a different team is authorized once the lead is in dgm_review", async () => {
   const client = buildClient({
     caller: callerRow({ team: "SomeOtherTeam", committee: "G3" }),

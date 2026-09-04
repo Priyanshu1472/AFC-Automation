@@ -1,20 +1,32 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { handleRequest } from "./index.ts";
 import { authedReq, createFakeAdminClient, fakeJwt, FakeResult } from "../_shared/testHelpers.ts";
+import { hashPin } from "../_shared/pin.ts";
 
 const CALLER_ID = "caller-1";
 const LEAD_ID = "lead-1";
 const TEAM = "BPDD";
 
+// Every PIN-gated action test goes through req(), which already attaches a
+// valid PIN by default — tests that care about PIN behavior specifically
+// (see the "PIN gate" section) override it explicitly.
+const CALLER_PIN = "5432";
+const CALLER_PIN_HASH = await hashPin(CALLER_PIN, CALLER_ID);
+
 function callerRow(overrides: Record<string, unknown> = {}) {
-  return { id: CALLER_ID, role: "project_officer", team: TEAM, office: "delhi", committee: null, is_active: true, email: "caller@afc.com", ...overrides };
+  return { id: CALLER_ID, role: "project_officer", team: TEAM, office: "delhi", committee: null, is_active: true, email: "caller@afc.com", pin_hash: CALLER_PIN_HASH, ...overrides };
 }
 
 function leadRow(overrides: Record<string, unknown> = {}) {
   return {
     id: LEAD_ID, lead_number: "LH-2026-000001", title: "Test Lead", status: "pa_review", team: TEAM,
     created_by: "creator-1", person_responsible_id: CALLER_ID, reviewer_id: "reviewer-1",
-    approval_authority_id: "authority-1", handled_by_dgm_id: null, ...overrides,
+    approval_authority_id: "authority-1", handled_by_dgm_id: null,
+    // Present by default since the Lead Approval Note is a precondition for
+    // "accept" — tests specifically covering that precondition override it
+    // back to null.
+    approval_note_data: { nature_of_lead: "Nomination" },
+    ...overrides,
   };
 }
 
@@ -46,7 +58,7 @@ function buildClient(opts: {
 }
 
 function req(body: Record<string, unknown>) {
-  return authedReq("https://x.com/advance-lead-stage", { token: fakeJwt({ sub: CALLER_ID }), body });
+  return authedReq("https://x.com/advance-lead-stage", { token: fakeJwt({ sub: CALLER_ID }), body: { pin: CALLER_PIN, ...body } });
 }
 
 Deno.test("handleRequest - OPTIONS returns ok without auth", async () => {
@@ -83,11 +95,35 @@ Deno.test("accept - rejects a caller who isn't Person Responsible", async () => 
   assertEquals(res.status, 403);
 });
 
-Deno.test("accept - success moves to pmt_review when the lead already has a BA", async () => {
+Deno.test("accept - requires the Lead Approval Note to be generated first", async () => {
+  const client = buildClient({ lead: leadRow({ approval_note_data: null, assigned_ba_id: "existing-ba" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "Generate the Lead Approval Note before submitting for DGM approval.");
+});
+
+Deno.test("accept - success moves to dgm_initial_review when the lead already has a BA", async () => {
   const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
   assertEquals(res.status, 200);
-  assertEquals(await res.json(), { success: true, status: "pmt_review" });
+  assertEquals(await res.json(), { success: true, status: "dgm_initial_review" });
+});
+
+Deno.test("accept - notifies only this lead's own team's DGM(s), not every G3 committee member org-wide", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow(), error: null }, // getCallerProfile
+      { data: [{ id: "team-dgm-1" }], error: null }, // getTeamDgmHolders' afc_users lookup, scoped to the membership ids below
+    ],
+    afc_user_teams: [{ data: [{ user_id: "team-dgm-1" }], error: null }], // only this team's members
+    leads: [{ data: leadRow({ assigned_ba_id: "existing-ba" }), error: null }, { data: { id: LEAD_ID }, error: null }],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 200);
+
+  const notifyLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "notifications");
+  const rows = JSON.parse(notifyLog[0].calls.find((c) => c[0] === "insert")![1]);
+  assertEquals(rows.map((r: { user_id: string }) => r.user_id), ["team-dgm-1"]);
 });
 
 Deno.test("accept - requires a BA when the lead has none and none is provided", async () => {
@@ -120,7 +156,371 @@ Deno.test("accept - accepts and assigns a BA when caller selects one", async () 
   });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", assigned_ba_id: "ba-9" }), client as never);
   assertEquals(res.status, 200);
-  assertEquals(await res.json(), { success: true, status: "pmt_review" });
+  assertEquals(await res.json(), { success: true, status: "dgm_initial_review" });
+});
+
+// ── DGM initial review (new first-line gate, ahead of PMT) — this is the
+// lead's OWN TEAM's DGM (role + team match), not the org-wide G3 committee
+// (G3 only applies to the later PMT-Extended-escalated dgm_review stage) ──
+Deno.test("dgm_initial_approve - rejects a caller who isn't a DGM at all", async () => {
+  const client = buildClient({ caller: callerRow({ role: "project_officer" }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("dgm_initial_approve - rejects a DGM from a different team", async () => {
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: "OtherTeam" }), lead: leadRow({ status: "dgm_initial_review", team: TEAM }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("dgm_initial_approve - a multi-team DGM (afc_user_teams) can act on a lead from their secondary team, not just their primary", async () => {
+  const client = buildClient({
+    caller: callerRow({ role: "dgm", team: "BPDD" }),
+    lead: leadRow({ status: "dgm_initial_review", team: "HO" }),
+    routes: { afc_user_teams: [{ data: [{ team: "BPDD" }, { team: "HO" }], error: null }] },
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("dgm_initial_approve - G3 committee membership alone is NOT enough (must be the team's DGM)", async () => {
+  const client = buildClient({ caller: callerRow({ role: "project_officer", committee: "G3" }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("dgm_initial_approve - requires a comment", async () => {
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: TEAM }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("dgm_initial_approve - success moves to pmt_review", async () => {
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: TEAM }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pmt_review");
+});
+
+Deno.test("dgm_initial_approve - opens the chat and bulk-adds the named trio plus every PMT holder", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ role: "dgm", team: TEAM }), error: null }, // getCallerProfile
+      { data: [{ id: "pmt-1" }, { id: "pmt-2" }], error: null }, // getOrgWideHolders(PMT)
+    ],
+    leads: [
+      { data: leadRow({ status: "dgm_initial_review", chat_opened_at: null }), error: null },
+      { data: { id: LEAD_ID }, error: null },
+    ],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const leadUpdate = JSON.parse(log.filter((l) => l.table === "leads")[1].calls.find((c) => c[0] === "update")![1]);
+  assertEquals(typeof leadUpdate.chat_opened_at, "string");
+
+  const participantCalls = log.filter((l) => l.table === "lead_chat_participants");
+  assertEquals(participantCalls.length, 2);
+  const namedRows = JSON.parse(participantCalls[0].calls.find((c) => c[0] === "upsert")![1]);
+  assertEquals(namedRows.map((r: { user_id: string }) => r.user_id).sort(), [CALLER_ID, "authority-1", "reviewer-1"].sort());
+  const pmtRows = JSON.parse(participantCalls[1].calls.find((c) => c[0] === "upsert")![1]);
+  assertEquals(pmtRows.map((r: { user_id: string; role_at_add: string }) => r.user_id), ["pmt-1", "pmt-2"]);
+  assertEquals(pmtRows[0].role_at_add, "PMT");
+});
+
+Deno.test("dgm_initial_approve - does not overwrite chat_opened_at once it's already set", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [{ data: callerRow({ role: "dgm", team: TEAM }), error: null }, { data: [], error: null }],
+    leads: [
+      { data: leadRow({ status: "dgm_initial_review", chat_opened_at: "2026-08-20T00:00:00Z" }), error: null },
+      { data: { id: LEAD_ID }, error: null },
+    ],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const leadUpdate = JSON.parse(log.filter((l) => l.table === "leads")[1].calls.find((c) => c[0] === "update")![1]);
+  assertEquals("chat_opened_at" in leadUpdate, false);
+});
+
+Deno.test("dgm_initial_decline - adds nobody to the chat roster (a decline never grows it)", async () => {
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: TEAM }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_decline", comment: "not viable" }), client as never);
+  assertEquals(res.status, 200);
+  const participantCalls = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "lead_chat_participants");
+  assertEquals(participantCalls.length, 0);
+});
+
+Deno.test("dgm_initial_decline - requires a reason and returns to pa_action_required", async () => {
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: TEAM }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const missingReason = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_decline" }), client as never);
+  assertEquals(missingReason.status, 400);
+
+  const client2 = buildClient({ caller: callerRow({ role: "dgm", team: TEAM }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_decline", comment: "not viable" }), client2 as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pa_action_required");
+});
+
+Deno.test("dgm_initial_decline - strips the stale approval_note document off the lead", async () => {
+  const staleDoc = { name: "Lead Approval Note.pdf", path: `${LEAD_ID}/old.pdf`, size: 10, uploaded_at: "2026-08-01T00:00:00Z", category: "approval_note" };
+  const otherDoc = { name: "RFP.pdf", path: `${LEAD_ID}/rfp.pdf`, size: 20, uploaded_at: "2026-08-01T00:00:00Z" };
+  const client = buildClient({
+    caller: callerRow({ role: "dgm", team: TEAM }),
+    lead: leadRow({ status: "dgm_initial_review", documents: [staleDoc, otherDoc] }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_decline", comment: "not viable" }), client as never);
+  assertEquals(res.status, 200);
+
+  const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+  const updateCall = leadsLog[1].calls.find((c) => c[0] === "update");
+  const updatedFields = JSON.parse(updateCall![1]);
+  assertEquals(updatedFields.documents, [otherDoc]);
+});
+
+// Resubmission after a decline reuses "accept" — the exact same
+// action/PIN gate as the very first submission — for a decline from *any*
+// stage (DGM, PMT, PMT Extended, G3, or MD), always routing back through
+// DGM again rather than skipping ahead to whichever stage declined it.
+Deno.test("accept (resubmit) - valid regardless of which stage declined it", async () => {
+  for (const declinedFrom of ["dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review"]) {
+    const client = buildClient({
+      lead: leadRow({ status: "pa_action_required", declined_from_status: declinedFrom, assigned_ba_id: "existing-ba" }),
+    });
+    const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+    assertEquals(res.status, 200, `expected 200 for declined_from_status=${declinedFrom}`);
+    assertEquals((await res.json()).status, "dgm_initial_review");
+  }
+});
+
+Deno.test("accept (resubmit) - only the Person Responsible can resubmit", async () => {
+  const client = buildClient({
+    lead: leadRow({
+      status: "pa_action_required", declined_from_status: "dgm_initial_review",
+      person_responsible_id: "someone-else", assigned_ba_id: "existing-ba",
+    }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("accept (resubmit) - requires the Lead Approval Note to already be regenerated", async () => {
+  const client = buildClient({
+    lead: leadRow({
+      status: "pa_action_required", declined_from_status: "dgm_initial_review",
+      approval_note_data: null, assigned_ba_id: "existing-ba",
+    }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("accept (resubmit) - success sends the lead straight back to dgm_initial_review", async () => {
+  const client = buildClient({
+    lead: leadRow({ status: "pa_action_required", declined_from_status: "dgm_initial_review", assigned_ba_id: "existing-ba" }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "dgm_initial_review");
+});
+
+Deno.test("PIN gate - accept (resubmit after DGM decline) still requires a PIN, same as the first submission", async () => {
+  const client = buildClient({
+    caller: callerRow({ pin_hash: null }),
+    lead: leadRow({ status: "pa_action_required", declined_from_status: "dgm_initial_review", assigned_ba_id: "existing-ba" }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", pin: "" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+// ── submit_for_pr_review / pr_review_accept / pr_review_reject ──
+// The creator (not the PR) filling the note routes it to the PR for
+// Accept/Edit/Reject before it can be submitted to DGM — the PR's
+// signature must never be auto-stamped on a note they haven't reviewed
+// (see approval_note_pr_reviewed / leadApprovalPdf.ts). All three are
+// same-status transitions — the lead never leaves pa_review/
+// pa_action_required, only the approval_note_pending_pr_review /
+// approval_note_pr_reviewed flags move.
+Deno.test("submit_for_pr_review - rejects the Person Responsible themselves (they'd Accept directly instead)", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: CALLER_ID }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("submit_for_pr_review - rejects a caller who isn't the lead's creator", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: "someone-else", person_responsible_id: "pr-1" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("submit_for_pr_review - requires the Lead Approval Note to already be generated", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: "pr-1", approval_note_data: null }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("submit_for_pr_review - rejects sending it for review twice in a row", async () => {
+  const client = buildClient({
+    lead: leadRow({ created_by: CALLER_ID, person_responsible_id: "pr-1", approval_note_pending_pr_review: true }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("submit_for_pr_review - not valid from any status other than pa_review/pa_action_required", async () => {
+  const client = buildClient({ lead: leadRow({ status: "dgm_initial_review", created_by: CALLER_ID, person_responsible_id: "pr-1" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("submit_for_pr_review - success leaves the status untouched and sets approval_note_pending_pr_review", async () => {
+  for (const status of ["pa_review", "pa_action_required"]) {
+    const client = buildClient({ lead: leadRow({ status, created_by: CALLER_ID, person_responsible_id: "pr-1" }) });
+    const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+    assertEquals(res.status, 200, `expected 200 from status=${status}`);
+    assertEquals((await res.json()).status, status, `expected status to stay ${status}`);
+
+    const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+    const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
+    assertEquals(updatedFields.approval_note_pending_pr_review, true);
+  }
+});
+
+Deno.test("submit_for_pr_review - notifies the Person Responsible", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: "pr-1" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "submit_for_pr_review" }), client as never);
+  assertEquals(res.status, 200);
+
+  const notifyLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "notifications");
+  assertEquals(notifyLog.length, 1);
+  const rows = JSON.parse(notifyLog[0].calls.find((c) => c[0] === "insert")![1]);
+  assertEquals(rows.map((r: { user_id: string }) => r.user_id), ["pr-1"]);
+});
+
+Deno.test("pr_review_accept - rejects a caller who isn't the Person Responsible", async () => {
+  const client = buildClient({ lead: leadRow({ person_responsible_id: "someone-else", approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_accept" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("pr_review_accept - rejects when nothing is actually pending review", async () => {
+  const client = buildClient({ lead: leadRow({ approval_note_pending_pr_review: false }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_accept" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("pr_review_accept - success leaves the status untouched, clears pending, and marks the note PR-reviewed", async () => {
+  const client = buildClient({ lead: leadRow({ approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_accept" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pa_review");
+
+  const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+  const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
+  assertEquals(updatedFields.approval_note_pr_reviewed, true);
+  assertEquals(updatedFields.approval_note_pending_pr_review, false);
+});
+
+Deno.test("pr_review_accept - does not require a PIN", async () => {
+  const client = buildClient({ caller: callerRow({ pin_hash: null }), lead: leadRow({ approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_accept", pin: "" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("pr_review_reject - rejects a caller who isn't the Person Responsible", async () => {
+  const client = buildClient({ lead: leadRow({ person_responsible_id: "someone-else", approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_reject", comment: "needs more detail" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("pr_review_reject - rejects when nothing is actually pending review", async () => {
+  const client = buildClient({ lead: leadRow({ approval_note_pending_pr_review: false }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_reject", comment: "needs more detail" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("pr_review_reject - requires a comment, and leaves the status untouched while clearing the pending flag", async () => {
+  const client = buildClient({ lead: leadRow({ approval_note_pending_pr_review: true }) });
+  const missingReason = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_reject" }), client as never);
+  assertEquals(missingReason.status, 400);
+
+  const client2 = buildClient({ lead: leadRow({ approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_reject", comment: "needs more detail" }), client2 as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pa_review");
+
+  const leadsLog = (client2 as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+  const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
+  assertEquals(updatedFields.approval_note_pending_pr_review, false);
+  assertEquals("declined_from_status" in updatedFields, false);
+});
+
+Deno.test("pr_review_reject - notifies the creator", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: "creator-1", approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pr_review_reject", comment: "needs more detail" }), client as never);
+  assertEquals(res.status, 200);
+
+  const notifyLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "notifications");
+  const rows = JSON.parse(notifyLog[0].calls.find((c) => c[0] === "insert")![1]);
+  assertEquals(rows.map((r: { user_id: string }) => r.user_id), ["creator-1"]);
+});
+
+Deno.test("accept - a Person Responsible submitting directly (even one that skipped the explicit Accept step) always marks the note PR-reviewed", async () => {
+  const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba", approval_note_pending_pr_review: true }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 200);
+
+  const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+  const updatedFields = JSON.parse(leadsLog[1].calls.find((c) => c[0] === "update")![1]);
+  assertEquals(updatedFields.approval_note_pr_reviewed, true);
+  assertEquals(updatedFields.approval_note_pending_pr_review, false);
+});
+
+Deno.test("accept - regenerating the note on submission drops the '-- Draft' suffix, replacing (not duplicating) the stored document", async () => {
+  const originalFetch = globalThis.fetch;
+  const TINY_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+  globalThis.fetch = (() =>
+    Promise.resolve(new Response(Uint8Array.from(atob(TINY_PNG_BASE64), (c) => c.charCodeAt(0)), { status: 200 }))) as unknown as typeof fetch;
+
+  try {
+    const staleDraft = { name: "Lead Approval Note -- Draft.pdf", path: `${LEAD_ID}/draft.pdf`, size: 5, uploaded_at: "2026-08-01T00:00:00Z", category: "approval_note" };
+    const client = createFakeAdminClient({
+      afc_users: [
+        { data: callerRow(), error: null }, // getCallerProfile (PR)
+        { data: [], error: null }, // getOrgWideHolders notify fan-out
+        { data: { full_name: "Priya Sharma", role: "project_officer", signature_path: null }, error: null }, // regenerateApprovalNote's PR lookup
+      ],
+      leads: [
+        { data: leadRow({ assigned_ba_id: "existing-ba", documents: [staleDraft] }), error: null }, // initial fetch
+        { data: { id: LEAD_ID }, error: null }, // guarded status update
+        { // regenerateApprovalNote's own fresh fetch — status already flipped to dgm_initial_review
+          data: {
+            id: LEAD_ID, lead_number: "LH-2026-000001", title: "Test Lead", status: "dgm_initial_review",
+            client_name: null, submission_deadline: null, assigned_ba_id: "existing-ba", person_responsible_id: CALLER_ID,
+            team: TEAM, documents: [staleDraft], approval_note_data: { nature_of_lead: "Nomination" },
+          },
+          error: null,
+        },
+        { data: {}, error: null }, // documents write-back
+      ],
+      lead_activity_log: [{ data: [], error: null }],
+    });
+
+    const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+    assertEquals(res.status, 200);
+
+    const leadsLog = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "leads");
+    const documentsUpdateCall = leadsLog[3].calls.find((c) => c[0] === "update");
+    const updatedFields = JSON.parse(documentsUpdateCall![1]);
+    assertEquals(updatedFields.documents.length, 1);
+    assertEquals(updatedFields.documents[0].name, "Lead Approval Note.pdf");
+    assertEquals(updatedFields.documents[0].category, "approval_note");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 // "drop" (true, no-reassignment withdrawal) is creator-only at pa_review —
@@ -282,6 +682,22 @@ Deno.test("pmt_approve - success moves to md_review", async () => {
   assertEquals((await res.json()).status, "md_review");
 });
 
+Deno.test("pmt_approve - bulk-adds every MD holder to the chat roster", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ committee: "PMT" }), error: null },
+      { data: [{ id: "md-1" }], error: null }, // getOrgWideHolders(role: md)
+    ],
+    leads: [{ data: leadRow({ status: "pmt_review" }), error: null }, { data: { id: LEAD_ID }, error: null }],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pmt_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+  const participantCalls = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "lead_chat_participants");
+  assertEquals(participantCalls.length, 1);
+  const rows = JSON.parse(participantCalls[0].calls.find((c) => c[0] === "upsert")![1]);
+  assertEquals(rows, [{ lead_id: LEAD_ID, user_id: "md-1", role_at_add: "md" }]);
+});
+
 Deno.test("pmt_escalate - requires a comment", async () => {
   const client = buildClient({ caller: callerRow({ committee: "PMT" }), lead: leadRow({ status: "pmt_review" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pmt_escalate" }), client as never);
@@ -293,6 +709,23 @@ Deno.test("pmt_escalate - success moves to pmt_extended_review", async () => {
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pmt_escalate", comment: "needs deeper review" }), client as never);
   assertEquals(res.status, 200);
   assertEquals((await res.json()).status, "pmt_extended_review");
+});
+
+Deno.test("pmt_escalate - bulk-adds every PMT Extended holder to the chat roster", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ committee: "PMT" }), error: null },
+      { data: [{ id: "pmtx-1" }, { id: "pmtx-2" }], error: null },
+    ],
+    leads: [{ data: leadRow({ status: "pmt_review" }), error: null }, { data: { id: LEAD_ID }, error: null }],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pmt_escalate", comment: "needs deeper review" }), client as never);
+  assertEquals(res.status, 200);
+  const participantCalls = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "lead_chat_participants");
+  assertEquals(participantCalls.length, 1);
+  const rows = JSON.parse(participantCalls[0].calls.find((c) => c[0] === "upsert")![1]);
+  assertEquals(rows.map((r: { user_id: string }) => r.user_id), ["pmtx-1", "pmtx-2"]);
+  assertEquals(rows[0].role_at_add, "PMT Extended");
 });
 
 Deno.test("pmt_decline - success moves to pa_action_required with a reason", async () => {
@@ -322,6 +755,23 @@ Deno.test("pmt_extended_forward_dgm - success moves to dgm_review", async () => 
   assertEquals((await res.json()).status, "dgm_review");
 });
 
+Deno.test("pmt_extended_forward_dgm - bulk-adds every G3 (DGM) holder to the chat roster", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ committee: "PMT Extended" }), error: null },
+      { data: [{ id: "dgm-1" }, { id: "dgm-2" }, { id: "dgm-3" }], error: null },
+    ],
+    leads: [{ data: leadRow({ status: "pmt_extended_review" }), error: null }, { data: { id: LEAD_ID }, error: null }],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pmt_extended_forward_dgm" }), client as never);
+  assertEquals(res.status, 200);
+  const participantCalls = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "lead_chat_participants");
+  assertEquals(participantCalls.length, 1);
+  const rows = JSON.parse(participantCalls[0].calls.find((c) => c[0] === "upsert")![1]);
+  assertEquals(rows.map((r: { user_id: string }) => r.user_id), ["dgm-1", "dgm-2", "dgm-3"]);
+  assertEquals(rows[0].role_at_add, "G3");
+});
+
 Deno.test("pmt_extended_approve - requires a comment", async () => {
   const client = buildClient({ caller: callerRow({ committee: "PMT Extended" }), lead: leadRow({ status: "pmt_extended_review" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pmt_extended_approve" }), client as never);
@@ -333,6 +783,22 @@ Deno.test("pmt_extended_approve - success moves to md_review", async () => {
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pmt_extended_approve", comment: "looks good" }), client as never);
   assertEquals(res.status, 200);
   assertEquals((await res.json()).status, "md_review");
+});
+
+Deno.test("pmt_extended_approve - bulk-adds every MD holder to the chat roster", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ committee: "PMT Extended" }), error: null },
+      { data: [{ id: "md-1" }], error: null },
+    ],
+    leads: [{ data: leadRow({ status: "pmt_extended_review" }), error: null }, { data: { id: LEAD_ID }, error: null }],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "pmt_extended_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+  const participantCalls = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "lead_chat_participants");
+  assertEquals(participantCalls.length, 1);
+  const rows = JSON.parse(participantCalls[0].calls.find((c) => c[0] === "upsert")![1]);
+  assertEquals(rows, [{ lead_id: LEAD_ID, user_id: "md-1", role_at_add: "md" }]);
 });
 
 // ── DGM (G3) review — pooled org-wide, not team-scoped ─────
@@ -364,6 +830,22 @@ Deno.test("dgm_accept - G3 membership grants DGM-equivalent permission even for 
   assertEquals(res.status, 200);
 });
 
+Deno.test("dgm_accept - bulk-adds every MD holder to the chat roster", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ role: "dgm", committee: "G3" }), error: null },
+      { data: [{ id: "md-1" }, { id: "md-2" }], error: null },
+    ],
+    leads: [{ data: leadRow({ status: "dgm_review" }), error: null }, { data: { id: LEAD_ID }, error: null }],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_accept", comment: "reviewed" }), client as never);
+  assertEquals(res.status, 200);
+  const participantCalls = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "lead_chat_participants");
+  assertEquals(participantCalls.length, 1);
+  const rows = JSON.parse(participantCalls[0].calls.find((c) => c[0] === "upsert")![1]);
+  assertEquals(rows.map((r: { user_id: string }) => r.user_id), ["md-1", "md-2"]);
+});
+
 Deno.test("dgm_decline - requires a reason and returns to pa_action_required", async () => {
   const client = buildClient({ caller: callerRow({ role: "dgm", committee: "G3" }), lead: leadRow({ status: "dgm_review" }) });
   const missingReason = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_decline" }), client as never);
@@ -389,11 +871,91 @@ Deno.test("md_approve - success moves to md_approved (terminal)", async () => {
   assertEquals((await res.json()).status, "md_approved");
 });
 
-Deno.test("md_decline - requires a reason and moves to md_declined (terminal)", async () => {
+Deno.test("md_decline - requires a reason and returns the lead to pa_action_required (not terminal)", async () => {
   const client = buildClient({ caller: callerRow({ role: "md" }), lead: leadRow({ status: "md_review" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "md_decline", comment: "not aligned" }), client as never);
   assertEquals(res.status, 200);
-  assertEquals((await res.json()).status, "md_declined");
+  assertEquals((await res.json()).status, "pa_action_required");
+});
+
+Deno.test("md_decline - notifies creator, PR, and whichever committee last sent it to MD", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ role: "md" }), error: null }, // getCallerProfile
+      { data: [{ id: "pmt-member-1" }, { id: "pmt-member-2" }], error: null }, // getOrgWideHolders(PMT)
+    ],
+    leads: [
+      { data: leadRow({ status: "md_review", created_by: "creator-1", person_responsible_id: "pr-1" }), error: null },
+      { data: { id: LEAD_ID }, error: null },
+    ],
+    lead_activity_log: [
+      { data: { action: "pmt_approve", created_at: "2026-01-01T00:00:00Z" }, error: null }, // resolveCommitteeThatSentToMd
+      { data: null, error: null }, // logLeadActivity insert (result unused)
+    ],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "md_decline", comment: "not aligned" }), client as never);
+  assertEquals(res.status, 200);
+  const notifyCall = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.find((l) => l.table === "notifications");
+  assertEquals(notifyCall !== undefined, true);
+});
+
+Deno.test("md_decline - a lead with no resolvable sending committee still returns to the creator/PR only", async () => {
+  const client = buildClient({ caller: callerRow({ role: "md" }), lead: leadRow({ status: "md_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "md_decline", comment: "not aligned" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+// ── PIN gate ────────────────────────────────────────────────
+Deno.test("PIN gate - accept fails authorization before the PIN is even checked", async () => {
+  // Wrong PR *and* no PIN — should fail on authorization (403), not PIN (400).
+  const client = buildClient({ lead: leadRow({ person_responsible_id: "someone-else" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", pin: "" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("PIN gate - accept rejects a missing/malformed PIN once authorized", async () => {
+  const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", pin: "12" }), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "Enter your 4-digit PIN.");
+});
+
+Deno.test("PIN gate - accept rejects a caller with no PIN set yet", async () => {
+  const client = buildClient({ caller: callerRow({ pin_hash: null }), lead: leadRow({ assigned_ba_id: "existing-ba" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "You haven't set an action PIN yet — set one from My Profile before you can do this.");
+});
+
+Deno.test("PIN gate - accept rejects the wrong PIN", async () => {
+  const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept", pin: "0000" }), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "Incorrect PIN.");
+});
+
+Deno.test("PIN gate - accept succeeds with the correct PIN", async () => {
+  const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("PIN gate - dgm_initial_decline (DGM sending it back) does NOT require a PIN", async () => {
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: TEAM, pin_hash: null }), lead: leadRow({ status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_decline", comment: "needs more detail", pin: "" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("PIN gate - claim does NOT require a PIN", async () => {
+  const client = buildClient({ caller: callerRow({ role: "agm", pin_hash: null }), lead: leadRow({ status: "pa_dropped" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "claim", pin: "" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("PIN gate - drop returned-by-DGM leads with no Withdraw option, even with a valid PIN", async () => {
+  const client = buildClient({ lead: leadRow({ status: "pa_action_required", declined_from_status: "dgm_initial_review", created_by: CALLER_ID }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
+  assertEquals(res.status, 403);
 });
 
 // ── Concurrency ─────────────────────────────────────────────
