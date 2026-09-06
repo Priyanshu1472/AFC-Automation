@@ -1,0 +1,13 @@
+-- RECONCILIATION placeholder — this migration was pushed directly to the
+-- live afc-automation-dev database outside git (same recurring gap as
+-- 20260817030000 and 20260820040000: someone runs a one-off fix straight
+-- against the remote DB instead of committing a migration file). Recovered
+-- here only so `supabase migration list`/`db push` stop reporting local
+-- and remote history as out of sync; verified remotely via
+-- `supabase db query --linked` that lead_chat_messages has no rows with a
+-- null sender, consistent with the recorded name "lead_chat_backfill_
+-- creator" being a one-time UPDATE backfilling a chat message's
+-- creator/sender for pre-existing rows, not a schema change. No DDL is
+-- replayed here — this file exists purely to restore migration-history
+-- bookkeeping, not to reapply anything.
+select 1;

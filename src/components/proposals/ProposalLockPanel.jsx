@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import Card from "../../components/ui/Card";
+import Collapsible from "../../components/ui/Collapsible";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
@@ -20,9 +21,6 @@ function fmtDateTime(d) {
 
 export default function ProposalLockPanel({ proposalId, proposal, pastDeadline, canManage, onChanged }) {
   const [locking, setLocking] = useState(false);
-  const [outcomeChoice, setOutcomeChoice] = useState(null); // 'awarded' | 'rejected'
-  const [remark, setRemark] = useState("");
-  const [savingOutcome, setSavingOutcome] = useState(false);
   const [error, setError] = useState("");
 
   async function handleLock() {
@@ -38,27 +36,9 @@ export default function ProposalLockPanel({ proposalId, proposal, pastDeadline, 
     }
   }
 
-  async function handleSetOutcome() {
-    if (!outcomeChoice) return;
-    setSavingOutcome(true);
-    setError("");
-    try {
-      const { data, error: fnError } = await supabase.functions.invoke("set-proposal-outcome", {
-        body: { proposal_id: proposalId, outcome: outcomeChoice, remark: remark.trim() || null },
-      });
-      if (fnError) { setError(await extractFunctionErrorMessage(fnError, "Failed to save the client's response.")); return; }
-      if (!data?.success) { setError(data?.error || "Failed to save the client's response."); return; }
-      setOutcomeChoice(null); setRemark("");
-      onChanged();
-    } finally {
-      setSavingOutcome(false);
-    }
-  }
-
   return (
     <Card>
-      <Card.Header title="Lock & Client Response" subtitle="Lock once submitted to the client, then record their answer." />
-      <Card.Body>
+      <Collapsible title="Lock & Client Response" subtitle="Lock once submitted to the client, then record their answer.">
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
         {proposal.locked ? (
@@ -93,23 +73,14 @@ export default function ProposalLockPanel({ proposalId, proposal, pastDeadline, 
                 {proposal.client_response_remark ? ` "${proposal.client_response_remark}"` : ""}
               </p>
             )}
-            {proposal.client_response === "pending" && canManage && (
-              <div className="pp-outcome-form">
-                <div className="pp-outcome-buttons">
-                  <Button variant={outcomeChoice === "awarded" ? "primary" : "secondary"} size="sm" onClick={() => setOutcomeChoice("awarded")}>Awarded</Button>
-                  <Button variant={outcomeChoice === "rejected" ? "danger" : "secondary"} size="sm" onClick={() => setOutcomeChoice("rejected")}>Rejected</Button>
-                </div>
-                {outcomeChoice && (
-                  <>
-                    <textarea className="input" rows={2} placeholder="Remark (optional)" value={remark} onChange={(e) => setRemark(e.target.value)} style={{ marginTop: 8 }} />
-                    <Button variant="primary" size="sm" loading={savingOutcome} onClick={handleSetOutcome} style={{ marginTop: 8 }}>Save Response</Button>
-                  </>
-                )}
-              </div>
+            {proposal.client_response === "pending" && (
+              <p className="text-secondary text-sm" style={{ margin: "var(--space-2) 0 0" }}>
+                Still pending — record it in the banner at the top of the page.
+              </p>
             )}
           </div>
         )}
-      </Card.Body>
+      </Collapsible>
     </Card>
   );
 }

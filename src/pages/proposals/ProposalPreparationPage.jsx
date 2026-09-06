@@ -11,6 +11,7 @@ import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
+import Collapsible from "../../components/ui/Collapsible";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
@@ -19,8 +20,10 @@ import FeeNotesPanel from "../../components/proposals/FeeNotesPanel";
 import BaDocumentRequestsPanel from "../../components/proposals/BaDocumentRequestsPanel";
 import AfcChecklistPanel from "../../components/proposals/AfcChecklistPanel";
 import ProposalDocumentsPanel from "../../components/proposals/ProposalDocumentsPanel";
+import MergeProposalModal from "../../components/proposals/MergeProposalModal";
 import ProposalLockPanel from "../../components/proposals/ProposalLockPanel";
-import { isProposalLocked } from "../../lib/proposalPrep";
+import ClientResponseBanner from "../../components/proposals/ClientResponseBanner";
+import { isProposalLocked, CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS } from "../../lib/proposalPrep";
 import "../../styles/ProposalPreparationPage.css";
 
 function fmtDate(d) {
@@ -41,6 +44,7 @@ export default function ProposalPreparationPage() {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showMerge, setShowMerge] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setError("");
@@ -115,6 +119,11 @@ export default function ProposalPreparationPage() {
     [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(profile.id)
   );
   const isMd = profile && ["md", "admin"].includes(profile.role);
+  // The BA-requests and AFC checklist lists are day-to-day working
+  // documents for the lead's own team (Person Responsible, Reviewer,
+  // Approval Authority) — MD/Admin can see them but never add/edit/delete,
+  // unlike the rest of this page where MD/Admin get the usual override.
+  const canManageDocs = profile && [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(profile.id);
   const locked = isProposalLocked(proposal, lead);
   const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date() && !proposal.locked;
 
@@ -135,17 +144,54 @@ export default function ProposalPreparationPage() {
 
           {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
+          {proposal.locked && proposal.client_response === "pending" && canManage && (
+            <ClientResponseBanner proposalId={proposal.id} onChanged={fetchAll} />
+          )}
+
+          {proposal.locked && proposal.client_response !== "pending" && (
+            <div className="pp-outcome-status">
+              <span>Client Response:</span>
+              <Badge variant={CLIENT_RESPONSE_VARIANTS[proposal.client_response]}>{CLIENT_RESPONSE_LABELS[proposal.client_response]}</Badge>
+            </div>
+          )}
+
+          {proposal.locked && proposal.client_response === "pending" && !canManage && (
+            <Alert variant="warning">
+              This proposal is locked and waiting for its Person Responsible, Reviewer, or Approval Authority to record the client's response.
+            </Alert>
+          )}
+
+          {!proposal.locked && pastDeadline && (
+            <Alert variant="warning">
+              The submission deadline ({fmtDate(lead.submission_deadline)}) has passed, so this proposal is now read-only — that's why Fee Notes, BA Documents, the AFC Checklist, and Proposal Documents show no add/edit options for anyone. Lock it in "Lock &amp; Client Response" below to record the client's outcome.
+            </Alert>
+          )}
+
           <Card>
-            <Card.Body>
+            <Collapsible title="Lead Details">
+              <div className="pp-summary">
+                <div className="pp-summary-item"><span>Title of Proposal</span><strong>{lead.title}</strong></div>
+                <div className="pp-summary-item">
+                  <span>Lead Number</span>
+                  <strong><button type="button" className="pp-lead-number-link" onClick={() => navigate(`/leads/${lead.id}`)}>{lead.lead_number}</button></strong>
+                </div>
+                <div className="pp-summary-item"><span>Client Name</span><strong>{lead.client_name || "—"}</strong></div>
+                <div className="pp-summary-item"><span>Reference Number (if any)</span><strong>{lead.bid_number || "—"}</strong></div>
+                <div className="pp-summary-item"><span>Status</span><strong>{proposal.locked ? <Badge variant="neutral">Locked</Badge> : <Badge variant="success">In Progress</Badge>}</strong></div>
+                <div className="pp-summary-item"><span>Last Date</span><strong className={pastDeadline ? "pp-overdue" : ""}>{fmtDate(lead.submission_deadline)}</strong></div>
+              </div>
+            </Collapsible>
+          </Card>
+
+          <Card>
+            <Collapsible title="Responsibles">
               <div className="pp-summary">
                 <div className="pp-summary-item"><span>Person Responsible</span><strong>{lead.pr?.full_name || "—"}</strong></div>
                 <div className="pp-summary-item"><span>Reviewer</span><strong>{lead.rev?.full_name || "—"}</strong></div>
                 <div className="pp-summary-item"><span>Approval Authority</span><strong>{lead.aa?.full_name || "—"}</strong></div>
                 <div className="pp-summary-item"><span>Business Associate</span><strong>{lead.ba?.full_name || "—"}</strong></div>
-                <div className="pp-summary-item"><span>Submission Date</span><strong className={pastDeadline ? "pp-overdue" : ""}>{fmtDate(lead.submission_deadline)}</strong></div>
-                <div className="pp-summary-item"><span>Status</span><strong>{proposal.locked ? <Badge variant="neutral">Locked</Badge> : <Badge variant="success">In Progress</Badge>}</strong></div>
               </div>
-            </Card.Body>
+            </Collapsible>
           </Card>
 
           <FeeNotesPanel
@@ -159,9 +205,10 @@ export default function ProposalPreparationPage() {
 
           <BaDocumentRequestsPanel
             proposalId={proposal.id}
+            proposal={proposal}
             items={baItems}
             profile={profile}
-            canManage={canManage}
+            canManage={canManageDocs}
             locked={locked}
             hasBa={!!lead.assigned_ba_id}
             onChanged={fetchAll}
@@ -171,7 +218,7 @@ export default function ProposalPreparationPage() {
             proposalId={proposal.id}
             items={checklistItems}
             profile={profile}
-            canManage={canManage}
+            canManage={canManageDocs}
             locked={locked}
             onChanged={fetchAll}
           />
@@ -183,6 +230,23 @@ export default function ProposalPreparationPage() {
             locked={locked}
             onChanged={fetchAll}
           />
+
+          <Card>
+            <Collapsible title="Merge Proposal" subtitle="Assemble the documents you've collected into one final, editable .docx.">
+              {canManage && <Button variant="primary" onClick={() => setShowMerge(true)}>Merge Proposal</Button>}
+            </Collapsible>
+          </Card>
+
+          {showMerge && (
+            <MergeProposalModal
+              proposalId={proposal.id}
+              baItems={baItems}
+              checklistItems={checklistItems}
+              documents={documents}
+              profile={profile}
+              onClose={() => setShowMerge(false)}
+            />
+          )}
 
           <ProposalLockPanel
             proposalId={proposal.id}

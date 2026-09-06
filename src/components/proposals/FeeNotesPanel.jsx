@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import Card from "../../components/ui/Card";
+import Collapsible from "../../components/ui/Collapsible";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
@@ -119,12 +120,12 @@ export default function FeeNotesPanel({ proposalId, feeNotes, canManage, isMd, l
 
   return (
     <Card>
-      <Card.Header
-        title="Fee Notes"
-        subtitle="EMD, Tender Fee, and PBG notes go to the MD for approval — independently, or all together."
-        action={canManage && !locked && <Button variant="primary" size="sm" onClick={() => setShowForm(true)}>Prepare Fee Notes</Button>}
-      />
-      <Card.Body>
+      <Collapsible title="Fee Notes" subtitle="">
+        {canManage && !locked && (
+          <div style={{ marginBottom: "var(--space-4)" }}>
+            <Button variant="primary" size="sm" onClick={() => setShowForm(true)}>Prepare Fee Notes</Button>
+          </div>
+        )}
         <div className="pp-fee-note-grid">
           {FEE_NOTE_TYPES.map((t) => {
             const note = byType[t.key];
@@ -155,7 +156,7 @@ export default function FeeNotesPanel({ proposalId, feeNotes, canManage, isMd, l
             );
           })}
         </div>
-      </Card.Body>
+      </Collapsible>
 
       {showForm && (
         <FeeNoteForm proposalId={proposalId} feeNotes={feeNotes} onClose={() => setShowForm(false)} onSaved={onChanged} />

@@ -1,16 +1,36 @@
 // Internal-only "what AFC needs to submit" checklist — forms, annexures,
 // anything the person responsible wants to track so it doesn't get lost
-// during prep. Never sent anywhere; plain direct-RLS CRUD gated by
+// during prep. Each item can carry an attached file, either uploaded fresh
+// or pulled straight from the Knowledge Repository (past-project
+// documents) instead of re-uploading something AFC already has on file.
+// "Done" is derived purely from whether a file is attached — no separate
+// manual checkbox, since a file being there already is the meaningful
+// signal. Never sent anywhere; plain direct-RLS CRUD gated by
 // can_edit_proposal() (role + not-locked).
 import { useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import Card from "../../components/ui/Card";
+import Collapsible from "../../components/ui/Collapsible";
+import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
+import FileUploadButton from "./FileUploadButton";
+import KnowledgeRepositoryDocumentPicker from "./KnowledgeRepositoryDocumentPicker";
+
+const BUCKET = "proposal-documents";
+const KNOWLEDGE_BUCKET = "project-documents";
+
+function fmtSize(bytes) {
+  if (!bytes) return "";
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export default function AfcChecklistPanel({ proposalId, items, profile, canManage, locked, onChanged }) {
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+  const [pickerFor, setPickerFor] = useState(null);
   const [error, setError] = useState("");
 
   async function handleAdd() {
@@ -29,41 +49,137 @@ export default function AfcChecklistPanel({ proposalId, items, profile, canManag
     }
   }
 
-  async function handleToggle(item) {
-    const { error: updErr } = await supabase.from("proposal_afc_checklist_items")
-      .update({ status: item.status === "done" ? "pending" : "done" }).eq("id", item.id);
-    if (updErr) { setError(updErr.message); return; }
-    onChanged();
-  }
-
   async function handleRemove(id) {
     const { error: delErr } = await supabase.from("proposal_afc_checklist_items").delete().eq("id", id);
     if (delErr) { setError(delErr.message); return; }
     onChanged();
   }
 
+  async function handleUploadFromComputer(item, file) {
+    if (!file) return;
+    setBusyId(item.id);
+    setError("");
+    try {
+      const path = `${proposalId}/checklist_${item.id}_${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file);
+      if (upErr) { setError("Failed to upload document: " + upErr.message); return; }
+
+      const { error: updErr } = await supabase.from("proposal_afc_checklist_items").update({
+        file_name: file.name, file_path: path, file_size: file.size,
+        uploaded_at: new Date().toISOString(), uploaded_by: profile.id,
+        source: "upload", source_project_document_id: null, status: "done",
+      }).eq("id", item.id);
+      if (updErr) { setError(updErr.message); return; }
+
+      if (item.file_path && item.file_path !== path) {
+        await supabase.storage.from(BUCKET).remove([item.file_path]);
+      }
+      onChanged();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handlePickFromKnowledgeRepository(item, doc) {
+    setPickerFor(null);
+    setBusyId(item.id);
+    setError("");
+    try {
+      const { data: fileBlob, error: dlErr } = await supabase.storage.from(KNOWLEDGE_BUCKET).download(doc.storage_path);
+      if (dlErr || !fileBlob) { setError("Failed to fetch document from Knowledge Repository: " + (dlErr?.message || "")); return; }
+
+      const path = `${proposalId}/checklist_${item.id}_${Date.now()}_${doc.file_name.replace(/\s+/g, "_")}`;
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, fileBlob);
+      if (upErr) { setError("Failed to attach document: " + upErr.message); return; }
+
+      const { error: updErr } = await supabase.from("proposal_afc_checklist_items").update({
+        file_name: doc.file_name, file_path: path, file_size: fileBlob.size,
+        uploaded_at: new Date().toISOString(), uploaded_by: profile.id,
+        source: "knowledge_repository", source_project_document_id: doc.id, status: "done",
+      }).eq("id", item.id);
+      if (updErr) { setError(updErr.message); return; }
+
+      if (item.file_path && item.file_path !== path) {
+        await supabase.storage.from(BUCKET).remove([item.file_path]);
+      }
+      onChanged();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleView(item) {
+    setError("");
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("get-proposal-document-url", {
+        body: { path: item.file_path, proposal_id: proposalId },
+      });
+      if (fnError) { setError(await extractFunctionErrorMessage(fnError, "Failed to open document.")); return; }
+      if (!data?.url) { setError(data?.error || "Failed to open document."); return; }
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+    }
+  }
+
+  function renderRow(it) {
+    return (
+      <div key={it.id} className="pp-list-row pp-list-row-file">
+        <div>
+          <div className="pp-list-row-title">{it.item_name}</div>
+        </div>
+        <div className="pp-list-row-file-area">
+          {it.file_path ? (
+            <div className="pp-list-row-file-info">
+              <Badge variant="success">{it.source === "knowledge_repository" ? "From Knowledge Repository" : "Uploaded"}</Badge>
+              <span className="pp-list-row-filename" title={it.file_name}>{it.file_name}</span>
+              <span className="pp-doc-card-meta">{fmtSize(it.file_size)}</span>
+              <Button variant="secondary" size="sm" onClick={() => handleView(it)}>View</Button>
+              {canManage && !locked && (
+                <>
+                  <FileUploadButton label={busyId === it.id ? "Uploading…" : "Replace File"} disabled={busyId === it.id} onSelect={(file) => handleUploadFromComputer(it, file)} />
+                  <Button variant="ghost" size="sm" disabled={busyId === it.id} onClick={() => setPickerFor(it)}>From Knowledge Repository</Button>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="pp-list-row-file-info">
+              <Badge variant="warning">Pending</Badge>
+              {canManage && !locked && (
+                <>
+                  <FileUploadButton label={busyId === it.id ? "Uploading…" : "Attach File"} disabled={busyId === it.id} onSelect={(file) => handleUploadFromComputer(it, file)} />
+                  <Button variant="ghost" size="sm" disabled={busyId === it.id} onClick={() => setPickerFor(it)}>From Knowledge Repository</Button>
+                </>
+              )}
+            </div>
+          )}
+          {canManage && !locked && (
+            <button type="button" className="pp-list-remove" onClick={() => handleRemove(it.id)} aria-label="Remove">×</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card>
-      <Card.Header title="AFC Checklist" subtitle="Forms and annexures AFC needs to submit — tracked internally so nothing gets missed." />
-      <Card.Body>
+      <Collapsible title="AFC Checklist">
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
-        {items.length === 0 && <p className="text-secondary text-sm" style={{ margin: "0 0 var(--space-2)" }}>No items added yet.</p>}
-        {items.map((it) => (
-          <label key={it.id} className="pp-checklist-row">
-            <input type="checkbox" checked={it.status === "done"} disabled={!canManage || locked} onChange={() => handleToggle(it)} />
-            <span className={it.status === "done" ? "pp-checklist-done" : ""}>{it.item_name}</span>
-            {canManage && !locked && (
-              <button type="button" className="pp-list-remove" onClick={() => handleRemove(it.id)} aria-label="Remove">×</button>
-            )}
-          </label>
-        ))}
+        {items.length === 0 && <p className="text-secondary text-sm" style={{ margin: 0 }}>No items added yet.</p>}
+        {items.length > 0 && <div className="pp-list-group">{items.map(renderRow)}</div>}
         {canManage && !locked && (
           <div className="pp-add-row">
             <input type="text" className="input" placeholder="e.g. Annexure III — Undertaking" value={name} onChange={(e) => setName(e.target.value)} />
             <Button variant="secondary" size="sm" loading={adding} onClick={handleAdd}>+ Add</Button>
           </div>
         )}
-      </Card.Body>
+      </Collapsible>
+      {pickerFor && (
+        <KnowledgeRepositoryDocumentPicker
+          onSelect={(doc) => handlePickFromKnowledgeRepository(pickerFor, doc)}
+          onClose={() => setPickerFor(null)}
+        />
+      )}
     </Card>
   );
 }

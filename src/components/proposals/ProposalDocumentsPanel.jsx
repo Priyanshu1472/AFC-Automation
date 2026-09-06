@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import Card from "../../components/ui/Card";
+import Collapsible from "../../components/ui/Collapsible";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import { PROPOSAL_DOCUMENT_TYPES } from "../../lib/proposalPrep";
@@ -71,8 +72,7 @@ export default function ProposalDocumentsPanel({ proposalId, documents, canManag
 
   return (
     <Card>
-      <Card.Header title="Proposal Documents" subtitle="Technical, Financial, and a third slot for any additional proposal document." />
-      <Card.Body>
+      <Collapsible title="Proposal Documents" subtitle="Technical, Financial, and a third slot for any additional proposal document.">
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         <div className="pp-doc-grid">
           {PROPOSAL_DOCUMENT_TYPES.map((t) => {
@@ -111,7 +111,7 @@ export default function ProposalDocumentsPanel({ proposalId, documents, canManag
             );
           })}
         </div>
-      </Card.Body>
+      </Collapsible>
     </Card>
   );
 }

@@ -1,26 +1,51 @@
-// "Documents Required from BA" card — Person Responsible/Reviewer/Approval
-// Authority list what's needed from the lead's Business Associate with a
-// justification for each, then send the compiled list + an email in one
-// action. Items are plain direct-RLS writes (see can_edit_proposal() and
-// proposal_document_requests' RLS) while unsent; sending is a dedicated
-// edge function so the email and the "read-only once sent" transition
-// happen atomically. BA-facing response UI is out of scope for now.
+// "Documents Required from BA" card — the lead's Person Responsible,
+// Reviewer, or Approval Authority lists what's needed from the Business
+// Associate with a justification for each, then sends the compiled list +
+// an email in one action. Items are plain direct-RLS writes (see
+// can_edit_proposal() and proposal_document_requests' RLS) while unsent;
+// sending is a dedicated edge function so the email + sent_at bookkeeping
+// happen atomically. The BA is meant to upload each document themselves
+// once their own portal for this exists — not built yet in this
+// iteration, so for now AFC attaches whatever arrives some other way
+// (email, WhatsApp, etc.) as a stand-in for whatever the BA hasn't
+// uploaded directly. Reminders are capped to once every 24 hours (both
+// here and server-side in the edge function) so a double-click can't spam
+// the BA's inbox.
 import { useState } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import Card from "../../components/ui/Card";
+import Collapsible from "../../components/ui/Collapsible";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
+import FileUploadButton from "./FileUploadButton";
 
-export default function BaDocumentRequestsPanel({ proposalId, items, profile, canManage, locked, hasBa, onChanged }) {
+const BUCKET = "proposal-documents";
+const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+function fmtSize(bytes) {
+  if (!bytes) return "";
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fmtDateTime(d) {
+  return new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+}
+
+export default function BaDocumentRequestsPanel({ proposalId, proposal, items, profile, canManage, locked, hasBa, onChanged }) {
   const [name, setName] = useState("");
   const [justification, setJustification] = useState("");
   const [adding, setAdding] = useState(false);
   const [sending, setSending] = useState(false);
+  const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
 
   const unsent = items.filter((it) => !it.sent_at);
   const sent = items.filter((it) => it.sent_at);
+
+  const nextReminderAt = proposal?.ba_last_sent_at ? new Date(new Date(proposal.ba_last_sent_at).getTime() + REMINDER_COOLDOWN_MS) : null;
+  const onCooldown = !!(nextReminderAt && nextReminderAt > new Date());
 
   async function handleAdd() {
     if (!name.trim()) { setError("Item name is required."); return; }
@@ -44,6 +69,44 @@ export default function BaDocumentRequestsPanel({ proposalId, items, profile, ca
     onChanged();
   }
 
+  async function handleUpload(item, file) {
+    if (!file) return;
+    setBusyId(item.id);
+    setError("");
+    try {
+      const path = `${proposalId}/ba_request_${item.id}_${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file);
+      if (upErr) { setError("Failed to upload document: " + upErr.message); return; }
+
+      const { error: updErr } = await supabase.from("proposal_document_requests").update({
+        file_name: file.name, file_path: path, file_size: file.size,
+        uploaded_at: new Date().toISOString(), uploaded_by: profile.id,
+      }).eq("id", item.id);
+      if (updErr) { setError(updErr.message); return; }
+
+      if (item.file_path && item.file_path !== path) {
+        await supabase.storage.from(BUCKET).remove([item.file_path]);
+      }
+      onChanged();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleView(item) {
+    setError("");
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("get-proposal-document-url", {
+        body: { path: item.file_path, proposal_id: proposalId },
+      });
+      if (fnError) { setError(await extractFunctionErrorMessage(fnError, "Failed to open document.")); return; }
+      if (!data?.url) { setError(data?.error || "Failed to open document."); return; }
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+    }
+  }
+
   async function handleSend() {
     setSending(true);
     setError("");
@@ -57,42 +120,57 @@ export default function BaDocumentRequestsPanel({ proposalId, items, profile, ca
     }
   }
 
+  function renderRow(it) {
+    return (
+      <div key={it.id} className="pp-list-row pp-list-row-file">
+        <div>
+          <div className="pp-list-row-title">{it.item_name}</div>
+          {it.justification && <div className="pp-list-row-sub">{it.justification}</div>}
+        </div>
+        <div className="pp-list-row-file-area">
+          {it.file_path ? (
+            <div className="pp-list-row-file-info">
+              <Badge variant="success">Received</Badge>
+              <span className="pp-list-row-filename" title={it.file_name}>{it.file_name}</span>
+              <span className="pp-doc-card-meta">{fmtSize(it.file_size)}</span>
+              <Button variant="secondary" size="sm" onClick={() => handleView(it)}>View</Button>
+              {canManage && !locked && (
+                <FileUploadButton label={busyId === it.id ? "Uploading…" : "Replace File"} disabled={busyId === it.id} onSelect={(file) => handleUpload(it, file)} />
+              )}
+            </div>
+          ) : (
+            <div className="pp-list-row-file-info">
+              <Badge variant="warning">Pending</Badge>
+              {canManage && !locked && (
+                <FileUploadButton label={busyId === it.id ? "Uploading…" : "Attach File"} disabled={busyId === it.id} onSelect={(file) => handleUpload(it, file)} />
+              )}
+            </div>
+          )}
+          {canManage && !locked && !it.sent_at && (
+            <button type="button" className="pp-list-remove" onClick={() => handleRemove(it.id)} aria-label="Remove">×</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card>
-      <Card.Header title="Documents Required from BA" subtitle="Compiled and emailed to the lead's Business Associate as one list." />
-      <Card.Body>
+      <Collapsible title="Documents Required from BA">
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         {!hasBa && <p className="text-secondary text-sm" style={{ margin: "0 0 var(--space-3)" }}>This lead has no linked Business Associate.</p>}
 
         {sent.length > 0 && (
           <div className="pp-list-group">
             <div className="pp-list-group-label">Sent</div>
-            {sent.map((it) => (
-              <div key={it.id} className="pp-list-row">
-                <div>
-                  <div className="pp-list-row-title">{it.item_name}</div>
-                  {it.justification && <div className="pp-list-row-sub">{it.justification}</div>}
-                </div>
-                <Badge variant="success">Sent</Badge>
-              </div>
-            ))}
+            {sent.map(renderRow)}
           </div>
         )}
 
         {unsent.length > 0 && (
           <div className="pp-list-group">
             {sent.length > 0 && <div className="pp-list-group-label">Not yet sent</div>}
-            {unsent.map((it) => (
-              <div key={it.id} className="pp-list-row">
-                <div>
-                  <div className="pp-list-row-title">{it.item_name}</div>
-                  {it.justification && <div className="pp-list-row-sub">{it.justification}</div>}
-                </div>
-                {canManage && !locked && (
-                  <button type="button" className="pp-list-remove" onClick={() => handleRemove(it.id)} aria-label="Remove">×</button>
-                )}
-              </div>
-            ))}
+            {unsent.map(renderRow)}
           </div>
         )}
 
@@ -105,12 +183,16 @@ export default function BaDocumentRequestsPanel({ proposalId, items, profile, ca
             <Button variant="secondary" size="sm" loading={adding} onClick={handleAdd}>+ Add</Button>
           </div>
         )}
-      </Card.Body>
-      {canManage && !locked && hasBa && unsent.length > 0 && (
-        <Card.Footer>
-          <Button variant="primary" loading={sending} onClick={handleSend}>Send to BA ({unsent.length})</Button>
-        </Card.Footer>
-      )}
+
+        {canManage && !locked && hasBa && items.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap", marginTop: "var(--space-4)" }}>
+            <Button variant="primary" loading={sending} disabled={onCooldown} onClick={handleSend}>
+              {(proposal?.ba_send_count || 0) > 0 ? "Send Reminder to BA" : `Send to BA (${items.length})`}
+            </Button>
+            {onCooldown && <span className="text-secondary text-sm">Next reminder available {fmtDateTime(nextReminderAt)}</span>}
+          </div>
+        )}
+      </Collapsible>
     </Card>
   );
 }

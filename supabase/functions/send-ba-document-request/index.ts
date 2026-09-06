@@ -1,11 +1,11 @@
 // supabase/functions/send-ba-document-request/index.ts
-// JWT must be ON. Marks every un-sent proposal_document_requests row for
-// this proposal as sent, then emails the lead's linked BA the itemized
-// list + justifications in one message. Sending (not just adding items) is
-// an edge function so the "read-only once sent" transition and the email
-// happen atomically — see proposal_document_requests' RLS (direct writes
-// only while sent_at is null). BA-facing response UI is out of scope for
-// now; this is a one-way notice.
+// JWT must be ON. Emails the lead's linked BA the FULL current itemized
+// list every time it's called — first call is "Send to BA", every call
+// after is effectively a reminder (the "Send Reminder" button on the panel
+// is always visible, not gated on unsent items existing). Marks any
+// still-unsent rows' sent_at on the way, but never refuses to send just
+// because everything was already sent once. BA-facing response UI is out
+// of scope for now; this is a one-way notice.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -45,10 +45,12 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
-    const authorized =
-      ["md", "admin"].includes(caller.role) ||
-      [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(caller.id);
-    if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this proposal." });
+    // Managing/sending the BA document list is the lead's own team's job
+    // (Person Responsible, Reviewer, Approval Authority) — MD/Admin can
+    // view but not act. Mirrors the client gate in
+    // ProposalPreparationPage.jsx (canManageDocs).
+    const authorized = [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(caller.id);
+    if (!authorized) return jsonRes(req, 403, { error: "Only the lead's Person Responsible, Reviewer, or Approval Authority can send this to the BA." });
 
     const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date();
     if (proposal.locked || pastDeadline) {
@@ -60,13 +62,34 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     const { data: ba } = await adminClient.from("afc_users").select("email").eq("id", lead.assigned_ba_id).maybeSingle();
     if (!ba?.email) return jsonRes(req, 400, { error: "The linked Business Associate has no email on file." });
 
+    const { data: proposalRow, error: prepErr } = await adminClient
+      .from("proposal_preparations")
+      .select("ba_send_count, ba_last_sent_at")
+      .eq("id", proposalId)
+      .maybeSingle();
+    if (prepErr || !proposalRow) throw new Error(prepErr?.message || "Proposal not found.");
+    const isFirstSend = (proposalRow.ba_send_count || 0) === 0;
+
+    // Cap reminders to once every 24h — mirrors the disabled state the UI
+    // already shows, enforced here too so it can't be bypassed by calling
+    // this function directly.
+    const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+    if (proposalRow.ba_last_sent_at) {
+      const nextAllowedAt = new Date(proposalRow.ba_last_sent_at).getTime() + REMINDER_COOLDOWN_MS;
+      if (Date.now() < nextAllowedAt) {
+        return jsonRes(req, 400, {
+          error: `You can send a reminder once every 24 hours. Next reminder available at ${new Date(nextAllowedAt).toLocaleString("en-IN")}.`,
+        });
+      }
+    }
+
     const { data: items, error: itemsErr } = await adminClient
       .from("proposal_document_requests")
-      .select("id, item_name, justification")
+      .select("id, item_name, justification, sent_at")
       .eq("proposal_id", proposalId)
-      .is("sent_at", null);
+      .order("created_at");
     if (itemsErr) throw new Error(itemsErr.message);
-    if (!items || items.length === 0) return jsonRes(req, 400, { error: "There are no new items to send." });
+    if (!items || items.length === 0) return jsonRes(req, 400, { error: "There are no items to send yet." });
 
     const nowIso = new Date().toISOString();
     const { error: updErr } = await adminClient
@@ -75,6 +98,12 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .eq("proposal_id", proposalId)
       .is("sent_at", null);
     if (updErr) throw new Error(updErr.message);
+
+    const { error: countErr } = await adminClient
+      .from("proposal_preparations")
+      .update({ ba_send_count: (proposalRow.ba_send_count || 0) + 1, ba_last_sent_at: nowIso })
+      .eq("id", proposalId);
+    if (countErr) throw new Error(countErr.message);
 
     const itemsHtml = items.map((it) => `
       <li style="margin-bottom:12px;">
@@ -86,7 +115,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     const html = wrapEmailBody(`
       <p style="margin:0 0 16px;font-size:14px;color:#374151;">Dear Sir / Ma'am,</p>
       <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
-        AFC India Limited requires the following from you for the proposal being prepared for
+        ${isFirstSend ? "AFC India Limited requires" : "This is a reminder that AFC India Limited still requires"}
+        the following from you for the proposal being prepared for
         <strong>${escapeHtml(lead.title)}</strong>:
       </p>
       <ul style="margin:0 0 20px;padding-left:20px;font-size:14px;color:#374151;">${itemsHtml}</ul>
@@ -95,11 +125,11 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const emailSent = await sendResendEmail({
       to: ba.email,
-      subject: `Documents Required for "${lead.title}" — AFC India Limited`,
+      subject: `${isFirstSend ? "Documents Required" : "Reminder: Documents Required"} for "${lead.title}" — AFC India Limited`,
       html,
     });
 
-    return jsonRes(req, 200, { success: true, email_sent: emailSent, items_sent: items.length });
+    return jsonRes(req, 200, { success: true, email_sent: emailSent, items_sent: items.length, is_first_send: isFirstSend });
   } catch (err) {
     console.error("Unhandled error:", (err as Error).message);
     return jsonRes(req, 500, { error: (err as Error).message || "Internal server error." });
