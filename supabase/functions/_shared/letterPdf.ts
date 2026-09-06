@@ -8,6 +8,24 @@
 
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 
+// Same private bucket/convention as leadApprovalPdf's signature embedding —
+// shared here so the Empanelment/Provisional letters (advance-empanelment-
+// stage, send-provisional-letter) can embed a signer's actual uploaded
+// signature image the same way, instead of duplicating this fetch.
+export const SIGNATURE_BUCKET = "user-signatures";
+
+// deno-lint-ignore no-explicit-any
+export async function fetchSignatureBytes(admin: any, path: string | null | undefined): Promise<Uint8Array | null> {
+  if (!path) return null;
+  try {
+    const { data, error } = await admin.storage.from(SIGNATURE_BUCKET).download(path);
+    if (error || !data) return null;
+    return new Uint8Array(await data.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 export function bytesToBase64(bytes: Uint8Array): string {
   let bin = "";
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
@@ -28,7 +46,9 @@ export function addMonths(date: Date, months: number): Date {
   return d;
 }
 
-export const GREEN = rgb(0.047, 0.376, 0.165);
+// #014B2B — the exact brand green from AFC's official Word letterhead
+// ("Letter Head Editable.docx"), not an approximation.
+export const GREEN = rgb(0.00392, 0.29412, 0.16863);
 export const BLACK = rgb(0.05, 0.05, 0.05);
 
 export interface Segment { text: string; bold: boolean; }
@@ -44,43 +64,52 @@ export async function embedImageAuto(pdf: any, bytes: Uint8Array) {
   catch (_) { return await pdf.embedJpg(bytes); }
 }
 
+// Matches AFC's official Word letterhead ("Letter Head Editable.docx"):
+// the seal logo sits pinned to the left margin (its own block, not
+// centered as a unit with the text), while the four text lines are
+// centered on the full page width independently — not offset to make
+// room for the logo, same as the reference document.
 // deno-lint-ignore no-explicit-any
 export async function drawHeader(pdf: any, page: any, logoBytes: Uint8Array, fonts: { reg: any; bold: any }, H: number) {
   const logo = await embedImageAuto(pdf, logoBytes);
 
   const logoDims = logo.scale(1);
-  const logoH = 78;
+  const logoH = 92;
   const logoW = (logoDims.width / logoDims.height) * logoH;
+  const LOGO_X = 26;
+  const PAGE_W = 595;
 
   const afcText = "AFC  INDIA  LIMITED";
-  const whollyText = "Wholly Owned by NABARD, Commercial Banks & EXIM Bank";
-  const premierText = "Premier Development Institution Committed to Rural Prosperity";
-  const whollyW = fonts.reg.widthOfTextAtSize(whollyText, 8);
-  const premierW = fonts.bold.widthOfTextAtSize(premierText, 8.5);
+  const unionText = "(A Union Government Company)";
+  const whollyText = "Wholly Owned by NABARD, Commercial Banks & Exim Bank";
+  const premierText = "Premier Development Institutions Committed to Rural Prosperity";
 
-  const GAP = 14;
-  const TOTAL_W = logoW + GAP + premierW;
-  const PAGE_W = 595;
-  const BLOCK_X = (PAGE_W - TOTAL_W) / 2;
+  const afcSize = 22;
+  const unionSize = 9;
+  const whollySize = 8;
+  const premierSize = 8.5;
 
-  const L1Y = H - 24;
-  const L2Y = L1Y - 20;
-  const L3Y = L2Y - 13;
+  const afcW = fonts.bold.widthOfTextAtSize(afcText, afcSize);
+  const unionW = fonts.reg.widthOfTextAtSize(unionText, unionSize);
+  const whollyW = fonts.reg.widthOfTextAtSize(whollyText, whollySize);
+  const premierW = fonts.bold.widthOfTextAtSize(premierText, premierSize);
+
+  const L1Y = H - 30;
+  const L2Y = L1Y - 22;
+  const L3Y = L2Y - 14;
   const ruleY = L3Y - 4;
-  const L4Y = ruleY - 10;
+  const L4Y = ruleY - 11;
 
+  // Logo vertically centered against the text stack's span, pinned left.
   const textMidY = (L1Y + 14 + L4Y) / 2;
-  const LX = BLOCK_X;
-  const LY = textMidY - logoH / 2;
-  const TX = BLOCK_X + logoW + GAP;
+  const logoY = textMidY - logoH / 2;
+  page.drawImage(logo, { x: LOGO_X, y: logoY, width: logoW, height: logoH });
 
-  page.drawImage(logo, { x: LX, y: LY, width: logoW, height: logoH });
-
-  page.drawText(afcText, { x: TX, y: L1Y, size: 20, font: fonts.bold, color: GREEN });
-  page.drawText("(A Union Government Company)", { x: TX, y: L2Y, size: 8.5, font: fonts.reg, color: GREEN });
-  page.drawText(whollyText, { x: TX, y: L3Y, size: 8, font: fonts.reg, color: GREEN });
-  page.drawLine({ start: { x: TX, y: ruleY }, end: { x: TX + whollyW, y: ruleY }, thickness: 0.7, color: GREEN });
-  page.drawText(premierText, { x: TX, y: L4Y, size: 8.5, font: fonts.bold, color: GREEN });
+  page.drawText(afcText, { x: (PAGE_W - afcW) / 2, y: L1Y, size: afcSize, font: fonts.bold, color: GREEN });
+  page.drawText(unionText, { x: (PAGE_W - unionW) / 2, y: L2Y, size: unionSize, font: fonts.reg, color: GREEN });
+  page.drawText(whollyText, { x: (PAGE_W - whollyW) / 2, y: L3Y, size: whollySize, font: fonts.reg, color: GREEN });
+  page.drawLine({ start: { x: (PAGE_W - whollyW) / 2, y: ruleY }, end: { x: (PAGE_W + whollyW) / 2, y: ruleY }, thickness: 0.7, color: GREEN });
+  page.drawText(premierText, { x: (PAGE_W - premierW) / 2, y: L4Y, size: premierSize, font: fonts.bold, color: GREEN });
 }
 
 // deno-lint-ignore no-explicit-any
@@ -113,23 +142,28 @@ export function drawFooter(page: any, fonts: { reg: any; bold: any }) {
 
   drawCenteredMixed([
     { text: "Corporate Office: ", b: true },
-    { text: "M-4, Kanchenjunga Building, 18 Barakhamba Road, New Delhi-110001", b: false },
+    { text: "M-4, Kanchenjunga Building, 18 Barakhamba Road, New Delhi – 110001", b: false },
   ], 79, 7.2);
 
   drawCenteredMixed([
     { text: "Phones: ", b: true },
-    { text: "01135452875, 01135453305, 01135455910  ", b: false },
+    { text: "01135452875, 01135455910; ", b: false },
     { text: "E-mail: ", b: true },
     { text: "afc@afcindia.org.in, afcindia.delhi@gmail.com", b: false },
   ], 69, 7);
 
   drawCenteredMixed([
     { text: "Registered Office: ", b: true },
-    { text: "Dhanraj Mahal, C.S.M. Marg, Mumbai - 400 001", b: false },
+    { text: "Dhanraj Mahal, C. S. M. Marg, Mumbai – 400001", b: false },
   ], 59, 7);
 
-  drawCentered("Phone: 91-22-22028924     Web: www.afcindia.org.in", 50, 7);
-  drawCentered("CIN: U65990MH1968GOI013983    ISO-9001:2015; ISO-14001:2015 & ISO-27001:2013", 41, 6.5);
+  drawCenteredMixed([
+    { text: "Phone: ", b: true },
+    { text: "91-22-22028924; ", b: false },
+    { text: "Web: ", b: true },
+    { text: "www.afcindia.org.in", b: false },
+  ], 50, 7);
+  drawCentered("CIN: U65990MH1968GOI013983; ISO-9001:2015; ISO-14001:2015 & ISO-27001:2013", 41, 6.5);
   drawCentered("& CMMI level 3 Certified Company", 32, 6.5);
 }
 
@@ -265,7 +299,13 @@ export class PageEngine {
 
   gap(pts: number) { this.y -= pts; }
 
-  drawPara(segments: Segment[], size: number, indent = 0) {
+  // Async (unlike every other draw* helper here) so a paragraph that wraps
+  // to more lines than fit in the remaining space can page-break mid-
+  // paragraph — checked per line, not just before/after the whole
+  // paragraph (sdPara's before/after check alone let a line slip past
+  // FOOTER_SAFE and overlap the footer whenever a paragraph started near
+  // the bottom of the page but its wrapped tail didn't fit).
+  async drawPara(segments: Segment[], size: number, indent = 0) {
     const xStart = this.LEFT + indent;
     const maxW = this.MAX_W - indent;
     const tokens: { w: string; bold: boolean }[] = [];
@@ -279,8 +319,9 @@ export class PageEngine {
     let lineTokens: typeof tokens = [];
     let lineWidth = 0;
 
-    const flushLine = () => {
+    const flushLine = async () => {
       if (!lineTokens.length) return;
+      if (this.y < this.FOOTER_SAFE) await this.newPage();
       let x = xStart;
       for (let i = 0; i < lineTokens.length; i++) {
         const { w, bold: isBold } = lineTokens[i];
@@ -303,7 +344,7 @@ export class PageEngine {
       const wW = f.widthOfTextAtSize(token.w, size);
       const test = lineWidth + (lineTokens.length ? spW : 0) + wW;
       if (test > maxW && lineTokens.length) {
-        flushLine();
+        await flushLine();
         lineTokens = [token];
         lineWidth = wW;
       } else {
@@ -311,7 +352,7 @@ export class PageEngine {
         lineWidth = lineWidth + (lineTokens.length > 1 ? spW : 0) + wW;
       }
     }
-    flushLine();
+    await flushLine();
   }
 }
 
@@ -326,13 +367,46 @@ export async function sdLine(e: PageEngine, text: string, size: number, isBold: 
 
 export async function sdPara(e: PageEngine, segs: Segment[], size: number, indent = 0) {
   if (e.y < e.FOOTER_SAFE) await e.newPage();
-  e.drawPara(segs, size, indent);
+  await e.drawPara(segs, size, indent);
   if (e.y < e.FOOTER_SAFE) await e.newPage();
 }
 
 export async function sdGap(e: PageEngine, pts: number) {
   e.gap(pts);
   if (e.y < e.FOOTER_SAFE) await e.newPage();
+}
+
+// The "Warm Regards, [signature] Name / Designation / AFC India Limited"
+// closing block shared by the Empanelment and Provisional letters. Draws
+// the signature image (if the signer has one uploaded) between the
+// salutation and the printed name — falls back to a plain text-only
+// closing when there's no image, same layout either way.
+// deno-lint-ignore no-explicit-any
+export async function drawSignatureClosing(e: PageEngine, size: number, opts: { name: string; designation: string; signatureImage?: any | null }) {
+  // Force the whole block onto one page if it doesn't fully fit — each
+  // sdLine below only checks itself, which used to let "AFC India Limited"
+  // print alone at the top of a fresh page while the rest of the closing
+  // stayed on the previous one.
+  const estimatedHeight = e.LINE_H * 4 + (opts.signatureImage ? 44 : 20);
+  if (e.y - estimatedHeight < e.FOOTER_SAFE) await e.newPage();
+
+  await sdLine(e, "Warm Regards,", size, false);
+  if (opts.signatureImage) {
+    const dims = opts.signatureImage.scale(1);
+    const maxH = 40;
+    const maxW = 140;
+    const scale = Math.min(maxW / dims.width, maxH / dims.height, 1);
+    const imgW = dims.width * scale;
+    const imgH = dims.height * scale;
+    if (e.y - imgH < e.FOOTER_SAFE) await e.newPage();
+    e.currentPage.drawImage(opts.signatureImage, { x: e.LEFT, y: e.y - imgH + 4, width: imgW, height: imgH });
+    e.gap(imgH - 4);
+  } else {
+    await sdGap(e, 20);
+  }
+  await sdLine(e, opts.name, size, true);
+  await sdLine(e, opts.designation, size, false);
+  await sdLine(e, "AFC India Limited", size, false);
 }
 
 export async function newPdfDoc() {

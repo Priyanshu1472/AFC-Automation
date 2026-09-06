@@ -30,9 +30,21 @@
   gap: var(--space-1);
   position: relative;
   overflow: hidden;
+  /* These are <button>s (clickable quick filters) — reset native button
+     chrome back to the card look. */
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
   transition:
     box-shadow      var(--duration-normal) var(--ease-out),
     border-color    var(--duration-normal) var(--ease-out);
+}
+
+.bl-stat-active {
+  border-color: var(--text-brand);
+  box-shadow: 0 0 0 1px var(--text-brand);
 }
 
 .bl-stat-card:hover {
@@ -114,6 +126,9 @@
 
 .bl-filter-right {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 /* ── Table scroll wrapper ────────────────────────────────── */
@@ -123,6 +138,10 @@
 
 .bl-table {
   min-width: 800px;
+}
+
+.bl-row-clickable {
+  cursor: pointer;
 }
 
 /* ── Table cell content ──────────────────────────────────── */

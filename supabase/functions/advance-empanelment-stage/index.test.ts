@@ -1,14 +1,21 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { handleRequest } from "./index.ts";
 import { authedReq, createFakeAdminClient, fakeJwt, FakeResult } from "../_shared/testHelpers.ts";
+import { hashPin } from "../_shared/pin.ts";
 
 Deno.env.set("RESEND_API_KEY", "test-key");
 
 const CALLER_ID = "caller-1";
 const APP_ID = "app-1";
 
+// md_accept/md_reject tests below pass this PIN explicitly (there's no
+// shared req() default the way advance-lead-stage has, since most actions
+// here aren't PIN-gated) — must match callerRow()'s pin_hash.
+const CALLER_PIN = "1234";
+const CALLER_PIN_HASH = await hashPin(CALLER_PIN, CALLER_ID);
+
 function callerRow(overrides: Record<string, unknown> = {}) {
-  return { id: CALLER_ID, role: "project_officer", team: "BPDD", office: "delhi", is_active: true, email: "caller@afc.com", ...overrides };
+  return { id: CALLER_ID, role: "project_officer", team: "BPDD", office: "delhi", is_active: true, email: "caller@afc.com", pin_hash: CALLER_PIN_HASH, ...overrides };
 }
 
 function appRow(overrides: Record<string, unknown> = {}) {
@@ -254,42 +261,34 @@ Deno.test("md_send_back - success returns application to dgm_review", async () =
   assertEquals(await res.json(), { success: true, status: "dgm_review" });
 });
 
-// ── md_reject (OTP gated) ────────────────────────────────────
+// ── md_reject (PIN gated) ────────────────────────────────────
 Deno.test("md_reject - rejects a non-MD caller", async () => {
   const client = buildClient({ caller: callerRow({ role: "dgm" }), app: appRow({ status: "md_review" }) });
-  const res = await handleRequest(req({ application_id: APP_ID, action: "md_reject", comment: "no", otp: "123456" }), client as never);
+  const res = await handleRequest(req({ application_id: APP_ID, action: "md_reject", comment: "no", pin: CALLER_PIN }), client as never);
   assertEquals(res.status, 403);
 });
 
 Deno.test("md_reject - requires rejection remarks", async () => {
   const client = buildClient({ caller: callerRow({ role: "md" }), app: appRow({ status: "md_review" }) });
-  const res = await handleRequest(req({ application_id: APP_ID, action: "md_reject", otp: "123456" }), client as never);
+  const res = await handleRequest(req({ application_id: APP_ID, action: "md_reject", pin: CALLER_PIN }), client as never);
   assertEquals(res.status, 400);
 });
 
-Deno.test("md_reject - invalid OTP blocks the rejection even with a valid comment", async () => {
-  const client = buildClient({
-    caller: callerRow({ role: "md" }),
-    app: appRow({ status: "md_review" }),
-    routes: { empanelment_action_otps: [{ data: null, error: null }] },
-  });
-  const res = await handleRequest(req({ application_id: APP_ID, action: "md_reject", comment: "not good enough", otp: "000000" }), client as never);
+Deno.test("md_reject - wrong PIN blocks the rejection even with a valid comment", async () => {
+  const client = buildClient({ caller: callerRow({ role: "md" }), app: appRow({ status: "md_review" }) });
+  const res = await handleRequest(req({ application_id: APP_ID, action: "md_reject", comment: "not good enough", pin: "0000" }), client as never);
   assertEquals(res.status, 400);
-  assertEquals((await res.json()).error, "Invalid or expired verification code. Please request a new one.");
+  assertEquals((await res.json()).error, "Incorrect PIN.");
 });
 
-Deno.test("md_reject - valid OTP rejects the application and emails the BA", async () => {
-  const hash = await sha256Hex("999999");
+Deno.test("md_reject - correct PIN rejects the application and emails the BA", async () => {
   const client = buildClient({
     caller: callerRow({ role: "md" }),
     app: appRow({ status: "md_review" }),
-    routes: {
-      empanelment_action_otps: [{ data: { id: "row1", otp_hash: hash, expires_at: future() }, error: null }, { data: null, error: null }],
-      afc_users: [{ data: [{ id: "teammate-1" }], error: null }],
-    },
+    routes: { afc_users: [{ data: [{ id: "teammate-1" }], error: null }] },
   });
   await withFetch(resendOkFetch, async () => {
-    const res = await handleRequest(req({ application_id: APP_ID, action: "md_reject", comment: "not aligned", otp: "999999" }), client as never);
+    const res = await handleRequest(req({ application_id: APP_ID, action: "md_reject", comment: "not aligned", pin: CALLER_PIN }), client as never);
     assertEquals(res.status, 200);
     const json = await res.json();
     assertEquals(json.success, true);
@@ -297,41 +296,35 @@ Deno.test("md_reject - valid OTP rejects the application and emails the BA", asy
   });
 });
 
-// ── md_accept (OTP gated) ─────────────────────────────────────
+// ── md_accept (PIN gated) ─────────────────────────────────────
 Deno.test("md_accept - rejects a non-MD caller", async () => {
   const client = buildClient({ caller: callerRow({ role: "dgm" }), app: appRow({ status: "md_review" }) });
-  const res = await handleRequest(req({ application_id: APP_ID, action: "md_accept", comment: "good", otp: "123456" }), client as never);
+  const res = await handleRequest(req({ application_id: APP_ID, action: "md_accept", comment: "good", pin: CALLER_PIN }), client as never);
   assertEquals(res.status, 403);
 });
 
 Deno.test("md_accept - wrong application status rejected", async () => {
   const client = buildClient({ caller: callerRow({ role: "md" }), app: appRow({ status: "dgm_review" }) });
-  const res = await handleRequest(req({ application_id: APP_ID, action: "md_accept", comment: "good", otp: "123456" }), client as never);
+  const res = await handleRequest(req({ application_id: APP_ID, action: "md_accept", comment: "good", pin: CALLER_PIN }), client as never);
   assertEquals(res.status, 400);
 });
 
-Deno.test("md_accept - invalid OTP blocks acceptance", async () => {
-  const client = buildClient({
-    caller: callerRow({ role: "md" }),
-    app: appRow({ status: "md_review" }),
-    routes: { empanelment_action_otps: [{ data: null, error: null }] },
-  });
-  const res = await handleRequest(req({ application_id: APP_ID, action: "md_accept", comment: "great fit", otp: "000000" }), client as never);
+Deno.test("md_accept - wrong PIN blocks acceptance", async () => {
+  const client = buildClient({ caller: callerRow({ role: "md" }), app: appRow({ status: "md_review" }) });
+  const res = await handleRequest(req({ application_id: APP_ID, action: "md_accept", comment: "great fit", pin: "0000" }), client as never);
   assertEquals(res.status, 400);
 });
 
-Deno.test("md_accept - valid OTP accepts, reuses an existing BA login (no new account), and skips the letter when the logo can't be fetched", async () => {
-  const hash = await sha256Hex("111222");
+Deno.test("md_accept - correct PIN accepts, reuses an existing BA login (no new account), and skips the letter when the logo can't be fetched", async () => {
   const client = buildClient({
     caller: callerRow({ role: "md" }),
     app: appRow({ status: "md_review" }),
     routes: {
-      empanelment_action_otps: [{ data: { id: "row1", otp_hash: hash, expires_at: future() }, error: null }, { data: null, error: null }],
       afc_users: [{ data: { id: "existing-ba-user", team: "Team 1" }, error: null }, { data: [{ id: "teammate-1" }], error: null }],
     },
   });
   await withFetch(logoFailsEmailOkFetch, async () => {
-    const res = await handleRequest(req({ application_id: APP_ID, action: "md_accept", comment: "approved", otp: "111222" }), client as never);
+    const res = await handleRequest(req({ application_id: APP_ID, action: "md_accept", comment: "approved", pin: CALLER_PIN }), client as never);
     assertEquals(res.status, 200);
     const json = await res.json();
     assertEquals(json.success, true);
@@ -340,13 +333,11 @@ Deno.test("md_accept - valid OTP accepts, reuses an existing BA login (no new ac
   });
 });
 
-Deno.test("md_accept - valid OTP accepts and provisions a brand-new BA portal login when none exists", async () => {
-  const hash = await sha256Hex("333444");
+Deno.test("md_accept - correct PIN accepts and provisions a brand-new BA portal login when none exists", async () => {
   const client = buildClient({
     caller: callerRow({ role: "md" }),
     app: appRow({ status: "md_review" }),
     routes: {
-      empanelment_action_otps: [{ data: { id: "row1", otp_hash: hash, expires_at: future() }, error: null }, { data: null, error: null }],
       afc_users: [
         { data: null, error: null }, // no existing BA account
         { data: [{ id: "teammate-1" }], error: null },
@@ -355,7 +346,7 @@ Deno.test("md_accept - valid OTP accepts and provisions a brand-new BA portal lo
     auth: { createUser: { data: { user: { id: "new-ba-user" } }, error: null } },
   });
   await withFetch(logoFailsEmailOkFetch, async () => {
-    const res = await handleRequest(req({ application_id: APP_ID, action: "md_accept", comment: "approved", otp: "333444" }), client as never);
+    const res = await handleRequest(req({ application_id: APP_ID, action: "md_accept", comment: "approved", pin: CALLER_PIN }), client as never);
     assertEquals(res.status, 200);
     const json = await res.json();
     assertEquals(json.ba_account_created, true);
@@ -365,15 +356,6 @@ Deno.test("md_accept - valid OTP accepts and provisions a brand-new BA portal lo
 });
 
 // ── helpers ──────────────────────────────────────────────────
-async function sha256Hex(input: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function future(): string {
-  return new Date(Date.now() + 60_000).toISOString();
-}
-
 function withFetch(impl: typeof fetch, fn: () => Promise<void>) {
   const original = globalThis.fetch;
   globalThis.fetch = impl;

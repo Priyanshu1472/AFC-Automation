@@ -12,7 +12,7 @@ import Button from "../../components/ui/Button";
 import Select from "../../components/ui/Select";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
-import { EyeIcon, ChatIcon, PencilIcon, TrashIcon, ArrowRightIcon } from "../../components/icons";
+import { ChatIcon, PencilIcon, TrashIcon, ArrowRightIcon } from "../../components/icons";
 import { STATUS_MAP } from "../../components/leads/leadStatus";
 import { canOpenProposal } from "../../lib/proposalPrep";
 import "../../styles/LeadListPage.css";
@@ -273,9 +273,6 @@ export default function LeadListPage() {
                       <td className="ll-date">{fmtDate(l.created_at)}</td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <div className="ll-action-icons">
-                          <button type="button" className="ll-icon-btn" title="View" aria-label="View lead" onClick={() => navigate(`/leads/${l.id}`)}>
-                            <EyeIcon />
-                          </button>
                           {l.chat_opened_at && (
                             <button
                               type="button"
