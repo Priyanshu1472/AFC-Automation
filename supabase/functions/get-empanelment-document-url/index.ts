@@ -50,7 +50,7 @@ serve(async (req) => {
   const authorized =
     ["md", "cfo", "cs", "admin"].includes(caller.role) ||
     (caller.role === "dgm" && isCallerOnTeam(caller, application.team)) ||
-    (caller.role === "project_officer" && caller.id === application.project_officer_id) ||
+    (["project_officer", "project_assistant"].includes(caller.role) && caller.id === application.project_officer_id) ||
     (["associate_consultant", "project_assistant"].includes(caller.role) && caller.id === application.sent_by);
 
   if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this application." });

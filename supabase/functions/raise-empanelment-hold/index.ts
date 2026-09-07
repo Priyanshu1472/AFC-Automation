@@ -13,9 +13,14 @@ import { notifyUser } from "../_shared/notify.ts";
 
 const ALLOWED_STATUS_BY_ROLE: Record<string, string[]> = {
   project_officer: ["po_review", "po_final_review"],
+  // A team with no active Project Officer sends the empanelment invite to a
+  // Project Assistant instead (see send-empanelment-invite) — whichever role
+  // ends up assigned as project_officer_id can act at the PO stages.
+  project_assistant: ["po_review", "po_final_review"],
   dgm: ["dgm_review"],
   md: ["md_review"],
 };
+const PO_REVIEWER_ROLES = ["project_officer", "project_assistant"];
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
@@ -52,7 +57,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
 
-  if (caller.role === "project_officer" && caller.id !== app.project_officer_id) return jsonRes(req, 403, { error: "Only the assigned Project Officer can raise a hold on this application." });
+  if (PO_REVIEWER_ROLES.includes(caller.role) && caller.id !== app.project_officer_id) return jsonRes(req, 403, { error: "Only the assigned Project Officer can raise a hold on this application." });
   if (caller.role === "dgm" && !isCallerOnTeam(caller, app.team)) return jsonRes(req, 403, { error: "Only the team's DGM can raise a hold on this application." });
 
   const allowedStatuses = ALLOWED_STATUS_BY_ROLE[caller.role];
@@ -115,7 +120,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       type: "info",
       link: `/empanelment/${application_id}`,
     };
-    const holdRecipients = [app.sent_by, caller.role !== "project_officer" ? app.project_officer_id : null, caller.role !== "dgm" ? app.dgm_id : null];
+    const holdRecipients = [app.sent_by, !PO_REVIEWER_ROLES.includes(caller.role) ? app.project_officer_id : null, caller.role !== "dgm" ? app.dgm_id : null];
     await Promise.all(holdRecipients.map((id) => notifyUser(adminClient, id, holdPayload)));
 
     return jsonRes(req, 200, { success: true, status: "on_hold", flags_count: flagRows.length, email_sent: emailSent });

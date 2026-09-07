@@ -143,6 +143,11 @@ export default function SendEmpanelmentPage() {
   const [form, setForm] = useState({ projectOfficer: "", baEmail: "" });
   const [fieldErrors, setFieldErrors] = useState({});
   const [projectOfficers, setProjectOfficers] = useState([]);
+  // Falls back to the team's Project Assistants when there's no active
+  // Project Officer to assign as reviewer (none on the team, or the only
+  // one(s) are deactivated) — tracks which pool is currently shown so the
+  // label/warning can reflect it.
+  const [reviewerRole, setReviewerRole] = useState("project_officer");
   const [dgmUser, setDgmUser] = useState(null);
   const [loadingPOs, setLoadingPOs] = useState(true);
   const [step, setStep] = useState(0);
@@ -159,7 +164,14 @@ export default function SendEmpanelmentPage() {
       supabase.from("afc_users").select("id, full_name, email").eq("role", "project_officer").eq("team", team).eq("is_active", true).order("full_name"),
       supabase.from("afc_users").select("id, full_name, email").eq("role", "dgm").eq("team", team).eq("is_active", true).limit(1).maybeSingle(),
     ]);
-    setProjectOfficers(pos || []);
+    if (pos && pos.length > 0) {
+      setProjectOfficers(pos);
+      setReviewerRole("project_officer");
+    } else {
+      const { data: pas } = await supabase.from("afc_users").select("id, full_name, email").eq("role", "project_assistant").eq("team", team).eq("is_active", true).order("full_name");
+      setProjectOfficers(pas || []);
+      setReviewerRole("project_assistant");
+    }
     setDgmUser(dgm || null);
     setLoadingPOs(false);
   }, [team]);
@@ -172,10 +184,11 @@ export default function SendEmpanelmentPage() {
   const advisedByName = dgmUser?.full_name || profile?.full_name || "";
   const advisedByDesig = dgmUser ? ROLE_LABELS.dgm : ROLE_LABELS[profile?.role] || profile?.role || "";
   const poOptions = projectOfficers.map((po) => ({ value: po.id, label: `${po.full_name} (${po.email})` }));
+  const reviewerLabel = ROLE_LABELS[reviewerRole] || "Project Officer";
 
   function handleGoToPreview() {
     const errors = {};
-    if (!form.projectOfficer) errors.projectOfficer = "Please select a Project Officer.";
+    if (!form.projectOfficer) errors.projectOfficer = `Please select a ${reviewerLabel}.`;
     if (!form.baEmail.trim()) errors.baEmail = "BA email is required.";
     else if (!isValidEmail(form.baEmail)) errors.baEmail = "Enter a valid email address.";
 
@@ -242,17 +255,20 @@ export default function SendEmpanelmentPage() {
           {step === 0 && (
             <div className="sef-layout">
               <Card className="sef-main-card">
-                <Card.Header title="Send Empanelment Form" subtitle="Select a Project Officer and enter the BA's email address." action={<Badge variant="brand">Step 1 of 2</Badge>} />
+                <Card.Header title="Send Empanelment Form" subtitle={`Select a ${reviewerLabel} and enter the BA's email address.`} action={<Badge variant="brand">Step 1 of 2</Badge>} />
                 <Card.Body className="sef-card-body">
                   <SenderInfoRow profile={profile} team={team} dgmUser={dgmUser} />
                   <div className="sef-divider" />
 
                   <div className="sef-field">
-                    <label className="sef-label" htmlFor="sef-po-select">Project Officer <span className="sef-required">*</span></label>
+                    <label className="sef-label" htmlFor="sef-po-select">{reviewerLabel} <span className="sef-required">*</span></label>
+                    {reviewerRole === "project_assistant" && projectOfficers.length > 0 && (
+                      <Alert variant="info">No active Project Officer on team <strong>{team}</strong> — assign a Project Assistant instead.</Alert>
+                    )}
                     {projectOfficers.length === 0 ? (
-                      <Alert variant="warning">No active Project Officers found in team <strong>{team}</strong>.</Alert>
+                      <Alert variant="warning">No active Project Officers or Project Assistants found in team <strong>{team}</strong>.</Alert>
                     ) : (
-                      <Select id="sef-po-select" options={poOptions} value={form.projectOfficer} onChange={(val) => { setForm((p) => ({ ...p, projectOfficer: val })); setFieldErrors((e) => ({ ...e, projectOfficer: "" })); }} placeholder="Select a Project Officer" />
+                      <Select id="sef-po-select" options={poOptions} value={form.projectOfficer} onChange={(val) => { setForm((p) => ({ ...p, projectOfficer: val })); setFieldErrors((e) => ({ ...e, projectOfficer: "" })); }} placeholder={`Select a ${reviewerLabel}`} />
                     )}
                     {fieldErrors.projectOfficer && <span className="sef-field-error" role="alert">{fieldErrors.projectOfficer}</span>}
                   </div>
@@ -288,7 +304,7 @@ export default function SendEmpanelmentPage() {
                 <Card.Body className="sef-summary-body">
                   <div className="sef-summary-group">
                     <div className="sef-summary-item"><span className="sef-summary-label">Sending to</span><span className="sef-summary-value sef-summary-email">{form.baEmail}</span></div>
-                    <div className="sef-summary-item"><span className="sef-summary-label">Project Officer</span><span className="sef-summary-value">{selectedPO?.full_name || "—"}</span></div>
+                    <div className="sef-summary-item"><span className="sef-summary-label">{reviewerLabel}</span><span className="sef-summary-value">{selectedPO?.full_name || "—"}</span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Advised by</span><span className="sef-summary-value">{advisedByName} <span className="sef-summary-role">({advisedByDesig})</span></span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Sent by</span><span className="sef-summary-value">{profile?.full_name}</span></div>
                     <div className="sef-summary-item sef-summary-last"><span className="sef-summary-label">Team / Office</span><span className="sef-summary-value">{team} · {capitalise(profile?.office)}</span></div>

@@ -12,7 +12,7 @@ import PageLoader from "../../components/ui/PageLoader";
 import ComplianceHoldModal from "./ComplianceHoldModal";
 import PinConfirmModal from "./PinConfirmModal";
 import LetterPreviewPinModal from "./LetterPreviewPinModal";
-import { STATUS_FLOW, STATUS_BADGE, ProgressStepper, TimelineAccordion } from "../../components/empanelment/ApplicationTimeline";
+import { STATUS_FLOW, STATUS_BADGE, ProgressStepper, TimelineAccordion, stepLabel } from "../../components/empanelment/ApplicationTimeline";
 import "../../styles/ApplicationReviewPage.css";
 
 const SLOT_LABELS = {
@@ -143,7 +143,7 @@ export default function ApplicationReviewPage() {
   const fetchApp = useCallback(async () => {
     const { data: application } = await supabase
       .from("empanelment_applications")
-      .select("*, po:project_officer_id(id, full_name, email), dgm:dgm_id(id, full_name, email), ac:sent_by(id, full_name, email)")
+      .select("*, po:project_officer_id(id, full_name, email, role), dgm:dgm_id(id, full_name, email), ac:sent_by(id, full_name, email)")
       .eq("id", id)
       .maybeSingle();
     setApp(application);
@@ -259,7 +259,7 @@ export default function ApplicationReviewPage() {
   function canAct() {
     if (!app) return false;
     const s = app.status;
-    if (role === "project_officer" && app.project_officer_id === profile.id && (s === "po_review" || s === "po_final_review")) return true;
+    if (["project_officer", "project_assistant"].includes(role) && app.project_officer_id === profile.id && (s === "po_review" || s === "po_final_review")) return true;
     if (role === "cfo" && s === "cfo_cs_review" && !app.cfo_reviewed) return true;
     if (role === "cs" && s === "cfo_cs_review" && !app.cs_reviewed) return true;
     if (role === "dgm" && app.team === profile.team && s === "dgm_review") return true;
@@ -297,7 +297,7 @@ export default function ApplicationReviewPage() {
               <div className="ar-header-left">
                 <div className="ar-header-badges">
                   <Badge variant="brand">Application Review</Badge>
-                  <Badge variant={STATUS_BADGE[app.status] || "neutral"} dot>{STATUS_FLOW.find((s) => s.key === app.status)?.label || app.status}</Badge>
+                  <Badge variant={STATUS_BADGE[app.status] || "neutral"} dot>{stepLabel(app.status, STATUS_FLOW.find((s) => s.key === app.status)?.label, app.po?.role) || app.status}</Badge>
                 </div>
                 <h1 className="ar-header-email">{app.ba_email}</h1>
                 <p className="ar-header-meta">Code: <strong>{app.application_code}</strong> · Team: <strong>{app.team || "—"}</strong> · Sent: <strong>{fmtDate(app.created_at)}</strong></p>
@@ -308,7 +308,7 @@ export default function ApplicationReviewPage() {
           <Card>
             <Card.Body className="ar-stepper-body">
               <p className="ar-stepper-heading">Application Progress</p>
-              <ProgressStepper currentStatus={app.status} />
+              <ProgressStepper currentStatus={app.status} reviewerRole={app.po?.role} />
             </Card.Body>
           </Card>
 
@@ -403,7 +403,7 @@ export default function ApplicationReviewPage() {
                 <Card className="ar-action-card">
                   <Card.Header title="Your Action" action={<Badge variant="brand">{ROLE_LABELS[role]}</Badge>} />
                   <Card.Body className="ar-action-body">
-                    {role === "project_officer" && (<>
+                    {["project_officer", "project_assistant"].includes(role) && (<>
                       {app.status === "po_final_review" && (
                         <div className="ar-po-final-notice">
                           <p className="ar-po-final-title">CFO / CS have reviewed this application</p>
@@ -447,7 +447,7 @@ export default function ApplicationReviewPage() {
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your recommendation..." rows={4} />
                       </div>
                       <Button variant="primary" block disabled={!comment.trim() || actionLoading} loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleDGMRecommend}>{actionLoading ? "Sending..." : "Recommend to Managing Director"}</Button>
-                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleDGMSendBack}>Send Back to Project Officer</Button>
+                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleDGMSendBack}>Send Back to {app.po?.role === "project_assistant" ? "Project Assistant" : "Project Officer"}</Button>
                     </>)}
 
                     {role === "md" && (<>
@@ -460,7 +460,7 @@ export default function ApplicationReviewPage() {
                       <Button variant="danger" block disabled={actionLoading} icon={<XIcon />} onClick={() => setShowReject(true)}>Reject</Button>
                     </>)}
 
-                    {["project_officer", "dgm", "md"].includes(role) && (
+                    {["project_officer", "project_assistant", "dgm", "md"].includes(role) && (
                       <>
                         <hr className="divider" />
                         <Button variant="secondary" block disabled={actionLoading} onClick={() => setShowHoldModal(true)}>Raise Compliance Hold</Button>
@@ -513,7 +513,7 @@ export default function ApplicationReviewPage() {
               )}
 
               {!userCanAct && !isFinalised && app.status !== "on_hold" && (
-                <Card><Card.Body className="ar-view-only"><EyeIcon /><span>Viewing only. Action pending from <strong>{STATUS_FLOW.find((s) => s.key === app.status)?.label || app.status}</strong></span></Card.Body></Card>
+                <Card><Card.Body className="ar-view-only"><EyeIcon /><span>Viewing only. Action pending from <strong>{stepLabel(app.status, STATUS_FLOW.find((s) => s.key === app.status)?.label, app.po?.role) || app.status}</strong></span></Card.Body></Card>
               )}
 
               <Card>
