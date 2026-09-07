@@ -75,16 +75,31 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   const normalizedEmail = ba_email.trim().toLowerCase();
 
   try {
-    // Project Officer must be an active PO on the caller's own team.
+    // The assigned reviewer must be an active Project Officer on the
+    // caller's own team — or, when the team has none active, a Project
+    // Assistant (the client only offers the PA pool in that case, but the
+    // server re-validates rather than trusting it).
     const { data: po, error: poErr } = await adminClient
       .from("afc_users")
-      .select("id, full_name, email")
+      .select("id, full_name, email, role")
       .eq("id", project_officer_id)
-      .eq("role", "project_officer")
+      .in("role", ["project_officer", "project_assistant"])
       .eq("team", team)
       .eq("is_active", true)
       .maybeSingle();
     if (poErr || !po) return jsonRes(req, 400, { error: "Invalid Project Officer for your team." });
+
+    if (po.role === "project_assistant") {
+      const { count: activePoCount } = await adminClient
+        .from("afc_users")
+        .select("id", { count: "exact", head: true })
+        .eq("role", "project_officer")
+        .eq("team", team)
+        .eq("is_active", true);
+      if (activePoCount && activePoCount > 0) {
+        return jsonRes(req, 400, { error: "Your team has an active Project Officer — select them instead of a Project Assistant." });
+      }
+    }
 
     const { data: dgm } = await adminClient
       .from("afc_users")
@@ -163,7 +178,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     await notifyUser(adminClient, po.id, {
       title: "New empanelment invite sent",
-      sub_text: `An invite was sent to ${normalizedEmail}. You're assigned as the reviewing Project Officer.`,
+      sub_text: `An invite was sent to ${normalizedEmail}. You're assigned as the reviewing ${ROLE_LABELS[po.role] || "Project Officer"}.`,
       type: "info",
       link: `/empanelment/${app.id}`,
     });

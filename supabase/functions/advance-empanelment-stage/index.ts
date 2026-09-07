@@ -16,6 +16,14 @@ import { buildEmpanelmentLetter } from "../_shared/empanelmentLetterPdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
+// A team with no active Project Officer sends the empanelment invite to a
+// Project Assistant instead (see send-empanelment-invite) — whichever role
+// ends up in project_officer_id is the assigned reviewer for the PO stages.
+const PO_REVIEWER_ROLES = ["project_officer", "project_assistant"];
+function reviewerLabel(role: string): string {
+  return role === "project_assistant" ? "Project Assistant" : "Project Officer";
+}
+
 // CFO/CS previously only got the in-app bell notification when an
 // application reached their stage — this adds an actual email so it isn't
 // missed if they haven't opened the app.
@@ -257,14 +265,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   try {
     switch (action) {
       case "po_forward": {
-        if (caller.role !== "project_officer" || caller.id !== app.project_officer_id) return forbidden("Only the assigned Project Officer can forward this application.");
+        if (!PO_REVIEWER_ROLES.includes(caller.role) || caller.id !== app.project_officer_id) return forbidden("Only the assigned Project Officer can forward this application.");
         if (app.status !== "po_review") return badState("po_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "cfo_cs_review", po_comment: trimmedComment }).eq("id", app.id);
         await logActivity(adminClient, app.id, caller.id, caller.role, "po_forwarded", trimmedComment);
         const forwardPayload = {
           title: "Empanelment application awaiting your review",
-          sub_text: `${orgName}'s application was forwarded by the Project Officer.`,
+          sub_text: `${orgName}'s application was forwarded by the ${reviewerLabel(caller.role)}.`,
           type: "action_required",
           link: `/empanelment/${app.id}`,
         };
@@ -307,7 +315,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "po_resend_cfo_cs": {
-        if (caller.role !== "project_officer" || caller.id !== app.project_officer_id) return forbidden("Only the assigned Project Officer can send this back to CFO and CS.");
+        if (!PO_REVIEWER_ROLES.includes(caller.role) || caller.id !== app.project_officer_id) return forbidden("Only the assigned Project Officer can send this back to CFO and CS.");
         if (app.status !== "po_final_review") return badState("po_final_review");
         await adminClient.from("empanelment_applications").update({
           status: "cfo_cs_review",
@@ -319,7 +327,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         await logActivity(adminClient, app.id, caller.id, caller.role, "po_resent_cfo_cs", trimmedComment || "Sent back to CFO and CS for a fresh review.");
         const resendPayload = {
           title: "Empanelment application sent back for review",
-          sub_text: `${orgName}'s application was sent back by the Project Officer for a fresh look.`,
+          sub_text: `${orgName}'s application was sent back by the ${reviewerLabel(caller.role)} for a fresh look.`,
           type: "action_required",
           link: `/empanelment/${app.id}`,
         };
@@ -332,13 +340,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "po_final_forward": {
-        if (caller.role !== "project_officer" || caller.id !== app.project_officer_id) return forbidden("Only the assigned Project Officer can forward this application.");
+        if (!PO_REVIEWER_ROLES.includes(caller.role) || caller.id !== app.project_officer_id) return forbidden("Only the assigned Project Officer can forward this application.");
         if (app.status !== "po_final_review") return badState("po_final_review");
         await adminClient.from("empanelment_applications").update({ status: "dgm_review", po_final_comment: trimmedComment || null }).eq("id", app.id);
         await logActivity(adminClient, app.id, caller.id, caller.role, "po_final_forwarded", trimmedComment || "Forwarded to DGM.");
         const dgmPayload = {
           title: "Empanelment application awaiting your review",
-          sub_text: `${orgName}'s application was forwarded by the Project Officer.`,
+          sub_text: `${orgName}'s application was forwarded by the ${reviewerLabel(caller.role)}.`,
           type: "action_required",
           link: `/empanelment/${app.id}`,
         };
