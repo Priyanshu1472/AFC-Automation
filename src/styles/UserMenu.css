@@ -61,12 +61,22 @@
   text-overflow: ellipsis;
 }
 
+/* position: fixed, opening to the right of the sidebar — not absolute +
+   right: 0. The trigger sits in the narrow (240px) left rail, which has
+   overflow-y: auto (forcing overflow-x: auto too, per the CSS overflow
+   spec — see NotificationBell.css for the same root cause); an
+   absolutely-positioned panel anchored with right: 0 there mostly
+   extends past the rail's *left* edge, off the viewport, and gets clipped.
+   Fixed positioning anchored past the rail opens it over the main content
+   instead, matching how the notifications panel was fixed. */
 .user-menu-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
+  top: auto;
+  bottom: var(--space-4);
+  left: calc(var(--sidebar-nav-w) + var(--space-3));
+  right: auto;
   width: 220px;
-  max-width: calc(100vw - 32px);
+  max-width: calc(100vw - var(--sidebar-nav-w) - var(--space-4));
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);

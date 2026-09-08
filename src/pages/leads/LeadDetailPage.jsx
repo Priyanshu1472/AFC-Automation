@@ -15,7 +15,7 @@ import PinInput from "../../components/ui/PinInput";
 import PageLoader from "../../components/ui/PageLoader";
 import LeadTimeline from "../../components/leads/LeadTimeline";
 import LeadChatPanel from "../../components/leads/LeadChatPanel";
-import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS } from "../../components/leads/leadStatus";
+import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, dgmInitialApproveLabel } from "../../components/leads/leadStatus";
 // Reuses the ar-* detail/action/timeline/document styles already defined
 // for Empanelment's review page — generic patterns (label/value rows,
 // stepper, action panel, doc list), no Lead-Gen-specific CSS needed yet.
@@ -265,7 +265,11 @@ export default function LeadDetailPage() {
         default:
           return false;
       }
-    });
+    }).map((a) =>
+      // Resubmitting after a decline resumes at whichever stage sent it
+      // back, not always PMT — see advance-lead-stage's RESUME_AFTER_DECLINE.
+      a.key === "dgm_initial_approve" ? { ...a, label: dgmInitialApproveLabel(lead.declined_from_status) } : a
+    );
   }
 
   // Rejecting before PMT review (as PR, not the creator) hands the lead

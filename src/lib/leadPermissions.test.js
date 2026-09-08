@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { leadCan, isActionRequiredForViewer } from "./leadPermissions";
+import { leadCan, isActionRequiredForViewer, isMyLead, isTeamLead } from "./leadPermissions";
 
 describe("leadCan", () => {
   const user = { id: "user-1" };
@@ -157,5 +157,53 @@ describe("isActionRequiredForViewer", () => {
     const profile = { id: "user-1", role: "project_officer", team: "BPDD", committee: "PMT" };
     expect(isActionRequiredForViewer(profile, { status: "pa_review", person_responsible_id: "user-1" })).toBe(true);
     expect(isActionRequiredForViewer(profile, { status: "pmt_review", team: "OtherTeam" })).toBe(true);
+  });
+});
+
+describe("isMyLead", () => {
+  it("matches the creator", () => {
+    const profile = { id: "user-1" };
+    expect(isMyLead(profile, { created_by: "user-1", person_responsible_id: "someone-else" })).toBe(true);
+  });
+
+  it("matches the Person Responsible", () => {
+    const profile = { id: "user-1" };
+    expect(isMyLead(profile, { created_by: "someone-else", person_responsible_id: "user-1" })).toBe(true);
+  });
+
+  it("does NOT match Reviewer, Approval Authority, or handled-by-DGM — those belong on Team Leads instead", () => {
+    const profile = { id: "user-1" };
+    const base = { created_by: "someone-else", person_responsible_id: "someone-else-2" };
+    expect(isMyLead(profile, { ...base, reviewer_id: "user-1" })).toBe(false);
+    expect(isMyLead(profile, { ...base, approval_authority_id: "user-1" })).toBe(false);
+    expect(isMyLead(profile, { ...base, handled_by_dgm_id: "user-1" })).toBe(false);
+  });
+
+  it("returns false with no profile", () => {
+    expect(isMyLead(null, { created_by: "user-1" })).toBe(false);
+  });
+});
+
+describe("isTeamLead", () => {
+  it("matches a team-scoped role's own team, not another team", () => {
+    const profile = { id: "user-1", role: "dgm", teams: ["BPDD", "HO"] };
+    expect(isTeamLead(profile, { team: "BPDD" })).toBe(true);
+    expect(isTeamLead(profile, { team: "HO" })).toBe(true);
+    expect(isTeamLead(profile, { team: "OtherTeam" })).toBe(false);
+  });
+
+  it("always matches org-wide roles (md/cfo/cs/admin), any team — their org-wide browse view", () => {
+    for (const role of ["md", "cfo", "cs", "admin"]) {
+      expect(isTeamLead({ id: "user-1", role, teams: [] }, { team: "AnyTeam" })).toBe(true);
+    }
+  });
+
+  it("does not match a Business Associate against an unrelated team", () => {
+    const profile = { id: "ba-1", role: "business_associate", teams: [] };
+    expect(isTeamLead(profile, { team: "BPDD" })).toBe(false);
+  });
+
+  it("returns false with no profile", () => {
+    expect(isTeamLead(null, { team: "BPDD" })).toBe(false);
   });
 });

@@ -3,7 +3,8 @@
 // calendar, which can't be restyled and ignores the app's light/dark theme.
 // Ported from the previous AFC empanelment app's DatePickerCalendar.
 // Value format: "YYYY-MM-DD"
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import "../../styles/DatePickerCalendar.css";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -40,16 +41,52 @@ export default function DatePickerCalendar({ value, onChange, placeholder = "Sel
   const [viewMonth, setViewMonth] = useState(parsed?.month ?? today.getMonth());
   const [mode, setMode] = useState("day"); // "day" | "month" | "year"
   const [yearPage, setYearPage] = useState(Math.floor((parsed?.year || today.getFullYear()) / 12) * 12);
+  const [panelStyle, setPanelStyle] = useState(null);
   const ref = useRef(null);
+  const panelRef = useRef(null);
 
   useEffect(() => {
-    function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    function handler(e) {
+      if (ref.current && !ref.current.contains(e.target) && panelRef.current && !panelRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   useEffect(() => {
     if (open) setMode("day");
+  }, [open]);
+
+  // Positions the panel relative to the viewport (not the trigger's parent)
+  // and renders it through a portal — the trigger can sit inside a
+  // scrollable container (e.g. a filter drawer body), which would otherwise
+  // clip an absolutely-positioned panel that spills past its bounds.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const panelWidth = 280;
+    const estPanelHeight = 360;
+
+    function updatePosition() {
+      if (!ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const openUpward = rect.bottom + estPanelHeight > window.innerHeight && rect.top > estPanelHeight;
+      const left = Math.min(rect.left, window.innerWidth - panelWidth - 8);
+      setPanelStyle({
+        left: Math.max(8, left),
+        top: openUpward ? undefined : rect.bottom + 6,
+        bottom: openUpward ? window.innerHeight - rect.top + 6 : undefined,
+      });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
   }, [open]);
 
   function handleDayClick(day) {
@@ -116,8 +153,8 @@ export default function DatePickerCalendar({ value, onChange, placeholder = "Sel
         </svg>
       </button>
 
-      {open && (
-        <div className="dpc-panel">
+      {open && panelStyle && createPortal(
+        <div ref={panelRef} className="dpc-panel" style={panelStyle}>
           {mode === "day" && (
             <>
               <div className="dpc-nav">
@@ -208,7 +245,8 @@ export default function DatePickerCalendar({ value, onChange, placeholder = "Sel
               </div>
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

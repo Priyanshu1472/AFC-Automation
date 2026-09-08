@@ -67,6 +67,25 @@ export default function AppHeader() {
         <span className="font-display font-semibold text-primary">AFC India Limited</span>
       </Link>
 
+      {/* Mobile-only — mirrors the desktop utilities row (Knowledge
+          Repository + Notifications) but sits in the top bar itself, not
+          inside the off-canvas drawer, so both stay reachable without
+          opening the hamburger menu. Hidden above the mobile breakpoint,
+          where the equivalent icons already live in the drawer/sidebar. */}
+      <div className="app-header-mobile-utilities">
+        {canSeeKnowledge && (
+          <NavLink
+            to="/knowledge"
+            className={({ isActive }) => `app-header-kr-link-mobiletop${isActive ? " active" : ""}`}
+            aria-label="Knowledge Repository"
+            title="Knowledge Repository"
+          >
+            <BookIcon />
+          </NavLink>
+        )}
+        <NotificationBell />
+      </div>
+
       {menuOpen && <div className="app-header-backdrop" onClick={closeMenu} aria-hidden="true" />}
 
       <nav id="app-header-drawer" className={`app-header-nav${menuOpen ? " open" : ""}`}>
@@ -163,7 +182,9 @@ export default function AppHeader() {
             </NavLink>
           )}
           <ThemeToggle />
-          <NotificationBell />
+          <span className="app-header-notif-desktop-only">
+            <NotificationBell />
+          </span>
           <UserMenu />
         </div>
 

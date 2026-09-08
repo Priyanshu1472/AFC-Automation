@@ -99,6 +99,18 @@ export function AuthProvider({ children }) {
     setUser(null);
     setProfile(null);
     setActiveTeamState(null);
+    try {
+      // Per-page list filters (LeadListPage, UserListPage, etc.) persist in
+      // sessionStorage so a trip out to a detail page and back restores
+      // where you left off — but that same persistence would otherwise
+      // survive a sign-out, so the next person to log in in this tab (or
+      // this user logging back in) would land mid-filter instead of on a
+      // clean, unfiltered list. Sign-out is the one point that should
+      // reset all of it.
+      sessionStorage.clear();
+    } catch {
+      // Private browsing / storage disabled — nothing to clear.
+    }
   }, []);
 
   useEffect(() => {

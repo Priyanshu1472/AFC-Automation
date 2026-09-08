@@ -220,3 +220,37 @@
 @media (max-width: 768px) {
   .ll-stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* "My Leads" vs a committee tab (e.g. "PMT Leads") — replaces the plain
+   <h1> with a small tab-button row so a committee-holding viewer can switch
+   between their team/personal leads and their committee's own org-wide
+   queue, each with fully independent tiles/filters. */
+.ll-view-tabs {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.ll-view-tab {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-lg);
+  color: var(--text-tertiary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.ll-view-tab:hover {
+  color: var(--text-secondary);
+}
+
+.ll-view-tab-active {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}

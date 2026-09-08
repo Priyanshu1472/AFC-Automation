@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
-import { leadCan, isActionRequiredForViewer } from "../../lib/leadPermissions";
+import { leadCan, isActionRequiredForViewer, isMyLead, isTeamLead } from "../../lib/leadPermissions";
 import { can } from "../../lib/roles";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
@@ -13,7 +13,7 @@ import Select from "../../components/ui/Select";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import { ChatIcon, PencilIcon, TrashIcon, ArrowRightIcon } from "../../components/icons";
-import { STATUS_MAP } from "../../components/leads/leadStatus";
+import { STATUS_MAP, COMMITTEE_STAGE_STATUS } from "../../components/leads/leadStatus";
 import { canOpenProposal } from "../../lib/proposalPrep";
 import "../../styles/LeadListPage.css";
 
@@ -68,6 +68,10 @@ export default function LeadListPage() {
   // { [lead_id]: unread_count } for the current viewer, across every lead
   // they're a chat participant on — powers the badge on the chat icon.
   const [unreadCounts, setUnreadCounts] = useState({});
+  // "mine" (My Leads), "team" (Team Leads), or a committee name ("PMT"/
+  // "PMT Extended"/"G3") — the last is only ever one extra tab, for a
+  // viewer who holds that committee (see committeeTab below).
+  const [view, setView] = useState(() => loadStoredFilters().view || "mine");
   const [search, setSearch] = useState(() => loadStoredFilters().search || "");
   const [quickFilter, setQuickFilter] = useState(() => loadStoredFilters().quickFilter || "all");
   const [statusFilter, setStatusFilter] = useState(() => loadStoredFilters().statusFilter || "all");
@@ -77,13 +81,31 @@ export default function LeadListPage() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ search, quickFilter, statusFilter, teamFilter, page }));
+      sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ view, search, quickFilter, statusFilter, teamFilter, page }));
     } catch {
       // Private browsing / storage disabled — filters just won't persist.
     }
-  }, [search, quickFilter, statusFilter, teamFilter, page]);
+  }, [view, search, quickFilter, statusFilter, teamFilter, page]);
 
-  const canFilterTeam = can.viewAllTeams(profile?.role);
+  // Team Leads and any committee tab are both org-wide-flavored (a team, or
+  // a whole committee's queue), so the Team filter/column is worth showing
+  // there to everyone, not just the md/cfo/cs/admin roles that see it on
+  // "My Leads".
+  const canFilterTeam = can.viewAllTeams(profile?.role) || view !== "mine";
+  // A viewer only ever holds one committee (afc_users.committee), so this is
+  // at most a single extra tab, only for a member of that committee.
+  const committeeTab = profile?.committee ? { key: profile.committee, label: `${profile.committee} Leads` } : null;
+
+  // Switching tabs starts clean — quick/status filters, search, and page
+  // never carry over from the other tab, so each one's tiles/filters are
+  // fully independent.
+  function selectView(nextView) {
+    setView(nextView);
+    setQuickFilter("all");
+    setStatusFilter("all");
+    setSearch("");
+    setPage(1);
+  }
   // Team-scoped roles (dgm/agm/srm/etc.) have no visible team filter — RLS
   // already scopes their rows to their assigned team(s), but a multi-team
   // user's rows now span every team they're on, so the "whole interface
@@ -127,18 +149,35 @@ export default function LeadListPage() {
     return () => supabase.removeChannel(channel);
   }, [fetchLeads, fetchUnreadCounts]);
 
+  // The tab's own base set, all drawn from the one RLS-permitted `leads`
+  // fetch — no separate query per tab:
+  //  - "mine": only leads the viewer created or is Person Responsible on
+  //    (see isMyLead) — narrowly personal, not Reviewer/Approval Authority/
+  //    team ownership.
+  //  - "team": every lead going on in the viewer's own team(s) (see
+  //    isTeamLead) — an org-wide role's "team" is every team, so this is
+  //    also their org-wide browse view.
+  //  - a committee name: only leads actually AT that committee's own stage
+  //    (see COMMITTEE_STAGE_STATUS) — not the whole post-DGM pipeline
+  //    can_view_lead() otherwise grants read access to.
+  const baseLeads = useMemo(() => {
+    if (view === "mine") return leads.filter((l) => isMyLead(profile, l));
+    if (view === "team") return leads.filter((l) => isTeamLead(profile, l));
+    return leads.filter((l) => l.status === COMMITTEE_STAGE_STATUS[view]);
+  }, [leads, profile, view]);
+
   // Scoped by team the same way the table below is (effectiveTeamFilter) —
   // otherwise these tiles kept counting every RLS-permitted lead across all
   // of a multi-team user's teams even while the table itself was correctly
   // narrowed to just the active team.
   const stats = useMemo(() => {
-    const teamScoped = effectiveTeamFilter === "all" ? leads : leads.filter((l) => l.team === effectiveTeamFilter);
+    const teamScoped = effectiveTeamFilter === "all" ? baseLeads : baseLeads.filter((l) => l.team === effectiveTeamFilter);
     const result = {};
     for (const [key, cfg] of Object.entries(QUICK_FILTERS)) {
       result[key] = teamScoped.filter((l) => cfg.match(l, profile)).length;
     }
     return result;
-  }, [leads, profile, effectiveTeamFilter]);
+  }, [baseLeads, profile, effectiveTeamFilter]);
 
   function selectQuickFilter(key) {
     // Clicking the active card again clears it back to Total.
@@ -160,7 +199,7 @@ export default function LeadListPage() {
 
   // Search runs over every matching lead, not just the current page — the
   // page slice below is purely a display concern.
-  const filtered = leads.filter((l) => {
+  const filtered = baseLeads.filter((l) => {
     const q = search.toLowerCase();
     const matchSearch =
       (l.lead_number || "").toLowerCase().includes(q) ||
@@ -189,8 +228,36 @@ export default function LeadListPage() {
       <div className="app-container">
         <div className="page-header">
           <div className="page-title-row">
-            <div>
-              <h1>{profile?.role === "md" || profile?.role === "admin" ? "All Leads" : "My Leads"}</h1>
+            <div className="ll-view-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "mine"}
+                className={`ll-view-tab${view === "mine" ? " ll-view-tab-active" : ""}`}
+                onClick={() => selectView("mine")}
+              >
+                My Leads
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "team"}
+                className={`ll-view-tab${view === "team" ? " ll-view-tab-active" : ""}`}
+                onClick={() => selectView("team")}
+              >
+                Team Leads
+              </button>
+              {committeeTab && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === committeeTab.key}
+                  className={`ll-view-tab${view === committeeTab.key ? " ll-view-tab-active" : ""}`}
+                  onClick={() => selectView(committeeTab.key)}
+                >
+                  {committeeTab.label}
+                </button>
+              )}
             </div>
             {canCreate && <Button variant="primary" onClick={() => navigate("/leads/create")}>+ Add Lead</Button>}
           </div>

@@ -1,4 +1,4 @@
-import { LEAD_PA_TIER_ROLES } from "./roles";
+import { LEAD_PA_TIER_ROLES, can } from "./roles";
 
 // Lead-specific action predicates, mirroring the server-side authorization
 // in advance-lead-stage/index.ts — UX-only (hide/disable), never trusted.
@@ -57,6 +57,25 @@ export const leadCan = {
   dgmReview: (profile, lead) => lead.status === "dgm_review" && profile?.committee === "G3",
   mdReview: (profile, lead) => lead.status === "md_review" && profile?.role === "md",
 };
+
+// "My Leads" on LeadListPage — narrowly personal: the viewer is either the
+// lead's creator or its assigned Person Responsible. Deliberately excludes
+// Reviewer/Approval Authority/handled-by-DGM and team ownership — those
+// live under the "Team Leads" tab instead (see isTeamLead below).
+export function isMyLead(profile, lead) {
+  if (!profile) return false;
+  return profile.id === lead.created_by || profile.id === lead.person_responsible_id;
+}
+
+// "Team Leads" on LeadListPage — every lead going on in the viewer's own
+// team(s). An org-wide role (md/cfo/cs/admin) has no single team of its
+// own, so "their team" is every team — this is where those roles get an
+// org-wide browse view now that "My Leads" is personal-only for everyone.
+export function isTeamLead(profile, lead) {
+  if (!profile) return false;
+  if (can.viewAllTeams(profile.role)) return true;
+  return !!profile.teams?.includes(lead.team);
+}
 
 // "Action Required" on the Leads list — what counts as actionable depends
 // on who's looking: a PMT member's action-required set is pmt_review leads

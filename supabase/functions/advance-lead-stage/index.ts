@@ -90,6 +90,39 @@ const REGENERATE_DRAFT_NOTE_ON = new Set([
   "dgm_accept",
 ]);
 
+// Where a resubmitted lead resumes once DGM re-approves it (dgm_initial_
+// approve), keyed by declined_from_status — only when the decline happened
+// AFTER pmt_review's own first look, so committees that already cleared it
+// aren't made to review it again. A first-ever submission (no decline yet),
+// or one declined by DGM/PMT themselves, has nothing to skip and falls
+// through to the normal pmt_review target — see the "dgm_initial_approve"
+// case, which is the only place this is consulted.
+const RESUME_AFTER_DECLINE: Record<string, string> = {
+  pmt_extended_review: "pmt_extended_review",
+  dgm_review: "dgm_review",
+  md_review: "md_review",
+};
+
+// Per resume target, who to notify/chat-add and what to call it — mirrors
+// the equivalent per-stage cases further down (dgm_initial_approve's normal
+// PMT path, pmt_escalate's PMT Extended path, etc.) so a skip-ahead
+// resubmission notifies the same audience that stage's own transition would.
+async function resumeNotification(
+  admin: AdminClient,
+  target: string
+): Promise<{ title: string; holders: string[]; roleAtAdd: string }> {
+  if (target === "pmt_extended_review") {
+    return { title: "Lead awaiting PMT Extended review", holders: await getOrgWideHolders(admin, { committee: "PMT Extended" }), roleAtAdd: "PMT Extended" };
+  }
+  if (target === "dgm_review") {
+    return { title: "Lead awaiting DGM (G3) review", holders: await getOrgWideHolders(admin, { committee: "G3" }), roleAtAdd: "G3" };
+  }
+  if (target === "md_review") {
+    return { title: "Lead awaiting MD approval", holders: await getOrgWideHolders(admin, { role: "md" }), roleAtAdd: "md" };
+  }
+  return { title: "Lead awaiting PMT review", holders: await getOrgWideHolders(admin, { committee: "PMT" }), roleAtAdd: "PMT" };
+}
+
 // (from_status -> action -> to_status) — the single source of truth for
 // valid transitions, checked before any authorization logic runs.
 const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
@@ -190,7 +223,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
   const leadRow = lead as LeadRow;
 
-  const expectedTo = LEAD_TRANSITIONS[leadRow.status]?.[action];
+  let expectedTo = LEAD_TRANSITIONS[leadRow.status]?.[action];
   if (!expectedTo) {
     return jsonRes(req, 400, {
       error: `"${action}" is not valid for a lead in "${leadRow.status}" status. It may have just been updated by someone else — refresh and try again.`,
@@ -383,19 +416,35 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       // (see "dgm_accept"/"dgm_decline" further down).
       case "dgm_initial_approve": {
         if (caller.role !== "dgm" || !isCallerOnTeam(caller, leadRow.team)) return forbidden("Only this lead's team DGM can act on this lead.");
-        extraFields = { handled_by_dgm_id: caller.id };
+        // Resubmitting after a decline resumes at whichever stage originally
+        // sent it back, skipping committees that already cleared it —
+        // e.g. a PMT-Extended decline goes straight back to PMT Extended,
+        // not through PMT again. A first-ever submission, or one declined by
+        // DGM/PMT themselves, has nothing to skip — normal pmt_review path.
+        const resumeTarget = leadRow.declined_from_status ? RESUME_AFTER_DECLINE[leadRow.declined_from_status] : undefined;
+        if (resumeTarget) expectedTo = resumeTarget;
+        // Consumed — a future decline (from wherever it happens next) sets
+        // this fresh; it shouldn't keep steering approvals after this point.
+        extraFields = { handled_by_dgm_id: caller.id, declined_from_status: null };
         // Chat opens here — the first time this lead clears DGM and reaches
         // PMT — and only here; never overwritten on a later pass through
         // this same case (e.g. a resubmission), so it keeps the timestamp
         // of when it first opened.
         if (!leadRow.chat_opened_at) extraFields.chat_opened_at = new Date().toISOString();
-        const pmtHolders = await getOrgWideHolders(adminClient, { committee: "PMT" });
-        notifyTargetIds = pmtHolders;
-        notifyTitle = "Lead awaiting PMT review";
+        const resumeInfo = await resumeNotification(adminClient, expectedTo);
+        notifyTargetIds = resumeInfo.holders;
+        notifyTitle = resumeInfo.title;
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was cleared by DGM. ${trimmedComment}`;
+        // The lead's own team DGM(s) get standing chat access from the
+        // moment the chat opens — not just whichever DGM happened to act
+        // on dgm_initial_approve — so every team DGM can view and take
+        // part in every one of their team's lead chats, matching PMT's
+        // standing access.
+        const teamDgmHolders = await getTeamDgmHolders(adminClient, leadRow.team);
         chatRosterSyncs.push(
           { userIds: [leadRow.person_responsible_id, leadRow.reviewer_id, leadRow.approval_authority_id], roleAtAdd: "named" },
-          { userIds: pmtHolders, roleAtAdd: "PMT" }
+          { userIds: resumeInfo.holders, roleAtAdd: resumeInfo.roleAtAdd },
+          { userIds: teamDgmHolders, roleAtAdd: "dgm" }
         );
         break;
       }

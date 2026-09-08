@@ -203,6 +203,84 @@ Deno.test("dgm_initial_approve - success moves to pmt_review", async () => {
   assertEquals((await res.json()).status, "pmt_review");
 });
 
+Deno.test("dgm_initial_approve - a first-ever submission (no prior decline) still goes to pmt_review", async () => {
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: TEAM }), lead: leadRow({ status: "dgm_initial_review", declined_from_status: null }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pmt_review");
+});
+
+Deno.test("dgm_initial_approve - a lead declined by DGM itself resubmits to pmt_review, nothing to skip", async () => {
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: TEAM }), lead: leadRow({ status: "dgm_initial_review", declined_from_status: "dgm_initial_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pmt_review");
+});
+
+Deno.test("dgm_initial_approve - a lead declined by PMT itself resubmits to pmt_review, nothing to skip", async () => {
+  const client = buildClient({ caller: callerRow({ role: "dgm", team: TEAM }), lead: leadRow({ status: "dgm_initial_review", declined_from_status: "pmt_review" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pmt_review");
+});
+
+Deno.test("dgm_initial_approve - a lead declined by PMT Extended resumes directly at pmt_extended_review, skipping PMT", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ role: "dgm", team: TEAM }), error: null }, // getCallerProfile
+      { data: [{ id: "pmtx-1" }], error: null }, // getOrgWideHolders(PMT Extended)
+    ],
+    leads: [
+      { data: leadRow({ status: "dgm_initial_review", declined_from_status: "pmt_extended_review" }), error: null },
+      { data: { id: LEAD_ID }, error: null },
+    ],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "pmt_extended_review");
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const leadUpdate = JSON.parse(log.filter((l) => l.table === "leads")[1].calls.find((c) => c[0] === "update")![1]);
+  assertEquals(leadUpdate.status, "pmt_extended_review");
+  // Consumed — doesn't keep steering a future decline/resubmission.
+  assertEquals(leadUpdate.declined_from_status, null);
+
+  const notifyRows = JSON.parse(log.filter((l) => l.table === "notifications")[0].calls.find((c) => c[0] === "insert")![1]);
+  assertEquals(notifyRows.map((r: { user_id: string }) => r.user_id), ["pmtx-1"]);
+});
+
+Deno.test("dgm_initial_approve - a lead declined by G3 (dgm_review) resumes directly at dgm_review, skipping PMT and PMT Extended", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ role: "dgm", team: TEAM }), error: null },
+      { data: [{ id: "g3-1" }], error: null }, // getOrgWideHolders(G3)
+    ],
+    leads: [
+      { data: leadRow({ status: "dgm_initial_review", declined_from_status: "dgm_review" }), error: null },
+      { data: { id: LEAD_ID }, error: null },
+    ],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "dgm_review");
+});
+
+Deno.test("dgm_initial_approve - a lead declined by MD resumes directly at md_review, skipping every committee", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ role: "dgm", team: TEAM }), error: null },
+      { data: [{ id: "md-1" }], error: null }, // getOrgWideHolders(md)
+    ],
+    leads: [
+      { data: leadRow({ status: "dgm_initial_review", declined_from_status: "md_review" }), error: null },
+      { data: { id: LEAD_ID }, error: null },
+    ],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).status, "md_review");
+});
+
 Deno.test("dgm_initial_approve - opens the chat and bulk-adds the named trio plus every PMT holder", async () => {
   const client = createFakeAdminClient({
     afc_users: [
@@ -228,6 +306,33 @@ Deno.test("dgm_initial_approve - opens the chat and bulk-adds the named trio plu
   const pmtRows = JSON.parse(participantCalls[1].calls.find((c) => c[0] === "upsert")![1]);
   assertEquals(pmtRows.map((r: { user_id: string; role_at_add: string }) => r.user_id), ["pmt-1", "pmt-2"]);
   assertEquals(pmtRows[0].role_at_add, "PMT");
+});
+
+Deno.test("dgm_initial_approve - also bulk-adds every one of the lead's team DGMs to the chat roster, not just the caller", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow({ role: "dgm", team: TEAM }), error: null }, // getCallerProfile
+      { data: [{ id: "pmt-1" }], error: null }, // getOrgWideHolders(PMT)
+      { data: [{ id: "team-dgm-1" }, { id: "team-dgm-2" }], error: null }, // getTeamDgmHolders' afc_users lookup
+    ],
+    afc_user_teams: [
+      { data: [{ team: TEAM }], error: null }, // getCallerProfile's own teams fetch
+      { data: [{ user_id: "team-dgm-1" }, { user_id: "team-dgm-2" }], error: null }, // getTeamDgmHolders' membership lookup
+    ],
+    leads: [
+      { data: leadRow({ status: "dgm_initial_review", chat_opened_at: null }), error: null },
+      { data: { id: LEAD_ID }, error: null },
+    ],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "dgm_initial_approve", comment: "looks good" }), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const participantCalls = log.filter((l) => l.table === "lead_chat_participants");
+  assertEquals(participantCalls.length, 3);
+  const dgmRows = JSON.parse(participantCalls[2].calls.find((c) => c[0] === "upsert")![1]);
+  assertEquals(dgmRows.map((r: { user_id: string }) => r.user_id).sort(), ["team-dgm-1", "team-dgm-2"]);
+  assertEquals(dgmRows[0].role_at_add, "dgm");
 });
 
 Deno.test("dgm_initial_approve - does not overwrite chat_opened_at once it's already set", async () => {

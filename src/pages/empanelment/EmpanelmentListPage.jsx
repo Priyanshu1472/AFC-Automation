@@ -69,7 +69,7 @@ function DetailField({ label, value }) {
   );
 }
 
-function BADetailModal({ ba, invStatus, onClose }) {
+function BADetailModal({ ba, invStatus, canReview, onReview, onClose }) {
   if (!ba) return null;
   return (
     <div className="bl-modal-backdrop" onClick={onClose}>
@@ -81,6 +81,7 @@ function BADetailModal({ ba, invStatus, onClose }) {
           </div>
           <div className="bl-modal-header-right">
             <StatusBadge status={invStatus} />
+            {canReview && <Button variant="primary" size="sm" onClick={onReview}>Review</Button>}
             <button className="bl-modal-close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
           </div>
         </div>
@@ -176,6 +177,7 @@ export default function EmpanelmentListPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedBA, setSelectedBA] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState(null);
+  const [selectedAppId, setSelectedAppId] = useState(null);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [teamFilter, setTeamFilter] = useState("all");
 
@@ -324,7 +326,7 @@ export default function EmpanelmentListPage() {
                       <tr
                         key={a.id}
                         className={a.ba_reg ? "bl-row-clickable" : undefined}
-                        onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedStatus(a.status); } : undefined}
+                        onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedStatus(a.status); setSelectedAppId(a.id); } : undefined}
                       >
                         <td><span className="bl-app-code">{a.application_code || "—"}</span></td>
                         <td className="bl-email" title={a.ba_email || ""}>{fmt(a.ba_email)}</td>
@@ -352,7 +354,13 @@ export default function EmpanelmentListPage() {
         </div>
       </div>
 
-      <BADetailModal ba={selectedBA} invStatus={selectedStatus} onClose={() => { setSelectedBA(null); setSelectedStatus(null); }} />
+      <BADetailModal
+        ba={selectedBA}
+        invStatus={selectedStatus}
+        canReview={canReview}
+        onReview={() => navigate(`/empanelment/${selectedAppId}`)}
+        onClose={() => { setSelectedBA(null); setSelectedStatus(null); setSelectedAppId(null); }}
+      />
 
       <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={() => setStatusFilter("all")}>
         <FilterField label="Status">

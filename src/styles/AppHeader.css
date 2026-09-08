@@ -1,13 +1,23 @@
+/* Desktop default: a fixed vertical rail down the left edge — everything
+   (brand, links, dropdowns, utilities) stacks top-to-bottom instead of
+   the old single horizontal row. Reverts to a compact top bar + off-canvas
+   drawer below the mobile breakpoint (see the media query at the bottom),
+   where a permanent full-height sidebar doesn't fit. */
 .app-header {
   display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-6);
-  border-bottom: 1px solid var(--border-subtle);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  border-right: 1px solid var(--border-subtle);
   background: var(--nav-bg);
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-nav-w);
   z-index: var(--z-sticky);
+  overflow-y: auto;
 }
 
 .app-header-brand {
@@ -15,6 +25,9 @@
   align-items: center;
   gap: var(--space-3);
   flex-shrink: 0;
+  padding-bottom: var(--space-4);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .app-header-brand:hover{
@@ -27,18 +40,22 @@
   border-radius: var(--radius-sm);
 }
 
-/* ── Nav (holds links + utilities; becomes the mobile drawer below) ─── */
+/* ── Nav (holds links + utilities; becomes the mobile off-canvas drawer
+   below) — a vertical stack filling the rail's remaining height. ─── */
 .app-header-nav {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   flex: 1;
-  margin-left: var(--space-6);
+  margin-left: 0;
   gap: var(--space-1);
+  min-height: 0;
 }
 
 .app-header-nav-links {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-1);
 }
 
@@ -66,12 +83,13 @@
 }
 
 /* Dashboard / Reports — sit right after the module links with the same
-   gap as every other nav item, so the whole row reads as one continuous
-   group; .app-header-nav-utilities' own margin-left: auto still pushes the
-   utility icons to the far right past this group. */
+   gap as every other nav item, so the whole rail reads as one continuous
+   stack; .app-header-nav-utilities' own margin-top: auto still pushes the
+   utility icons down to the bottom past this group. */
 .app-header-nav-dropdowns {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-1);
 }
 
@@ -110,6 +128,12 @@
 .nav-dropdown-chevron-open { transform: rotate(180deg); }
 
 .nav-dropdown-panel {
+  /* Desktop: portaled to document.body with position/top/left set inline
+     by NavDropdown.jsx (see its comment for why) — these absolute/top/left
+     values are the mobile-drawer fallback, used when it renders inline
+     instead (no portal there). z-index is bumped past --z-sticky since,
+     once portaled out of the rail's stacking context, it needs to clear
+     any sticky in-page headers on its own. */
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
@@ -119,7 +143,7 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   padding: var(--space-1);
-  z-index: var(--z-dropdown);
+  z-index: calc(var(--z-sticky) + 1);
   animation: slideIn var(--duration-fast) var(--ease-out);
 }
 
@@ -145,16 +169,24 @@
   background: var(--bg-surface-3);
 }
 
-/* Divider — only meaningful inside the mobile drawer, hidden on desktop */
 .app-header-nav-divider {
-  display: none;
+  display: block;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--space-3) 0;
 }
 
+/* Pinned to the bottom of the rail (margin-top: auto), wraps if the
+   sidebar is narrower than the icon row needs. */
 .app-header-nav-utilities {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
-  margin-left: auto;
+  margin-left: 0;
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
 }
 
 /* Desktop-only copy of the Knowledge Repository link, rendered next to the
@@ -199,6 +231,40 @@
   }
 }
 
+/* Mobile-only top-bar copy of Knowledge Repository + Notifications — see
+   .app-header-mobile-utilities below for why these live outside the
+   drawer. Hidden on desktop, where the sidebar's own copies (further up)
+   take over instead. */
+.app-header-mobile-utilities {
+  display: none;
+}
+
+.app-header-kr-link-mobiletop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--btn-secondary-bg);
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.app-header-kr-link-mobiletop:hover {
+  color: var(--text-primary);
+  background: var(--btn-secondary-bg-hover);
+  text-decoration: none;
+}
+
+.app-header-kr-link-mobiletop.active {
+  color: var(--text-brand);
+  border-color: var(--brand-500);
+  background: var(--bg-surface-3);
+  text-decoration: none;
+}
+
 .app-header-menu-btn {
   display: none;
   align-items: center;
@@ -234,12 +300,32 @@
 
 /* ── Mobile ──────────────────────────────────────────── */
 @media (max-width: 720px) {
+  /* Revert the desktop rail back to a compact top bar — a permanent
+     full-height sidebar doesn't fit a small screen, so .app-header-nav
+     below becomes an off-canvas drawer again instead. */
   .app-header {
+    position: sticky;
+    top: 0;
+    left: auto;
+    bottom: auto;
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-4);
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
     padding: var(--space-3) var(--space-4);
+    overflow: visible;
   }
 
   .app-header-logo {
     height: 50px;
+  }
+
+  .app-header-brand {
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-bottom: none;
   }
 
   /* Right-side sliding drawer — holds links, then utilities (theme,
@@ -296,17 +382,17 @@
     animation: none;
   }
 
-  .app-header-nav-divider {
-    display: block;
-    height: 1px;
-    background: var(--border-subtle);
-    margin: var(--space-3) 0;
-  }
-
+  /* Undoes the desktop rail's bottom-pin (margin-top: auto) — the mobile
+     drawer already pins Profile/Sign out to the bottom via their own
+     margin-top: auto further down; keeping both would fight over the same
+     free space and reshuffle the drawer's grouping. */
   .app-header-nav-utilities {
     align-items: center;
     gap: var(--space-2);
     margin-left: 0;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
   }
 
   /* Profile + Sign out already show directly (see below), so UserMenu's
@@ -321,6 +407,20 @@
      mobile spot (see .app-header-kr-link-mobile). */
   .app-header-kr-link-desktop {
     display: none;
+  }
+
+  /* Same reasoning — the mobile top bar now carries its own always-visible
+     Notifications button (see .app-header-mobile-utilities), so the copy
+     buried inside the drawer would just be a redundant second path to it. */
+  .app-header-notif-desktop-only {
+    display: none;
+  }
+
+  .app-header-mobile-utilities {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: auto;
   }
 
   .app-header-nav-profile-mobile {
@@ -453,10 +553,10 @@
 
   .app-header-menu-btn {
     display: inline-flex;
-    /* .app-header-nav is position:fixed on mobile (removed from normal
-       flow), so without this the brand and hamburger — the only two
-       remaining flow children of .app-header — sit flush together on the
-       left instead of spanning the header. */
-    margin-left: auto;
+    /* No margin-left: auto here — .app-header-mobile-utilities (the KR +
+       notifications icons) already carries it, pushing that whole group,
+       hamburger included, to the right as one unit. A second auto margin
+       on this button pulled it away from those icons instead of sitting
+       close to them, leaving an odd gap. */
   }
 }

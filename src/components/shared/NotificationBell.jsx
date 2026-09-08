@@ -7,7 +7,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from "../../lib/notifications";
-import { BellIcon } from "../icons";
+import { BellIcon, CloseIcon } from "../icons";
 import "../../styles/NotificationBell.css";
 
 function timeAgo(isoString) {
@@ -91,11 +91,21 @@ export default function NotificationBell() {
         <div className="notif-bell-panel" role="menu">
           <div className="notif-bell-panel-header">
             <span className="notif-bell-panel-title">Notifications</span>
-            {unreadCount > 0 && (
-              <button type="button" className="notif-bell-mark-all" onClick={handleMarkAllRead}>
-                Mark all read
+            <span className="notif-bell-panel-header-actions">
+              {unreadCount > 0 && (
+                <button type="button" className="notif-bell-mark-all" onClick={handleMarkAllRead}>
+                  Mark all read
+                </button>
+              )}
+              <button
+                type="button"
+                className="notif-bell-close"
+                onClick={() => setOpen(false)}
+                aria-label="Close notifications"
+              >
+                <CloseIcon />
               </button>
-            )}
+            </span>
           </div>
 
           <div className="notif-bell-list">
