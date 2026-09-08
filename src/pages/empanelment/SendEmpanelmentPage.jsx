@@ -276,7 +276,6 @@ export default function SendEmpanelmentPage() {
                         onChange={(val) => setForm((p) => ({ ...p, advisorId: val }))}
                         placeholder="Select the advising DGM or AGM"
                       />
-                      <span className="sef-field-hint">The invitation email goes out &ldquo;as advised by&rdquo; this person, and they own the DGM review stage.</span>
                     </div>
                   )}
 
