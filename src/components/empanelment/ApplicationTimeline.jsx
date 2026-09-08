@@ -108,7 +108,7 @@ export function TimelineAccordion({ logs, showActorName = true }) {
                   {showActorName ? (log.actor?.full_name || "Business Partner") : roleLabel}
                   {showActorName && <span className="ar-acc-role"> ({roleLabel})</span>}
                 </span>
-                <span className="ar-acc-action">{log.action.replace(/_/g, " ").toUpperCase()}</span>
+                <span className="ar-acc-action">{log.action.replace(/_/g, " ").toUpperCase().replace(/^BA /, "BP ")}</span>
               </div>
               <div className="ar-acc-right">
                 <span className="ar-acc-time">{time}</span>
