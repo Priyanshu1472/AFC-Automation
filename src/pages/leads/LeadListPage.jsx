@@ -151,9 +151,9 @@ export default function LeadListPage() {
 
   // The tab's own base set, all drawn from the one RLS-permitted `leads`
   // fetch — no separate query per tab:
-  //  - "mine": only leads the viewer created or is Person Responsible on
-  //    (see isMyLead) — narrowly personal, not Reviewer/Approval Authority/
-  //    team ownership.
+  //  - "mine": only leads the viewer is Person Responsible, Reviewer, or
+  //    Approval Authority on (see isMyLead) — a lead they merely created
+  //    (and aren't otherwise named on) stays on "team", not here.
   //  - "team": every lead going on in the viewer's own team(s) (see
   //    isTeamLead) — an org-wide role's "team" is every team, so this is
   //    also their org-wide browse view.
