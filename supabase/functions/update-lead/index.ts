@@ -183,7 +183,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "edited", fromStatus, fromStatus, null);
 
     // Only notify a role's newly-assigned person — not every save, and not
-    // someone who was already in that role before this edit.
+    // someone who was already in that role before this edit. action_required
+    // (not "info") so the appointment shows on their Home page too, not just
+    // the notification bell — see fetchPendingActionNotifications.
     const reassignments: Array<{ roleLabel: string; oldValue: string | null; newValue: string }> = [
       { roleLabel: "Person Responsible", oldValue: lead.person_responsible_id as string | null, newValue: input.person_responsible_id },
       { roleLabel: "Reviewer", oldValue: lead.reviewer_id as string | null, newValue: input.reviewer_id },
@@ -194,7 +196,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         await notifyUser(adminClient, newValue, {
           title: `You've been assigned as ${roleLabel}`,
           sub_text: `${lead.lead_number} — "${lead.title}" has named you as ${roleLabel}.`,
-          type: "info",
+          type: "action_required",
           link: `/leads/${lead.id}`,
         });
       }

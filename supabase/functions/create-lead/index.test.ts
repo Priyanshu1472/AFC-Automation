@@ -235,7 +235,7 @@ Deno.test("handleRequest - notifies Person Responsible, Reviewer, and Approval A
   const prNotify = notifyInserts.find((n: { user_id: string }) => n.user_id === PR_ID);
   assertEquals(prNotify.type, "action_required");
   const reviewerNotify = notifyInserts.find((n: { user_id: string }) => n.user_id === REVIEWER_ID);
-  assertEquals(reviewerNotify.type, "info");
+  assertEquals(reviewerNotify.type, "action_required");
   assertEquals(reviewerNotify.link, "/leads/new-lead-1");
 });
 
