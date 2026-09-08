@@ -1,9 +1,39 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLogin } from "../../hooks/useLogin";
-import { MailIcon, LockIcon, ArrowRightIcon, ShowHideButton } from "../../components/icons";
+import { MailIcon, LockIcon, ArrowRightIcon, ShowHideButton, BookIcon } from "../../components/icons";
 import logo from "../../images/Logo.png";
 import "../../styles/Login.css";
+
+// Small line icons for the module chips — kept local since they're only
+// used here, matching the stroke weight/size of the shared icon set.
+function LeadsIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22l-4-9-9-4Z" />
+    </svg>
+  );
+}
+
+function EmpanelmentIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 12l2 2 4-4" />
+      <path d="M12 3c3 0 5 1.5 8 1v9c0 4.5-3.5 6.5-8 8-4.5-1.5-8-3.5-8-8V4c3 0.5 5-1 8-1Z" />
+    </svg>
+  );
+}
+
+function ProposalsIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2Z" />
+      <path d="M14 2v6h6" />
+      <path d="M9 13h6M9 17h6" />
+    </svg>
+  );
+}
 
 function ChevronDownIcon({ open }) {
   return (
@@ -23,15 +53,67 @@ function UserCircleIcon() {
   );
 }
 
-// A slim decorative flow of curved lines behind the hero copy — purely
-// ornamental, so it's inline SVG rather than a raster asset.
-function HeroWaves() {
+// Two translucent diagonal bands crossing the hero — purely ornamental,
+// echoes the angled crop used across the brand's marketing material. Pure
+// CSS (see .login-hero-band), no raster asset — just two skewed rectangles.
+function HeroBands() {
   return (
-    <svg className="login-hero-waves" viewBox="0 0 800 900" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M-50,200 C150,120 300,280 500,180 S780,60 900,160" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.28" />
-      <path d="M-50,420 C180,340 340,520 560,420 S820,300 900,400" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.18" />
-      <path d="M-50,650 C160,580 360,760 540,650 S800,540 900,630" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.14" />
+    <div className="login-hero-bands" aria-hidden="true">
+      <span className="login-hero-band login-hero-band-1" />
+      <span className="login-hero-band login-hero-band-2" />
+    </div>
+  );
+}
+
+// Large thin ring, off-canvas center-right — ambient depth, echoing the
+// circular seal in the brand's own logo without reproducing it.
+function HeroRing() {
+  return <span className="login-hero-ring" aria-hidden="true" />;
+}
+
+// "FINANCE / FARMERS / GROWTH" — a vertical label stack, faint against the
+// dark hero background.
+function HeroSideLabel() {
+  return (
+    <div className="login-hero-side-label" aria-hidden="true">
+      <span>FINANCE</span>
+      <span>FARMERS</span>
+      <span>GROWTH</span>
+    </div>
+  );
+}
+
+// A single faint upward growth line, tracing behind the hero copy — the
+// page's one visual metaphor (rural finance -> growth), kept as a plain
+// inline stroke rather than a literal chart so it reads as texture, not UI.
+function HeroGrowthLine() {
+  return (
+    <svg className="login-hero-growth-line" viewBox="0 0 640 360" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M-20,320 C120,300 160,220 260,230 C350,238 360,140 460,120 C520,108 560,60 680,20" fill="none" stroke="currentColor" strokeWidth="2" />
+      <circle cx="680" cy="20" r="5" fill="currentColor" />
     </svg>
+  );
+}
+
+// The app's actual modules, not marketing copy — grounds the hero in what
+// the staff account genuinely gives access to.
+const MODULES = [
+  { label: "Leads", icon: LeadsIcon },
+  { label: "Empanelment", icon: EmpanelmentIcon },
+  { label: "Knowledge Repository", icon: BookIcon },
+  { label: "Proposals", icon: ProposalsIcon },
+];
+
+function ModuleChips() {
+  return (
+    <ul className="login-hero-modules">
+      {MODULES.map(({ label, icon: Icon }) => (
+        <li key={label} className="login-hero-module-chip">
+          <Icon />
+          <span>{label}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -58,7 +140,7 @@ function BusinessAssociateMenu() {
   return (
     <div className="login-ba-menu" ref={ref}>
       <button type="button" className="login-ba-trigger" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu">
-        Business Associate <ChevronDownIcon open={open} />
+        Business Partner <ChevronDownIcon open={open} />
       </button>
       {open && (
         <div className="login-ba-dropdown" role="menu">
@@ -118,9 +200,12 @@ export default function LoginPage() {
 
       <div className="login-main">
         <section className="login-hero">
-          <img src={logo} alt="" aria-hidden="true" className="login-hero-watermark" />
-          <HeroWaves />
+          <HeroRing />
+          <HeroBands />
+          <HeroGrowthLine />
+          <HeroSideLabel />
           <div className="login-hero-content">
+            <span className="login-hero-badge">Agricultural Finance Corporation · Since 1968</span>
             <h1 className="login-hero-title">
               Welcome <span className="login-hero-title-accent">back!</span>
             </h1>
@@ -128,6 +213,7 @@ export default function LoginPage() {
             <p className="login-hero-tagline">
               Sign in to access your AFC staff account and continue your work seamlessly.
             </p>
+            <ModuleChips />
           </div>
         </section>
 
@@ -197,6 +283,11 @@ export default function LoginPage() {
                   )}
                 </button>
               </form>
+
+              <div className="login-secure-note">
+                <LockIcon />
+                <span>Role-based access — every sign-in is scoped to your team and permissions.</span>
+              </div>
             </div>
 
             <p className="login-footer-v2">© {new Date().getFullYear()} AFC India Limited. All rights reserved.</p>

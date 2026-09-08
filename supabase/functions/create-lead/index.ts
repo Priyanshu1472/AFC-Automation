@@ -1,5 +1,5 @@
 // supabase/functions/create-lead/index.ts
-// JWT must be ON. Creates a lead (RFP or EOI; In-House, BA Source, or Suo
+// JWT must be ON. Creates a lead (RFP or EOI; In-House, BP Source, or Suo
 // Moto) directly into `pa_review` (the real intake form has one "Save Lead"
 // action, no separate draft/submit step). Mirrors submit-ba-form's
 // multipart handling for the optional RFP/Tender document upload, and
@@ -89,12 +89,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const assignedBaId = get("assigned_ba_id") || null;
   if (input.source === "ba" && !assignedBaId) {
-    return jsonRes(req, 400, { error: "Select a Business Associate for a BA Source lead." });
+    return jsonRes(req, 400, { error: "Select a Business Partner for a BP Source lead." });
   }
-  // Name of BA is mandatory for a Suo Moto lead too, per product decision —
+  // Name of BP is mandatory for a Suo Moto lead too, per product decision —
   // unlike In-House, where it's optional.
   if (input.source === "suo_moto" && !assignedBaId) {
-    return jsonRes(req, 400, { error: "Select a Business Associate for a Suo Moto lead." });
+    return jsonRes(req, 400, { error: "Select a Business Partner for a Suo Moto lead." });
   }
 
   try {
@@ -196,6 +196,28 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         title: "A lead has been assigned to you",
         sub_text: `${lead.lead_number} — "${input.title.trim()}" is awaiting your Accept/Drop decision.`,
         type: "action_required",
+        link: `/leads/${lead.id}`,
+      });
+    }
+
+    // Reviewer/Approval Authority aren't being asked to act yet (that only
+    // comes once the lead clears PA/DGM review) — just letting them know
+    // they've been named on it, same as PR's notice above minus the
+    // Accept/Drop framing.
+    if (input.reviewer_id !== caller.id) {
+      await notifyUser(adminClient, input.reviewer_id, {
+        title: "You've been assigned as Reviewer",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" has named you as Reviewer.`,
+        type: "info",
+        link: `/leads/${lead.id}`,
+      });
+    }
+
+    if (input.approval_authority_id !== caller.id) {
+      await notifyUser(adminClient, input.approval_authority_id, {
+        title: "You've been assigned as Approval Authority",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" has named you as Approval Authority.`,
+        type: "info",
         link: `/leads/${lead.id}`,
       });
     }

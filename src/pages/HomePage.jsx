@@ -58,7 +58,7 @@ function ChevronRightIcon() {
 }
 
 // RLS (can_view_empanelment_application) scopes this to exactly the one
-// application tied to this BA's account via ba_user_id — no client filter
+// application tied to this BP's account via ba_user_id — no client filter
 // needed.
 function BaStatusCard() {
   const [app, setApp] = useState(null);

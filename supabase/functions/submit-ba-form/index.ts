@@ -1,5 +1,5 @@
 // supabase/functions/submit-ba-form/index.ts
-// JWT verification must be OFF for this function (public, BA-facing).
+// JWT verification must be OFF for this function (public, BP-facing).
 // Security: anon key check + rate limiting + server-side field validation +
 // PDF magic-byte file validation. Uploads go to the private `ba-documents`
 // bucket — only the storage path is stored, never a public URL (see
@@ -267,7 +267,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       throw new Error("Failed to save registration. Please try again.");
     }
 
-    // No actor sits between "BA submitted" and "PO reviews" — go straight to
+    // No actor sits between "BP submitted" and "PO reviews" — go straight to
     // po_review, the status the PO's queue actually filters on.
     await adminClient
       .from("empanelment_applications")
@@ -279,7 +279,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       actor_id: null,
       actor_role: "ba",
       action: "ba_filled",
-      comment: `BA form submitted by ${get("orgName")} (${email}). Documents uploaded: ${uploadedDocs.length}.`,
+      comment: `BP form submitted by ${get("orgName")} (${email}). Documents uploaded: ${uploadedDocs.length}.`,
     });
 
     await notifyUser(adminClient, application.project_officer_id, {

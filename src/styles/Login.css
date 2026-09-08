@@ -326,6 +326,9 @@
   padding: var(--space-5) var(--space-10);
   position: relative;
   z-index: 5;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(5, 8, 10, 0.4);
+  backdrop-filter: blur(8px);
 }
 
 .login-topbar-brand {
@@ -418,41 +421,127 @@
   isolation: isolate;
 }
 
+/* No photo — an entirely CSS-built backdrop: a deep green-to-black base,
+   two soft glowing "orbs" for depth, and a fine dot grid for texture
+   (faded out toward the edges via mask so it doesn't compete with the
+   copy/card). Layered back-to-front in one background shorthand. */
 .login-hero::before {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -2;
-  background:
-    radial-gradient(120% 90% at 10% 10%, rgba(34, 197, 94, 0.16), transparent 55%),
-    radial-gradient(90% 70% at 100% 100%, rgba(34, 197, 94, 0.08), transparent 60%),
-    var(--lg-bg);
-}
-
-.login-hero-watermark {
-  position: absolute;
-  right: -70px;
-  bottom: -50px;
-  width: 440px;
-  height: 440px;
-  opacity: 0.07;
   z-index: -1;
-  pointer-events: none;
-  filter: grayscale(1) brightness(2.4);
+  background:
+    radial-gradient(38% 55% at 14% 18%, rgba(74, 222, 128, 0.22), transparent 70%),
+    radial-gradient(45% 60% at 88% 82%, rgba(22, 163, 74, 0.16), transparent 72%),
+    linear-gradient(160deg, #071a12 0%, var(--lg-bg) 60%, #030503 100%);
 }
 
-.login-hero-waves {
+.login-hero::after {
+  content: "";
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  z-index: -1;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(80% 80% at 22% 30%, #000 15%, transparent 72%);
+  -webkit-mask-image: radial-gradient(80% 80% at 22% 30%, #000 15%, transparent 72%);
+}
+
+/* Two skewed translucent bands crossing the hero, right of the copy —
+   purely decorative, echoes the angled crop used across the brand's own
+   marketing material. */
+.login-hero-bands {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.login-hero-band {
+  position: absolute;
+  top: -10%;
+  height: 130%;
+  width: 14%;
+  background: rgba(255, 255, 255, 0.03);
+  transform: skewX(-12deg);
+}
+
+.login-hero-band-1 { left: 46%; }
+.login-hero-band-2 { left: 62%; width: 8%; background: rgba(255, 255, 255, 0.018); }
+
+/* Large thin ring, echoing the circular seal in the brand's own logo. */
+.login-hero-ring {
+  position: absolute;
+  top: 50%;
+  right: 6%;
+  width: 460px;
+  height: 460px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transform: translateY(-50%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.login-hero-ring::before {
+  content: "";
+  position: absolute;
+  inset: 56px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Single faint upward stroke tracing behind the hero copy — the page's one
+   visual metaphor (rural finance -> growth), not a literal chart. */
+.login-hero-growth-line {
+  position: absolute;
+  right: -4%;
+  bottom: 6%;
+  width: 58%;
+  height: 46%;
   z-index: -1;
   color: var(--lg-accent);
+  opacity: 0.22;
   pointer-events: none;
+}
+
+/* "FINANCE / FARMERS / GROWTH" — vertical label stack, faint against the
+   dark hero background. */
+.login-hero-side-label {
+  position: absolute;
+  top: 34%;
+  right: 9%;
+  z-index: -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.login-hero-side-label span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: rgba(255, 255, 255, 0.22);
 }
 
 .login-hero-content {
   max-width: 540px;
+}
+
+.login-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  background: rgba(74, 222, 128, 0.08);
+  color: #86efac;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-5);
 }
 
 .login-hero-title {
@@ -487,6 +576,41 @@
   max-width: 38ch;
 }
 
+/* What a staff account actually gives access to — the app's real modules,
+   not marketing copy. */
+.login-hero-modules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  padding: 0;
+  list-style: none;
+}
+
+.login-hero-module-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: border-color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out);
+}
+
+.login-hero-module-chip:hover {
+  border-color: rgba(74, 222, 128, 0.35);
+  background: rgba(74, 222, 128, 0.06);
+}
+
+.login-hero-module-chip svg {
+  color: var(--lg-accent);
+  flex-shrink: 0;
+}
+
 /* ── Panel (right) ───────────────────────────────────────── */
 .login-panel {
   display: flex;
@@ -506,6 +630,7 @@
 }
 
 .login-card-v2 {
+  position: relative;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: var(--radius-xl);
@@ -516,6 +641,19 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
+  overflow: hidden;
+}
+
+/* Slim brand-accent bar along the card's top edge — a small premium touch
+   distinguishing this card from a plain bordered box. */
+.login-card-v2::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #4ade80, var(--lg-accent-2), transparent);
 }
 
 .login-card-icon {
@@ -678,6 +816,25 @@
   box-shadow: none;
 }
 
+.login-secure-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  width: 100%;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.login-secure-note svg {
+  flex-shrink: 0;
+  color: rgba(74, 222, 128, 0.55);
+}
+
 .login-footer-v2 {
   text-align: center;
   font-size: var(--text-xs);
@@ -708,7 +865,9 @@
 @media (max-width: 560px) {
   .login-topbar { padding: var(--space-4) var(--space-5); flex-wrap: wrap; gap: var(--space-3); }
   .login-topbar-name { display: none; }
-  .login-hero-watermark { display: none; }
+  .login-hero-ring,
+  .login-hero-side-label,
+  .login-hero-growth-line { display: none; }
   .login-card-v2 { padding: var(--space-8) var(--space-5); }
 }
 

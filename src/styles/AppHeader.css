@@ -189,80 +189,13 @@
   border-top: 1px solid var(--border-subtle);
 }
 
-/* Desktop-only copy of the Knowledge Repository link, rendered next to the
-   theme toggle instead of in the left-hand nav-links list — an icon-only
-   square button matching ThemeToggle/NotificationBell so it reads as part
-   of that utility group rather than a stray text pill. The mobile drawer
-   keeps its own full-text copy (see .app-header-kr-link-mobile) because
-   this one is hidden below the 720px breakpoint. */
-.app-header-kr-link-desktop {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-default);
-  background: var(--btn-secondary-bg);
-  color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
-}
-
-.app-header-kr-link-desktop:hover {
-  color: var(--text-primary);
-  background: var(--btn-secondary-bg-hover);
-  text-decoration: none;
-}
-
-.app-header-kr-link-desktop.active {
-  color: var(--text-brand);
-  border-color: var(--brand-500);
-  background: var(--bg-surface-3);
-  text-decoration: none;
-}
-
-/* The nav-links list doubles as the desktop top nav and the mobile drawer's
-   link list — the mobile-drawer copy of Knowledge Repository only makes
-   sense in the latter, so it's hidden above the mobile breakpoint (where
-   the desktop copy above takes over instead). */
-@media (min-width: 721px) {
-  .app-header-kr-link-mobile {
-    display: none;
-  }
-}
-
-/* Mobile-only top-bar copy of Knowledge Repository + Notifications — see
-   .app-header-mobile-utilities below for why these live outside the
-   drawer. Hidden on desktop, where the sidebar's own copies (further up)
-   take over instead. */
+/* Mobile-only top-bar copy of Notifications — see .app-header-mobile-
+   utilities below for why it lives outside the drawer. Hidden on desktop,
+   where the sidebar's own copy (further up) takes over instead. Knowledge
+   Repository is a plain entry in .app-header-nav-links now (same as Home/
+   Empanelment/etc.), not a special icon button, so it needs no copy here. */
 .app-header-mobile-utilities {
   display: none;
-}
-
-.app-header-kr-link-mobiletop {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-default);
-  background: var(--btn-secondary-bg);
-  color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
-}
-
-.app-header-kr-link-mobiletop:hover {
-  color: var(--text-primary);
-  background: var(--btn-secondary-bg-hover);
-  text-decoration: none;
-}
-
-.app-header-kr-link-mobiletop.active {
-  color: var(--text-brand);
-  border-color: var(--brand-500);
-  background: var(--bg-surface-3);
-  text-decoration: none;
 }
 
 .app-header-menu-btn {
@@ -402,14 +335,7 @@
     display: none;
   }
 
-  /* Knowledge Repository's desktop copy (utilities row) is redundant here —
-     the drawer already shows it in the nav-links list, in its normal
-     mobile spot (see .app-header-kr-link-mobile). */
-  .app-header-kr-link-desktop {
-    display: none;
-  }
-
-  /* Same reasoning — the mobile top bar now carries its own always-visible
+  /* The mobile top bar carries its own always-visible
      Notifications button (see .app-header-mobile-utilities), so the copy
      buried inside the drawer would just be a redundant second path to it. */
   .app-header-notif-desktop-only {

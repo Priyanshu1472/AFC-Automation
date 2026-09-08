@@ -307,12 +307,12 @@ export default function LeadApprovalNoteForm() {
 
                 <Input
                   label="Proposed Implementation Arrangement"
-                  value={lead.assigned_ba_id ? "Business Associate" : "In-house"}
+                  value={lead.assigned_ba_id ? "Business Partner" : "In-house"}
                   disabled
-                  hint="Determined by whether a Business Associate is assigned to this lead."
+                  hint="Determined by whether a Business Partner is assigned to this lead."
                 />
                 {lead.assigned_ba_id && (
-                  <Input label="Name of BA" value={baOrgName || "—"} disabled />
+                  <Input label="Name of BP" value={baOrgName || "—"} disabled />
                 )}
 
                 <div className="field">

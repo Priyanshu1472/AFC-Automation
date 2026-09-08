@@ -14,6 +14,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
+import { notifyUser } from "../_shared/notify.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
   validateApprovalAuthority, validateBusinessAssociate, clampText,
@@ -95,7 +96,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // are always what gets written back.
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, status, created_by, person_responsible_id, lead_number, documents, title, portal_name, bid_number")
+      .select("id, status, created_by, person_responsible_id, reviewer_id, approval_authority_id, lead_number, documents, title, portal_name, bid_number")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -180,6 +181,24 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     }
 
     await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "edited", fromStatus, fromStatus, null);
+
+    // Only notify a role's newly-assigned person — not every save, and not
+    // someone who was already in that role before this edit.
+    const reassignments: Array<{ roleLabel: string; oldValue: string | null; newValue: string }> = [
+      { roleLabel: "Person Responsible", oldValue: lead.person_responsible_id as string | null, newValue: input.person_responsible_id },
+      { roleLabel: "Reviewer", oldValue: lead.reviewer_id as string | null, newValue: input.reviewer_id },
+      { roleLabel: "Approval Authority", oldValue: lead.approval_authority_id as string | null, newValue: input.approval_authority_id },
+    ];
+    for (const { roleLabel, oldValue, newValue } of reassignments) {
+      if (newValue && newValue !== oldValue && newValue !== caller.id) {
+        await notifyUser(adminClient, newValue, {
+          title: `You've been assigned as ${roleLabel}`,
+          sub_text: `${lead.lead_number} — "${lead.title}" has named you as ${roleLabel}.`,
+          type: "info",
+          link: `/leads/${lead.id}`,
+        });
+      }
+    }
 
     return jsonRes(req, 200, { success: true, id: lead.id, lead_number: lead.lead_number, status: fromStatus });
   } catch (err) {

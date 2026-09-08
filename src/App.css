@@ -954,17 +954,48 @@ select.input {
   z-index: var(--z-toast);
   display: flex;
   flex-direction: column-reverse;
-  gap: var(--space-2);
-  width: min(360px, calc(100vw - var(--space-8)));
+  gap: var(--space-3);
+  width: min(400px, calc(100vw - var(--space-8)));
   pointer-events: none;
 }
 
 .toast {
   position: relative;
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
+  align-items: center;
+  /* A fully opaque surface with a bold accent stripe so a confirmation reads
+     clearly even over a busy page (the inline .alert look was too faint once
+     it floated free of the page flow). */
+  padding: var(--space-4) var(--space-5);
+  border-width: 1px;
+  border-left-width: 5px;
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.45;
+  box-shadow: var(--shadow-xl);
   pointer-events: auto;
-  animation: slideInUp var(--duration-normal) var(--ease-out);
+  animation: toastPop var(--duration-normal) var(--ease-out);
+}
+
+/* Opaque variant tint (both mix operands are opaque, so the page never shows
+   through) plus a solid accent stripe down the left edge. */
+.toast.alert-success { background: color-mix(in srgb, var(--success-dark) 12%, var(--card-bg)); border-left-color: var(--success-dark); }
+.toast.alert-warning { background: color-mix(in srgb, var(--warning-dark) 12%, var(--card-bg)); border-left-color: var(--warning-dark); }
+.toast.alert-danger  { background: color-mix(in srgb, var(--danger-dark)  12%, var(--card-bg)); border-left-color: var(--danger-dark); }
+.toast.alert-info    { background: color-mix(in srgb, var(--info-dark)    12%, var(--card-bg)); border-left-color: var(--info-dark); }
+
+.toast .alert-icon {
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes toastPop {
+  from { transform: translateY(20px) scale(0.96); opacity: 0; }
+  to   { transform: translateY(0) scale(1);       opacity: 1; }
 }
 
 /* Countdown bar along the bottom edge — shrinks from 100% to 0% width over

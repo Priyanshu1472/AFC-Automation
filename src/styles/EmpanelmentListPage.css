@@ -69,7 +69,7 @@
 /* ── Status badge (table) — fixed width so "Sent" and "CFO/CS Review"
    render the same size ────────────────────────────────────────── */
 .bl-status-badge {
-  min-width: 130px;
+  min-width: 116px;
   justify-content: center;
 }
 
@@ -137,11 +137,32 @@
 }
 
 .bl-table {
-  min-width: 800px;
+  min-width: 720px;
 }
 
 .bl-row-clickable {
   cursor: pointer;
+}
+
+/* ── Pinned Actions column ───────────────────────────────────
+   Keep the last column (Review button) stuck to the right edge so
+   it stays visible without horizontally scrolling the table on
+   narrow viewports. */
+.bl-table thead th:last-child,
+.bl-table tbody td:last-child {
+  position: sticky;
+  right: 0;
+  background: var(--card-bg);
+  box-shadow: -1px 0 0 var(--border-subtle);
+}
+
+.bl-table thead th:last-child {
+  background: var(--table-header-bg);
+  z-index: 2;
+}
+
+.bl-table tbody tr:hover td:last-child {
+  background: var(--table-row-hover);
 }
 
 /* ── Table cell content ──────────────────────────────────── */
@@ -223,11 +244,30 @@
   font-size: var(--text-sm);
 }
 
-/* ── Record count ────────────────────────────────────────── */
+/* ── Record count + pagination ───────────────────────────── */
+.bl-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.bl-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.bl-pagination-page {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .bl-record-count {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
-  text-align: right;
 }
 
 /* ── Detail Modal ────────────────────────────────────────── */

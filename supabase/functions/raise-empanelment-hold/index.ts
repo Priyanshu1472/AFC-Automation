@@ -1,21 +1,30 @@
 // supabase/functions/raise-empanelment-hold/index.ts
 // JWT must be ON. Caller must be the assigned PO/DGM, or MD, acting at the
 // stage where they're the active reviewer. Puts the application on hold,
-// records one compliance_flags row per flagged field, and emails the BA a
+// records one compliance_flags row per flagged field, and emails the BP a
 // link + reminder of their application code to submit a correction.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
+import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 import { isValidFieldKey, labelForFieldKey } from "../_shared/empanelmentFields.ts";
 import { notifyUser } from "../_shared/notify.ts";
 
 const ALLOWED_STATUS_BY_ROLE: Record<string, string[]> = {
   project_officer: ["po_review", "po_final_review"],
+  // A team with no active Project Officer sends the empanelment invite to a
+  // Project Assistant instead (see send-empanelment-invite) — whichever role
+  // ends up assigned as project_officer_id can act at the PO stages.
+  project_assistant: ["po_review", "po_final_review"],
+  // The dgm_review stage belongs to the assigned advising authority, which
+  // may be a DGM or an AGM (see send-empanelment-invite) — dgm_id holds it.
   dgm: ["dgm_review"],
+  agm: ["dgm_review"],
   md: ["md_review"],
 };
+const PO_REVIEWER_ROLES = ["project_officer", "project_assistant"];
+const ADVISOR_ROLES = ["dgm", "agm"];
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
@@ -26,7 +35,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   const caller = callerResult.caller;
 
   if (!(caller.role in ALLOWED_STATUS_BY_ROLE)) {
-    return jsonRes(req, 403, { error: "Only a Project Officer, DGM, or MD can raise a compliance hold." });
+    return jsonRes(req, 403, { error: "Only a Project Officer, DGM, AGM, or MD can raise a compliance hold." });
   }
 
   let body: Record<string, unknown>;
@@ -52,8 +61,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
 
-  if (caller.role === "project_officer" && caller.id !== app.project_officer_id) return jsonRes(req, 403, { error: "Only the assigned Project Officer can raise a hold on this application." });
-  if (caller.role === "dgm" && !isCallerOnTeam(caller, app.team)) return jsonRes(req, 403, { error: "Only the team's DGM can raise a hold on this application." });
+  if (PO_REVIEWER_ROLES.includes(caller.role) && caller.id !== app.project_officer_id) return jsonRes(req, 403, { error: "Only the assigned Project Officer can raise a hold on this application." });
+  if (ADVISOR_ROLES.includes(caller.role) && caller.id !== app.dgm_id) return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can raise a hold on it." });
 
   const allowedStatuses = ALLOWED_STATUS_BY_ROLE[caller.role];
   if (!allowedStatuses.includes(app.status)) {
@@ -107,15 +116,15 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     });
 
     // Let the rest of the pipeline know review is paused — informational,
-    // not action_required (the next step is the BA's, via their own
+    // not action_required (the next step is the BP's, via their own
     // public correction form, not anything in-app for staff).
     const holdPayload = {
       title: "Compliance hold raised",
-      sub_text: `${flagRows.length} item(s) flagged on ${orgName}'s application. Review is paused until the BA submits a correction.`,
+      sub_text: `${flagRows.length} item(s) flagged on ${orgName}'s application. Review is paused until the BP submits a correction.`,
       type: "info",
       link: `/empanelment/${application_id}`,
     };
-    const holdRecipients = [app.sent_by, caller.role !== "project_officer" ? app.project_officer_id : null, caller.role !== "dgm" ? app.dgm_id : null];
+    const holdRecipients = [app.sent_by, !PO_REVIEWER_ROLES.includes(caller.role) ? app.project_officer_id : null, !ADVISOR_ROLES.includes(caller.role) ? app.dgm_id : null];
     await Promise.all(holdRecipients.map((id) => notifyUser(adminClient, id, holdPayload)));
 
     return jsonRes(req, 200, { success: true, status: "on_hold", flags_count: flagRows.length, email_sent: emailSent });

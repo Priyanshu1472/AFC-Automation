@@ -26,7 +26,7 @@ const ALL_STATUSES = Object.keys(STATUS_MAP);
 // PIPELINE (also ends at its own terminal "accepted").
 const PIPELINE = ["pa_review", "dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review", "md_approved"];
 const TERMINAL = ["md_approved", "md_declined", "pa_dropped"];
-const SOURCE_LABELS = { in_house: "In House", ba: "BA Source", suo_moto: "Suo Moto" };
+const SOURCE_LABELS = { in_house: "In House", ba: "BP Source", suo_moto: "Suo Moto" };
 const TYPE_LABELS = { rfp: "RFP", eoi: "EOI" };
 // Every action that can send a lead back for changes — used to find the
 // most recent reason/comment behind an Action Required / Declined /
@@ -286,7 +286,7 @@ const REPORTS = [
   },
   {
     id: "source", group: "Source & Type", title: "Source-wise Distribution",
-    desc: "In-house vs. BA-sourced vs. Suo Moto leads.",
+    desc: "In-house vs. BP-sourced vs. Suo Moto leads.",
     build: ({ leads }) => ({
       columns: [{ key: "source", label: "Source" }, { key: "total", label: "Total" }, { key: "approved", label: "Approved" }, { key: "declined", label: "Declined" }, { key: "rate", label: "Approval %" }],
       rows: Object.entries(SOURCE_LABELS).map(([key, label]) => {
@@ -309,8 +309,8 @@ const REPORTS = [
     }),
   },
   {
-    id: "ba_distribution", group: "Source & Type", title: "BA-wise Distribution",
-    desc: "Leads sourced through each Business Associate.",
+    id: "ba_distribution", group: "Source & Type", title: "BP-wise Distribution",
+    desc: "Leads sourced through each Business Partner.",
     build: ({ leads }) => {
       const withBa = leads.filter((l) => l.assigned_ba_id);
       const rows = [...groupBy(withBa, (l) => l.ba_org_name || "—")].map(([ba, arr]) => {
@@ -318,8 +318,8 @@ const REPORTS = [
         return { ba, total: arr.length, approved: app, declined: dec, rate: pct(app, app + dec) };
       }).sort((x, y) => y.total - x.total);
       return {
-        kpis: [{ label: "Leads via a BA", value: withBa.length }, { label: "Distinct BAs", value: rows.length }],
-        columns: [{ key: "ba", label: "Business Associate" }, { key: "total", label: "Total" }, { key: "approved", label: "Approved" }, { key: "declined", label: "Declined" }, { key: "rate", label: "Approval %" }],
+        kpis: [{ label: "Leads via a BP", value: withBa.length }, { label: "Distinct BPs", value: rows.length }],
+        columns: [{ key: "ba", label: "Business Partner" }, { key: "total", label: "Total" }, { key: "approved", label: "Approved" }, { key: "declined", label: "Declined" }, { key: "rate", label: "Approval %" }],
         rows,
       };
     },
@@ -678,7 +678,7 @@ export default function LeadReportsPage() {
 
         const list = leadRows || [];
 
-        // BA org names — one RPC call per distinct team present, same
+        // BP org names — one RPC call per distinct team present, same
         // batching idea as Empanelment's ba_registrations lookup.
         const teams = [...new Set(list.filter((l) => l.assigned_ba_id).map((l) => l.team).filter(Boolean))];
         const baNameById = {};

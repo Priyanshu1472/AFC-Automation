@@ -58,13 +58,18 @@ export const leadCan = {
   mdReview: (profile, lead) => lead.status === "md_review" && profile?.role === "md",
 };
 
-// "My Leads" on LeadListPage — narrowly personal: the viewer is either the
-// lead's creator or its assigned Person Responsible. Deliberately excludes
-// Reviewer/Approval Authority/handled-by-DGM and team ownership — those
-// live under the "Team Leads" tab instead (see isTeamLead below).
+// "My Leads" on LeadListPage — the leads the viewer is personally on the
+// hook for: the assigned Person Responsible, the named Reviewer, or the
+// named Approval Authority. The creator is deliberately excluded — a lead
+// you only created (and aren't otherwise named on) shows under "Team Leads",
+// not here. handled-by-DGM and plain team ownership also stay on Team Leads.
 export function isMyLead(profile, lead) {
   if (!profile) return false;
-  return profile.id === lead.created_by || profile.id === lead.person_responsible_id;
+  return (
+    profile.id === lead.person_responsible_id ||
+    profile.id === lead.reviewer_id ||
+    profile.id === lead.approval_authority_id
+  );
 }
 
 // "Team Leads" on LeadListPage — every lead going on in the viewer's own

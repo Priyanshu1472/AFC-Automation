@@ -63,7 +63,7 @@ Deno.test("send-empanelment-invite - rejects a caller with no team assigned", as
   assertEquals(res.status, 400);
 });
 
-Deno.test("send-empanelment-invite - rejects an invalid BA email", async () => {
+Deno.test("send-empanelment-invite - rejects an invalid BP email", async () => {
   const res = await handleRequest(req({ ba_email: "not-an-email", project_officer_id: PO_ID }), client({}) as never);
   assertEquals(res.status, 400);
 });
@@ -73,7 +73,7 @@ Deno.test("send-empanelment-invite - rejects a project officer not on the caller
   assertEquals(res.status, 400);
 });
 
-Deno.test("send-empanelment-invite - rejects a duplicate active invitation for the same BA email", async () => {
+Deno.test("send-empanelment-invite - rejects a duplicate active invitation for the same BP email", async () => {
   const res = await handleRequest(
     req({ ba_email: "ba@org.com", project_officer_id: PO_ID }),
     client({ existing: { id: "existing-app", status: "po_review", application_code: "54321" } }) as never,
@@ -92,6 +92,28 @@ Deno.test("send-empanelment-invite - succeeds even when the team has no DGM assi
   } finally {
     globalThis.fetch = original;
   }
+});
+
+Deno.test("send-empanelment-invite - accepts an AGM as the advising authority", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = okFetch;
+  try {
+    const res = await handleRequest(
+      req({ ba_email: "ba@org.com", project_officer_id: PO_ID, advisor_id: "agm-1" }),
+      client({ dgm: { id: "agm-1", full_name: "AGM Person", role: "agm" } }) as never,
+    );
+    assertEquals(res.status, 200);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("send-empanelment-invite - rejects an advisor_id that isn't an active DGM or AGM on the team", async () => {
+  const res = await handleRequest(
+    req({ ba_email: "ba@org.com", project_officer_id: PO_ID, advisor_id: "not-a-real-advisor" }),
+    client({ dgm: null }) as never,
+  );
+  assertEquals(res.status, 400);
 });
 
 Deno.test("send-empanelment-invite - a multi-team caller can target a non-primary assigned team via `team`", async () => {
@@ -114,6 +136,43 @@ Deno.test("send-empanelment-invite - rejects a `team` the caller isn't assigned 
     client({ caller: callerRow({ team: "BPDD" }) }) as never,
   );
   assertEquals(res.status, 403);
+});
+
+Deno.test("send-empanelment-invite - accepts a Project Assistant reviewer when the team has no active Project Officer", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = okFetch;
+  try {
+    const adminClient = createFakeAdminClient({
+      afc_users: [
+        { data: callerRow(), error: null },
+        { data: { id: PO_ID, full_name: "PA Person", email: "pa@afc.com", role: "project_assistant" }, error: null },
+        { data: null, error: null, count: 0 },
+        { data: { id: "dgm-1", full_name: "DGM Person" }, error: null },
+      ],
+      empanelment_applications: [{ data: null, error: null }, { data: { id: "app-new-1" }, error: null }],
+      empanelment_activity_log: [{ data: null, error: null }],
+    });
+    const res = await handleRequest(req({ ba_email: "ba@org.com", project_officer_id: PO_ID }), adminClient as never);
+    assertEquals(res.status, 200);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("send-empanelment-invite - rejects a Project Assistant reviewer when the team still has an active Project Officer", async () => {
+  const adminClient = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow(), error: null },
+      { data: { id: PO_ID, full_name: "PA Person", email: "pa@afc.com", role: "project_assistant" }, error: null },
+      { data: null, error: null, count: 1 },
+    ],
+    empanelment_applications: [{ data: null, error: null }],
+    empanelment_activity_log: [{ data: null, error: null }],
+  });
+  const res = await handleRequest(req({ ba_email: "ba@org.com", project_officer_id: PO_ID }), adminClient as never);
+  const json = await res.json();
+  assertEquals(res.status, 400);
+  assertEquals(json.error, "Your team has an active Project Officer — select them instead of a Project Assistant.");
 });
 
 Deno.test("send-empanelment-invite - success returns the new application_id and email_sent status", async () => {

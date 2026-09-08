@@ -2,7 +2,7 @@
 // JWT must be ON. Caller must be an active associate_consultant or
 // project_assistant (same send permissions).
 // Generates a 5-digit application code, creates the empanelment_applications
-// row, and emails the BA the invite + code.
+// row, and emails the BP the invite + code.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -51,12 +51,15 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     return jsonRes(req, 400, { error: "Invalid JSON body." });
   }
 
-  const { ba_email, project_officer_id, team: requestedTeam } = body;
+  const { ba_email, project_officer_id, advisor_id, team: requestedTeam } = body;
   if (!ba_email || typeof ba_email !== "string" || !isValidEmail(ba_email)) {
-    return jsonRes(req, 400, { error: "A valid BA email is required." });
+    return jsonRes(req, 400, { error: "A valid BP email is required." });
   }
   if (!project_officer_id || typeof project_officer_id !== "string") {
     return jsonRes(req, 400, { error: "Project Officer is required." });
+  }
+  if (advisor_id !== undefined && advisor_id !== null && typeof advisor_id !== "string") {
+    return jsonRes(req, 400, { error: "Invalid advising authority." });
   }
   // A multi-team caller can pick which of their assigned teams this invite
   // is for (the client sends its currently active team) — falls back to
@@ -75,26 +78,60 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   const normalizedEmail = ba_email.trim().toLowerCase();
 
   try {
-    // Project Officer must be an active PO on the caller's own team.
+    // The assigned reviewer must be an active Project Officer on the
+    // caller's own team — or, when the team has none active, a Project
+    // Assistant (the client only offers the PA pool in that case, but the
+    // server re-validates rather than trusting it).
     const { data: po, error: poErr } = await adminClient
       .from("afc_users")
-      .select("id, full_name, email")
+      .select("id, full_name, email, role")
       .eq("id", project_officer_id)
-      .eq("role", "project_officer")
+      .in("role", ["project_officer", "project_assistant"])
       .eq("team", team)
       .eq("is_active", true)
       .maybeSingle();
     if (poErr || !po) return jsonRes(req, 400, { error: "Invalid Project Officer for your team." });
 
-    const { data: dgm } = await adminClient
-      .from("afc_users")
-      .select("id, full_name")
-      .eq("role", "dgm")
-      .eq("team", team)
-      .eq("is_active", true)
-      .maybeSingle();
+    if (po.role === "project_assistant") {
+      const { count: activePoCount } = await adminClient
+        .from("afc_users")
+        .select("id", { count: "exact", head: true })
+        .eq("role", "project_officer")
+        .eq("team", team)
+        .eq("is_active", true);
+      if (activePoCount && activePoCount > 0) {
+        return jsonRes(req, 400, { error: "Your team has an active Project Officer — select them instead of a Project Assistant." });
+      }
+    }
 
-    // One active (non-terminal) invitation per BA email at a time.
+    // The advising authority is the DGM or AGM the sender picked (the client
+    // offers the team's active DGMs + AGMs) — re-validated here rather than
+    // trusted. Older clients send no advisor_id: fall back to the team's DGM,
+    // same as before this became a choice.
+    let advisor: { id: string; full_name: string; role: string } | null = null;
+    if (advisor_id) {
+      const { data: picked, error: advErr } = await adminClient
+        .from("afc_users")
+        .select("id, full_name, role")
+        .eq("id", advisor_id)
+        .in("role", ["dgm", "agm"])
+        .eq("team", team)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (advErr || !picked) return jsonRes(req, 400, { error: "Invalid advising authority for your team — pick an active DGM or AGM." });
+      advisor = picked;
+    } else {
+      const { data: dgm } = await adminClient
+        .from("afc_users")
+        .select("id, full_name, role")
+        .eq("role", "dgm")
+        .eq("team", team)
+        .eq("is_active", true)
+        .maybeSingle();
+      advisor = dgm || null;
+    }
+
+    // One active (non-terminal) invitation per BP email at a time.
     const { data: existing } = await adminClient
       .from("empanelment_applications")
       .select("id, status, application_code")
@@ -120,14 +157,14 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         office: caller.office,
         sent_by: caller.id,
         project_officer_id: po.id,
-        dgm_id: dgm?.id || null,
+        dgm_id: advisor?.id || null,
       })
       .select("id")
       .single();
     if (insertErr) throw new Error("Failed to save invitation: " + insertErr.message);
 
-    const advisedByName = dgm?.full_name || "AFC India Limited";
-    const advisedByDesig = dgm ? ROLE_LABELS["dgm"] : ROLE_LABELS[caller.role] || caller.role;
+    const advisedByName = advisor?.full_name || "AFC India Limited";
+    const advisedByDesig = advisor ? (ROLE_LABELS[advisor.role] || advisor.role) : (ROLE_LABELS[caller.role] || caller.role);
     const siteUrl = Deno.env.get("SITE_URL") || "http://localhost:5173";
 
     const html = wrapEmailBody(`
@@ -135,7 +172,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">Greetings from AFC India Limited!</p>
       <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
         As advised by <strong>${escapeHtml(advisedByName)}</strong> (${escapeHtml(advisedByDesig)}), please find enclosed the link for the
-        Business Associate (BA) empanelment form for your kind perusal.
+        Business Partner (BP) empanelment form for your kind perusal.
       </p>
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:20px 24px;margin:0 0 24px;">
         <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:0.08em;">Your Application Code</p>
@@ -149,7 +186,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const emailSent = await sendResendEmail({
       to: normalizedEmail,
-      subject: "Business Associate Empanelment Form — AFC India Limited",
+      subject: "Business Partner Empanelment Form — AFC India Limited",
       html,
     });
 
@@ -163,14 +200,14 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     await notifyUser(adminClient, po.id, {
       title: "New empanelment invite sent",
-      sub_text: `An invite was sent to ${normalizedEmail}. You're assigned as the reviewing Project Officer.`,
+      sub_text: `An invite was sent to ${normalizedEmail}. You're assigned as the reviewing ${ROLE_LABELS[po.role] || "Project Officer"}.`,
       type: "info",
       link: `/empanelment/${app.id}`,
     });
-    if (dgm?.id) {
-      await notifyUser(adminClient, dgm.id, {
+    if (advisor?.id) {
+      await notifyUser(adminClient, advisor.id, {
         title: "New empanelment invite sent",
-        sub_text: `An invite was sent to ${normalizedEmail} on your team.`,
+        sub_text: `An invite was sent to ${normalizedEmail}. You're the advising ${ROLE_LABELS[advisor.role] || "authority"} on it.`,
         type: "info",
         link: `/empanelment/${app.id}`,
       });

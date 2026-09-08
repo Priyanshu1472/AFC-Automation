@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { useToast } from "../../hooks/useToast";
 import { ROLE_LABELS } from "../../lib/roles";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -12,7 +13,7 @@ import PageLoader from "../../components/ui/PageLoader";
 import ComplianceHoldModal from "./ComplianceHoldModal";
 import PinConfirmModal from "./PinConfirmModal";
 import LetterPreviewPinModal from "./LetterPreviewPinModal";
-import { STATUS_FLOW, STATUS_BADGE, ProgressStepper, TimelineAccordion } from "../../components/empanelment/ApplicationTimeline";
+import { STATUS_FLOW, STATUS_BADGE, ProgressStepper, TimelineAccordion, stepLabel } from "../../components/empanelment/ApplicationTimeline";
 import "../../styles/ApplicationReviewPage.css";
 
 const SLOT_LABELS = {
@@ -120,6 +121,7 @@ export default function ApplicationReviewPage() {
   // actually came from.
   const backTo = location.state?.from === "home" ? "/home" : "/empanelment";
   const { profile } = useAuth();
+  const { showToast } = useToast();
   const role = profile?.role;
 
   const [app, setApp] = useState(null);
@@ -127,7 +129,6 @@ export default function ApplicationReviewPage() {
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
-  const [banner, setBanner] = useState(null); // { msg, type }
   const [auditLogs, setAuditLogs] = useState([]);
   const [showReject, setShowReject] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
@@ -143,7 +144,7 @@ export default function ApplicationReviewPage() {
   const fetchApp = useCallback(async () => {
     const { data: application } = await supabase
       .from("empanelment_applications")
-      .select("*, po:project_officer_id(id, full_name, email), dgm:dgm_id(id, full_name, email), ac:sent_by(id, full_name, email)")
+      .select("*, po:project_officer_id(id, full_name, email, role), dgm:dgm_id(id, full_name, email, role), ac:sent_by(id, full_name, email)")
       .eq("id", id)
       .maybeSingle();
     setApp(application);
@@ -181,11 +182,10 @@ export default function ApplicationReviewPage() {
     return () => { supabase.removeChannel(channel); };
   }, [id, fetchApp]);
 
-  function showBanner(msg, type = "success") { setBanner({ msg, type }); }
+  function showBanner(msg, type = "success") { showToast(msg, type); }
 
   async function runAction(action, extra = {}) {
     setActionLoading(true);
-    setBanner(null);
     try {
       const { data, error } = await supabase.functions.invoke("advance-empanelment-stage", {
         body: { application_id: id, action, comment: comment.trim(), ...extra },
@@ -245,7 +245,7 @@ export default function ApplicationReviewPage() {
   }
   function handleRejectPinSuccess(data) {
     setShowRejectPin(false);
-    showBanner(`Application rejected. Rejection email ${data.email_sent ? "sent to" : "failed to send to"} BA.`, data.email_sent ? "success" : "warning");
+    showBanner(`Application rejected. Rejection email ${data.email_sent ? "sent to" : "failed to send to"} BP.`, data.email_sent ? "success" : "warning");
     setComment("");
     setRejectRemark("");
     fetchApp();
@@ -259,10 +259,12 @@ export default function ApplicationReviewPage() {
   function canAct() {
     if (!app) return false;
     const s = app.status;
-    if (role === "project_officer" && app.project_officer_id === profile.id && (s === "po_review" || s === "po_final_review")) return true;
+    if (["project_officer", "project_assistant"].includes(role) && app.project_officer_id === profile.id && (s === "po_review" || s === "po_final_review")) return true;
     if (role === "cfo" && s === "cfo_cs_review" && !app.cfo_reviewed) return true;
     if (role === "cs" && s === "cfo_cs_review" && !app.cs_reviewed) return true;
-    if (role === "dgm" && app.team === profile.team && s === "dgm_review") return true;
+    // The dgm_review stage belongs to the assigned advising authority
+    // (dgm_id) — a DGM or an AGM — not just any DGM on the team.
+    if (["dgm", "agm"].includes(role) && app.dgm_id === profile.id && s === "dgm_review") return true;
     if (role === "md" && s === "md_review") return true;
     return false;
   }
@@ -278,6 +280,11 @@ export default function ApplicationReviewPage() {
 
   const isFinalised = ["accepted", "rejected"].includes(app.status);
   const userCanAct = canAct();
+  // The advising authority stage carries the assigned person's real role —
+  // "AGM" when an AGM was assigned instead of a DGM (see SendEmpanelmentPage).
+  const advisorRole = app.dgm?.role;
+  const advisorLabel = advisorRole === "agm" ? "AGM" : "DGM";
+  const isAssignedAdvisor = ["dgm", "agm"].includes(role) && app.dgm_id === profile.id;
 
   return (
     <div className="app-shell">
@@ -286,18 +293,12 @@ export default function ApplicationReviewPage() {
         <div className="ar-page">
           <button className="ar-back-btn" onClick={() => navigate(backTo)}><ArrowLeftIcon /> {backTo === "/home" ? "Back to Home" : "Back to Applications"}</button>
 
-          {banner && (
-            <Alert variant={banner.type === "danger" ? "danger" : banner.type === "warning" ? "warning" : "success"} onClose={() => setBanner(null)}>
-              {banner.msg}
-            </Alert>
-          )}
-
           <Card className="ar-header-card">
             <Card.Body className="ar-header-body">
               <div className="ar-header-left">
                 <div className="ar-header-badges">
                   <Badge variant="brand">Application Review</Badge>
-                  <Badge variant={STATUS_BADGE[app.status] || "neutral"} dot>{STATUS_FLOW.find((s) => s.key === app.status)?.label || app.status}</Badge>
+                  <Badge variant={STATUS_BADGE[app.status] || "neutral"} dot>{stepLabel(app.status, STATUS_FLOW.find((s) => s.key === app.status)?.label, app.po?.role, advisorRole) || app.status}</Badge>
                 </div>
                 <h1 className="ar-header-email">{app.ba_email}</h1>
                 <p className="ar-header-meta">Code: <strong>{app.application_code}</strong> · Team: <strong>{app.team || "—"}</strong> · Sent: <strong>{fmtDate(app.created_at)}</strong></p>
@@ -308,7 +309,7 @@ export default function ApplicationReviewPage() {
           <Card>
             <Card.Body className="ar-stepper-body">
               <p className="ar-stepper-heading">Application Progress</p>
-              <ProgressStepper currentStatus={app.status} />
+              <ProgressStepper currentStatus={app.status} reviewerRole={app.po?.role} advisorRole={advisorRole} />
             </Card.Body>
           </Card>
 
@@ -317,10 +318,10 @@ export default function ApplicationReviewPage() {
               <Card>
                 <Card.Header title="Application Info" />
                 <Card.Body className="ar-detail-body">
-                  <Row label="BA Email" value={app.ba_email} />
+                  <Row label="BP Email" value={app.ba_email} />
                   <Row label="Sent By (AC)" value={app.ac?.full_name} />
                   <Row label="Project Officer" value={app.po?.full_name} />
-                  <Row label="DGM" value={app.dgm?.full_name} />
+                  <Row label={advisorLabel} value={app.dgm?.full_name} />
                   <Row label="Team" value={app.team} />
                   <Row label="Office" value={app.office} />
                   <Row label="Application Code" value={app.application_code} />
@@ -394,7 +395,7 @@ export default function ApplicationReviewPage() {
                   </Card.Body>
                 </Card>
               ) : (
-                <Card><Card.Body><p className="ar-empty-text">The Business Associate has not filled out the form yet.</p></Card.Body></Card>
+                <Card><Card.Body><p className="ar-empty-text">The Business Partner has not filled out the form yet.</p></Card.Body></Card>
               )}
             </div>
 
@@ -403,7 +404,7 @@ export default function ApplicationReviewPage() {
                 <Card className="ar-action-card">
                   <Card.Header title="Your Action" action={<Badge variant="brand">{ROLE_LABELS[role]}</Badge>} />
                   <Card.Body className="ar-action-body">
-                    {role === "project_officer" && (<>
+                    {["project_officer", "project_assistant"].includes(role) && (<>
                       {app.status === "po_final_review" && (
                         <div className="ar-po-final-notice">
                           <p className="ar-po-final-title">CFO / CS have reviewed this application</p>
@@ -413,7 +414,7 @@ export default function ApplicationReviewPage() {
                       )}
                       <div className="ar-field">
                         <label className="ar-label">{app.status === "po_final_review" ? "Your Final Comment (optional)" : "Technical Review Comment"}{app.status !== "po_final_review" && <span className="ar-required"> *</span>}</label>
-                        <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={app.status === "po_final_review" ? "Add any additional comments before forwarding to DGM..." : "Review the BA's technical details and write your comments..."} rows={4} />
+                        <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={app.status === "po_final_review" ? "Add any additional comments before forwarding to DGM..." : "Review the BP's technical details and write your comments..."} rows={4} />
                       </div>
                       {app.status === "po_final_review"
                         ? (<>
@@ -441,13 +442,13 @@ export default function ApplicationReviewPage() {
                       <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleCSForward}>{actionLoading ? "Saving..." : "Submit Review"}</Button>
                     </>)}
 
-                    {role === "dgm" && (<>
+                    {["dgm", "agm"].includes(role) && (<>
                       <div className="ar-field">
                         <label className="ar-label">Recommendation Comment <span className="ar-required">*</span></label>
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your recommendation..." rows={4} />
                       </div>
                       <Button variant="primary" block disabled={!comment.trim() || actionLoading} loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleDGMRecommend}>{actionLoading ? "Sending..." : "Recommend to Managing Director"}</Button>
-                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleDGMSendBack}>Send Back to Project Officer</Button>
+                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleDGMSendBack}>Send Back to {app.po?.role === "project_assistant" ? "Project Assistant" : "Project Officer"}</Button>
                     </>)}
 
                     {role === "md" && (<>
@@ -456,11 +457,11 @@ export default function ApplicationReviewPage() {
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your remarks along with the final decision..." rows={4} />
                       </div>
                       <Button variant="primary" block disabled={!comment.trim() || actionLoading} icon={<CheckIcon />} onClick={() => setShowAcceptPin(true)}>Accept</Button>
-                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleMDSendBack}>Send Back to DGM</Button>
+                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleMDSendBack}>Send Back to {advisorLabel}</Button>
                       <Button variant="danger" block disabled={actionLoading} icon={<XIcon />} onClick={() => setShowReject(true)}>Reject</Button>
                     </>)}
 
-                    {["project_officer", "dgm", "md"].includes(role) && (
+                    {["project_officer", "project_assistant", "dgm", "agm", "md"].includes(role) && (
                       <>
                         <hr className="divider" />
                         <Button variant="secondary" block disabled={actionLoading} onClick={() => setShowHoldModal(true)}>Raise Compliance Hold</Button>
@@ -470,12 +471,12 @@ export default function ApplicationReviewPage() {
                 </Card>
               )}
 
-              {role === "dgm" && baData && app.status !== "rejected" && (
+              {isAssignedAdvisor && baData && app.status !== "rejected" && (
                 <Card className="ar-action-card">
                   <Card.Header title="Provisional Letter" action={app.provisional_letter_sent ? <Badge variant="success">Sent</Badge> : null} />
                   <Card.Body className="ar-action-body">
                     <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
-                      A non-final, provisional empanelment letter emailed to the BA — separate from the MD&apos;s final acceptance email.
+                      A non-final, provisional empanelment letter emailed to the BP — separate from the MD&apos;s final acceptance email.
                     </p>
                     <Button variant="secondary" block disabled={app.provisional_letter_sent} icon={<DocumentIcon />} onClick={() => setShowProvisionalPin(true)}>
                       {app.provisional_letter_sent ? "Provisional Letter Already Sent" : "Send Provisional Letter"}
@@ -486,10 +487,10 @@ export default function ApplicationReviewPage() {
 
               {app.status === "on_hold" && (
                 <Card className="ar-final-card" style={{ borderColor: "rgba(219,36,36,0.3)" }}>
-                  <Card.Header title="On Hold — Awaiting BA Correction" action={<Badge variant="warning">On Hold</Badge>} />
+                  <Card.Header title="On Hold — Awaiting BP Correction" action={<Badge variant="warning">On Hold</Badge>} />
                   <Card.Body className="ar-action-body">
                     <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
-                      The BA was emailed and can submit corrections for the item(s) below. Review will resume from the stage that raised this hold once they do.
+                      The BP was emailed and can submit corrections for the item(s) below. Review will resume from the stage that raised this hold once they do.
                     </p>
                     <div className="ar-flag-list">
                       {openFlags.map((f) => (
@@ -513,7 +514,7 @@ export default function ApplicationReviewPage() {
               )}
 
               {!userCanAct && !isFinalised && app.status !== "on_hold" && (
-                <Card><Card.Body className="ar-view-only"><EyeIcon /><span>Viewing only. Action pending from <strong>{STATUS_FLOW.find((s) => s.key === app.status)?.label || app.status}</strong></span></Card.Body></Card>
+                <Card><Card.Body className="ar-view-only"><EyeIcon /><span>Viewing only. Action pending from <strong>{stepLabel(app.status, STATUS_FLOW.find((s) => s.key === app.status)?.label, app.po?.role, advisorRole) || app.status}</strong></span></Card.Body></Card>
               )}
 
               <Card>
@@ -544,7 +545,7 @@ export default function ApplicationReviewPage() {
         <ComplianceHoldModal
           applicationId={app.id}
           onClose={() => setShowHoldModal(false)}
-          onSuccess={(data) => { setShowHoldModal(false); showBanner(`Application put on hold. ${data.flags_count} item(s) flagged. Correction email ${data.email_sent ? "sent" : "failed to send"} to the BA.`, data.email_sent ? "success" : "warning"); fetchApp(); }}
+          onSuccess={(data) => { setShowHoldModal(false); showBanner(`Application put on hold. ${data.flags_count} item(s) flagged. Correction email ${data.email_sent ? "sent" : "failed to send"} to the BP.`, data.email_sent ? "success" : "warning"); fetchApp(); }}
         />
       )}
     </div>

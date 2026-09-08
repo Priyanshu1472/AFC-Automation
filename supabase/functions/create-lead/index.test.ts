@@ -99,7 +99,7 @@ Deno.test("handleRequest - ba source without assigned_ba_id is rejected", async 
   const res = await handleRequest(formReq(baseFields({ source: "ba" })), client as never);
   assertEquals(res.status, 400);
   const body = await res.json();
-  assertEquals(body.error, "Select a Business Associate for a BA Source lead.");
+  assertEquals(body.error, "Select a Business Partner for a BP Source lead.");
 });
 
 Deno.test("handleRequest - ba source with a valid assigned_ba_id succeeds", async () => {
@@ -114,7 +114,7 @@ Deno.test("handleRequest - suo_moto source without assigned_ba_id is rejected", 
   const res = await handleRequest(formReq(baseFields({ source: "suo_moto" })), client as never);
   assertEquals(res.status, 400);
   const body = await res.json();
-  assertEquals(body.error, "Select a Business Associate for a Suo Moto lead.");
+  assertEquals(body.error, "Select a Business Partner for a Suo Moto lead.");
 });
 
 Deno.test("handleRequest - suo_moto source with a valid assigned_ba_id succeeds and stores the Suo-Moto-only dates", async () => {
@@ -169,7 +169,7 @@ Deno.test("handleRequest - rejects a Person Responsible on a different team", as
   assertEquals(res.status, 400);
 });
 
-Deno.test("handleRequest - rejects a Business Associate as Person Responsible", async () => {
+Deno.test("handleRequest - rejects a Business Partner as Person Responsible", async () => {
   const client = buildClient({ prTarget: { data: { id: PR_ID, role: "business_associate", team: TEAM, committee: null, is_active: true }, error: null } });
   const res = await handleRequest(formReq(baseFields()), client as never);
   assertEquals(res.status, 400);
@@ -187,7 +187,7 @@ Deno.test("handleRequest - rejects a Reviewer on a different team", async () => 
   assertEquals(res.status, 400);
 });
 
-Deno.test("handleRequest - rejects a Business Associate as Reviewer", async () => {
+Deno.test("handleRequest - rejects a Business Partner as Reviewer", async () => {
   const client = buildClient({ reviewerTarget: { data: { id: REVIEWER_ID, role: "business_associate", team: TEAM, committee: null, is_active: true }, error: null } });
   const res = await handleRequest(formReq(baseFields()), client as never);
   assertEquals(res.status, 400);
@@ -221,4 +221,31 @@ Deno.test("handleRequest - success creates the lead directly into pa_review", as
   assertEquals(body.success, true);
   assertEquals(body.status, "pa_review");
   assertEquals(body.lead_number, "LH-2026-000001");
+});
+
+Deno.test("handleRequest - notifies Person Responsible, Reviewer, and Approval Authority on creation", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const notifyInserts = log.filter((l) => l.table === "notifications").map((l) => JSON.parse(l.calls.find((c) => c[0] === "insert")![1])[0]);
+  const notifiedIds = notifyInserts.map((n: { user_id: string }) => n.user_id);
+  assertEquals(notifiedIds.sort(), [AUTHORITY_ID, PR_ID, REVIEWER_ID].sort());
+  const prNotify = notifyInserts.find((n: { user_id: string }) => n.user_id === PR_ID);
+  assertEquals(prNotify.type, "action_required");
+  const reviewerNotify = notifyInserts.find((n: { user_id: string }) => n.user_id === REVIEWER_ID);
+  assertEquals(reviewerNotify.type, "info");
+  assertEquals(reviewerNotify.link, "/leads/new-lead-1");
+});
+
+Deno.test("handleRequest - does not notify the caller if they assigned themselves a role", async () => {
+  const client = buildClient({ caller: callerRow({ id: PR_ID }) });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const notifyInserts = log.filter((l) => l.table === "notifications").map((l) => JSON.parse(l.calls.find((c) => c[0] === "insert")![1])[0]);
+  const notifiedIds = notifyInserts.map((n: { user_id: string }) => n.user_id);
+  assertEquals(notifiedIds.sort(), [AUTHORITY_ID, REVIEWER_ID].sort());
 });

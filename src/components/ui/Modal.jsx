@@ -13,10 +13,10 @@ import { createPortal } from "react-dom";
  *    <Modal.Footer>...</Modal.Footer>
  *  </Modal>
  */
-function Modal({ children, onClose, size, closeOnBackdrop = true }) {
+function Modal({ children, onClose, size, className = "", closeOnBackdrop = true }) {
   return createPortal(
     <div className="modal-backdrop" onClick={() => closeOnBackdrop && onClose?.()}>
-      <div className={`modal${size ? ` modal-${size}` : ""}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div className={`modal${size ? ` modal-${size}` : ""}${className ? ` ${className}` : ""}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         {children}
       </div>
     </div>,

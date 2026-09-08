@@ -1,6 +1,6 @@
 // src/pages/empanelment/EmpanelmentReportsPage.jsx
 // Report registry pattern ported from the previous AFC empanelment app
-// (BA-Empanelment-AFC1/src/modules/afc/BaReportsSection.jsx), adapted to
+// (BP-Empanelment-AFC1/src/modules/afc/BaReportsSection.jsx), adapted to
 // this project's schema (empanelment_applications + ba_registrations,
 // RLS-scoped — no client-side owner filtering needed, unlike the old app).
 // Adding a report = one more object in REPORTS.
@@ -23,7 +23,7 @@ import "../../styles/EmpanelmentReportsPage.css";
 
 const PIPELINE = ["sent", "filled", "po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "accepted", "rejected", "on_hold"];
 const STATUS_LABELS = {
-  sent: "Sent", filled: "BA Filled", po_review: "PO Review", cfo_cs_review: "CFO / CS",
+  sent: "Sent", filled: "BP Filled", po_review: "PO Review", cfo_cs_review: "CFO / CS",
   po_final_review: "PO Final", dgm_review: "DGM Review", md_review: "MD Review",
   accepted: "Accepted", rejected: "Rejected", on_hold: "On Hold",
 };
@@ -91,11 +91,11 @@ const REPORTS = [
         kpis: [
           { label: "Total Applications", value: total }, { label: "Empanelled", value: acc },
           { label: "Rejected", value: rej }, { label: "In Progress", value: prog },
-          { label: "Awaiting BA Fill", value: wait }, { label: "Acceptance Rate", value: pct(acc, acc + rej) + "%" },
+          { label: "Awaiting BP Fill", value: wait }, { label: "Acceptance Rate", value: pct(acc, acc + rej) + "%" },
         ],
         columns: [{ key: "status", label: "Status" }, { key: "count", label: "Count" }, { key: "share", label: "Share %" }],
         rows: [
-          { status: "Awaiting BA Fill", count: wait, share: pct(wait, total) },
+          { status: "Awaiting BP Fill", count: wait, share: pct(wait, total) },
           { status: "In Progress", count: prog, share: pct(prog, total) },
           { status: "Empanelled", count: acc, share: pct(acc, total) },
           { status: "Rejected", count: rej, share: pct(rej, total) },
@@ -109,7 +109,7 @@ const REPORTS = [
     desc: "Current pipeline snapshot — every application with its stage and days elapsed.",
     build: ({ apps }) => ({
       columns: [
-        { key: "org_name", label: "Organisation" }, { key: "code", label: "App Code" }, { key: "ba_email", label: "BA Email" },
+        { key: "org_name", label: "Organisation" }, { key: "code", label: "App Code" }, { key: "ba_email", label: "BP Email" },
         { key: "team", label: "Team" }, { key: "office", label: "Office" }, { key: "po", label: "Project Officer" },
         { key: "status_label", label: "Status" }, { key: "sent_f", label: "Sent On" }, { key: "days", label: "Days in Pipeline" },
         { key: "provisional", label: "Provisional Sent" },
@@ -167,7 +167,7 @@ const REPORTS = [
           { label: "Oldest (days)", value: rows[0]?.days ?? 0 },
         ],
         columns: [
-          { key: "org_name", label: "Organisation" }, { key: "code", label: "App Code" }, { key: "ba_email", label: "BA Email" },
+          { key: "org_name", label: "Organisation" }, { key: "code", label: "App Code" }, { key: "ba_email", label: "BP Email" },
           { key: "team", label: "Team" }, { key: "status_label", label: "Stuck At" }, { key: "sent_f", label: "Sent On" }, { key: "days", label: "Days Open" },
         ],
         rows,
@@ -176,7 +176,7 @@ const REPORTS = [
   },
   {
     id: "tat", group: "Pipeline", title: "Turnaround Time",
-    desc: "For empanelled BAs: days taken from sent to the final accept decision.",
+    desc: "For empanelled BPs: days taken from sent to the final accept decision.",
     build: ({ apps }) => {
       const done = apps.filter((a) => isAccepted(a) && a.decided_at);
       const tats = done.map((a) => daysBetween(a.created_at, a.decided_at)).filter((n) => n !== null);
@@ -198,8 +198,8 @@ const REPORTS = [
     },
   },
   {
-    id: "form_gap", group: "Pipeline", title: "BA Form Response Time",
-    desc: "How long each Business Associate took to fill the form after being sent the invite.",
+    id: "form_gap", group: "Pipeline", title: "BP Form Response Time",
+    desc: "How long each Business Partner took to fill the form after being sent the invite.",
     build: ({ apps }) => {
       const filled = apps.filter((a) => a.form_submitted_at);
       const gaps = filled.map((a) => daysBetween(a.created_at, a.form_submitted_at)).filter((n) => n !== null);
@@ -209,7 +209,7 @@ const REPORTS = [
           { label: "Average (days)", value: avg(gaps) }, { label: "Median (days)", value: median(gaps) },
         ],
         columns: [
-          { key: "org_name", label: "Organisation" }, { key: "code", label: "App Code" }, { key: "ba_email", label: "BA Email" },
+          { key: "org_name", label: "Organisation" }, { key: "code", label: "App Code" }, { key: "ba_email", label: "BP Email" },
           { key: "sent_f", label: "Sent On" }, { key: "filled_f", label: "Form Filled On" }, { key: "gap", label: "Days Taken" },
         ],
         rows: filled.map((a) => ({
@@ -287,7 +287,7 @@ const REPORTS = [
   },
   {
     id: "sector", group: "Empanelment", title: "Sector-wise Distribution",
-    desc: "Which sectors our BAs cover. One BA can appear under several sectors.",
+    desc: "Which sectors our BPs cover. One BP can appear under several sectors.",
     build: ({ apps }) => {
       const counts = new Map();
       apps.forEach((a) => {
@@ -314,7 +314,7 @@ const REPORTS = [
         reason: dash(a.md_remarks || a.dgm_comment), sent_f: fmt(a.created_at), decided_f: fmt(a.decided_at),
       }));
       return { kpis: [{ label: "Rejected", value: rows.length }], columns: [
-        { key: "org_name", label: "Organisation" }, { key: "code", label: "App Code" }, { key: "ba_email", label: "BA Email" },
+        { key: "org_name", label: "Organisation" }, { key: "code", label: "App Code" }, { key: "ba_email", label: "BP Email" },
         { key: "team", label: "Team" }, { key: "reason", label: "Reason / Remark" }, { key: "sent_f", label: "Sent On" }, { key: "decided_f", label: "Decided On" },
       ], rows };
     },

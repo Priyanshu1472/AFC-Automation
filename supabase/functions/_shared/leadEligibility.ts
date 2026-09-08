@@ -40,7 +40,7 @@ export function validateRequiredFields(input: LeadFieldInput): string | null {
   if (input.delivery_type != null && !DELIVERY_TYPES.has(String(input.delivery_type))) return "Invalid delivery type.";
   // lead_type (RFP/EOI) doesn't apply to a Suo Moto lead — the frontend just
   // sends a fixed placeholder value for it in that case, so this stays
-  // rfp/eoi only. source now covers all three: In-House, BA Source, and
+  // rfp/eoi only. source now covers all three: In-House, BP Source, and
   // Suo Moto.
   if (input.lead_type != null && !["rfp", "eoi"].includes(String(input.lead_type))) return "Invalid lead type.";
   if (input.source != null && !["in_house", "ba", "suo_moto"].includes(String(input.source))) return "Invalid lead source.";
@@ -55,7 +55,7 @@ export function clampText(val: unknown, max = MAX_TEXT_LENGTH): string | null {
 }
 
 // Person Responsible must be an active staff member on the lead's team —
-// any role except business_associate (BAs have a team too, for the BA-org
+// any role except business_associate (BAs have a team too, for the BP-org
 // lookup, but aren't staff and can't own a lead's workflow).
 export async function validateAssignment(admin: AdminClient, personResponsibleId: string, team: string): Promise<string | null> {
   const user = await getTargetUser(admin, personResponsibleId);
@@ -85,15 +85,15 @@ export async function validateApprovalAuthority(admin: AdminClient, approvalAuth
   return null;
 }
 
-// Each team empanels its own Business Associates (via the Empanelment
-// module) — a BA's afc_users.team is set from the empanelment application's
+// Each team empanels its own Business Partners (via the Empanelment
+// module) — a BP's afc_users.team is set from the empanelment application's
 // team when their portal login is provisioned, so this mirrors the other
 // assignment validators: active + same team as the lead.
 export async function validateBusinessAssociate(admin: AdminClient, baId: string, team: string): Promise<string | null> {
   const { data, error } = await admin.from("afc_users").select("id, role, team, is_active").eq("id", baId).maybeSingle();
-  if (error || !data) return "Selected Business Associate not found.";
+  if (error || !data) return "Selected Business Partner not found.";
   if (data.role !== "business_associate" || !data.is_active || data.team !== team) {
-    return "Selected Business Associate is not valid for this team.";
+    return "Selected Business Partner is not valid for this team.";
   }
   return null;
 }

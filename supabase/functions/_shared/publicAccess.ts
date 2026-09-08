@@ -48,7 +48,7 @@ export async function checkRateLimit(
   return { allowed: row?.allowed ?? true, waitMinutes: Math.ceil((row?.wait_seconds ?? 0) / 60) };
 }
 
-// Resets a key's budget after a legitimate success, so a real BA isn't
+// Resets a key's budget after a legitimate success, so a real BP isn't
 // stuck rate-limited by their own earlier typos/retries.
 export async function clearRateLimit(adminClient: SupabaseClient, key: string) {
   const { error } = await adminClient.from("rate_limit_attempts").delete().eq("key", key);

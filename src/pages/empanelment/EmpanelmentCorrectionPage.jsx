@@ -55,6 +55,16 @@ const FIELD_WIDGETS = {
 
 const UPPERCASE_FIELDS = new Set(["pan", "ifsc_code", "gst", "cin", "msme_no", "ca_reg_no"]);
 
+// Fields that span both grid columns — mirrors the `full` fields on the real
+// empanelment form (BaFormPage) so the read-only recap here lays out with the
+// same two-column rhythm instead of one field per row.
+const FULL_WIDTH_KEYS = new Set([
+  "org_name", "reg_address", "branch_address", "website", "director_kyc",
+  "net_worth", "turnover", "pat", "cash_flow",
+  "core_expertise", "sectors_served", "assignments",
+  "certifications", "govt_empanelments",
+]);
+
 // Client-side mirror of the format checks in
 // submit-empanelment-correction/index.ts — real validation still happens
 // server-side, this is just earlier feedback.
@@ -116,7 +126,7 @@ function FieldBlock({ fieldKey, registration, flagMap, values, fieldErrors, setV
   const label = FLAGGABLE_TEXT_FIELDS[fieldKey] || NON_FLAGGABLE_LABELS[fieldKey] || fieldKey;
   if (!flag) {
     return (
-      <div className="bf-field bf-field-full ec-field-readonly">
+      <div className={`bf-field${FULL_WIDTH_KEYS.has(fieldKey) ? " bf-field-full" : ""} ec-field-readonly`}>
         <span className="bf-label">{label}</span>
         <span className="ec-readonly-value">{fmtValue(fieldKey, registration?.[fieldKey])}</span>
       </div>

@@ -185,3 +185,62 @@ Deno.test("handleRequest - the Person Responsible (not creator) can edit a pa_re
   const res = await handleRequest(formReq(baseFields(), fakeJwt({ sub: PR_ID })), client as never);
   assertEquals(res.status, 200);
 });
+
+// ── Reassignment notifications ──────────────────────────────────
+Deno.test("handleRequest - notifies newly-assigned Reviewer and Approval Authority, but not an unchanged Person Responsible", async () => {
+  // Default leadRow() has no reviewer/approval authority yet, and
+  // person_responsible_id already PR_ID (unchanged by baseFields()).
+  const client = buildClient({});
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const notifyInserts = log.filter((l) => l.table === "notifications").map((l) => JSON.parse(l.calls.find((c) => c[0] === "insert")![1])[0]);
+  const notifiedIds = notifyInserts.map((n: { user_id: string }) => n.user_id);
+  assertEquals(notifiedIds.sort(), [AUTHORITY_ID, REVIEWER_ID].sort());
+  const reviewerNotify = notifyInserts.find((n: { user_id: string }) => n.user_id === REVIEWER_ID);
+  assertEquals(reviewerNotify.title, "You've been assigned as Reviewer");
+  assertEquals(reviewerNotify.link, `/leads/${LEAD_ID}`);
+});
+
+Deno.test("handleRequest - notifies a newly-assigned Person Responsible when reassigned away from the original", async () => {
+  const client = buildClient({
+    lead: leadRow({ person_responsible_id: "old-pr", reviewer_id: REVIEWER_ID, approval_authority_id: AUTHORITY_ID }),
+  });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const notifyInserts = log.filter((l) => l.table === "notifications").map((l) => JSON.parse(l.calls.find((c) => c[0] === "insert")![1])[0]);
+  const notifiedIds = notifyInserts.map((n: { user_id: string }) => n.user_id);
+  assertEquals(notifiedIds, [PR_ID]);
+});
+
+Deno.test("handleRequest - does not notify the caller if they reassign themselves a role", async () => {
+  // Caller is the PR (so they're authorized to edit) and reassigns
+  // themselves as Reviewer too — only the (different) Approval Authority
+  // should get notified.
+  const client = buildClient({
+    caller: callerRow({ id: PR_ID }),
+    lead: leadRow({ status: "pa_review", person_responsible_id: PR_ID }),
+  });
+  const res = await handleRequest(formReq(baseFields({ reviewer_id: PR_ID }), fakeJwt({ sub: PR_ID })), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const notifyInserts = log.filter((l) => l.table === "notifications").map((l) => JSON.parse(l.calls.find((c) => c[0] === "insert")![1])[0]);
+  const notifiedIds = notifyInserts.map((n: { user_id: string }) => n.user_id);
+  assertEquals(notifiedIds, [AUTHORITY_ID]);
+});
+
+Deno.test("handleRequest - saving with no reassignment sends no notifications", async () => {
+  const client = buildClient({
+    lead: leadRow({ person_responsible_id: PR_ID, reviewer_id: REVIEWER_ID, approval_authority_id: AUTHORITY_ID }),
+  });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const notifyInserts = log.filter((l) => l.table === "notifications");
+  assertEquals(notifyInserts.length, 0);
+});

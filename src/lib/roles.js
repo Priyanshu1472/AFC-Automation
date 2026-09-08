@@ -30,7 +30,7 @@ export const ROLE_LABELS = {
   project_officer: "Project Officer",
   associate_consultant: "Associate Consultant",
   project_assistant: "Project Assistant",
-  business_associate: "Business Associate",
+  business_associate: "Business Partner",
   admin: "Administrator",
 };
 

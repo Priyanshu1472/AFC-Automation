@@ -75,7 +75,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   // workflow gate — the actual PMT/PMT Extended authorization is org-wide
   // committee membership (checked server-side), not tied to this team, so
   // both dropdowns just list this team's active members — excluding
-  // Business Associates, who have a team (for the BA-org-name lookup below)
+  // Business Partners, who have a team (for the BP-org-name lookup below)
   // but aren't staff and can't be assigned either role. Approval Authority
   // is the one field still role-filtered: AGM, SRM (same permissions as AGM
   // throughout Lead Generation), or DGM on the team.
@@ -106,7 +106,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   // Each team empanels its own BAs — scoped the same way as Person
   // Responsible/Reviewer above, not org-wide. Sourced via RPC (not a plain
   // afc_users select) so the dropdown shows the organisation name from the
-  // Empanelment module's ba_registrations, not the BA account's contact-
+  // Empanelment module's ba_registrations, not the BP account's contact-
   // person full_name — and because regular lead users have no direct RLS
   // access to empanelment_applications/ba_registrations.
   useEffect(() => {
@@ -152,8 +152,8 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     if (!form.person_responsible_id) errs.person_responsible_id = "Person Responsible is required.";
     if (!form.reviewer_id) errs.reviewer_id = "Reviewer is required.";
     if (!form.approval_authority_id) errs.approval_authority_id = "Approval Authority is required.";
-    if (form.source === "ba" && !form.assigned_ba_id) errs.assigned_ba_id = "Business Associate is required for a BA Source lead.";
-    if (isSuoMoto && !form.assigned_ba_id) errs.assigned_ba_id = "Business Associate is required for a Suo Moto lead.";
+    if (form.source === "ba" && !form.assigned_ba_id) errs.assigned_ba_id = "Business Partner is required for a BP Source lead.";
+    if (isSuoMoto && !form.assigned_ba_id) errs.assigned_ba_id = "Business Partner is required for a Suo Moto lead.";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -249,7 +249,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
                   disabled={submitting || isEdit}
                   onClick={() => set("source", "ba")}
                 >
-                  BA Source
+                  BP Source
                 </button>
                 <button
                   type="button"
@@ -415,22 +415,22 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
           <div className="field">
             <label className="field-label">
               {form.source === "ba" || isSuoMoto ? (
-                <>Business Associate <span className="required">*</span></>
+                <>Business Partner <span className="required">*</span></>
               ) : (
-                "Business Associate (optional)"
+                "Business Partner (optional)"
               )}
             </label>
             <Select
               options={baOptions}
               value={form.assigned_ba_id}
               onChange={(v) => set("assigned_ba_id", v)}
-              placeholder={baOptions.length ? "— Select BA —" : "No empanelled BA found on your team."}
+              placeholder={baOptions.length ? "— Select BP —" : "No empanelled BP found on your team."}
               error={errors.assigned_ba_id}
               disabled={submitting}
             />
             {errors.assigned_ba_id && <span className="field-error">{errors.assigned_ba_id}</span>}
             {baOptions.length === 0 && (
-              <span className="field-hint">No MD-approved (empanelled) Business Associate found on your team yet.</span>
+              <span className="field-hint">No MD-approved (empanelled) Business Partner found on your team yet.</span>
             )}
           </div>
 
