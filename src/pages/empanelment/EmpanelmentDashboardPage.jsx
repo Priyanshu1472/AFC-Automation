@@ -409,7 +409,7 @@ export default function EmpanelmentDashboardPage() {
     const list = [];
     if (stalled.length > 0) list.push({ tone: "warn", icon: Icon.alert, text: `${stalled.length} application${stalled.length > 1 ? "s" : ""} stalled for 5+ days without movement.` });
     if (onHold > 0) list.push({ tone: "warn", icon: Icon.pause, text: `${onHold} application${onHold > 1 ? "s are" : " is"} on hold awaiting a BA correction.` });
-    if (total - provisionalSent > 0 && (role === "dgm" || role === "md")) list.push({ tone: "info", icon: Icon.mail, text: `${total - provisionalSent} application${total - provisionalSent > 1 ? "s haven't" : " hasn't"} had a provisional letter sent yet.` });
+    if (total - provisionalSent > 0 && (role === "dgm" || role === "agm" || role === "md")) list.push({ tone: "info", icon: Icon.mail, text: `${total - provisionalSent} application${total - provisionalSent > 1 ? "s haven't" : " hasn't"} had a provisional letter sent yet.` });
     if (acceptRate !== null && acceptRate >= 70) list.push({ tone: "good", icon: Icon.check, text: `Strong acceptance rate of ${acceptRate}% across decided applications.` });
     if (avgTat !== null) list.push({ tone: "info", icon: Icon.trending, text: `Applications take an average of ${avgTat} day${avgTat !== 1 ? "s" : ""} from being sent to being accepted.` });
     if (stalled.length === 0 && total > 0) list.push({ tone: "good", icon: Icon.check, text: "No stalled applications — the pipeline is moving well." });

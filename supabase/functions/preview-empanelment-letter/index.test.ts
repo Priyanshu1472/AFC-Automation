@@ -17,7 +17,7 @@ const logoOkFetch = (() => Promise.resolve(new Response(pngBytes(), { status: 20
 
 function appRow(overrides: Record<string, unknown> = {}) {
   return {
-    id: APP_ID, status: "md_review", team: "BPDD", application_code: "12345", provisional_letter_sent: false,
+    id: APP_ID, status: "md_review", team: "BPDD", dgm_id: CALLER_ID, application_code: "12345", provisional_letter_sent: false,
     ...overrides,
   };
 }
@@ -67,12 +67,20 @@ Deno.test("final preview - success returns a pdf_base64 without mutating anythin
   });
 });
 
-Deno.test("provisional preview - rejects a DGM from a different team", async () => {
+Deno.test("provisional preview - rejects a DGM/AGM who isn't the assigned advisor", async () => {
   const res = await handleRequest(
     req({ application_id: APP_ID, type: "provisional" }),
-    client({ caller: { id: CALLER_ID, role: "dgm", team: "BIID", is_active: true }, app: appRow({ team: "BPDD" }) }) as never,
+    client({ caller: { id: CALLER_ID, role: "dgm", team: "BPDD", is_active: true }, app: appRow({ dgm_id: "someone-else" }) }) as never,
   );
   assertEquals(res.status, 403);
+});
+
+Deno.test("provisional preview - the assigned AGM can preview it", async () => {
+  const fake = client({ caller: { id: CALLER_ID, role: "agm", team: "BPDD", is_active: true } });
+  await withFetch(logoOkFetch, async () => {
+    const res = await handleRequest(req({ application_id: APP_ID, type: "provisional" }), fake as never);
+    assertEquals(res.status, 200);
+  });
 });
 
 Deno.test("provisional preview - rejects when already sent", async () => {

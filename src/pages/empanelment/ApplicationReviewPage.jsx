@@ -144,7 +144,7 @@ export default function ApplicationReviewPage() {
   const fetchApp = useCallback(async () => {
     const { data: application } = await supabase
       .from("empanelment_applications")
-      .select("*, po:project_officer_id(id, full_name, email, role), dgm:dgm_id(id, full_name, email), ac:sent_by(id, full_name, email)")
+      .select("*, po:project_officer_id(id, full_name, email, role), dgm:dgm_id(id, full_name, email, role), ac:sent_by(id, full_name, email)")
       .eq("id", id)
       .maybeSingle();
     setApp(application);
@@ -262,7 +262,9 @@ export default function ApplicationReviewPage() {
     if (["project_officer", "project_assistant"].includes(role) && app.project_officer_id === profile.id && (s === "po_review" || s === "po_final_review")) return true;
     if (role === "cfo" && s === "cfo_cs_review" && !app.cfo_reviewed) return true;
     if (role === "cs" && s === "cfo_cs_review" && !app.cs_reviewed) return true;
-    if (role === "dgm" && app.team === profile.team && s === "dgm_review") return true;
+    // The dgm_review stage belongs to the assigned advising authority
+    // (dgm_id) — a DGM or an AGM — not just any DGM on the team.
+    if (["dgm", "agm"].includes(role) && app.dgm_id === profile.id && s === "dgm_review") return true;
     if (role === "md" && s === "md_review") return true;
     return false;
   }
@@ -278,6 +280,11 @@ export default function ApplicationReviewPage() {
 
   const isFinalised = ["accepted", "rejected"].includes(app.status);
   const userCanAct = canAct();
+  // The advising authority stage carries the assigned person's real role —
+  // "AGM" when an AGM was assigned instead of a DGM (see SendEmpanelmentPage).
+  const advisorRole = app.dgm?.role;
+  const advisorLabel = advisorRole === "agm" ? "AGM" : "DGM";
+  const isAssignedAdvisor = ["dgm", "agm"].includes(role) && app.dgm_id === profile.id;
 
   return (
     <div className="app-shell">
@@ -291,7 +298,7 @@ export default function ApplicationReviewPage() {
               <div className="ar-header-left">
                 <div className="ar-header-badges">
                   <Badge variant="brand">Application Review</Badge>
-                  <Badge variant={STATUS_BADGE[app.status] || "neutral"} dot>{stepLabel(app.status, STATUS_FLOW.find((s) => s.key === app.status)?.label, app.po?.role) || app.status}</Badge>
+                  <Badge variant={STATUS_BADGE[app.status] || "neutral"} dot>{stepLabel(app.status, STATUS_FLOW.find((s) => s.key === app.status)?.label, app.po?.role, advisorRole) || app.status}</Badge>
                 </div>
                 <h1 className="ar-header-email">{app.ba_email}</h1>
                 <p className="ar-header-meta">Code: <strong>{app.application_code}</strong> · Team: <strong>{app.team || "—"}</strong> · Sent: <strong>{fmtDate(app.created_at)}</strong></p>
@@ -302,7 +309,7 @@ export default function ApplicationReviewPage() {
           <Card>
             <Card.Body className="ar-stepper-body">
               <p className="ar-stepper-heading">Application Progress</p>
-              <ProgressStepper currentStatus={app.status} reviewerRole={app.po?.role} />
+              <ProgressStepper currentStatus={app.status} reviewerRole={app.po?.role} advisorRole={advisorRole} />
             </Card.Body>
           </Card>
 
@@ -314,7 +321,7 @@ export default function ApplicationReviewPage() {
                   <Row label="BA Email" value={app.ba_email} />
                   <Row label="Sent By (AC)" value={app.ac?.full_name} />
                   <Row label="Project Officer" value={app.po?.full_name} />
-                  <Row label="DGM" value={app.dgm?.full_name} />
+                  <Row label={advisorLabel} value={app.dgm?.full_name} />
                   <Row label="Team" value={app.team} />
                   <Row label="Office" value={app.office} />
                   <Row label="Application Code" value={app.application_code} />
@@ -435,7 +442,7 @@ export default function ApplicationReviewPage() {
                       <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleCSForward}>{actionLoading ? "Saving..." : "Submit Review"}</Button>
                     </>)}
 
-                    {role === "dgm" && (<>
+                    {["dgm", "agm"].includes(role) && (<>
                       <div className="ar-field">
                         <label className="ar-label">Recommendation Comment <span className="ar-required">*</span></label>
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your recommendation..." rows={4} />
@@ -450,11 +457,11 @@ export default function ApplicationReviewPage() {
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your remarks along with the final decision..." rows={4} />
                       </div>
                       <Button variant="primary" block disabled={!comment.trim() || actionLoading} icon={<CheckIcon />} onClick={() => setShowAcceptPin(true)}>Accept</Button>
-                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleMDSendBack}>Send Back to DGM</Button>
+                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleMDSendBack}>Send Back to {advisorLabel}</Button>
                       <Button variant="danger" block disabled={actionLoading} icon={<XIcon />} onClick={() => setShowReject(true)}>Reject</Button>
                     </>)}
 
-                    {["project_officer", "project_assistant", "dgm", "md"].includes(role) && (
+                    {["project_officer", "project_assistant", "dgm", "agm", "md"].includes(role) && (
                       <>
                         <hr className="divider" />
                         <Button variant="secondary" block disabled={actionLoading} onClick={() => setShowHoldModal(true)}>Raise Compliance Hold</Button>
@@ -464,7 +471,7 @@ export default function ApplicationReviewPage() {
                 </Card>
               )}
 
-              {role === "dgm" && baData && app.status !== "rejected" && (
+              {isAssignedAdvisor && baData && app.status !== "rejected" && (
                 <Card className="ar-action-card">
                   <Card.Header title="Provisional Letter" action={app.provisional_letter_sent ? <Badge variant="success">Sent</Badge> : null} />
                   <Card.Body className="ar-action-body">
@@ -507,7 +514,7 @@ export default function ApplicationReviewPage() {
               )}
 
               {!userCanAct && !isFinalised && app.status !== "on_hold" && (
-                <Card><Card.Body className="ar-view-only"><EyeIcon /><span>Viewing only. Action pending from <strong>{stepLabel(app.status, STATUS_FLOW.find((s) => s.key === app.status)?.label, app.po?.role) || app.status}</strong></span></Card.Body></Card>
+                <Card><Card.Body className="ar-view-only"><EyeIcon /><span>Viewing only. Action pending from <strong>{stepLabel(app.status, STATUS_FLOW.find((s) => s.key === app.status)?.label, app.po?.role, advisorRole) || app.status}</strong></span></Card.Body></Card>
               )}
 
               <Card>

@@ -51,12 +51,15 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     return jsonRes(req, 400, { error: "Invalid JSON body." });
   }
 
-  const { ba_email, project_officer_id, team: requestedTeam } = body;
+  const { ba_email, project_officer_id, advisor_id, team: requestedTeam } = body;
   if (!ba_email || typeof ba_email !== "string" || !isValidEmail(ba_email)) {
     return jsonRes(req, 400, { error: "A valid BA email is required." });
   }
   if (!project_officer_id || typeof project_officer_id !== "string") {
     return jsonRes(req, 400, { error: "Project Officer is required." });
+  }
+  if (advisor_id !== undefined && advisor_id !== null && typeof advisor_id !== "string") {
+    return jsonRes(req, 400, { error: "Invalid advising authority." });
   }
   // A multi-team caller can pick which of their assigned teams this invite
   // is for (the client sends its currently active team) — falls back to
@@ -101,13 +104,32 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       }
     }
 
-    const { data: dgm } = await adminClient
-      .from("afc_users")
-      .select("id, full_name")
-      .eq("role", "dgm")
-      .eq("team", team)
-      .eq("is_active", true)
-      .maybeSingle();
+    // The advising authority is the DGM or AGM the sender picked (the client
+    // offers the team's active DGMs + AGMs) — re-validated here rather than
+    // trusted. Older clients send no advisor_id: fall back to the team's DGM,
+    // same as before this became a choice.
+    let advisor: { id: string; full_name: string; role: string } | null = null;
+    if (advisor_id) {
+      const { data: picked, error: advErr } = await adminClient
+        .from("afc_users")
+        .select("id, full_name, role")
+        .eq("id", advisor_id)
+        .in("role", ["dgm", "agm"])
+        .eq("team", team)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (advErr || !picked) return jsonRes(req, 400, { error: "Invalid advising authority for your team — pick an active DGM or AGM." });
+      advisor = picked;
+    } else {
+      const { data: dgm } = await adminClient
+        .from("afc_users")
+        .select("id, full_name, role")
+        .eq("role", "dgm")
+        .eq("team", team)
+        .eq("is_active", true)
+        .maybeSingle();
+      advisor = dgm || null;
+    }
 
     // One active (non-terminal) invitation per BA email at a time.
     const { data: existing } = await adminClient
@@ -135,14 +157,14 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         office: caller.office,
         sent_by: caller.id,
         project_officer_id: po.id,
-        dgm_id: dgm?.id || null,
+        dgm_id: advisor?.id || null,
       })
       .select("id")
       .single();
     if (insertErr) throw new Error("Failed to save invitation: " + insertErr.message);
 
-    const advisedByName = dgm?.full_name || "AFC India Limited";
-    const advisedByDesig = dgm ? ROLE_LABELS["dgm"] : ROLE_LABELS[caller.role] || caller.role;
+    const advisedByName = advisor?.full_name || "AFC India Limited";
+    const advisedByDesig = advisor ? (ROLE_LABELS[advisor.role] || advisor.role) : (ROLE_LABELS[caller.role] || caller.role);
     const siteUrl = Deno.env.get("SITE_URL") || "http://localhost:5173";
 
     const html = wrapEmailBody(`
@@ -182,10 +204,10 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       type: "info",
       link: `/empanelment/${app.id}`,
     });
-    if (dgm?.id) {
-      await notifyUser(adminClient, dgm.id, {
+    if (advisor?.id) {
+      await notifyUser(adminClient, advisor.id, {
         title: "New empanelment invite sent",
-        sub_text: `An invite was sent to ${normalizedEmail} on your team.`,
+        sub_text: `An invite was sent to ${normalizedEmail}. You're the advising ${ROLE_LABELS[advisor.role] || "authority"} on it.`,
         type: "info",
         link: `/empanelment/${app.id}`,
       });

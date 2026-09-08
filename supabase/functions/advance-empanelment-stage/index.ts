@@ -7,7 +7,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
+import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 import { notifyUser, notifyRole, notifyTeam, emailRole, emailUser } from "../_shared/notify.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
@@ -22,6 +22,14 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 const PO_REVIEWER_ROLES = ["project_officer", "project_assistant"];
 function reviewerLabel(role: string): string {
   return role === "project_assistant" ? "Project Assistant" : "Project Officer";
+}
+
+// The "DGM" review stage belongs to whichever advising authority the sender
+// assigned — a DGM or an AGM (see send-empanelment-invite). dgm_id holds
+// that person regardless of role; only they can act at dgm_review.
+const ADVISOR_ROLES = ["dgm", "agm"];
+function advisorLabel(role: string): string {
+  return role === "agm" ? "AGM" : "DGM";
 }
 
 // CFO/CS previously only got the in-app bell notification when an
@@ -367,39 +375,39 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "dgm_recommend": {
-        if (caller.role !== "dgm" || !isCallerOnTeam(caller, app.team)) return forbidden("Only the team's DGM can act on this application.");
+        if (!ADVISOR_ROLES.includes(caller.role) || caller.id !== app.dgm_id) return forbidden("Only the advising authority assigned to this application can act on it.");
         if (app.status !== "dgm_review") return badState("dgm_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "md_review", dgm_comment: trimmedComment }).eq("id", app.id);
         await logActivity(adminClient, app.id, caller.id, caller.role, "dgm_recommended", trimmedComment);
         await notifyRole(adminClient, "md", {
           title: "Empanelment application awaiting your decision",
-          sub_text: `${orgName}'s application was recommended by the DGM and is ready for a final decision.`,
+          sub_text: `${orgName}'s application was recommended by the ${advisorLabel(caller.role)} and is ready for a final decision.`,
           type: "action_required",
           link: `/empanelment/${app.id}`,
         });
         await emailRole(adminClient, "md", {
           subject: "Empanelment Application Awaiting Your Decision — AFC India Limited",
-          html: actionRequiredEmailHtml(orgName, app.id, "make a final decision — the DGM has recommended this application"),
+          html: actionRequiredEmailHtml(orgName, app.id, `make a final decision — the ${advisorLabel(caller.role)} has recommended this application`),
         });
         return jsonRes(req, 200, { success: true, status: "md_review" });
       }
 
       case "dgm_send_back": {
-        if (caller.role !== "dgm" || !isCallerOnTeam(caller, app.team)) return forbidden("Only the team's DGM can act on this application.");
+        if (!ADVISOR_ROLES.includes(caller.role) || caller.id !== app.dgm_id) return forbidden("Only the advising authority assigned to this application can act on it.");
         if (app.status !== "dgm_review") return badState("dgm_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "po_final_review" }).eq("id", app.id);
         await logActivity(adminClient, app.id, caller.id, caller.role, "dgm_sent_back", trimmedComment);
         await notifyUser(adminClient, app.project_officer_id, {
           title: "Empanelment application sent back",
-          sub_text: `${orgName}'s application was sent back by the DGM for another look.`,
+          sub_text: `${orgName}'s application was sent back by the ${advisorLabel(caller.role)} for another look.`,
           type: "action_required",
           link: `/empanelment/${app.id}`,
         });
         await emailUser(adminClient, app.project_officer_id, {
           subject: "Empanelment Application Sent Back — AFC India Limited",
-          html: actionRequiredEmailHtml(orgName, app.id, "take another look — it was sent back by the DGM"),
+          html: actionRequiredEmailHtml(orgName, app.id, `take another look — it was sent back by the ${advisorLabel(caller.role)}`),
         });
         return jsonRes(req, 200, { success: true, status: "po_final_review" });
       }

@@ -1,9 +1,10 @@
 // supabase/functions/_shared/provisionalLetterPdf.ts
-// The DGM's non-final, provisional empanelment letter — distinct from the
-// MD's final Empanelment Letter (_shared/empanelmentLetterPdf.ts). Sendable
-// at any stage once the BA has filled the form, signed by whichever DGM is
-// actually issuing it. Ported from the previous AFC empanelment app's
-// send-provisional-mail function.
+// The advising authority's non-final, provisional empanelment letter —
+// distinct from the MD's final Empanelment Letter
+// (_shared/empanelmentLetterPdf.ts). Sendable at any stage once the BA has
+// filled the form, signed by the application's assigned advisor (a DGM or an
+// AGM) with the designation line following their actual role. Ported from
+// the previous AFC empanelment app's send-provisional-mail function.
 //
 // Shared between send-provisional-letter (the real send, which persists
 // provisional_letter_sent) and preview-empanelment-letter (a read-only
@@ -133,18 +134,21 @@ export type BuiltProvisionalLetter = {
   validUntilStr: string;
 };
 
-// Fetches everything the letter needs (issuing DGM's identity/signature,
+// Fetches everything the letter needs (issuing advisor's identity/signature,
 // logo, next ref number) and renders the PDF — never writes anything to
 // the DB. Callers decide whether to persist `provisional_letter_sent`
-// (the real send does; a preview does not).
+// (the real send does; a preview does not). The signatory is the assigned
+// advising authority, a DGM or an AGM (see send-empanelment-invite), so the
+// designation line follows their actual role.
 export async function buildProvisionalLetter(
   admin: AdminClient,
   app: { application_code: string | null },
   reg: { org_name: string | null; contact_person: string | null; designation: string | null; reg_address: string | null },
-  dgmId: string
+  signatoryId: string
 ): Promise<BuiltProvisionalLetter | null> {
-  const { data: dgmRow } = await admin.from("afc_users").select("full_name, signature_path").eq("id", dgmId).maybeSingle();
-  const signatureBytes = await fetchSignatureBytes(admin, dgmRow?.signature_path);
+  const { data: signatoryRow } = await admin.from("afc_users").select("full_name, role, signature_path").eq("id", signatoryId).maybeSingle();
+  const signatureBytes = await fetchSignatureBytes(admin, signatoryRow?.signature_path);
+  const signatoryDesignation = signatoryRow?.role === "agm" ? "ASSISTANT GENERAL MANAGER" : "DEPUTY GENERAL MANAGER";
 
   const logoUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/public-assets/Logo.png`;
   const logoRes = await fetch(logoUrl);
@@ -174,8 +178,8 @@ export async function buildProvisionalLetter(
     orgName,
     regAddress: reg.reg_address || "",
     applicationCode: app.application_code || "",
-    signatoryName: (dgmRow?.full_name || "Deputy General Manager").toUpperCase(),
-    signatoryDesignation: "DEPUTY GENERAL MANAGER",
+    signatoryName: (signatoryRow?.full_name || signatoryDesignation).toUpperCase(),
+    signatoryDesignation,
     validUntil: validUntilStr,
     validityMonths: 3,
     signatureBytes,

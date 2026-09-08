@@ -57,10 +57,10 @@ function StepBar({ current }) {
   );
 }
 
-function SenderInfoRow({ profile, team, dgmUser }) {
+function SenderInfoRow({ profile, team, advisorName }) {
   const items = [
     { label: "Sent by", value: profile?.full_name },
-    { label: "Advised by", value: dgmUser?.full_name || profile?.full_name },
+    { label: "Advised by", value: advisorName || profile?.full_name },
     { label: "Team", value: team, highlight: true },
     { label: "Office", value: capitalise(profile?.office) },
   ];
@@ -140,7 +140,7 @@ export default function SendEmpanelmentPage() {
   const { profile, activeTeam } = useAuth();
   const team = activeTeam ?? profile?.team;
 
-  const [form, setForm] = useState({ projectOfficer: "", baEmail: "" });
+  const [form, setForm] = useState({ projectOfficer: "", baEmail: "", advisorId: "" });
   const [fieldErrors, setFieldErrors] = useState({});
   const [projectOfficers, setProjectOfficers] = useState([]);
   // Falls back to the team's Project Assistants when there's no active
@@ -148,7 +148,10 @@ export default function SendEmpanelmentPage() {
   // one(s) are deactivated) — tracks which pool is currently shown so the
   // label/warning can reflect it.
   const [reviewerRole, setReviewerRole] = useState("project_officer");
-  const [dgmUser, setDgmUser] = useState(null);
+  // The advising authority the invite goes out under — the team's active
+  // DGMs and AGMs. The sender picks (DGM listed first); auto-selected when
+  // there's only one.
+  const [advisors, setAdvisors] = useState([]);
   const [loadingPOs, setLoadingPOs] = useState(true);
   const [step, setStep] = useState(0);
   const [sending, setSending] = useState(false);
@@ -160,9 +163,9 @@ export default function SendEmpanelmentPage() {
       setLoadingPOs(false);
       return;
     }
-    const [{ data: pos }, { data: dgm }] = await Promise.all([
+    const [{ data: pos }, { data: advs }] = await Promise.all([
       supabase.from("afc_users").select("id, full_name, email").eq("role", "project_officer").eq("team", team).eq("is_active", true).order("full_name"),
-      supabase.from("afc_users").select("id, full_name, email").eq("role", "dgm").eq("team", team).eq("is_active", true).limit(1).maybeSingle(),
+      supabase.from("afc_users").select("id, full_name, email, role").in("role", ["dgm", "agm"]).eq("team", team).eq("is_active", true).order("role", { ascending: false }).order("full_name"),
     ]);
     if (pos && pos.length > 0) {
       setProjectOfficers(pos);
@@ -172,7 +175,8 @@ export default function SendEmpanelmentPage() {
       setProjectOfficers(pas || []);
       setReviewerRole("project_assistant");
     }
-    setDgmUser(dgm || null);
+    setAdvisors(advs || []);
+    setForm((p) => ({ ...p, advisorId: p.advisorId || advs?.[0]?.id || "" }));
     setLoadingPOs(false);
   }, [team]);
 
@@ -181,9 +185,11 @@ export default function SendEmpanelmentPage() {
   }, [fetchPOs]);
 
   const selectedPO = projectOfficers.find((p) => p.id === form.projectOfficer);
-  const advisedByName = dgmUser?.full_name || profile?.full_name || "";
-  const advisedByDesig = dgmUser ? ROLE_LABELS.dgm : ROLE_LABELS[profile?.role] || profile?.role || "";
+  const selectedAdvisor = advisors.find((a) => a.id === form.advisorId) || null;
+  const advisedByName = selectedAdvisor?.full_name || profile?.full_name || "";
+  const advisedByDesig = selectedAdvisor ? (ROLE_LABELS[selectedAdvisor.role] || selectedAdvisor.role) : (ROLE_LABELS[profile?.role] || profile?.role || "");
   const poOptions = projectOfficers.map((po) => ({ value: po.id, label: `${po.full_name} (${po.email})` }));
+  const advisorOptions = advisors.map((a) => ({ value: a.id, label: `${a.full_name} — ${ROLE_LABELS[a.role] || a.role}` }));
   const reviewerLabel = ROLE_LABELS[reviewerRole] || "Project Officer";
 
   function handleGoToPreview() {
@@ -205,7 +211,7 @@ export default function SendEmpanelmentPage() {
     setSending(true);
     try {
       const { data, error } = await supabase.functions.invoke("send-empanelment-invite", {
-        body: { ba_email: form.baEmail.trim().toLowerCase(), project_officer_id: form.projectOfficer, team },
+        body: { ba_email: form.baEmail.trim().toLowerCase(), project_officer_id: form.projectOfficer, advisor_id: form.advisorId || null, team },
       });
       if (error) {
         setSendError(await extractFunctionErrorMessage(error, "Failed to send invitation."));
@@ -225,7 +231,7 @@ export default function SendEmpanelmentPage() {
   }
 
   function handleSendAnother() {
-    setForm({ projectOfficer: "", baEmail: "" });
+    setForm({ projectOfficer: "", baEmail: "", advisorId: advisors[0]?.id || "" });
     setFieldErrors({});
     setSendError("");
     setSentToEmail("");
@@ -257,8 +263,22 @@ export default function SendEmpanelmentPage() {
               <Card className="sef-main-card">
                 <Card.Header title="Send Empanelment Form" subtitle={`Select a ${reviewerLabel} and enter the BA's email address.`} action={<Badge variant="brand">Step 1 of 2</Badge>} />
                 <Card.Body className="sef-card-body">
-                  <SenderInfoRow profile={profile} team={team} dgmUser={dgmUser} />
+                  <SenderInfoRow profile={profile} team={team} advisorName={advisedByName} />
                   <div className="sef-divider" />
+
+                  {advisors.length > 1 && (
+                    <div className="sef-field">
+                      <label className="sef-label" htmlFor="sef-advisor-select">Advising Authority <span className="sef-required">*</span></label>
+                      <Select
+                        id="sef-advisor-select"
+                        options={advisorOptions}
+                        value={form.advisorId}
+                        onChange={(val) => setForm((p) => ({ ...p, advisorId: val }))}
+                        placeholder="Select the advising DGM or AGM"
+                      />
+                      <span className="sef-field-hint">The invitation email goes out &ldquo;as advised by&rdquo; this person, and they own the DGM review stage.</span>
+                    </div>
+                  )}
 
                   <div className="sef-field">
                     <label className="sef-label" htmlFor="sef-po-select">{reviewerLabel} <span className="sef-required">*</span></label>

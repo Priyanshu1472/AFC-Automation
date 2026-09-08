@@ -63,12 +63,26 @@ Deno.test("raise-empanelment-hold - PO who isn't assigned to this application is
   assertEquals(res.status, 403);
 });
 
-Deno.test("raise-empanelment-hold - DGM from a different team is rejected", async () => {
+Deno.test("raise-empanelment-hold - a DGM/AGM who isn't the assigned advisor is rejected", async () => {
   const res = await handleRequest(
     req({ application_id: APP_ID, flags: VALID_FLAGS }),
-    client({ id: CALLER_ID, role: "dgm", team: "BIID", is_active: true }, appRow({ status: "dgm_review", team: "BPDD" })) as never,
+    client({ id: CALLER_ID, role: "dgm", team: "BPDD", is_active: true }, appRow({ status: "dgm_review", dgm_id: "someone-else" })) as never,
   );
   assertEquals(res.status, 403);
+});
+
+Deno.test("raise-empanelment-hold - the assigned AGM can raise a hold at dgm_review", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = okFetch;
+  try {
+    const res = await handleRequest(
+      req({ application_id: APP_ID, flags: VALID_FLAGS }),
+      client({ id: CALLER_ID, role: "agm", team: "BPDD", is_active: true }, appRow({ status: "dgm_review", dgm_id: CALLER_ID })) as never,
+    );
+    assertEquals(res.status, 200);
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 
 Deno.test("raise-empanelment-hold - PO can't raise a hold once it's moved past their stage", async () => {

@@ -42,15 +42,18 @@ const STATUS_OPTIONS = [
 
 const PAGE_SIZE = 10;
 
-// A team with no active Project Officer sends the empanelment invite to a
-// Project Assistant instead (see SendEmpanelmentPage) — the PO/PO Final
-// labels then belong to that Project Assistant for this application's whole
-// lifetime.
-function StatusBadge({ status, reviewerRole }) {
+// Two review stages carry a role that isn't fixed: PO/PO Final go to a
+// Project Assistant when the team has no active PO, and DGM goes to an AGM
+// when the sender assigned an AGM as advising authority. The badge label
+// follows whoever is actually on the hook (see SendEmpanelmentPage).
+function StatusBadge({ status, reviewerRole, advisorRole }) {
   const config = STATUS_MAP[status] || { label: status, variant: "neutral" };
-  const label = (status === "po_review" || status === "po_final_review") && reviewerRole === "project_assistant"
-    ? config.label.replace("PO", "PA")
-    : config.label;
+  let label = config.label;
+  if ((status === "po_review" || status === "po_final_review") && reviewerRole === "project_assistant") {
+    label = label.replace("PO", "PA");
+  } else if (status === "dgm_review" && advisorRole === "agm") {
+    label = label.replace("DGM", "AGM");
+  }
   return <Badge variant={config.variant} dot className="bl-status-badge">{label}</Badge>;
 }
 
@@ -78,7 +81,7 @@ function DetailField({ label, value }) {
   );
 }
 
-function BADetailModal({ ba, invStatus, invReviewerRole, canReview, onReview, onClose }) {
+function BADetailModal({ ba, invStatus, invReviewerRole, invAdvisorRole, canReview, onReview, onClose }) {
   if (!ba) return null;
   return (
     <div className="bl-modal-backdrop" onClick={onClose}>
@@ -89,7 +92,7 @@ function BADetailModal({ ba, invStatus, invReviewerRole, canReview, onReview, on
             <p className="bl-modal-sub">{fmt(ba.contact_person)} · {fmt(ba.email)} · {fmt(ba.phone)}</p>
           </div>
           <div className="bl-modal-header-right">
-            <StatusBadge status={invStatus} reviewerRole={invReviewerRole} />
+            <StatusBadge status={invStatus} reviewerRole={invReviewerRole} advisorRole={invAdvisorRole} />
             {canReview && <Button variant="primary" size="sm" onClick={onReview}>Review</Button>}
             <button className="bl-modal-close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
           </div>
@@ -188,6 +191,7 @@ export default function EmpanelmentListPage() {
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [selectedAppId, setSelectedAppId] = useState(null);
   const [selectedReviewerRole, setSelectedReviewerRole] = useState(null);
+  const [selectedAdvisorRole, setSelectedAdvisorRole] = useState(null);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [teamFilter, setTeamFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -197,7 +201,7 @@ export default function EmpanelmentListPage() {
     // automatically per role/team — no client-side team filter needed.
     const { data, error } = await supabase
       .from("empanelment_applications")
-      .select("*, ba_reg:ba_registrations(*), po:project_officer_id(role)")
+      .select("*, ba_reg:ba_registrations(*), po:project_officer_id(role), dgm:dgm_id(role)")
       .order("created_at", { ascending: false });
     if (!error) {
       setApplications((data || []).map((a) => ({ ...a, ba_reg: Array.isArray(a.ba_reg) ? a.ba_reg[0] || null : a.ba_reg })));
@@ -285,7 +289,7 @@ export default function EmpanelmentListPage() {
   const canSend = ["associate_consultant", "project_assistant"].includes(profile?.role);
   // Admin included so it can open the full read-only review page (timeline,
   // documents, etc.) — it has no action branch there, so it lands view-only.
-  const canReview = ["project_officer", "project_assistant", "cfo", "cs", "dgm", "md", "admin"].includes(profile?.role);
+  const canReview = ["project_officer", "project_assistant", "cfo", "cs", "dgm", "agm", "md", "admin"].includes(profile?.role);
 
   if (loading) return <PageLoader text="Loading applications…" />;
 
@@ -346,7 +350,7 @@ export default function EmpanelmentListPage() {
                       <tr
                         key={a.id}
                         className={a.ba_reg ? "bl-row-clickable" : undefined}
-                        onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedStatus(a.status); setSelectedAppId(a.id); setSelectedReviewerRole(a.po?.role || null); } : undefined}
+                        onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedStatus(a.status); setSelectedAppId(a.id); setSelectedReviewerRole(a.po?.role || null); setSelectedAdvisorRole(a.dgm?.role || null); } : undefined}
                       >
                         <td><span className="bl-app-code">{a.application_code || "—"}</span></td>
                         <td className="bl-email" title={a.ba_email || ""}>{fmt(a.ba_email)}</td>
@@ -354,7 +358,7 @@ export default function EmpanelmentListPage() {
                         <td className="bl-contact" title={a.ba_reg?.contact_person || ""}>{fmt(a.ba_reg?.contact_person)}</td>
                         <td>{a.team ? <Badge variant="neutral">{a.team}</Badge> : "—"}</td>
                         <td className="bl-date">{fmtDate(a.created_at)}</td>
-                        <td><StatusBadge status={a.status} reviewerRole={a.po?.role} /></td>
+                        <td><StatusBadge status={a.status} reviewerRole={a.po?.role} advisorRole={a.dgm?.role} /></td>
                         <td onClick={(e) => e.stopPropagation()}>
                           <div className="bl-actions">
                             {a.ba_reg && canReview && (
@@ -393,9 +397,10 @@ export default function EmpanelmentListPage() {
         ba={selectedBA}
         invStatus={selectedStatus}
         invReviewerRole={selectedReviewerRole}
+        invAdvisorRole={selectedAdvisorRole}
         canReview={canReview}
         onReview={() => navigate(`/empanelment/${selectedAppId}`)}
-        onClose={() => { setSelectedBA(null); setSelectedStatus(null); setSelectedAppId(null); setSelectedReviewerRole(null); }}
+        onClose={() => { setSelectedBA(null); setSelectedStatus(null); setSelectedAppId(null); setSelectedReviewerRole(null); setSelectedAdvisorRole(null); }}
       />
 
       <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={() => setStatusFilter("all")}>

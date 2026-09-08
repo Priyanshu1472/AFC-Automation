@@ -94,6 +94,28 @@ Deno.test("send-empanelment-invite - succeeds even when the team has no DGM assi
   }
 });
 
+Deno.test("send-empanelment-invite - accepts an AGM as the advising authority", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = okFetch;
+  try {
+    const res = await handleRequest(
+      req({ ba_email: "ba@org.com", project_officer_id: PO_ID, advisor_id: "agm-1" }),
+      client({ dgm: { id: "agm-1", full_name: "AGM Person", role: "agm" } }) as never,
+    );
+    assertEquals(res.status, 200);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("send-empanelment-invite - rejects an advisor_id that isn't an active DGM or AGM on the team", async () => {
+  const res = await handleRequest(
+    req({ ba_email: "ba@org.com", project_officer_id: PO_ID, advisor_id: "not-a-real-advisor" }),
+    client({ dgm: null }) as never,
+  );
+  assertEquals(res.status, 400);
+});
+
 Deno.test("send-empanelment-invite - a multi-team caller can target a non-primary assigned team via `team`", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = okFetch;

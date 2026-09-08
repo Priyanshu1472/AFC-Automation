@@ -15,15 +15,19 @@ export const STATUS_FLOW = [
   { key: "md_review", label: "MD" },
 ];
 
-// A team with no active Project Officer sends the empanelment invite to a
-// Project Assistant instead (see SendEmpanelmentPage) — the PO/PO Final
-// steps then belong to that Project Assistant for this application's whole
-// lifetime, so the stepper/badges swap wording when the assigned reviewer
-// (the applied application's project_officer_id) turns out to be one.
+// Two of the review steps belong to a role that isn't fixed:
+//  - PO / PO Final go to a Project Assistant when the team has no active
+//    Project Officer (see SendEmpanelmentPage).
+//  - DGM goes to an AGM when the sender assigned an AGM as the advising
+//    authority instead of a DGM.
+// The stepper/badges swap wording to match the person actually assigned.
 const PO_STEP_KEYS = new Set(["po_review", "po_final_review"]);
-export function stepLabel(stepKey, label, reviewerRole) {
-  if (!PO_STEP_KEYS.has(stepKey) || reviewerRole !== "project_assistant") return label;
-  return stepKey === "po_final_review" ? "PA Final" : "PA";
+export function stepLabel(stepKey, label, reviewerRole, advisorRole) {
+  if (PO_STEP_KEYS.has(stepKey) && reviewerRole === "project_assistant") {
+    return stepKey === "po_final_review" ? "PA Final" : "PA";
+  }
+  if (stepKey === "dgm_review" && advisorRole === "agm") return "AGM";
+  return label;
 }
 
 // Spelled-out labels for the public (no-login) status-check page — the
@@ -42,6 +46,7 @@ const STATUS_FLOW_FULL_LABELS_PA = {
   po_review: "Project Assistant",
   po_final_review: "Project Assistant (Final Review)",
 };
+const STATUS_FLOW_FULL_LABEL_AGM = "Assistant General Manager";
 
 export const STATUS_BADGE = {
   sent: "info", filled: "warning", po_review: "warning",
@@ -52,14 +57,17 @@ export const STATUS_BADGE = {
 function CheckIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>; }
 function XIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>; }
 
-export function ProgressStepper({ currentStatus, publicView = false, reviewerRole }) {
+export function ProgressStepper({ currentStatus, publicView = false, reviewerRole, advisorRole }) {
   const keys = STATUS_FLOW.map((s) => s.key);
   const isAccepted = currentStatus === "accepted";
   const isRejected = currentStatus === "rejected";
   const isHold = currentStatus === "on_hold";
   const currentIdx = isAccepted || isRejected ? keys.length - 1 : keys.indexOf(currentStatus);
   const isPA = reviewerRole === "project_assistant";
-  const fullLabels = isPA ? STATUS_FLOW_FULL_LABELS_PA : STATUS_FLOW_FULL_LABELS;
+  const fullLabels = {
+    ...(isPA ? STATUS_FLOW_FULL_LABELS_PA : STATUS_FLOW_FULL_LABELS),
+    ...(advisorRole === "agm" ? { dgm_review: STATUS_FLOW_FULL_LABEL_AGM } : {}),
+  };
 
   return (
     <div className={`ar-stepper${publicView ? " ar-stepper-public" : ""}`}>
@@ -73,7 +81,7 @@ export function ProgressStepper({ currentStatus, publicView = false, reviewerRol
               <div className={["ar-step-dot", isRejectedStep ? "ar-step-rejected" : "", isCurrent ? "ar-step-current" : "", isDone ? "ar-step-done" : ""].filter(Boolean).join(" ")}>
                 {isRejectedStep ? <XIcon /> : isDone || isAccepted ? <CheckIcon /> : null}
               </div>
-              <span className={["ar-step-label", isRejectedStep ? "ar-step-label-rejected" : "", isCurrent ? "ar-step-label-current" : "", isDone ? "ar-step-label-done" : ""].filter(Boolean).join(" ")}>{publicView ? fullLabels[step.key] : stepLabel(step.key, step.label, reviewerRole)}</span>
+              <span className={["ar-step-label", isRejectedStep ? "ar-step-label-rejected" : "", isCurrent ? "ar-step-label-current" : "", isDone ? "ar-step-label-done" : ""].filter(Boolean).join(" ")}>{publicView ? fullLabels[step.key] : stepLabel(step.key, step.label, reviewerRole, advisorRole)}</span>
             </div>
           </div>
         );

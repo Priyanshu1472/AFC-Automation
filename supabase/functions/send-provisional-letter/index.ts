@@ -1,5 +1,6 @@
 // supabase/functions/send-provisional-letter/index.ts
-// JWT must be ON. Only the assigned team's DGM can send this — it's a
+// JWT must be ON. Only the application's assigned advising authority (the DGM
+// or AGM in empanelment_applications.dgm_id) can send this — it's a
 // non-final, provisional empanelment letter (PDF) emailed to the BA, distinct
 // from the MD's final acceptance email (see the "Empanelment Letter" attached
 // in advance-empanelment-stage's md_accept). Sendable at ANY stage once the
@@ -76,7 +77,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
 
-  if (caller.role !== "dgm") return jsonRes(req, 403, { error: "Only a DGM can send the provisional empanelment letter." });
+  if (!["dgm", "agm"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM or AGM can send the provisional empanelment letter." });
 
   let body: Record<string, unknown>;
   try {
@@ -90,12 +91,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: app, error: appErr } = await adminClient
     .from("empanelment_applications")
-    .select("id, status, ba_email, team, sent_by, application_code, provisional_letter_sent")
+    .select("id, status, ba_email, team, sent_by, dgm_id, application_code, provisional_letter_sent")
     .eq("id", application_id)
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
 
-  if (!isCallerOnTeam(caller, app.team)) return jsonRes(req, 403, { error: "Only the team's DGM can send the provisional letter for this application." });
+  if (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id) {
+    return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can send its provisional letter." });
+  }
   if (!ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: `The BA hasn't submitted their form yet, so there's nothing to send a letter for.` });
   if (app.provisional_letter_sent) return jsonRes(req, 400, { error: "A provisional letter has already been sent for this application." });
 

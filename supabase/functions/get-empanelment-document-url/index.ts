@@ -49,7 +49,9 @@ serve(async (req) => {
   const caller = callerResult.caller;
   const authorized =
     ["md", "cfo", "cs", "admin"].includes(caller.role) ||
-    (caller.role === "dgm" && isCallerOnTeam(caller, application.team)) ||
+    // DGM or AGM — the advising authority stage — anyone on the team, same
+    // as can_view_empanelment_application already permits for the row.
+    (["dgm", "agm"].includes(caller.role) && isCallerOnTeam(caller, application.team)) ||
     (["project_officer", "project_assistant"].includes(caller.role) && caller.id === application.project_officer_id) ||
     (["associate_consultant", "project_assistant"].includes(caller.role) && caller.id === application.sent_by);
 
