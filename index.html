@@ -5,9 +5,94 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AFC India Limited</title>
+    <style>
+      /* ── Boot splash — shown before React mounts, removed by main.jsx ── */
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 26px;
+        background:
+          radial-gradient(58% 48% at 28% 18%, rgba(31, 191, 138, 0.22), transparent 70%),
+          linear-gradient(150deg, #06201b 0%, #0a2a25 48%, #05191a 100%);
+        opacity: 1;
+        transition: opacity 0.9s ease;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      #app-splash.is-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .app-splash__mark {
+        position: relative;
+        width: 104px;
+        height: 104px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.08), transparent 70%);
+        animation: splashIn 1.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      .app-splash__mark img {
+        width: 88px;
+        height: 88px;
+        object-fit: contain;
+      }
+      .app-splash__name {
+        color: #cfe9df;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        opacity: 0;
+        animation: splashFade 1s ease 0.44s forwards;
+      }
+      .app-splash__bar {
+        width: 138px;
+        height: 3px;
+        border-radius: 99px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.08);
+        opacity: 0;
+        animation: splashFade 1s ease 0.64s forwards;
+      }
+      .app-splash__bar span {
+        display: block;
+        height: 100%;
+        width: 42%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, transparent, #4fc79a, transparent);
+        animation: splashSlide 2.3s ease-in-out infinite;
+      }
+      @keyframes splashIn {
+        from { opacity: 0; transform: scale(0.92) translateY(6px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      @keyframes splashFade { to { opacity: 1; } }
+      @keyframes splashSlide {
+        0%   { transform: translateX(-100%); }
+        100% { transform: translateX(340%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .app-splash__mark,
+        .app-splash__name,
+        .app-splash__bar { animation: none; opacity: 1; }
+        .app-splash__bar span { animation: none; width: 100%; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="app-splash">
+      <div class="app-splash__mark">
+        <img src="/afc-logo.png" alt="" />
+      </div>
+      <div class="app-splash__name">AFC India Limited</div>
+      <div class="app-splash__bar"><span></span></div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

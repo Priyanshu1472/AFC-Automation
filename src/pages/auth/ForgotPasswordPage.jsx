@@ -52,9 +52,7 @@ export default function ForgotPasswordPage() {
             Limited
           </h1>
           <p className="login-brand-sub">
-            Agricultural Finance Corporation.
-            <br />
-            Serving India since 1968.
+            Project Management Information System
           </p>
           <div className="login-brand-rule" />
         </div>

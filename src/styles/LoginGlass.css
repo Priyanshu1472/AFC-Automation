@@ -1,0 +1,511 @@
+/* ============================================================
+   LoginGlass.css — sign-in screen only
+   Left-right: brand + "Welcome back." over a soft neutral field
+   on one side, a frosted card (credentials + three Business
+   Partner routes) on the other. Theme toggle floats top-right.
+   Self-contained; every custom property is scoped to .afc-login
+   so nothing leaks into the app's global token set. The other
+   auth pages keep Login.css.
+   ============================================================ */
+
+.afc-login {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 150px 40px 56px;
+  overflow-y: auto;
+  isolation: isolate;
+  font-family: var(--font-display, "Plus Jakarta Sans", system-ui, sans-serif);
+
+  /* ---- light tokens — professional field, quiet sage-green wash ---- */
+  --scene:
+    radial-gradient(48% 54% at 14% 20%, #d2e2d9, transparent 72%),
+    radial-gradient(44% 50% at 90% 84%, #dde6e1, transparent 74%),
+    radial-gradient(34% 40% at 62% 2%, #e0ebe4, transparent 72%),
+    linear-gradient(160deg, #e8efeb 0%, #dfe8e3 48%, #e9efec 100%);
+
+  --glass-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.5));
+  --glass-brdr: rgba(255, 255, 255, 0.9);
+  --glass-hi: rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 2px 10px rgba(26, 42, 36, 0.08), 0 30px 70px -18px rgba(26, 42, 36, 0.22);
+
+  --gink: #1a2823;
+  --gink-2: #53625b;
+  --gink-3: #88958e;
+  --ghair: rgba(22, 38, 32, 0.12);
+
+  --gfield: rgba(255, 255, 255, 0.62);
+  --gfield-brdr: rgba(22, 38, 32, 0.16);
+  --gfocus: #1f6f52;
+  --gring: rgba(31, 111, 82, 0.16);
+
+  --gprimary: #16402f;
+  --gprimary-h: #1d5240;
+  --gprimary-ink: #f2faf6;
+
+  --gghost: rgba(255, 255, 255, 0.46);
+  --gghost-h: rgba(255, 255, 255, 0.72);
+  --gghost-brdr: rgba(22, 38, 32, 0.14);
+
+  --gtgl-bg: rgba(255, 255, 255, 0.5);
+  --gtgl-brdr: rgba(255, 255, 255, 0.8);
+
+  --gerr-bg: rgba(219, 68, 55, 0.1);
+  --gerr-brdr: rgba(219, 68, 55, 0.28);
+  --gerr-ink: #a3271c;
+}
+
+/* ---- dark tokens: explicit choice + OS-dark fallback ---- */
+:root[data-theme="dark"] .afc-login {
+  --scene:
+    radial-gradient(48% 54% at 12% 18%, rgba(52, 138, 106, 0.16), transparent 72%),
+    radial-gradient(44% 50% at 90% 86%, rgba(70, 112, 118, 0.1), transparent 74%),
+    radial-gradient(34% 40% at 64% 2%, rgba(58, 148, 118, 0.08), transparent 72%),
+    linear-gradient(160deg, #141b18 0%, #0e1512 48%, #0b110f 100%);
+
+  --glass-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  --glass-brdr: rgba(255, 255, 255, 0.15);
+  --glass-hi: rgba(255, 255, 255, 0.26);
+  --glass-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 34px 80px -20px rgba(0, 0, 0, 0.6);
+
+  --gink: #e9ece9;
+  --gink-2: #adb6b0;
+  --gink-3: #79837c;
+  --ghair: rgba(255, 255, 255, 0.1);
+
+  --gfield: rgba(255, 255, 255, 0.06);
+  --gfield-brdr: rgba(255, 255, 255, 0.14);
+  --gfocus: #3fb98c;
+  --gring: rgba(63, 185, 140, 0.22);
+
+  --gprimary: #f1f7f4;
+  --gprimary-h: #ffffff;
+  --gprimary-ink: #0c221c;
+
+  --gghost: rgba(255, 255, 255, 0.055);
+  --gghost-h: rgba(255, 255, 255, 0.11);
+  --gghost-brdr: rgba(255, 255, 255, 0.13);
+
+  --gtgl-bg: rgba(255, 255, 255, 0.08);
+  --gtgl-brdr: rgba(255, 255, 255, 0.16);
+
+  --gerr-bg: rgba(211, 137, 122, 0.14);
+  --gerr-brdr: rgba(211, 137, 122, 0.34);
+  --gerr-ink: #e6a99d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .afc-login {
+    --scene:
+      radial-gradient(48% 54% at 12% 18%, rgba(52, 138, 106, 0.16), transparent 72%),
+      radial-gradient(44% 50% at 90% 86%, rgba(70, 112, 118, 0.1), transparent 74%),
+      radial-gradient(34% 40% at 64% 2%, rgba(58, 148, 118, 0.08), transparent 72%),
+      linear-gradient(160deg, #141b18 0%, #0e1512 48%, #0b110f 100%);
+    --glass-bg: linear-gradient(158deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+    --glass-brdr: rgba(255, 255, 255, 0.15);
+    --glass-hi: rgba(255, 255, 255, 0.26);
+    --glass-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), 0 34px 80px -20px rgba(0, 0, 0, 0.6);
+    --gink: #e9ece9;
+    --gink-2: #adb6b0;
+    --gink-3: #79837c;
+    --ghair: rgba(255, 255, 255, 0.1);
+    --gfield: rgba(255, 255, 255, 0.06);
+    --gfield-brdr: rgba(255, 255, 255, 0.14);
+    --gfocus: #3fb98c;
+    --gring: rgba(63, 185, 140, 0.22);
+    --gprimary: #f1f7f4;
+    --gprimary-h: #ffffff;
+    --gprimary-ink: #0c221c;
+    --gghost: rgba(255, 255, 255, 0.055);
+    --gghost-h: rgba(255, 255, 255, 0.11);
+    --gghost-brdr: rgba(255, 255, 255, 0.13);
+    --gtgl-bg: rgba(255, 255, 255, 0.08);
+    --gtgl-brdr: rgba(255, 255, 255, 0.16);
+    --gerr-bg: rgba(211, 137, 122, 0.14);
+    --gerr-brdr: rgba(211, 137, 122, 0.34);
+    --gerr-ink: #e6a99d;
+  }
+}
+
+/* ---- the neutral field + grain ---- */
+.afc-login { background: var(--scene); }
+.afc-login::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+}
+
+/* ---- top header: brand lockup (left) + actions (right) ---- */
+.afc-login-header {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 34px;
+}
+.afc-login-lockup {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.afc-login-lockup img {
+  height: 88px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.afc-login-lockup span {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--gink);
+}
+.afc-login-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* shared glass-control look for the trigger + toggle */
+.afc-login-actions .theme-toggle,
+.afc-bp-trigger {
+  height: 40px;
+  border-radius: 12px;
+  background: var(--gtgl-bg);
+  border: 1px solid var(--gtgl-brdr);
+  color: var(--gink);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px -10px rgba(0, 0, 0, 0.3);
+  transition: transform var(--duration-fast, 120ms) var(--ease-out, ease), background var(--duration-fast, 120ms) ease;
+}
+.afc-login-actions .theme-toggle { width: 40px; }
+.afc-login-actions .theme-toggle:hover { transform: translateY(-1px); color: var(--gink); }
+
+.afc-bp-menu { position: relative; }
+.afc-bp-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 15px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+}
+.afc-bp-trigger:hover,
+.afc-bp-trigger[aria-expanded="true"] {
+  transform: translateY(-1px);
+  background: var(--gghost-h);
+}
+
+.afc-bp-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 252px;
+  padding: 6px;
+  border-radius: 15px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-brdr);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: var(--glass-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: afcMenuIn var(--duration-fast, 120ms) var(--ease-out, ease);
+}
+@keyframes afcMenuIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.afc-bp-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--gink-2);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.afc-bp-item svg { flex-shrink: 0; color: var(--gink-3); }
+.afc-bp-item:hover {
+  background: var(--gghost-h);
+  color: var(--gink);
+  text-decoration: none;
+}
+.afc-bp-item:hover svg { color: var(--gfocus); }
+
+/* ---- left-right shell ---- */
+.afc-login-inner {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 1140px;
+  margin: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 40px;
+  align-items: center;
+  animation: afcLoginIn 0.64s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+@media (min-width: 940px) {
+  .afc-login-inner {
+    grid-template-columns: minmax(0, 1fr) 484px;
+    gap: 80px;
+  }
+}
+
+@keyframes afcLoginIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- brand side: "Welcome back." + tagline ---- */
+.afc-login-brand { max-width: none; }
+.afc-login-title {
+  font-size: clamp(36px, 4.8vw, 50px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.03;
+  color: var(--gink);
+  margin: 0;
+  white-space: nowrap;
+}
+@media (max-width: 939px) {
+  .afc-login-title { white-space: normal; }
+}
+
+.afc-login-tagline {
+  margin: 16px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: var(--gink-2);
+  text-wrap: balance;
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* Word-by-word mask reveal — each word wipes up into view, then the
+   tagline fades in. Gated on .is-revealed (set by LoginPage once the
+   page is visible), so it plays on every arrival: instantly on in-app
+   navigation, and as the boot splash clears on a cold load. */
+.afc-login-title-w {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  padding-bottom: 0.08em;
+}
+.afc-login-title-w > span {
+  display: inline-block;
+  transform: translateY(115%);
+}
+.afc-login-brand.is-revealed .afc-login-title-w > span {
+  animation: afcWordUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.afc-login-brand.is-revealed .afc-login-title-w:nth-child(2) > span {
+  animation-delay: 0.13s;
+}
+.afc-login-brand.is-revealed .afc-login-tagline {
+  animation: afcTagIn 0.55s var(--ease-out, ease) 0.34s forwards;
+}
+@keyframes afcWordUp {
+  to { transform: translateY(0); }
+}
+@keyframes afcTagIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .afc-login-title-w > span,
+  .afc-login-tagline {
+    transform: none !important;
+    opacity: 1 !important;
+    animation: none !important;
+  }
+}
+
+/* ---- the card ---- */
+.afc-login-card {
+  position: relative;
+  width: 100%;
+  border-radius: 26px;
+  padding: 40px 40px 34px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-brdr);
+  backdrop-filter: blur(30px) saturate(165%);
+  -webkit-backdrop-filter: blur(30px) saturate(165%);
+  box-shadow: var(--glass-shadow);
+}
+.afc-login-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(175deg, var(--glass-hi), transparent 42%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.afc-login-card-title {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--gink);
+  margin: 0 0 20px;
+}
+
+/* ---- error ---- */
+.afc-login-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  background: var(--gerr-bg);
+  border: 1px solid var(--gerr-brdr);
+  color: var(--gerr-ink);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.afc-login-error svg { flex-shrink: 0; margin-top: 1px; }
+
+/* ---- form ---- */
+.afc-login-form { display: flex; flex-direction: column; }
+.afc-field { margin-bottom: 15px; }
+.afc-field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--gink-2);
+  margin-bottom: 8px;
+}
+.afc-control {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  height: 52px;
+  padding: 0 15px;
+  border-radius: 13px;
+  background: var(--gfield);
+  border: 1px solid var(--gfield-brdr);
+  transition: border-color var(--duration-fast, 120ms) ease, box-shadow var(--duration-fast, 120ms) ease;
+}
+.afc-control:focus-within {
+  border-color: var(--gfocus);
+  box-shadow: 0 0 0 4px var(--gring);
+}
+.afc-control > svg { flex-shrink: 0; color: var(--gink-3); }
+.afc-control:focus-within > svg { color: var(--gfocus); }
+.afc-control input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  outline: none;
+  color: var(--gink);
+  font-family: inherit;
+  font-size: 15px;
+}
+.afc-control input::placeholder { color: var(--gink-3); }
+.afc-control input:-webkit-autofill {
+  -webkit-text-fill-color: var(--gink);
+  transition: background-color 600000s 0s;
+}
+.afc-control button { flex-shrink: 0; }
+
+.afc-login-forgot {
+  display: flex;
+  justify-content: flex-end;
+  margin: 6px 0 20px;
+}
+.afc-login-forgot a {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--gink-2);
+  text-decoration: none;
+}
+.afc-login-forgot a:hover { color: var(--gink); text-decoration: underline; }
+
+/* ---- primary button ---- */
+.afc-btn-primary {
+  width: 100%;
+  height: 52px;
+  border: 0;
+  border-radius: 13px;
+  cursor: pointer;
+  background: var(--gprimary);
+  color: var(--gprimary-ink);
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 14px 30px -12px rgba(0, 0, 0, 0.4);
+  transition: background var(--duration-fast, 120ms) ease, transform var(--duration-fast, 120ms) var(--ease-out, ease);
+}
+.afc-btn-primary:hover:not(:disabled) {
+  background: var(--gprimary-h);
+  transform: translateY(-1.5px);
+}
+.afc-btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ---- responsive ---- */
+@media (max-width: 939px) {
+  .afc-login { padding: 116px 22px 40px; }
+  .afc-login-header { padding: 16px 20px; }
+  .afc-login-lockup img { height: 60px; }
+  .afc-login-lockup span { font-size: 18px; }
+  .afc-login-inner { max-width: 460px; gap: 26px; }
+  /* smaller field text so long emails stay readable on narrow screens */
+  .afc-control { gap: 9px; padding: 0 13px; }
+  .afc-control input { font-size: 13px; }
+}
+@media (max-width: 560px) {
+  .afc-login-lockup span { display: none; }
+}
+@media (max-width: 420px) {
+  .afc-login { padding: 104px 16px 24px; }
+  .afc-login-lockup img { height: 54px; }
+  .afc-login-title { font-size: 30px; }
+  .afc-login-card { padding: 30px 22px 26px; }
+  .afc-control input { font-size: 12.5px; }
+  .afc-bp-trigger { padding: 0 12px; }
+  .afc-bp-dropdown { min-width: 220px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .afc-login-inner,
+  .afc-bp-dropdown { animation: none; }
+  .afc-login-actions .theme-toggle,
+  .afc-bp-trigger,
+  .afc-btn-primary,
+  .afc-control { transition: none; }
+}
