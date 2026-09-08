@@ -222,3 +222,30 @@ Deno.test("handleRequest - success creates the lead directly into pa_review", as
   assertEquals(body.status, "pa_review");
   assertEquals(body.lead_number, "LH-2026-000001");
 });
+
+Deno.test("handleRequest - notifies Person Responsible, Reviewer, and Approval Authority on creation", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const notifyInserts = log.filter((l) => l.table === "notifications").map((l) => JSON.parse(l.calls.find((c) => c[0] === "insert")![1])[0]);
+  const notifiedIds = notifyInserts.map((n: { user_id: string }) => n.user_id);
+  assertEquals(notifiedIds.sort(), [AUTHORITY_ID, PR_ID, REVIEWER_ID].sort());
+  const prNotify = notifyInserts.find((n: { user_id: string }) => n.user_id === PR_ID);
+  assertEquals(prNotify.type, "action_required");
+  const reviewerNotify = notifyInserts.find((n: { user_id: string }) => n.user_id === REVIEWER_ID);
+  assertEquals(reviewerNotify.type, "info");
+  assertEquals(reviewerNotify.link, "/leads/new-lead-1");
+});
+
+Deno.test("handleRequest - does not notify the caller if they assigned themselves a role", async () => {
+  const client = buildClient({ caller: callerRow({ id: PR_ID }) });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const notifyInserts = log.filter((l) => l.table === "notifications").map((l) => JSON.parse(l.calls.find((c) => c[0] === "insert")![1])[0]);
+  const notifiedIds = notifyInserts.map((n: { user_id: string }) => n.user_id);
+  assertEquals(notifiedIds.sort(), [AUTHORITY_ID, REVIEWER_ID].sort());
+});

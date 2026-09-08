@@ -6,7 +6,7 @@ import NavDropdown from "./NavDropdown";
 import UserMenu from "./UserMenu";
 import { useAuth } from "../../hooks/useAuth";
 import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, ROLE_LABELS } from "../../lib/roles";
-import { MenuIcon, CloseIcon, BookIcon } from "../icons";
+import { MenuIcon, CloseIcon } from "../icons";
 import logo from "../../images/Logo.png";
 import "../../styles/AppHeader.css";
 
@@ -67,22 +67,12 @@ export default function AppHeader() {
         <span className="font-display font-semibold text-primary">AFC India Limited</span>
       </Link>
 
-      {/* Mobile-only — mirrors the desktop utilities row (Knowledge
-          Repository + Notifications) but sits in the top bar itself, not
-          inside the off-canvas drawer, so both stay reachable without
-          opening the hamburger menu. Hidden above the mobile breakpoint,
-          where the equivalent icons already live in the drawer/sidebar. */}
+      {/* Mobile-only — mirrors the desktop utilities row's Notifications
+          button but sits in the top bar itself, not inside the off-canvas
+          drawer, so it stays reachable without opening the hamburger menu.
+          Hidden above the mobile breakpoint, where the equivalent icon
+          already lives in the sidebar. */}
       <div className="app-header-mobile-utilities">
-        {canSeeKnowledge && (
-          <NavLink
-            to="/knowledge"
-            className={({ isActive }) => `app-header-kr-link-mobiletop${isActive ? " active" : ""}`}
-            aria-label="Knowledge Repository"
-            title="Knowledge Repository"
-          >
-            <BookIcon />
-          </NavLink>
-        )}
         <NotificationBell />
       </div>
 
@@ -111,11 +101,7 @@ export default function AppHeader() {
             </NavLink>
           )}
           {canSeeKnowledge && (
-            <NavLink
-              to="/knowledge"
-              className={({ isActive }) => `app-header-kr-link-mobile${isActive ? " active" : ""}`}
-              onClick={closeMenu}
-            >
+            <NavLink to="/knowledge" className={navLinkClass} onClick={closeMenu}>
               Knowledge Repository
             </NavLink>
           )}
@@ -170,17 +156,6 @@ export default function AppHeader() {
         <div className="app-header-nav-divider" aria-hidden="true" />
 
         <div className="app-header-nav-utilities">
-          {canSeeKnowledge && (
-            <NavLink
-              to="/knowledge"
-              className={({ isActive }) => `app-header-kr-link-desktop${isActive ? " active" : ""}`}
-              onClick={closeMenu}
-              aria-label="Knowledge Repository"
-              title="Knowledge Repository"
-            >
-              <BookIcon />
-            </NavLink>
-          )}
           <ThemeToggle />
           <span className="app-header-notif-desktop-only">
             <NotificationBell />

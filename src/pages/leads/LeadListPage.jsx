@@ -70,8 +70,12 @@ export default function LeadListPage() {
   const [unreadCounts, setUnreadCounts] = useState({});
   // "mine" (My Leads), "team" (Team Leads), or a committee name ("PMT"/
   // "PMT Extended"/"G3") — the last is only ever one extra tab, for a
-  // viewer who holds that committee (see committeeTab below).
-  const [view, setView] = useState(() => loadStoredFilters().view || "mine");
+  // viewer who holds that committee (see committeeTab below). MD is
+  // org-wide and never a lead's creator/Person Responsible, so "My Leads"
+  // would just be empty for them — the page always opens on Team Leads for
+  // that role, ignoring whatever tab was last open (never restored from
+  // sessionStorage either).
+  const [view, setView] = useState(() => (profile?.role === "md" ? "team" : loadStoredFilters().view || "mine"));
   const [search, setSearch] = useState(() => loadStoredFilters().search || "");
   const [quickFilter, setQuickFilter] = useState(() => loadStoredFilters().quickFilter || "all");
   const [statusFilter, setStatusFilter] = useState(() => loadStoredFilters().statusFilter || "all");

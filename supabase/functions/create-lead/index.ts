@@ -200,6 +200,28 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       });
     }
 
+    // Reviewer/Approval Authority aren't being asked to act yet (that only
+    // comes once the lead clears PA/DGM review) — just letting them know
+    // they've been named on it, same as PR's notice above minus the
+    // Accept/Drop framing.
+    if (input.reviewer_id !== caller.id) {
+      await notifyUser(adminClient, input.reviewer_id, {
+        title: "You've been assigned as Reviewer",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" has named you as Reviewer.`,
+        type: "info",
+        link: `/leads/${lead.id}`,
+      });
+    }
+
+    if (input.approval_authority_id !== caller.id) {
+      await notifyUser(adminClient, input.approval_authority_id, {
+        title: "You've been assigned as Approval Authority",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" has named you as Approval Authority.`,
+        type: "info",
+        link: `/leads/${lead.id}`,
+      });
+    }
+
     return jsonRes(req, 200, { success: true, id: lead.id, lead_number: lead.lead_number, status: lead.status });
   } catch (err) {
     console.error("Unhandled error:", (err as Error).message);
