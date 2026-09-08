@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { useToast } from "../../hooks/useToast";
 import { ROLE_LABELS } from "../../lib/roles";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -120,6 +121,7 @@ export default function ApplicationReviewPage() {
   // actually came from.
   const backTo = location.state?.from === "home" ? "/home" : "/empanelment";
   const { profile } = useAuth();
+  const { showToast } = useToast();
   const role = profile?.role;
 
   const [app, setApp] = useState(null);
@@ -127,7 +129,6 @@ export default function ApplicationReviewPage() {
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
-  const [banner, setBanner] = useState(null); // { msg, type }
   const [auditLogs, setAuditLogs] = useState([]);
   const [showReject, setShowReject] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
@@ -181,11 +182,10 @@ export default function ApplicationReviewPage() {
     return () => { supabase.removeChannel(channel); };
   }, [id, fetchApp]);
 
-  function showBanner(msg, type = "success") { setBanner({ msg, type }); }
+  function showBanner(msg, type = "success") { showToast(msg, type); }
 
   async function runAction(action, extra = {}) {
     setActionLoading(true);
-    setBanner(null);
     try {
       const { data, error } = await supabase.functions.invoke("advance-empanelment-stage", {
         body: { application_id: id, action, comment: comment.trim(), ...extra },
@@ -285,12 +285,6 @@ export default function ApplicationReviewPage() {
       <div className="app-container">
         <div className="ar-page">
           <button className="ar-back-btn" onClick={() => navigate(backTo)}><ArrowLeftIcon /> {backTo === "/home" ? "Back to Home" : "Back to Applications"}</button>
-
-          {banner && (
-            <Alert variant={banner.type === "danger" ? "danger" : banner.type === "warning" ? "warning" : "success"} onClose={() => setBanner(null)}>
-              {banner.msg}
-            </Alert>
-          )}
 
           <Card className="ar-header-card">
             <Card.Body className="ar-header-body">
