@@ -1,10 +1,13 @@
-// supabase/functions/_shared/otp.ts
-// One-time codes gating MD's accept/reject decision and the DGM's
-// provisional-letter send. A code is generated, hashed, stored, and emailed
-// to the ACTOR'S OWN registered address (never anywhere else) — verification
-// happens inside the same request that performs the real action, so nothing
-// mutates and no decision email goes out until the code is confirmed. See
-// supabase/migrations/20260721010000_empanelment_action_otps.sql.
+// supabase/functions/_shared/feeNoteOtp.ts
+// One-time codes gating the MD's approve/reject decision on a fee note
+// (EMD / Tender Fee / PBG). A code is generated, hashed, stored, and
+// emailed to the ACTOR'S OWN registered address (never anywhere else) —
+// verification happens inside the same request that performs the real
+// action, so nothing mutates and no decision email goes out until the code
+// is confirmed. Deliberately a parallel implementation (same shape, own
+// table — fee_note_otps) rather than generalizing an existing OTP helper,
+// so this feature can't regress another working OTP flow. See
+// supabase/migrations/20260820040000_proposal_preparation_schema.sql.
 
 import { createAdminClient } from "./auth.ts";
 import { checkRateLimit } from "./publicAccess.ts";
@@ -15,9 +18,8 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 const OTP_TTL_MINUTES = 10;
 
 const ACTION_LABELS: Record<string, string> = {
-  md_accept: "accept this empanelment application",
-  md_reject: "reject this empanelment application",
-  provisional_letter: "send the provisional empanelment letter",
+  md_approve: "approve this fee note",
+  md_reject: "reject this fee note",
 };
 
 function generateOtp(): string {
@@ -31,11 +33,11 @@ async function hashOtp(otp: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function issueOtp(
+export async function issueFeeNoteOtp(
   admin: AdminClient,
-  opts: { userId: string; userEmail: string; applicationId: string; action: string }
+  opts: { userId: string; userEmail: string; feeNoteId: string; action: string }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const rate = await checkRateLimit(admin, `otp_req:${opts.userId}:${opts.applicationId}:${opts.action}`, 3, 10 * 60);
+  const rate = await checkRateLimit(admin, `fee_note_otp_req:${opts.userId}:${opts.feeNoteId}:${opts.action}`, 3, 10 * 60);
   if (!rate.allowed) return { ok: false, error: `Too many code requests. Try again in about ${rate.waitMinutes} minute(s).` };
 
   const otp = generateOtp();
@@ -45,22 +47,22 @@ export async function issueOtp(
   // Invalidate any earlier unconsumed codes for this exact action so only
   // the most recently emailed code can ever verify.
   await admin
-    .from("empanelment_action_otps")
+    .from("fee_note_otps")
     .update({ consumed_at: new Date().toISOString() })
     .eq("user_id", opts.userId)
-    .eq("application_id", opts.applicationId)
+    .eq("fee_note_id", opts.feeNoteId)
     .eq("action", opts.action)
     .is("consumed_at", null);
 
-  const { error: insertErr } = await admin.from("empanelment_action_otps").insert({
+  const { error: insertErr } = await admin.from("fee_note_otps").insert({
     user_id: opts.userId,
-    application_id: opts.applicationId,
+    fee_note_id: opts.feeNoteId,
     action: opts.action,
     otp_hash: otpHash,
     expires_at: expiresAt,
   });
   if (insertErr) {
-    console.error("issueOtp insert failed:", insertErr.message);
+    console.error("issueFeeNoteOtp insert failed:", insertErr.message);
     return { ok: false, error: "Could not generate a verification code. Please try again." };
   }
 
@@ -80,20 +82,20 @@ export async function issueOtp(
   return { ok: true };
 }
 
-export async function verifyOtp(
+export async function verifyFeeNoteOtp(
   admin: AdminClient,
-  opts: { userId: string; applicationId: string; action: string; otp: unknown }
+  opts: { userId: string; feeNoteId: string; action: string; otp: unknown }
 ): Promise<boolean> {
-  const rate = await checkRateLimit(admin, `otp_verify:${opts.userId}:${opts.applicationId}:${opts.action}`, 5, 15 * 60);
+  const rate = await checkRateLimit(admin, `fee_note_otp_verify:${opts.userId}:${opts.feeNoteId}:${opts.action}`, 5, 15 * 60);
   if (!rate.allowed) return false;
 
   if (typeof opts.otp !== "string" || !/^\d{6}$/.test(opts.otp)) return false;
 
   const { data: row } = await admin
-    .from("empanelment_action_otps")
+    .from("fee_note_otps")
     .select("id, otp_hash, expires_at")
     .eq("user_id", opts.userId)
-    .eq("application_id", opts.applicationId)
+    .eq("fee_note_id", opts.feeNoteId)
     .eq("action", opts.action)
     .is("consumed_at", null)
     .order("created_at", { ascending: false })
@@ -106,6 +108,6 @@ export async function verifyOtp(
   const candidateHash = await hashOtp(opts.otp);
   if (candidateHash !== row.otp_hash) return false;
 
-  await admin.from("empanelment_action_otps").update({ consumed_at: new Date().toISOString() }).eq("id", row.id);
+  await admin.from("fee_note_otps").update({ consumed_at: new Date().toISOString() }).eq("id", row.id);
   return true;
 }

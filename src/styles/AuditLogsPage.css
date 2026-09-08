@@ -35,6 +35,16 @@
 .al-row-clickable { cursor: pointer; }
 .al-row-clickable:hover { background: var(--table-row-hover); }
 
+/* Fixed-width pills so the Role/Action columns read as a clean aligned
+   block instead of every row's badge being a different width — same idea
+   as Empanelment's .bl-status-badge and Proposals' .pp-status-badge. Role
+   is sized for the longest label, "Assistant General Manager" (same as
+   UserListPage's .ul-role-badge); Action covers most labels — a rare very
+   long one (e.g. "User Created (email failed)") just grows past this
+   floor rather than being clipped. */
+.al-role-badge { min-width: 190px; justify-content: center; }
+.al-action-badge { min-width: 150px; justify-content: center; }
+
 /* ── Filter row ─────────────────────────────────────────── */
 .al-filter-row {
   display: flex;
@@ -239,6 +249,52 @@
   background: var(--bg-surface-2);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   color: var(--text-primary);
+}
+
+/* ── Detail modal ───────────────────────────────────────── */
+.al-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.al-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.al-detail-row-full {
+  grid-column: 1 / -1;
+}
+
+.al-detail-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+}
+
+.al-detail-value {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.al-detail-comment {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: var(--space-3);
+  background: var(--bg-surface-2);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--border-default);
+}
+
+@media (max-width: 560px) {
+  .al-detail-grid { grid-template-columns: 1fr; }
 }
 
 /* ── Switch ─────────────────────────────────────────────── */

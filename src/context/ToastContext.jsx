@@ -17,7 +17,7 @@ export function ToastProvider({ children }) {
   const showToast = useCallback(
     (message, variant = "info", duration = DEFAULT_DURATION) => {
       const id = ++idRef.current;
-      setToasts((prev) => [...prev, { id, message, variant }]);
+      setToasts((prev) => [...prev, { id, message, variant, duration }]);
       if (duration) setTimeout(() => dismiss(id), duration);
       return id;
     },
@@ -30,7 +30,7 @@ export function ToastProvider({ children }) {
       {createPortal(
         <div className="toast-stack">
           {toasts.map((t) => (
-            <Toast key={t.id} variant={t.variant} onClose={() => dismiss(t.id)}>
+            <Toast key={t.id} variant={t.variant} duration={t.duration} onClose={() => dismiss(t.id)}>
               {t.message}
             </Toast>
           ))}

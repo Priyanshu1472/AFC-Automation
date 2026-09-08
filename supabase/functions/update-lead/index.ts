@@ -1,19 +1,19 @@
 // supabase/functions/update-lead/index.ts
 // JWT must be ON. Edit is available to the creator/Person Responsible at
 // two points: while a lead is still at `pa_review` (before the PR has
-// accepted it — a plain in-place edit, status unchanged), and once it's
-// `pa_action_required` (returned by PMT / PMT Extended / DGM with a note —
-// an Edit & Resubmit that moves it back into `pmt_review`, logging both
-// `edited` and `resubmitted` so the prior version's existence stays visible
-// in the timeline without a separate versioning table). Every other status
-// (accepted and under active review, or terminal) is locked.
+// accepted it) and once it's `pa_action_required` (returned by a
+// committee/DGM/MD decline) — a plain in-place field edit, status never
+// changes here either way. Resubmitting a declined lead back into the
+// approval pipeline is a SEPARATE, deliberate action — generate/edit the
+// Lead Approval Note, then "Accept" (see generate-lead-approval-note and
+// advance-lead-stage's "accept" case) — never a side effect of just editing
+// the lead's fields. Every other status (accepted and under active review,
+// or terminal) is locked.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
-import { notifyUsers } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
-import { getOrgWideHolders } from "../_shared/leadAuth.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
   validateApprovalAuthority, validateBusinessAssociate, clampText,
@@ -80,25 +80,28 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!leadId) return jsonRes(req, 400, { error: "lead_id is required." });
 
   const input = {
-    title: get("title"),
     delivery_type: get("delivery_type") || null,
     person_responsible_id: get("person_responsible_id"),
     reviewer_id: get("reviewer_id"),
     approval_authority_id: get("approval_authority_id"),
   };
 
-  const fieldErr = validateRequiredFields(input);
-  if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
-
   const assignedBaId = get("assigned_ba_id") || null;
 
   try {
+    // title/portal_name/bid_number are locked once a lead exists — the UI
+    // disables them, and this is the server-side backstop: whatever the
+    // client sent for those three is ignored, the lead's existing values
+    // are always what gets written back.
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, status, created_by, person_responsible_id, lead_number, documents")
+      .select("id, status, created_by, person_responsible_id, lead_number, documents, title, portal_name, bid_number")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
+
+    const fieldErr = validateRequiredFields({ ...input, title: lead.title });
+    if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
 
     if (caller.id !== lead.created_by && caller.id !== lead.person_responsible_id) {
       return jsonRes(req, 403, { error: "Only the lead's creator or Person Responsible can edit it." });
@@ -108,9 +111,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         error: `This lead is in "${lead.status}" status and cannot be edited right now. It may have just been updated — refresh and try again.`,
       });
     }
+    // A plain field edit — status is never touched here, whether the lead
+    // is still at pa_review or has been returned as pa_action_required.
     const fromStatus = lead.status as string;
-    const isResubmit = fromStatus === "pa_action_required";
-    const toStatus = isResubmit ? "pmt_review" : "pa_review";
 
     const { data: personResponsible, error: prErr } = await adminClient
       .from("afc_users")
@@ -151,13 +154,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     const { error: updateErr } = await adminClient
       .from("leads")
       .update({
-        title: input.title.trim(),
-        portal_name: clampText(get("portal_name"), 200),
-        bid_number: clampText(get("bid_number"), 200),
+        // title/portal_name/bid_number deliberately NOT taken from the
+        // client — see the comment above the initial select.
         client_name: clampText(get("client_name"), 300),
         state: clampText(get("state"), 100),
         submission_deadline: get("submission_deadline") || null,
         delivery_type: input.delivery_type,
+        presentation_date: get("presentation_date") || null,
+        followup_date: get("followup_date") || null,
         remark: clampText(get("remark")),
         documents,
         team,
@@ -165,8 +169,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         reviewer_id: input.reviewer_id,
         approval_authority_id: input.approval_authority_id,
         assigned_ba_id: assignedBaId,
-        status: toStatus,
-        ...(isResubmit ? { submitted_at: new Date().toISOString() } : {}),
       })
       .eq("id", lead.id)
       .eq("status", fromStatus);
@@ -178,21 +180,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     }
 
     await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "edited", fromStatus, fromStatus, null);
-    if (isResubmit) {
-      await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "resubmitted", "pa_action_required", "pmt_review", null);
-    }
 
-    const pmtHolders = isResubmit ? await getOrgWideHolders(adminClient, { committee: "PMT" }) : [];
-    if (pmtHolders.length) {
-      await notifyUsers(adminClient, pmtHolders, {
-        title: "Lead resubmitted — awaiting PMT review",
-        sub_text: `${lead.lead_number} — "${input.title.trim()}" was edited and resubmitted for review.`,
-        type: "action_required",
-        link: `/leads/${lead.id}`,
-      });
-    }
-
-    return jsonRes(req, 200, { success: true, id: lead.id, lead_number: lead.lead_number, status: toStatus });
+    return jsonRes(req, 200, { success: true, id: lead.id, lead_number: lead.lead_number, status: fromStatus });
   } catch (err) {
     console.error("Unhandled error:", (err as Error).message);
     return jsonRes(req, 500, { error: "Internal server error." });

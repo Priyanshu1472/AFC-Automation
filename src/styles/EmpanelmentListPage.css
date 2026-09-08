@@ -30,9 +30,21 @@
   gap: var(--space-1);
   position: relative;
   overflow: hidden;
+  /* These are <button>s (clickable quick filters) — reset native button
+     chrome back to the card look. */
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
   transition:
     box-shadow      var(--duration-normal) var(--ease-out),
     border-color    var(--duration-normal) var(--ease-out);
+}
+
+.bl-stat-active {
+  border-color: var(--text-brand);
+  box-shadow: 0 0 0 1px var(--text-brand);
 }
 
 .bl-stat-card:hover {
@@ -52,6 +64,14 @@
 .bl-stat-amber::before  { background: var(--warning); }
 .bl-stat-purple::before { background: #7c3aed; }
 .bl-stat-green::before  { background: var(--success); }
+.bl-stat-red::before    { background: var(--danger); }
+
+/* ── Status badge (table) — fixed width so "Sent" and "CFO/CS Review"
+   render the same size ────────────────────────────────────────── */
+.bl-status-badge {
+  min-width: 130px;
+  justify-content: center;
+}
 
 .bl-stat-value {
   font-family: var(--font-display);
@@ -106,6 +126,9 @@
 
 .bl-filter-right {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 /* ── Table scroll wrapper ────────────────────────────────── */
@@ -117,6 +140,10 @@
   min-width: 800px;
 }
 
+.bl-row-clickable {
+  cursor: pointer;
+}
+
 /* ── Table cell content ──────────────────────────────────── */
 .bl-app-code {
   font-family: var(--font-body);
@@ -126,6 +153,12 @@
   letter-spacing: 0.04em;
 }
 
+/* Applied directly to the <td> (not a nested span, unlike .bl-org/
+   .bl-contact) — must stay a table cell. "display: block" here used to
+   knock it out of the table's cell layout model entirely, detaching the
+   column from its header/neighbors (exactly the "BA Email column is not
+   in place" symptom). overflow/white-space/text-overflow truncate a
+   table-cell element just fine without it. */
 .bl-email {
   font-size: var(--text-sm);
   color: var(--text-primary);
@@ -133,7 +166,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: block;
   cursor: default;
 }
 

@@ -1,0 +1,22 @@
+-- Lead Approval Note workflow: replaces the old one-click "Accept" at
+-- pa_review with fill-a-form -> generate a branded PDF -> submit for DGM
+-- approval. No new tables — per-stage remarks/actor/timestamp are already
+-- fully captured by the existing lead_activity_log (populated by every
+-- dgm_initial_approve/pmt_*/dgm_accept/md_approve case in
+-- advance-lead-stage), so the final "MD Approval Note" PDF is built by
+-- reading that log at generation time rather than duplicating state here.
+--
+-- approval_note_data holds only the fields that are genuinely NEW input on
+-- the Lead Approval Form — everything else on the note (title, client name,
+-- BA, last submission date, implementation arrangement) is read straight
+-- off the lead row itself, never re-entered. Shape:
+--   {
+--     nature_of_lead: text,
+--     client_address: text,
+--     objectives: text,
+--     scope_of_work: text[],
+--     project_timeline: text,
+--     financial_requirement: { document_fee_emd_pbg: text, emd: text, processing_fee: text },
+--     revenue_sharing: text
+--   }
+alter table public.leads add column if not exists approval_note_data jsonb;

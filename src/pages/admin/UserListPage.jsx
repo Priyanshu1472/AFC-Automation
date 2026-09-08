@@ -32,6 +32,22 @@ const ROLE_VARIANT = {
 
 const PAGE_SIZE = 25;
 
+const COMMITTEE_OPTIONS = ["PMT", "PMT Extended", "G3"];
+
+// Restores search/filter/page state after a trip out to a user's Edit page
+// and back — "Back to Users" (EditUserPage.jsx) pushes a bare /users, so
+// sessionStorage survives that regardless of how the admin navigates back
+// (that link, or the browser's own back button). Same pattern as
+// LeadListPage's FILTER_STORAGE_KEY.
+const FILTER_STORAGE_KEY = "userListFilters";
+function loadStoredFilters() {
+  try {
+    return JSON.parse(sessionStorage.getItem(FILTER_STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
 function ToggleButton({ user, isSelf, togglingId, onToggle }) {
   if (isSelf) return null;
   return (
@@ -72,15 +88,30 @@ export default function UserListPage() {
   const [users, setUsers] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Only the very first load shows the full-page loader — every later
+  // refetch (typing in Search, changing a filter/page) must NOT unmount
+  // the page (and with it, the focused search Input): doing so on every
+  // keystroke was dropping the cursor/focus the moment results emptied out
+  // and the old `loading && users.length === 0` gate kicked back in.
+  const [initialLoad, setInitialLoad] = useState(true);
   const [banner, setBanner] = useState("");
   const [togglingId, setTogglingId] = useState(null);
-  const [search, setSearch] = useState("");
-  const [teamFilter, setTeamFilter] = useState("all");
-  const [roleFilter, setRoleFilter] = useState("all");
-  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState(() => loadStoredFilters().search || "");
+  const [teamFilter, setTeamFilter] = useState(() => loadStoredFilters().teamFilter || "all");
+  const [roleFilter, setRoleFilter] = useState(() => loadStoredFilters().roleFilter || "all");
+  const [committeeFilter, setCommitteeFilter] = useState(() => loadStoredFilters().committeeFilter || "all");
+  const [page, setPage] = useState(() => loadStoredFilters().page || 0);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
-  const canManage = can.manageAllUsers(profile?.role) || can.manageTeamUsers(profile?.role);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ search, teamFilter, roleFilter, committeeFilter, page }));
+    } catch {
+      // Private browsing / storage disabled — filters just won't persist.
+    }
+  }, [search, teamFilter, roleFilter, committeeFilter, page]);
+
+  const canManage = can.manageAllUsers(profile?.role);
   const canCreate = can.createUsers(profile?.role);
 
   // MD looking at "All Teams" (the default) sees the whole roster grouped
@@ -95,19 +126,24 @@ export default function UserListPage() {
   );
   const teams = useTeamOptions();
   const teamFilterOptions = useMemo(() => [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))], [teams]);
+  const committeeFilterOptions = useMemo(
+    () => [{ value: "all", label: "All Committees" }, ...COMMITTEE_OPTIONS.map((c) => ({ value: c, label: c }))],
+    []
+  );
 
-  const fetchUsersFlat = useCallback(async (currentPage, currentSearch, currentTeam, currentRole) => {
+  const fetchUsersFlat = useCallback(async (currentPage, currentSearch, currentTeam, currentRole, currentCommittee) => {
     // RLS scopes the visible rows automatically: md/cfo/cs see everyone,
     // dgm sees their own team, everyone else sees only themselves.
     let query = supabase
       .from("afc_users")
-      .select("id, full_name, email, role, team, office, is_active", { count: "exact" })
+      .select("id, full_name, email, role, team, office, committee, is_active", { count: "exact" })
       .order("created_at", { ascending: false });
 
     const trimmed = currentSearch.trim();
     if (trimmed) query = query.or(`full_name.ilike.%${trimmed}%,email.ilike.%${trimmed}%`);
     if (currentTeam !== "all") query = query.eq("team", currentTeam);
     if (currentRole !== "all") query = query.eq("role", currentRole);
+    if (currentCommittee !== "all") query = query.eq("committee", currentCommittee);
 
     const from = currentPage * PAGE_SIZE;
     query = query.range(from, from + PAGE_SIZE - 1);
@@ -116,39 +152,41 @@ export default function UserListPage() {
 
   // Grouped view needs every matching row at once (to group + count
   // accurately per team) rather than one page at a time.
-  const fetchUsersGrouped = useCallback(async (currentSearch, currentRole) => {
+  const fetchUsersGrouped = useCallback(async (currentSearch, currentRole, currentCommittee) => {
     let query = supabase
       .from("afc_users")
-      .select("id, full_name, email, role, team, office, is_active", { count: "exact" })
+      .select("id, full_name, email, role, team, office, committee, is_active", { count: "exact" })
       .order("team", { ascending: true })
       .order("full_name", { ascending: true });
 
     const trimmed = currentSearch.trim();
     if (trimmed) query = query.or(`full_name.ilike.%${trimmed}%,email.ilike.%${trimmed}%`);
     if (currentRole !== "all") query = query.eq("role", currentRole);
+    if (currentCommittee !== "all") query = query.eq("committee", currentCommittee);
     return query;
   }, []);
 
   const fetchUsers = useCallback(
-    async (currentPage, currentSearch, currentTeam, currentRole) => {
+    async (currentPage, currentSearch, currentTeam, currentRole, currentCommittee) => {
       setLoading(true);
       const { data, error, count } =
         profile?.role === "md" && currentTeam === "all"
-          ? await fetchUsersGrouped(currentSearch, currentRole)
-          : await fetchUsersFlat(currentPage, currentSearch, currentTeam, currentRole);
+          ? await fetchUsersGrouped(currentSearch, currentRole, currentCommittee)
+          : await fetchUsersFlat(currentPage, currentSearch, currentTeam, currentRole, currentCommittee);
       if (error) setBanner(error.message);
       else {
         setUsers(data || []);
         setTotalCount(count || 0);
       }
       setLoading(false);
+      setInitialLoad(false);
     },
     [profile?.role, fetchUsersFlat, fetchUsersGrouped]
   );
 
   useEffect(() => {
-    fetchUsers(page, search, teamFilter, roleFilter);
-  }, [fetchUsers, page, search, teamFilter, roleFilter]);
+    fetchUsers(page, search, teamFilter, roleFilter, committeeFilter);
+  }, [fetchUsers, page, search, teamFilter, roleFilter, committeeFilter]);
 
   const groupedSections = useMemo(() => {
     if (!groupedByTeam) return null;
@@ -175,11 +213,16 @@ export default function UserListPage() {
     setRoleFilter(value);
     setPage(0);
   }
-  const activeFilterCount = [teamFilter !== "all", roleFilter !== "all"].filter(Boolean).length;
+  function handleCommitteeFilterChange(value) {
+    setCommitteeFilter(value);
+    setPage(0);
+  }
+  const activeFilterCount = [teamFilter !== "all", roleFilter !== "all", committeeFilter !== "all"].filter(Boolean).length;
   const hasActiveFilters = activeFilterCount > 0;
   function clearFilters() {
     setTeamFilter("all");
     setRoleFilter("all");
+    setCommitteeFilter("all");
     setPage(0);
   }
 
@@ -198,7 +241,7 @@ export default function UserListPage() {
         setBanner(data?.error || "Failed to update user status.");
         return;
       }
-      await fetchUsers(page, search, teamFilter, roleFilter);
+      await fetchUsers(page, search, teamFilter, roleFilter, committeeFilter);
     } catch (err) {
       setBanner(err.message || "Failed to update user status.");
     } finally {
@@ -210,11 +253,21 @@ export default function UserListPage() {
     navigate(`/users/${user.id}/edit`);
   }
 
+  // Whole rows are clickable to open Edit — but only where the Edit button
+  // itself would actually show (same as EditButton's own isSelf/canManage
+  // gate), so this never offers a click target that leads nowhere.
+  function isRowClickable(user) {
+    return canManage && user.id !== profile.id;
+  }
+  function handleRowClick(user) {
+    if (isRowClickable(user)) handleEdit(user);
+  }
+
   const from = totalCount === 0 ? 0 : page * PAGE_SIZE + 1;
   const to = Math.min((page + 1) * PAGE_SIZE, totalCount);
   const hasNextPage = to < totalCount;
 
-  if (loading && users.length === 0) return <PageLoader text="Loading users…" />;
+  if (initialLoad) return <PageLoader text="Loading users…" />;
 
   return (
     <div className="app-shell">
@@ -267,6 +320,7 @@ export default function UserListPage() {
                       <th>Email</th>
                       <th>Role</th>
                       <th>Office</th>
+                      <th>Committee</th>
                       <th>Status</th>
                       {canManage && <th>Actions</th>}
                     </tr>
@@ -274,20 +328,21 @@ export default function UserListPage() {
                   {groupedSections.map(({ team, users: teamUsers }) => (
                     <tbody key={team}>
                       <tr className="ul-team-sep-row">
-                        <td colSpan={canManage ? 6 : 5}>
+                        <td colSpan={canManage ? 7 : 6}>
                           <span className="ul-team-sep-name">{team}</span>
                           <span className="ul-team-sep-count">{teamUsers.length}</span>
                         </td>
                       </tr>
                       {teamUsers.map((u) => (
-                        <tr key={u.id}>
+                        <tr key={u.id} className={isRowClickable(u) ? "ul-row-clickable" : undefined} onClick={() => handleRowClick(u)}>
                           <td>{u.full_name}</td>
                           <td>{u.email}</td>
-                          <td><Badge variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge></td>
+                          <td><Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge></td>
                           <td>{u.office ? u.office.charAt(0).toUpperCase() + u.office.slice(1) : "—"}</td>
+                          <td>{u.committee ? <Badge variant="neutral">{u.committee}</Badge> : "—"}</td>
                           <td><Badge variant={u.is_active ? "success" : "danger"} dot>{u.is_active ? "Active" : "Inactive"}</Badge></td>
                           {canManage && (
-                            <td>
+                            <td onClick={(e) => e.stopPropagation()}>
                               <div style={{ display: "flex", gap: 8 }}>
                                 <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                                 <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
@@ -309,7 +364,11 @@ export default function UserListPage() {
                       <span className="ul-team-sep-count">{teamUsers.length}</span>
                     </div>
                     {teamUsers.map((u) => (
-                      <div key={u.id} className="ul-mobile-card">
+                      <div
+                        key={u.id}
+                        className={`ul-mobile-card${isRowClickable(u) ? " ul-row-clickable" : ""}`}
+                        onClick={() => handleRowClick(u)}
+                      >
                         <div className="ul-mobile-card-top">
                           <div>
                             <div className="ul-mobile-name">{u.full_name}</div>
@@ -318,11 +377,12 @@ export default function UserListPage() {
                           <Badge variant={u.is_active ? "success" : "danger"} dot>{u.is_active ? "Active" : "Inactive"}</Badge>
                         </div>
                         <div className="ul-mobile-card-meta">
-                          <Badge variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
+                          <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
                           {u.office && <span className="text-xs text-tertiary">{u.office.charAt(0).toUpperCase() + u.office.slice(1)}</span>}
+                          {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
                         </div>
                         {canManage && (
-                          <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }}>
+                          <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }} onClick={(e) => e.stopPropagation()}>
                             <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                             <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
                           </div>
@@ -349,6 +409,7 @@ export default function UserListPage() {
                       </th>
                       <th>Office</th>
                       <th>Team</th>
+                      <th>Committee</th>
                       <th>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           Status <FieldTooltip text="Inactive accounts cannot sign in, but their Supabase login itself is kept intact and can be reactivated at any time." />
@@ -359,21 +420,22 @@ export default function UserListPage() {
                   </thead>
                   <tbody>
                     {users.map((u) => (
-                      <tr key={u.id}>
+                      <tr key={u.id} className={isRowClickable(u) ? "ul-row-clickable" : undefined} onClick={() => handleRowClick(u)}>
                         <td>{u.full_name}</td>
                         <td>{u.email}</td>
                         <td>
-                          <Badge variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
+                          <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
                         </td>
                         <td>{u.office ? u.office.charAt(0).toUpperCase() + u.office.slice(1) : "—"}</td>
                         <td>{u.team || "—"}</td>
+                        <td>{u.committee ? <Badge variant="neutral">{u.committee}</Badge> : "—"}</td>
                         <td>
                           <Badge variant={u.is_active ? "success" : "danger"} dot>
                             {u.is_active ? "Active" : "Inactive"}
                           </Badge>
                         </td>
                         {canManage && (
-                          <td>
+                          <td onClick={(e) => e.stopPropagation()}>
                             <div style={{ display: "flex", gap: 8 }}>
                               <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                               <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
@@ -389,7 +451,11 @@ export default function UserListPage() {
               {/* Narrow screens — stacked cards instead of a cramped table */}
               <div className="ul-mobile-list">
                 {users.map((u) => (
-                  <div key={u.id} className="ul-mobile-card">
+                  <div
+                    key={u.id}
+                    className={`ul-mobile-card${isRowClickable(u) ? " ul-row-clickable" : ""}`}
+                    onClick={() => handleRowClick(u)}
+                  >
                     <div className="ul-mobile-card-top">
                       <div>
                         <div className="ul-mobile-name">{u.full_name}</div>
@@ -400,12 +466,13 @@ export default function UserListPage() {
                       </Badge>
                     </div>
                     <div className="ul-mobile-card-meta">
-                      <Badge variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
+                      <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
                       {u.office && <span className="text-xs text-tertiary">{u.office.charAt(0).toUpperCase() + u.office.slice(1)}</span>}
                       {u.team && <span className="text-xs text-tertiary">{u.team}</span>}
+                      {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
                     </div>
                     {canManage && (
-                      <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }}>
+                      <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }} onClick={(e) => e.stopPropagation()}>
                         <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                         <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
                       </div>
@@ -447,6 +514,9 @@ export default function UserListPage() {
         )}
         <FilterField label="Role">
           <Select options={roleFilterOptions} value={roleFilter} onChange={handleRoleFilterChange} placeholder="All Roles" />
+        </FilterField>
+        <FilterField label="Committee">
+          <Select options={committeeFilterOptions} value={committeeFilter} onChange={handleCommitteeFilterChange} placeholder="All Committees" />
         </FilterField>
       </FilterDrawer>
     </div>

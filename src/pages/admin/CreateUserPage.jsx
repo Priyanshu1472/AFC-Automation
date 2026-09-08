@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { MD_CREATABLE_ROLES, ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, COMMITTEES } from "../../lib/roles";
-import { useAuth } from "../../hooks/useAuth";
+import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, COMMITTEES } from "../../lib/roles";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
+import TeamMultiSelect from "../../components/ui/TeamMultiSelect";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import FieldTooltip from "../../components/FieldTooltip";
@@ -15,30 +15,28 @@ import "../../styles/CreateUserPage.css";
 
 const FIELD_HELP = {
   email: "This becomes their login. They'll receive a temporary password here — make sure it's an address they can actually check.",
-  role: "Controls what this person can see and do. Admin can create any staff role except Admin/MD; MD can only create Admin accounts (to hand off ongoing user management).",
-  team: "The working group this person belongs to (e.g. BPDD, CBBO). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
+  role: "Controls what this person can see and do. Admin can create any staff role except Admin/MD.",
+  team: "The working group this person belongs to (e.g. BPDD, BIID). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
   office: "The physical office this person is based out of.",
   committee: "Optional Lead Generation review committee. G3 is the DGM committee — membership grants DGM-level review/approval on leads, org-wide.",
+  signature: "Optional. If provided, this image is embedded as this person's signature on generated PDFs (e.g. the Lead Approval Note) instead of a blank signature line.",
 };
 
-const EMPTY_FORM = { full_name: "", email: "", role: "", team: "", office: "", committee: "" };
+const EMPTY_FORM = { full_name: "", email: "", role: "", teams: [], office: "", committee: "" };
+const SIGNATURE_TYPES = ["image/png", "image/jpeg"];
 
 function isValidEmail(val) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
 }
 
 export default function CreateUserPage() {
-  const { profile } = useAuth();
-  const isAdmin = profile?.role === "admin";
-
-  const roleOptions = useMemo(() => {
-    const roles = isAdmin ? ADMIN_CREATABLE_ROLES : MD_CREATABLE_ROLES;
-    return roles.map((r) => ({ value: r, label: ROLE_LABELS[r] || r }));
-  }, [isAdmin]);
+  const roleOptions = useMemo(
+    () => ADMIN_CREATABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] || r })),
+    []
+  );
 
   const officeOptions = OFFICES.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }));
   const teams = useTeamOptions();
-  const teamOptions = teams.map((t) => ({ value: t, label: t }));
   const committeeOptions = COMMITTEES.map((c) => ({ value: c, label: c }));
 
   const [form, setForm] = useState(EMPTY_FORM);
@@ -46,6 +44,19 @@ export default function CreateUserPage() {
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null); // { emailSent, password? }
   const [banner, setBanner] = useState("");
+  const [signatureFile, setSignatureFile] = useState(null);
+  const [signatureError, setSignatureError] = useState("");
+
+  function handleSignatureChange(e) {
+    const file = e.target.files?.[0] || null;
+    setSignatureError("");
+    if (file && !SIGNATURE_TYPES.includes(file.type)) {
+      setSignatureError("Signature must be a PNG or JPEG image.");
+      setSignatureFile(null);
+      return;
+    }
+    setSignatureFile(file);
+  }
 
   function set(field, value) {
     setForm((p) => ({ ...p, [field]: value }));
@@ -75,7 +86,7 @@ export default function CreateUserPage() {
             email: form.email.trim().toLowerCase(),
             full_name: form.full_name.trim(),
             role: form.role,
-            team: form.team || null,
+            teams: form.teams,
             office: form.office || null,
             committee: form.committee || null,
           },
@@ -93,6 +104,17 @@ export default function CreateUserPage() {
         setResult({ emailSent: data.email_sent, password: data.password });
         setBanner(`Account created for ${form.full_name.trim()}.`);
         setForm(EMPTY_FORM);
+
+        if (signatureFile && data.id) {
+          const fd = new FormData();
+          fd.set("user_id", data.id);
+          fd.set("file", signatureFile, signatureFile.name);
+          const { error: sigError } = await supabase.functions.invoke("upload-user-signature", { body: fd });
+          if (sigError) {
+            setBanner(`Account created for ${form.full_name.trim()}, but the signature upload failed — add it from Edit User.`);
+          }
+        }
+        setSignatureFile(null);
       } catch (err) {
         setBanner(err.message || "Something went wrong. Please try again.");
       } finally {
@@ -182,12 +204,10 @@ export default function CreateUserPage() {
                   <label className="field-label">
                     Team <FieldTooltip text={FIELD_HELP.team} />
                   </label>
-                  <Select
-                    creatable
-                    options={teamOptions}
-                    value={form.team}
-                    onChange={(v) => set("team", v)}
-                    placeholder="Select or type a team"
+                  <TeamMultiSelect
+                    options={teams}
+                    value={form.teams}
+                    onChange={(v) => set("teams", v)}
                     disabled={saving}
                     error={errors.team}
                   />
@@ -218,6 +238,16 @@ export default function CreateUserPage() {
                     placeholder="— None —"
                     disabled={saving}
                   />
+                </div>
+                <div className="field full">
+                  <label className="field-label">
+                    Signature <FieldTooltip text={FIELD_HELP.signature} />
+                  </label>
+                  <label className="cup-file-drop">
+                    <input type="file" accept="image/png,image/jpeg" onChange={handleSignatureChange} disabled={saving} />
+                    {signatureFile ? signatureFile.name : "Click to upload a signature image (PNG or JPEG, optional)"}
+                  </label>
+                  {signatureError && <span className="field-error">{signatureError}</span>}
                 </div>
               </div>
             </Card.Body>

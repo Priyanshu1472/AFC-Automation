@@ -38,20 +38,34 @@
   text-align: center;
 }
 
+/* position: fixed (not absolute) — the bell sits inside .app-header, which
+   has overflow-y: auto (see AppHeader.css); per spec that forces
+   overflow-x to auto too, so an absolutely-positioned panel wide enough to
+   spill past the sidebar's edge got silently clipped there instead of
+   overlaying the main content. Fixed positioning escapes that clipping
+   and is anchored relative to the viewport instead. */
 .notif-bell-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
+  top: auto;
+  bottom: var(--space-4);
+  left: calc(var(--sidebar-nav-w) + var(--space-3));
+  right: auto;
   width: 340px;
-  max-width: calc(100vw - 32px);
+  max-width: calc(100vw - var(--sidebar-nav-w) - var(--space-4));
+  max-height: min(480px, calc(100vh - var(--space-8)));
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  /* Above the mobile drawer/backdrop too, so it's never hidden behind them
-     if both happen to be open at once. */
-  z-index: calc(var(--z-modal) + 1);
+  /* Above the mobile drawer/backdrop, and above the page's own hamburger
+     button (z-index: var(--z-modal) + 2 — it needs to clear the drawer
+     backdrop) too, since on mobile this panel is a full-screen overlay
+     that would otherwise let that button visibly poke through on top of
+     it. */
+  z-index: calc(var(--z-modal) + 3);
   animation: slideIn var(--duration-fast) var(--ease-out);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
@@ -69,6 +83,12 @@
   color: var(--text-primary);
 }
 
+.notif-bell-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .notif-bell-mark-all {
   font-size: var(--text-xs);
   font-weight: 600;
@@ -83,8 +103,27 @@
   text-decoration: underline;
 }
 
+.notif-bell-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.notif-bell-close:hover {
+  color: var(--text-primary);
+  background: var(--btn-ghost-bg-hover);
+}
+
 .notif-bell-list {
-  max-height: 360px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -153,27 +192,20 @@
 }
 
 @media (max-width: 720px) {
-  /* Inside the mobile nav drawer now (see AppHeader.css), and that drawer
-     animates with `transform`, which makes it the containing block for any
-     `position: fixed` descendant — so this panel's fixed positioning
-     resolves against the drawer's box, not the viewport. Since the drawer
-     itself spans the full screen height, setting top/bottom (not just
-     bottom) here makes the panel fill nearly that whole area instead of
-     shrinking to an intrinsic-height box pinned to the bottom corner. */
+  /* Now triggered from the always-visible top-bar button (see
+     .app-header-mobile-utilities in AppHeader.css), not from inside the
+     drawer, so this opens as a true full-page overlay — edge to edge,
+     no rounded corners/shadow — with its own close button, since a
+     full-screen panel leaves no visible backdrop to tap to dismiss. */
   .notif-bell-panel {
     position: fixed;
-    top: var(--space-4);
-    bottom: var(--space-4);
-    left: var(--space-3);
-    right: var(--space-3);
+    inset: 0;
+    left: 0;
     width: auto;
+    max-width: none;
     max-height: none;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .notif-bell-list {
-    flex: 1;
-    max-height: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
   }
 }

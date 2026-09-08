@@ -33,6 +33,12 @@ import LeadListPage from "./pages/leads/LeadListPage";
 import CreateLeadPage from "./pages/leads/CreateLeadPage";
 import EditLeadPage from "./pages/leads/EditLeadPage";
 import LeadDetailPage from "./pages/leads/LeadDetailPage";
+import LeadApprovalNoteForm from "./pages/leads/LeadApprovalNoteForm";
+import LeadApprovalNotePreviewPage from "./pages/leads/LeadApprovalNotePreviewPage";
+import LeadDashboardPage from "./pages/leads/LeadDashboardPage";
+import LeadReportsPage from "./pages/leads/LeadReportsPage";
+import ProposalsListPage from "./pages/proposals/ProposalsListPage";
+import ProposalPreparationPage from "./pages/proposals/ProposalPreparationPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES } from "./lib/roles";
 
@@ -97,7 +103,7 @@ export default function App() {
                 <Route
                   path="/create-user"
                   element={
-                    <ProtectedRoute allowedRoles={["md", "admin"]}>
+                    <ProtectedRoute allowedRoles={USERS_PAGE_ROLES}>
                       <CreateUserPage />
                     </ProtectedRoute>
                   }
@@ -113,7 +119,7 @@ export default function App() {
                 <Route
                   path="/users/:id/edit"
                   element={
-                    <ProtectedRoute allowedRoles={["md", "dgm", "admin"]}>
+                    <ProtectedRoute allowedRoles={USERS_PAGE_ROLES}>
                       <EditUserPage />
                     </ProtectedRoute>
                   }
@@ -172,6 +178,22 @@ export default function App() {
                 />
 
                 <Route
+                  path="/dashboard/leads"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <LeadDashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/reports/leads"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <LeadReportsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/leads/create"
                   element={
                     <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
@@ -188,6 +210,22 @@ export default function App() {
                   }
                 />
                 <Route
+                  path="/leads/:id/approval-note/preview"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <LeadApprovalNotePreviewPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/leads/:id/approval-note"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <LeadApprovalNoteForm />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/leads/:id"
                   element={
                     <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
@@ -200,6 +238,22 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
                       <LeadListPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/proposals"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <ProposalsListPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/proposals/:leadId"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <ProposalPreparationPage />
                     </ProtectedRoute>
                   }
                 />

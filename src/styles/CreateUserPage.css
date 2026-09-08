@@ -54,3 +54,38 @@
     letter-spacing: 0.06em;
   }
 }
+
+/* ── Signature upload (also used by SignatureUploadModal) ──────── */
+.cup-file-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: center;
+}
+
+.cup-file-drop:hover {
+  border-color: var(--text-primary);
+}
+
+.cup-file-drop input[type="file"] {
+  display: none;
+}
+
+.cup-signature-preview {
+  display: block;
+  max-width: 220px;
+  max-height: 80px;
+  margin-top: var(--space-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: #fff;
+  padding: var(--space-2);
+}

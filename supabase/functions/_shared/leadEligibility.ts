@@ -38,11 +38,12 @@ export function validateRequiredFields(input: LeadFieldInput): string | null {
   if (typeof input.reviewer_id !== "string" || !input.reviewer_id) return "Reviewer is required.";
   if (typeof input.approval_authority_id !== "string" || !input.approval_authority_id) return "Approval Authority is required.";
   if (input.delivery_type != null && !DELIVERY_TYPES.has(String(input.delivery_type))) return "Invalid delivery type.";
-  // Only RFP / In-House is active in this phase — reject anything else
-  // outright rather than silently coercing, so a stale/tampered client
-  // can't slip a lead into an unimplemented path.
-  if (input.lead_type != null && input.lead_type !== "rfp") return "Only RFP leads can be created at this time.";
-  if (input.source != null && input.source !== "in_house") return "Only In-House leads can be created at this time.";
+  // lead_type (RFP/EOI) doesn't apply to a Suo Moto lead — the frontend just
+  // sends a fixed placeholder value for it in that case, so this stays
+  // rfp/eoi only. source now covers all three: In-House, BA Source, and
+  // Suo Moto.
+  if (input.lead_type != null && !["rfp", "eoi"].includes(String(input.lead_type))) return "Invalid lead type.";
+  if (input.source != null && !["in_house", "ba", "suo_moto"].includes(String(input.source))) return "Invalid lead source.";
   return null;
 }
 
@@ -53,20 +54,23 @@ export function clampText(val: unknown, max = MAX_TEXT_LENGTH): string | null {
   return trimmed.slice(0, max);
 }
 
-// Person Responsible must be an active user on the lead's team — any role.
+// Person Responsible must be an active staff member on the lead's team —
+// any role except business_associate (BAs have a team too, for the BA-org
+// lookup, but aren't staff and can't own a lead's workflow).
 export async function validateAssignment(admin: AdminClient, personResponsibleId: string, team: string): Promise<string | null> {
   const user = await getTargetUser(admin, personResponsibleId);
-  if (!user || !user.is_active || user.team !== team) {
-    return "Person Responsible must be an active user on this team.";
+  if (!user || !user.is_active || user.team !== team || user.role === "business_associate") {
+    return "Person Responsible must be an active staff member on this team.";
   }
   return null;
 }
 
-// Reviewer must be an active user on the lead's team — any role.
+// Reviewer must be an active staff member on the lead's team — any role
+// except business_associate, same reasoning as Person Responsible above.
 export async function validateReviewer(admin: AdminClient, reviewerId: string, team: string): Promise<string | null> {
   const user = await getTargetUser(admin, reviewerId);
-  if (!user || !user.is_active || user.team !== team) {
-    return "Reviewer must be an active user on this team.";
+  if (!user || !user.is_active || user.team !== team || user.role === "business_associate") {
+    return "Reviewer must be an active staff member on this team.";
   }
   return null;
 }

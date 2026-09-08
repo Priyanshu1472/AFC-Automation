@@ -7,120 +7,14 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 import { notifyUser, notifyRole, notifyTeam, emailRole, emailUser } from "../_shared/notify.ts";
-import { verifyOtp } from "../_shared/otp.ts";
-import {
-  bytesToBase64, formatDateDDMMYYYY, formatDateLong, addMonths, BLACK,
-  Segment, plain, bold, PageEngine, sd, sdLine, sdPara, sdGap, newPdfDoc,
-} from "../_shared/letterPdf.ts";
+import { verifyActionPin } from "../_shared/pin.ts";
+import { bytesToBase64 } from "../_shared/letterPdf.ts";
+import { buildEmpanelmentLetter } from "../_shared/empanelmentLetterPdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
-
-// Final Empanelment Letter — attached to the same email that carries the
-// BA's portal credentials on MD accept. Distinct from the DGM's provisional
-// letter (send-provisional-letter): this one is final, references the
-// application's actual sectors, and is signed by the team's DGM. Ported
-// from the previous AFC empanelment app's send-welcome-mail function.
-async function generateEmpanelmentPDF(opts: {
-  logoBytes: Uint8Array;
-  refNumber: string;
-  date: string;
-  contactPerson: string;
-  designation: string;
-  orgName: string;
-  regAddress: string;
-  sectors: string;
-  validUntil: string;
-  dgmName: string;
-}): Promise<Uint8Array> {
-  const { pdf, fonts } = await newPdfDoc();
-  const e = new PageEngine(pdf, fonts, opts.logoBytes);
-  const S = 9.5;
-  const NI = 18;
-
-  await e.newPage();
-
-  await sdLine(e, opts.dgmName, S, true);
-  await sdLine(e, "DEPUTY GENERAL MANAGER", S, true);
-  await sdGap(e, 20);
-
-  e.drawTextAt(opts.refNumber, e.LEFT, S, true);
-  e.drawTextRight(opts.date, S, true);
-  e.gap(e.LINE_H);
-  await sdGap(e, 20);
-
-  await sdLine(e, "To,", S, false);
-  await sdLine(e, opts.contactPerson, S, false);
-  await sdLine(e, opts.designation, S, false);
-  await sdLine(e, opts.orgName, S, false);
-  for (const part of opts.regAddress.split(/[,\n]/).map((l: string) => l.trim()).filter(Boolean).slice(0, 3)) {
-    await sdLine(e, part.length > 72 ? part.slice(0, 72) : part, S, false);
-  }
-  await sdGap(e, 14);
-
-  await sdPara(e, [bold("Sub: "), plain("Empanelment as Business Associate — AFC India Limited")], S);
-  await sdGap(e, 3);
-  await sd(e, () => e.drawRule());
-  await sdGap(e, 8);
-
-  await sdLine(e, `Dear ${opts.contactPerson},`, S, false);
-  await sdGap(e, 8);
-
-  await sdPara(e, [
-    plain("We are pleased to inform you that we have reviewed and evaluated the capabilities and qualifications of "),
-    bold(opts.orgName),
-    plain(", and we are pleased to officially empanel "),
-    bold(opts.orgName),
-    plain(" as an approved Business Associate of AFC India Limited for providing services in "),
-    bold(opts.sectors),
-    plain(" on mutually agreed terms and conditions and revenue/risk sharing basis."),
-  ], S);
-  await sdGap(e, 10);
-
-  await sdPara(e, [plain("The said empanelment is subject to the following terms and conditions:")], S);
-  await sdGap(e, 8);
-
-  const clauses: Segment[][] = [
-    [plain("Both the organizations agree to share resources available with either organization, to explore newer business avenues and share technical expertise wherever possible and required.")],
-    [plain("This communication shall not be considered a Partnership / Joint Venture / Rights of business of either of the organization.")],
-    [plain("Both organizations agree to place their logo in the activities conducted jointly. The request for placing the logo would be made by obtaining consent before actual use.")],
-    [plain("During this period of work, the organization shall abide by all terms & conditions prescribed by AFC India Limited from time to time.")],
-    [plain("Neither organization shall use the intellectual property, trademarks, or brand names of the other, without prior written consent.")],
-    [plain("Neither organization i.e., AFC nor "), bold(opts.orgName), plain(" shall incur any liability on behalf of the other, without prior written consent.")],
-    [plain("Either organization i.e., AFC or "), bold(opts.orgName), plain(" shall not propagate this communication to further business interests without consent of the other.")],
-    [plain("Both organizations will enter into separate agreements for each assignment with clear-cut roles, payment, commercials, terms, and deliverables.")],
-    [plain("No information or document acquired while working together may be disclosed to a third organization without written consent.")],
-    [plain("The empanelment does not grant any exclusive right to either organization and shall not create any legally binding obligations.")],
-    [plain("The empanelment can be terminated by either organization by serving a 30-day notice in writing, subject to completion of assignments in hand.")],
-    [plain("This empanelment is valid for a period of "), bold("3 (three) years"), plain(" from the date of this letter, i.e., up to "), bold(opts.validUntil), plain(", and is subject to renewal on mutual consent.")],
-  ];
-
-  for (let i = 0; i < clauses.length; i++) {
-    if (e.y < e.FOOTER_SAFE) await e.newPage();
-    e.currentPage.drawText(`${i + 1}.`, { x: e.LEFT, y: e.y, size: S, font: fonts.bold, color: BLACK });
-    await sdPara(e, clauses[i], S, NI);
-    await sdGap(e, 5);
-  }
-
-  await sdGap(e, 10);
-  if (e.y < e.FOOTER_SAFE + 80) await e.newPage();
-
-  await sdPara(e, [
-    plain("Looking forward to a fruitful and mutually beneficial co-operation with "),
-    bold(opts.orgName), plain(" for taking business opportunities together."),
-  ], S);
-  await sdGap(e, 20);
-
-  await sdLine(e, "Warm Regards,", S, false);
-  await sdGap(e, 8);
-  await sdLine(e, opts.dgmName, S, true);
-  await sdLine(e, "DEPUTY GENERAL MANAGER", S, false);
-  await sdLine(e, "AFC India Limited", S, false);
-
-  return await pdf.save();
-}
 
 // CFO/CS previously only got the in-app bell notification when an
 // application reached their stage — this adds an actual email so it isn't
@@ -245,56 +139,19 @@ async function provisionBaAccount(
 async function tryBuildEmpanelmentLetter(
   admin: AdminClient,
   app: { id: string; application_code: string; team: string; dgm_id: string | null },
-  baData: { org_name: string | null; contact_person: string | null; designation: string | null; reg_address: string | null; sectors_served: unknown } | null
+  baData: { org_name: string | null; contact_person: string | null; designation: string | null; reg_address: string | null; sectors_served: unknown } | null,
+  mdId: string
 ): Promise<{ attachment: { filename: string; content: string }; refNumber: string; validUntil: string } | null> {
   try {
-    if (!baData) return null;
+    const built = await buildEmpanelmentLetter(admin, baData, mdId);
+    if (!built) return null;
 
-    let dgmName: string | null = null;
-    if (app.dgm_id) {
-      const { data } = await admin.from("afc_users").select("full_name").eq("id", app.dgm_id).maybeSingle();
-      dgmName = data?.full_name || null;
-    }
-    if (!dgmName) {
-      const { data } = await admin.from("afc_users").select("full_name").eq("team", app.team).eq("role", "dgm").eq("is_active", true).limit(1).maybeSingle();
-      dgmName = data?.full_name || null;
-    }
-
-    const logoUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/public-assets/Logo.png`;
-    const logoRes = await fetch(logoUrl);
-    if (!logoRes.ok) return null;
-    const logoBytes = new Uint8Array(await logoRes.arrayBuffer());
-
-    const today = new Date();
-    const validUntilDate = addMonths(today, 36); // 3 years
-    const validUntil = formatDateLong(validUntilDate);
-    const year = today.getFullYear();
-
-    const { count } = await admin.from("empanelment_applications").select("id", { count: "exact", head: true }).not("empanelment_ref", "is", null);
-    const refNumber = `AFC/BA/${year}/${String((count ?? 0) + 1).padStart(3, "0")}`;
-
-    const sectorsArr = Array.isArray(baData.sectors_served) ? baData.sectors_served as string[] : [];
-    const sectors = sectorsArr.length ? sectorsArr.join(", ") + " and other areas of common interest" : "areas of common interest as may be mutually agreed";
-
-    const pdfBytes = await generateEmpanelmentPDF({
-      logoBytes,
-      refNumber,
-      date: formatDateDDMMYYYY(today),
-      contactPerson: baData.contact_person ? `Mr./Ms. ${baData.contact_person}` : "Sir / Ma'am",
-      designation: baData.designation || "Authorized Signatory",
-      orgName: baData.org_name || "the Organization",
-      regAddress: baData.reg_address || "",
-      sectors,
-      validUntil,
-      dgmName: (dgmName || "Deputy General Manager").toUpperCase(),
-    });
-
-    await admin.from("empanelment_applications").update({ empanelment_ref: refNumber, empanelment_expires_at: validUntilDate.toISOString() }).eq("id", app.id);
+    await admin.from("empanelment_applications").update({ empanelment_ref: built.refNumber, empanelment_expires_at: built.validUntilDate.toISOString() }).eq("id", app.id);
 
     return {
-      attachment: { filename: `Empanelment_Letter_${refNumber.replace(/\//g, "_")}.pdf`, content: bytesToBase64(pdfBytes) },
-      refNumber,
-      validUntil,
+      attachment: { filename: `Empanelment_Letter_${built.refNumber.replace(/\//g, "_")}.pdf`, content: bytesToBase64(built.pdfBytes) },
+      refNumber: built.refNumber,
+      validUntil: built.validUntil,
     };
   } catch (err) {
     console.error("Empanelment letter generation failed:", (err as Error).message);
@@ -502,7 +359,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "dgm_recommend": {
-        if (caller.role !== "dgm" || caller.team !== app.team) return forbidden("Only the team's DGM can act on this application.");
+        if (caller.role !== "dgm" || !isCallerOnTeam(caller, app.team)) return forbidden("Only the team's DGM can act on this application.");
         if (app.status !== "dgm_review") return badState("dgm_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "md_review", dgm_comment: trimmedComment }).eq("id", app.id);
@@ -521,10 +378,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "dgm_send_back": {
-        if (caller.role !== "dgm" || caller.team !== app.team) return forbidden("Only the team's DGM can act on this application.");
+        if (caller.role !== "dgm" || !isCallerOnTeam(caller, app.team)) return forbidden("Only the team's DGM can act on this application.");
         if (app.status !== "dgm_review") return badState("dgm_review");
+        if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "po_final_review" }).eq("id", app.id);
-        await logActivity(adminClient, app.id, caller.id, caller.role, "dgm_sent_back", trimmedComment || "Sent back to Project Officer for another look.");
+        await logActivity(adminClient, app.id, caller.id, caller.role, "dgm_sent_back", trimmedComment);
         await notifyUser(adminClient, app.project_officer_id, {
           title: "Empanelment application sent back",
           sub_text: `${orgName}'s application was sent back by the DGM for another look.`,
@@ -541,8 +399,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       case "md_send_back": {
         if (caller.role !== "md") return forbidden("Only the MD can act at this stage.");
         if (app.status !== "md_review") return badState("md_review");
+        if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
         await adminClient.from("empanelment_applications").update({ status: "dgm_review" }).eq("id", app.id);
-        await logActivity(adminClient, app.id, caller.id, caller.role, "md_sent_back", trimmedComment || "Sent back to the DGM for another look.");
+        await logActivity(adminClient, app.id, caller.id, caller.role, "md_sent_back", trimmedComment);
         const sendBackPayload = {
           title: "Empanelment application sent back",
           sub_text: `${orgName}'s application was sent back by the MD for another look.`,
@@ -575,8 +434,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         if (app.status !== "md_review") return badState("md_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "Rejection remarks are required." });
 
-        const otpValid = await verifyOtp(adminClient, { userId: caller.id, applicationId: app.id, action: "md_reject", otp: body.otp });
-        if (!otpValid) return jsonRes(req, 400, { error: "Invalid or expired verification code. Please request a new one." });
+        const rejectPinErr = await verifyActionPin(adminClient, caller.id, caller.pin_hash, body.pin);
+        if (rejectPinErr) return jsonRes(req, 400, { error: rejectPinErr });
 
         await adminClient.from("empanelment_applications").update({ status: "rejected", md_remarks: trimmedComment, decided_at: new Date().toISOString() }).eq("id", app.id);
         const emailSent = await sendDecisionMail(orgName, app.ba_email, false, trimmedComment);
@@ -597,12 +456,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         if (app.status !== "md_review") return badState("md_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "Remarks are required." });
 
-        const otpValid = await verifyOtp(adminClient, { userId: caller.id, applicationId: app.id, action: "md_accept", otp: body.otp });
-        if (!otpValid) return jsonRes(req, 400, { error: "Invalid or expired verification code. Please request a new one." });
+        const acceptPinErr = await verifyActionPin(adminClient, caller.id, caller.pin_hash, body.pin);
+        if (acceptPinErr) return jsonRes(req, 400, { error: acceptPinErr });
 
         await adminClient.from("empanelment_applications").update({ status: "accepted", md_remarks: trimmedComment, decided_at: new Date().toISOString() }).eq("id", app.id);
         const credentials = await provisionBaAccount(adminClient, app.id, app.ba_email, orgName, baData?.contact_person || null, app.team);
-        const letter = await tryBuildEmpanelmentLetter(adminClient, app, baData);
+        const letter = await tryBuildEmpanelmentLetter(adminClient, app, baData, caller.id);
         const emailSent = await sendDecisionMail(orgName, app.ba_email, true, trimmedComment, credentials, letter?.attachment);
         await logActivity(
           adminClient,

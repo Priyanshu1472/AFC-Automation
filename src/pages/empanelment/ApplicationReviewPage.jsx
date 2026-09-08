@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { ROLE_LABELS } from "../../lib/roles";
@@ -10,7 +10,8 @@ import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import ComplianceHoldModal from "./ComplianceHoldModal";
-import OtpVerifyModal from "./OtpVerifyModal";
+import PinConfirmModal from "./PinConfirmModal";
+import LetterPreviewPinModal from "./LetterPreviewPinModal";
 import { STATUS_FLOW, STATUS_BADGE, ProgressStepper, TimelineAccordion } from "../../components/empanelment/ApplicationTimeline";
 import "../../styles/ApplicationReviewPage.css";
 
@@ -54,14 +55,14 @@ function CommentCard({ label, text, colorClass }) {
 }
 
 // MD-only now (DGM can no longer reject — see the removed dgm_reject
-// button/handler below). No preview step: the OTP modal that follows this
+// button/handler below). No preview step: the PIN modal that follows this
 // one is the actual safety gate, so this is just remarks capture.
 function RejectModal({ onConfirm, onClose }) {
   const [remark, setRemark] = useState("");
   return (
     <div className="ar-modal-backdrop" onClick={() => onClose()}>
       <div className="ar-modal ar-modal-lg" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div className="ar-modal-header"><h3 className="ar-modal-title">Reject Application</h3><p className="ar-modal-desc">Write the rejection remarks — you'll be asked to verify with a one-time code emailed to you before this is sent.</p></div>
+        <div className="ar-modal-header"><h3 className="ar-modal-title">Reject Application</h3><p className="ar-modal-desc">Write the rejection remarks — you'll be asked to confirm with your action PIN before this is sent.</p></div>
         <div className="ar-field"><label className="ar-label">Rejection Remarks <span className="ar-required">*</span></label><textarea className="input" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="Write the reason for rejection clearly..." rows={4} /></div>
         <div className="ar-modal-actions">
           <Button variant="danger" block disabled={!remark.trim()} onClick={() => onConfirm(remark.trim())} icon={<XIcon />}>Reject Application</Button>
@@ -113,6 +114,11 @@ function DocItem({ doc, applicationId }) {
 export default function ApplicationReviewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Opened from Home's "Needs your action" panel (see HomePage.jsx) — exit
+  // there instead of the Applications list, since that's where the user
+  // actually came from.
+  const backTo = location.state?.from === "home" ? "/home" : "/empanelment";
   const { profile } = useAuth();
   const role = profile?.role;
 
@@ -127,12 +133,12 @@ export default function ApplicationReviewPage() {
   const [activeTab, setActiveTab] = useState("details");
   const [showHoldModal, setShowHoldModal] = useState(false);
   const [openFlags, setOpenFlags] = useState([]);
-  // MD accept/reject and the DGM's provisional letter all go through an
-  // OTP-verify step before the real action (and its email) fires.
-  const [showAcceptOtp, setShowAcceptOtp] = useState(false);
+  // MD accept/reject and the DGM's provisional letter all go through a
+  // PIN-verify step before the real action (and its email) fires.
+  const [showAcceptPin, setShowAcceptPin] = useState(false);
   const [rejectRemark, setRejectRemark] = useState("");
-  const [showRejectOtp, setShowRejectOtp] = useState(false);
-  const [showProvisionalOtp, setShowProvisionalOtp] = useState(false);
+  const [showRejectPin, setShowRejectPin] = useState(false);
+  const [showProvisionalPin, setShowProvisionalPin] = useState(false);
 
   const fetchApp = useCallback(async () => {
     const { data: application } = await supabase
@@ -149,7 +155,7 @@ export default function ApplicationReviewPage() {
       .from("empanelment_activity_log")
       .select("*, actor:actor_id(full_name)")
       .eq("application_id", id)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false });
     setAuditLogs(logs || []);
     const { data: flags } = await supabase
       .from("compliance_flags")
@@ -224,26 +230,28 @@ export default function ApplicationReviewPage() {
     if (data) { showBanner("Recommended to MD."); setComment(""); fetchApp(); }
   }
   async function handleDGMSendBack() {
+    if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
     const data = await runAction("dgm_send_back");
     if (data) { showBanner("Sent back to Project Officer."); setComment(""); fetchApp(); }
   }
   async function handleMDSendBack() {
+    if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
     const data = await runAction("md_send_back");
     if (data) { showBanner("Sent back to DGM."); setComment(""); fetchApp(); }
   }
-  function handleAcceptOtpSuccess() {
-    setShowAcceptOtp(false);
-    navigate("/empanelment");
+  function handleAcceptPinSuccess() {
+    setShowAcceptPin(false);
+    navigate(backTo);
   }
-  function handleRejectOtpSuccess(data) {
-    setShowRejectOtp(false);
+  function handleRejectPinSuccess(data) {
+    setShowRejectPin(false);
     showBanner(`Application rejected. Rejection email ${data.email_sent ? "sent to" : "failed to send to"} BA.`, data.email_sent ? "success" : "warning");
     setComment("");
     setRejectRemark("");
     fetchApp();
   }
-  function handleProvisionalOtpSuccess(data) {
-    setShowProvisionalOtp(false);
+  function handleProvisionalPinSuccess(data) {
+    setShowProvisionalPin(false);
     showBanner(`Provisional letter sent (Ref: ${data.ref}).`);
     fetchApp();
   }
@@ -276,7 +284,7 @@ export default function ApplicationReviewPage() {
       <AppHeader />
       <div className="app-container">
         <div className="ar-page">
-          <button className="ar-back-btn" onClick={() => navigate("/empanelment")}><ArrowLeftIcon /> Back to Applications</button>
+          <button className="ar-back-btn" onClick={() => navigate(backTo)}><ArrowLeftIcon /> {backTo === "/home" ? "Back to Home" : "Back to Applications"}</button>
 
           {banner && (
             <Alert variant={banner.type === "danger" ? "danger" : banner.type === "warning" ? "warning" : "success"} onClose={() => setBanner(null)}>
@@ -438,8 +446,8 @@ export default function ApplicationReviewPage() {
                         <label className="ar-label">Recommendation Comment <span className="ar-required">*</span></label>
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your recommendation..." rows={4} />
                       </div>
-                      <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleDGMRecommend}>{actionLoading ? "Sending..." : "Recommend to Managing Director"}</Button>
-                      <Button variant="secondary" block disabled={actionLoading} icon={<ArrowLeftIcon />} onClick={handleDGMSendBack}>Send Back to Project Officer</Button>
+                      <Button variant="primary" block disabled={!comment.trim() || actionLoading} loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleDGMRecommend}>{actionLoading ? "Sending..." : "Recommend to Managing Director"}</Button>
+                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleDGMSendBack}>Send Back to Project Officer</Button>
                     </>)}
 
                     {role === "md" && (<>
@@ -447,8 +455,8 @@ export default function ApplicationReviewPage() {
                         <label className="ar-label">Final Remarks <span className="ar-required">*</span></label>
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your remarks along with the final decision..." rows={4} />
                       </div>
-                      <Button variant="primary" block disabled={!comment.trim() || actionLoading} icon={<CheckIcon />} onClick={() => setShowAcceptOtp(true)}>Accept</Button>
-                      <Button variant="secondary" block disabled={actionLoading} icon={<ArrowLeftIcon />} onClick={handleMDSendBack}>Send Back to DGM</Button>
+                      <Button variant="primary" block disabled={!comment.trim() || actionLoading} icon={<CheckIcon />} onClick={() => setShowAcceptPin(true)}>Accept</Button>
+                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleMDSendBack}>Send Back to DGM</Button>
                       <Button variant="danger" block disabled={actionLoading} icon={<XIcon />} onClick={() => setShowReject(true)}>Reject</Button>
                     </>)}
 
@@ -469,7 +477,7 @@ export default function ApplicationReviewPage() {
                     <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
                       A non-final, provisional empanelment letter emailed to the BA — separate from the MD&apos;s final acceptance email.
                     </p>
-                    <Button variant="secondary" block disabled={app.provisional_letter_sent} icon={<DocumentIcon />} onClick={() => setShowProvisionalOtp(true)}>
+                    <Button variant="secondary" block disabled={app.provisional_letter_sent} icon={<DocumentIcon />} onClick={() => setShowProvisionalPin(true)}>
                       {app.provisional_letter_sent ? "Provisional Letter Already Sent" : "Send Provisional Letter"}
                     </Button>
                   </Card.Body>
@@ -519,18 +527,18 @@ export default function ApplicationReviewPage() {
 
       {showReject && (
         <RejectModal
-          onConfirm={(remark) => { setRejectRemark(remark); setShowReject(false); setShowRejectOtp(true); }}
+          onConfirm={(remark) => { setRejectRemark(remark); setShowReject(false); setShowRejectPin(true); }}
           onClose={() => setShowReject(false)}
         />
       )}
-      {showAcceptOtp && (
-        <OtpVerifyModal applicationId={app.id} action="md_accept" comment={comment.trim()} onClose={() => setShowAcceptOtp(false)} onSuccess={handleAcceptOtpSuccess} />
+      {showAcceptPin && (
+        <LetterPreviewPinModal applicationId={app.id} action="md_accept" comment={comment.trim()} onClose={() => setShowAcceptPin(false)} onSuccess={handleAcceptPinSuccess} />
       )}
-      {showRejectOtp && (
-        <OtpVerifyModal applicationId={app.id} action="md_reject" comment={rejectRemark} onClose={() => setShowRejectOtp(false)} onSuccess={handleRejectOtpSuccess} />
+      {showRejectPin && (
+        <PinConfirmModal applicationId={app.id} action="md_reject" comment={rejectRemark} onClose={() => setShowRejectPin(false)} onSuccess={handleRejectPinSuccess} />
       )}
-      {showProvisionalOtp && (
-        <OtpVerifyModal applicationId={app.id} action="provisional_letter" onClose={() => setShowProvisionalOtp(false)} onSuccess={handleProvisionalOtpSuccess} />
+      {showProvisionalPin && (
+        <LetterPreviewPinModal applicationId={app.id} action="provisional_letter" onClose={() => setShowProvisionalPin(false)} onSuccess={handleProvisionalPinSuccess} />
       )}
       {showHoldModal && (
         <ComplianceHoldModal

@@ -1,0 +1,38 @@
+.pin-input-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.pin-input-box {
+  width: 44px;
+  height: 48px;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--input-text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.pin-input-box::placeholder { color: var(--input-placeholder); }
+
+.pin-input-box:focus {
+  outline: none;
+  border-color: var(--input-border-focus);
+  box-shadow: var(--input-shadow-focus);
+  background: var(--input-bg-focus);
+}
+
+.pin-input-box:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--bg-surface-3);
+}
+
+.pin-input-row-error .pin-input-box {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(138, 58, 48, 0.12) !important;
+}

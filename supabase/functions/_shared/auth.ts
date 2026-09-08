@@ -35,7 +35,21 @@ export type CallerProfile = {
   committee: string | null;
   is_active: boolean;
   email: string;
+  pin_hash: string | null;
+  // Full assigned-team membership (primary `team` included) — a
+  // multi-team user (e.g. a DGM covering 2 teams) is authorized against
+  // this whole set, not just the primary team, for both read (RLS mirrors
+  // this via is_current_user_team()) and write-side checks below.
+  teams: string[];
 };
+
+// Is the caller a member of `team` at all — every write-side "only this
+// team's DGM/PO/etc. can act" check should use this instead of
+// `caller.team === target.team`, so a multi-team user isn't limited to
+// acting only on their primary team.
+export function isCallerOnTeam(caller: Pick<CallerProfile, "teams">, team: string | null | undefined): boolean {
+  return !!team && caller.teams.includes(team);
+}
 
 export type CallerResult =
   | { ok: true; caller: CallerProfile }
@@ -60,12 +74,16 @@ export async function getCallerProfile(
 
   const { data: caller, error } = await adminClient
     .from("afc_users")
-    .select("id, role, team, office, committee, is_active, email")
+    .select("id, role, team, office, committee, is_active, email, pin_hash")
     .eq("id", payload.sub)
     .single();
 
   if (error || !caller) return { ok: false, status: 403, error: "Caller account not found." };
   if (!caller.is_active) return { ok: false, status: 403, error: "Your account is deactivated." };
 
-  return { ok: true, caller };
+  const { data: teamRows } = await adminClient.from("afc_user_teams").select("team").eq("user_id", caller.id);
+  const teamSet = (teamRows || []).map((r: { team: string }) => r.team);
+  const teams = teamSet.length ? teamSet : (caller.team ? [caller.team] : []);
+
+  return { ok: true, caller: { ...caller, teams } };
 }

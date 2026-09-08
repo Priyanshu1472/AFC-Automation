@@ -16,6 +16,7 @@ function client(opts: {
   return createFakeAdminClient(
     {
       afc_users: [{ data: caller, error: null }, { data: opts.existing ?? null, error: null }],
+      afc_user_teams: [{ data: null, error: null }],
       application_audit_log: [{ data: null, error: null }],
       notifications: [{ data: null, error: null }],
     },
@@ -52,7 +53,7 @@ Deno.test("create-staff-user - rejects a role Admin isn't allowed to create (e.g
   assertEquals(res.status, 403);
 });
 
-Deno.test("create-staff-user - MD's bootstrap allowance is limited to creating admin accounts only", async () => {
+Deno.test("create-staff-user - MD can no longer create any accounts (Admin-only now)", async () => {
   const res = await handleRequest(
     req({ email: "new@afc.com", full_name: "New Person", role: "cfo" }),
     client({ caller: { id: CALLER_ID, role: "md", is_active: true } }) as never,
@@ -60,18 +61,12 @@ Deno.test("create-staff-user - MD's bootstrap allowance is limited to creating a
   assertEquals(res.status, 403);
 });
 
-Deno.test("create-staff-user - MD can create the first admin account", async () => {
-  const original = globalThis.fetch;
-  globalThis.fetch = okFetch;
-  try {
-    const res = await handleRequest(
-      req({ email: "new-admin@afc.com", full_name: "New Admin", role: "admin" }),
-      client({ caller: { id: CALLER_ID, role: "md", is_active: true } }) as never,
-    );
-    assertEquals(res.status, 200);
-  } finally {
-    globalThis.fetch = original;
-  }
+Deno.test("create-staff-user - DGM can no longer create any accounts", async () => {
+  const res = await handleRequest(
+    req({ email: "new@afc.com", full_name: "New Person", role: "project_officer" }),
+    client({ caller: { id: CALLER_ID, role: "dgm", team: "BPDD", is_active: true } }) as never,
+  );
+  assertEquals(res.status, 403);
 });
 
 Deno.test("create-staff-user - rejects an invalid email", async () => {
@@ -101,7 +96,32 @@ Deno.test("create-staff-user - success path returns email_sent true and never ec
     const res = await handleRequest(req({ email: "new@afc.com", full_name: "New Person", role: "cfo" }), client({}) as never);
     const json = await res.json();
     assertEquals(res.status, 200);
-    assertEquals(json, { success: true, email_sent: true });
+    assertEquals(json, { success: true, email_sent: true, id: "new-user-1" });
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("create-staff-user - a multi-team `teams` array is written to afc_user_teams, and teams[0] becomes the primary afc_users.team", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = okFetch;
+  try {
+    const c = client({});
+    const res = await handleRequest(
+      req({ email: "new@afc.com", full_name: "New Person", role: "dgm", teams: ["BPDD", "HO"] }),
+      c as never,
+    );
+    assertEquals(res.status, 200);
+
+    const log = (c as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+    const profileInsert = JSON.parse(log.filter((l) => l.table === "afc_users").find((l) => l.calls[0][0] === "insert")!.calls[0][1])[0];
+    assertEquals(profileInsert.team, "BPDD");
+
+    const teamsInsert = JSON.parse(log.filter((l) => l.table === "afc_user_teams").find((l) => l.calls[0][0] === "insert")!.calls[0][1]);
+    assertEquals(teamsInsert, [
+      { user_id: "new-user-1", team: "BPDD" },
+      { user_id: "new-user-1", team: "HO" },
+    ]);
   } finally {
     globalThis.fetch = original;
   }

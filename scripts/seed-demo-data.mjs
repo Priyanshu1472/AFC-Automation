@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Seeds a full demo dataset for presenting the portal: one staff account per
-// role (two parallel teams, BPDD and CBBO, for the team-scoped roles) plus
+// role (two parallel teams, BPDD and BIID, for the team-scoped roles) plus
 // nine sample empanelment applications covering every pipeline status.
 //
 // Every account uses Gmail "+tag" addressing off a single real inbox (e.g.
@@ -132,8 +132,8 @@ function projectRefFromUrl(url) {
 }
 
 // ── Staff accounts ──────────────────────────────────────────────────
-const OFFICE_BY_TEAM = { BPDD: "delhi", CBBO: "mumbai" };
-const TEAMS = ["BPDD", "CBBO"];
+const OFFICE_BY_TEAM = { BPDD: "delhi", BIID: "mumbai" };
+const TEAMS = ["BPDD", "BIID"];
 
 const COMPANY_WIDE = [
   { tag: "md", full_name: "Priyanshu (Demo MD)", role: "md", team: null, office: null },
@@ -220,7 +220,7 @@ const APPLICATIONS = [
   },
   {
     id: "po_review",
-    team: "CBBO",
+    team: "BIID",
     status: "po_review",
     baTag: "ba-poreview",
     orgName: "Greenfield Agri Consultants Pvt Ltd",
@@ -248,7 +248,7 @@ const APPLICATIONS = [
   },
   {
     id: "po_final_review",
-    team: "CBBO",
+    team: "BIID",
     status: "po_final_review",
     baTag: "ba-pofinal",
     orgName: "Kisan Bridge Financial Services",
@@ -292,7 +292,7 @@ const APPLICATIONS = [
   },
   {
     id: "md_review",
-    team: "CBBO",
+    team: "BIID",
     status: "md_review",
     baTag: "ba-mdreview",
     orgName: "Vikas Micro Enterprises Network",
@@ -319,7 +319,7 @@ const APPLICATIONS = [
   },
   {
     id: "on_hold",
-    team: "CBBO",
+    team: "BIID",
     status: "on_hold",
     holdOriginStatus: "po_review",
     baTag: "ba-onhold",
@@ -368,7 +368,7 @@ const APPLICATIONS = [
   },
   {
     id: "rejected",
-    team: "CBBO",
+    team: "BIID",
     status: "rejected",
     baTag: "ba-rejected",
     orgName: "Nirman Infra Advisors",
@@ -441,13 +441,13 @@ function resolvedFiller({ id, team, baTag, orgName, contactPerson, accepted, sen
 
 APPLICATIONS.push(
   resolvedFiller({ id: "filler_accepted_1", team: "BPDD", baTag: "ba-d1", orgName: "Bharat Krishi Solutions Pvt Ltd", contactPerson: "Vinod Kumar", accepted: true, sentDaysAgo: 100, decidedDaysAgo: 88 }),
-  resolvedFiller({ id: "filler_accepted_2", team: "CBBO", baTag: "ba-d2", orgName: "Rural Edge Consultants LLP", contactPerson: "Neha Kapoor", accepted: true, sentDaysAgo: 70, decidedDaysAgo: 60 }),
+  resolvedFiller({ id: "filler_accepted_2", team: "BIID", baTag: "ba-d2", orgName: "Rural Edge Consultants LLP", contactPerson: "Neha Kapoor", accepted: true, sentDaysAgo: 70, decidedDaysAgo: 60 }),
   resolvedFiller({ id: "filler_accepted_3", team: "BPDD", baTag: "ba-d3", orgName: "Sanchar Development Group", contactPerson: "Ramesh Pillai", accepted: true, sentDaysAgo: 45, decidedDaysAgo: 36 }),
-  resolvedFiller({ id: "filler_accepted_4", team: "CBBO", baTag: "ba-d4", orgName: "Mitra Agri Services LLP", contactPerson: "Pooja Verma", accepted: true, sentDaysAgo: 20, decidedDaysAgo: 12 }),
+  resolvedFiller({ id: "filler_accepted_4", team: "BIID", baTag: "ba-d4", orgName: "Mitra Agri Services LLP", contactPerson: "Pooja Verma", accepted: true, sentDaysAgo: 20, decidedDaysAgo: 12 }),
   resolvedFiller({ id: "filler_accepted_5", team: "BPDD", baTag: "ba-d5", orgName: "Bandhan Livelihood Partners", contactPerson: "Arvind Joshi", accepted: true, sentDaysAgo: 6, decidedDaysAgo: 2 }),
-  resolvedFiller({ id: "filler_rejected_1", team: "CBBO", baTag: "ba-d6", orgName: "Disha Infra Consultants", contactPerson: "Sunil Rathi", accepted: false, sentDaysAgo: 80, decidedDaysAgo: 68 }),
+  resolvedFiller({ id: "filler_rejected_1", team: "BIID", baTag: "ba-d6", orgName: "Disha Infra Consultants", contactPerson: "Sunil Rathi", accepted: false, sentDaysAgo: 80, decidedDaysAgo: 68 }),
   resolvedFiller({ id: "filler_rejected_2", team: "BPDD", baTag: "ba-d7", orgName: "Chetna Rural Advisory Pvt Ltd", contactPerson: "Manisha Reddy", accepted: false, sentDaysAgo: 35, decidedDaysAgo: 26 }),
-  resolvedFiller({ id: "filler_rejected_3", team: "CBBO", baTag: "ba-d8", orgName: "Vistaar Business Solutions", contactPerson: "Ajay Malhotra", accepted: false, sentDaysAgo: 11, decidedDaysAgo: 4 }),
+  resolvedFiller({ id: "filler_rejected_3", team: "BIID", baTag: "ba-d8", orgName: "Vistaar Business Solutions", contactPerson: "Ajay Malhotra", accepted: false, sentDaysAgo: 11, decidedDaysAgo: 4 }),
   {
     id: "filler_onhold_1",
     team: "BPDD",
@@ -466,7 +466,7 @@ APPLICATIONS.push(
   },
   {
     id: "filler_onhold_2",
-    team: "CBBO",
+    team: "BIID",
     status: "on_hold",
     holdOriginStatus: "dgm_review",
     baTag: "ba-d10",
@@ -500,7 +500,7 @@ APPLICATIONS.push(
   },
   {
     id: "filler_sent_2",
-    team: "CBBO",
+    team: "BIID",
     status: "sent",
     baTag: "ba-d12",
     orgName: "Utkarsh Agri Associates",
@@ -521,7 +521,7 @@ APPLICATIONS.push(
   },
   {
     id: "filler_poreview_2",
-    team: "CBBO",
+    team: "BIID",
     status: "po_review",
     baTag: "ba-d14",
     orgName: "Him Alpine Consultants",

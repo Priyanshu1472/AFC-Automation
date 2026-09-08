@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import AppHeader from "../../components/shared/AppHeader";
 import Alert from "../../components/ui/Alert";
+import Button from "../../components/ui/Button";
 import PageLoader from "../../components/ui/PageLoader";
 import LeadForm from "./LeadForm";
 
@@ -30,7 +31,11 @@ export default function EditLeadPage() {
     lead &&
     (lead.status === "pa_review" || lead.status === "pa_action_required") &&
     (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
-  const isResubmit = lead?.status === "pa_action_required";
+  // A returned (pa_action_required) lead's fields can be edited here same as
+  // any other lead — saving does NOT resubmit it into the approval
+  // pipeline. Getting it back to DGM is a separate, deliberate step: the
+  // Lead Approval Note's "Resubmit Lead Approval Form" action from the
+  // lead's detail page.
 
   return (
     <div className="app-shell">
@@ -39,9 +44,12 @@ export default function EditLeadPage() {
         <div className="page-header">
           <div className="page-title-row">
             <div>
-              <h1>{isResubmit ? "Edit & Resubmit Lead" : "Edit Lead"}</h1>
+              <h1>Edit Lead</h1>
               {lead && <p>{lead.lead_number} — {lead.title}</p>}
             </div>
+            <Button variant="secondary" onClick={() => navigate(lead ? `/leads/${lead.id}` : "/leads")}>
+              ← Back
+            </Button>
           </div>
         </div>
 

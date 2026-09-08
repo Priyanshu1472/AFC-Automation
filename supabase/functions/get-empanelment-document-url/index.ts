@@ -5,7 +5,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 
 const BUCKET = "ba-documents";
 const SIGNED_URL_TTL_SECONDS = 5 * 60;
@@ -49,7 +49,7 @@ serve(async (req) => {
   const caller = callerResult.caller;
   const authorized =
     ["md", "cfo", "cs", "admin"].includes(caller.role) ||
-    (caller.role === "dgm" && caller.team === application.team) ||
+    (caller.role === "dgm" && isCallerOnTeam(caller, application.team)) ||
     (caller.role === "project_officer" && caller.id === application.project_officer_id) ||
     (["associate_consultant", "project_assistant"].includes(caller.role) && caller.id === application.sent_by);
 

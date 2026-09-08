@@ -61,7 +61,7 @@ Deno.test("getCallerProfile - deactivated account -> 403", async () => {
 });
 
 Deno.test("getCallerProfile - active caller -> ok with profile", async () => {
-  const caller = { id: "user-1", role: "md", team: null, office: "delhi", is_active: true, email: "md@afc.com" };
+  const caller = { id: "user-1", role: "md", team: null, office: "delhi", committee: null, is_active: true, email: "md@afc.com", pin_hash: null };
   const client = createFakeAdminClient({ afc_users: [{ data: caller, error: null }] });
   const token = fakeJwt({ sub: "user-1" });
   const result = await getCallerProfile(reqWithAuth(`Bearer ${token}`), client as never);

@@ -29,9 +29,12 @@ export default function Select({
 
   // Keep the input's displayed text in sync with the selected value
   // whenever it changes from outside (form reset, loading a record, etc.)
-  // and we're not actively typing (dropdown closed).
+  // and we're not actively typing (dropdown closed). Falls back to the raw
+  // value (not "") when it isn't in `options` — that's exactly the case
+  // right after commitCreate below sets a brand-new value that `options`
+  // doesn't know about yet, so this must not blank the input back out.
   useEffect(() => {
-    if (creatable && !open) setQuery(selected ? selected.label : "");
+    if (creatable && !open) setQuery(selected ? selected.label : value || "");
   }, [creatable, open, value]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const trimmedQuery = query.trim();
@@ -115,7 +118,7 @@ export default function Select({
   function handleInputKeyDown(e) {
     if (disabled) return;
     if (e.key === "Escape") {
-      setQuery(selected ? selected.label : "");
+      setQuery(selected ? selected.label : value || "");
       setOpen(false);
       return;
     }

@@ -62,28 +62,20 @@ Deno.test("set-user-status - unknown target -> 404", async () => {
   assertEquals(res.status, 404);
 });
 
-Deno.test("set-user-status - DGM can't manage a user outside their team", async () => {
-  const res = await handleRequest(
-    req({ user_id: TARGET_ID, is_active: false }),
-    client({ id: CALLER_ID, role: "dgm", team: "BPDD", is_active: true }, { id: TARGET_ID, role: "srm", team: "CBBO", email: "x@afc.com", full_name: "X" }) as never,
-  );
-  assertEquals(res.status, 403);
-});
-
-Deno.test("set-user-status - DGM can't manage a role outside DGM_CREATABLE_ROLES (e.g. another dgm)", async () => {
-  const res = await handleRequest(
-    req({ user_id: TARGET_ID, is_active: false }),
-    client({ id: CALLER_ID, role: "dgm", team: "BPDD", is_active: true }, { id: TARGET_ID, role: "dgm", team: "BPDD", email: "x@afc.com", full_name: "X" }) as never,
-  );
-  assertEquals(res.status, 403);
-});
-
-Deno.test("set-user-status - DGM can deactivate an SRM on their own team", async () => {
+Deno.test("set-user-status - DGM can no longer change any user's status, even a teammate", async () => {
   const res = await handleRequest(
     req({ user_id: TARGET_ID, is_active: false }),
     client({ id: CALLER_ID, role: "dgm", team: "BPDD", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD", email: "x@afc.com", full_name: "X" }) as never,
   );
-  assertEquals(res.status, 200);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("set-user-status - MD can no longer change any user's status", async () => {
+  const res = await handleRequest(
+    req({ user_id: TARGET_ID, is_active: false }),
+    client({ id: CALLER_ID, role: "md", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD", email: "x@afc.com", full_name: "X" }) as never,
+  );
+  assertEquals(res.status, 403);
 });
 
 Deno.test("set-user-status - Admin can deactivate a DGM", async () => {

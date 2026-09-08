@@ -5,6 +5,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+import { DEFAULT_PIN, hashPin } from "../_shared/pin.ts";
 
 // Deploy-preview / branch-deploy subdomains are generated per-PR by
 // Netlify and can't be enumerated in advance, so we match by suffix
@@ -47,10 +48,11 @@ function jsonRes(req: Request, status: number, body: unknown) {
   });
 }
 
-// MD can create ONLY admin accounts — a bootstrap allowance so there's a
-// way to create the very first Admin. Every other role is created by an
-// Admin (ADMIN_CREATABLE_ROLES). DGM can no longer create anyone.
-const MD_CREATABLE_ROLES = ["admin"];
+// User creation is Admin-only — MD's earlier bootstrap allowance to create
+// the first Admin account is retired now that Users management is
+// Admin-only everywhere (an Admin account already exists in every real
+// environment; recovering from zero Admins is an out-of-band ops task, not
+// a normal-flow UI capability).
 const ADMIN_CREATABLE_ROLES = ["cfo", "cs", "dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"];
 
 // Lead Generation review committees — an optional, independent tag on top
@@ -236,8 +238,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     if (callerErr || !caller) return jsonRes(req, 403, { error: "Caller account not found." });
     if (!caller.is_active) return jsonRes(req, 403, { error: "Your account is deactivated." });
-    if (!["md", "admin"].includes(caller.role)) {
-      return jsonRes(req, 403, { error: "Forbidden. Only Admin (or MD, to create the first Admin) can create user accounts." });
+    if (caller.role !== "admin") {
+      return jsonRes(req, 403, { error: "Forbidden. Only Admin can create user accounts." });
     }
 
     let body: Record<string, unknown>;
@@ -262,11 +264,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       return jsonRes(req, 400, { error: `Committee must be one of: ${LEAD_COMMITTEES.join(", ")}.` });
     }
 
-    if (caller.role === "admin" && !ADMIN_CREATABLE_ROLES.includes(role)) {
+    if (!ADMIN_CREATABLE_ROLES.includes(role)) {
       return jsonRes(req, 403, { error: `Admin can only create: ${ADMIN_CREATABLE_ROLES.join(", ")}.` });
-    }
-    if (caller.role === "md" && !MD_CREATABLE_ROLES.includes(role)) {
-      return jsonRes(req, 403, { error: `MD can only create: ${MD_CREATABLE_ROLES.join(", ")}.` });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -293,9 +292,23 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       });
     }
 
-    const finalTeam = (body.team as string) || null;
+    // `teams` (plural) is the full assignment set for team-scoped roles —
+    // `team` (singular) stays the primary/home team, written to
+    // afc_users.team unchanged so every existing single-team-read call site
+    // keeps working. Falls back to the singular `team` field alone when
+    // `teams` isn't sent, so older callers/tests still work.
+    const rawTeams = Array.isArray(body.teams) ? body.teams : null;
+    const teamSet = (rawTeams
+      ? rawTeams.filter((t): t is string => typeof t === "string" && t.trim().length > 0).map((t) => t.trim())
+      : []
+    );
+    const finalTeam = teamSet[0] || (body.team as string) || null;
     const finalOffice = (body.office as string) || null;
     const finalCommittee = (committee as string) || null;
+    // Every account starts with the same default action PIN ("1234") so a
+    // new user can act on PIN-gated lead actions immediately — same idea as
+    // the generated temp password, changeable any time from My Profile.
+    const defaultPinHash = await hashPin(DEFAULT_PIN, newAuthUser.user.id);
 
     const { error: insertErr } = await adminClient.from("afc_users").insert([
       {
@@ -310,6 +323,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         must_change_password: true,
         created_by: caller.id,
         managed_by_dgm: null,
+        pin_hash: defaultPinHash,
+        pin_updated_at: new Date().toISOString(),
       },
     ]);
 
@@ -318,6 +333,14 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       // can never pass ProtectedRoute's profile check anyway.
       await adminClient.auth.admin.deleteUser(newAuthUser.user.id);
       return jsonRes(req, 500, { error: "Failed to save user profile. Please try again." });
+    }
+
+    const teamsToAssign = teamSet.length ? teamSet : (finalTeam ? [finalTeam] : []);
+    if (teamsToAssign.length) {
+      const { error: teamsErr } = await adminClient
+        .from("afc_user_teams")
+        .insert(teamsToAssign.map((team) => ({ user_id: newAuthUser.user.id, team })));
+      if (teamsErr) console.error("Failed to insert afc_user_teams:", teamsErr.message);
     }
 
     // ── Notify the new user (best-effort — never fails account creation) ──
@@ -351,7 +374,13 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     // Only ever return the plaintext password when email delivery failed —
     // it is never logged and never returned otherwise.
-    return jsonRes(req, 200, emailSent ? { success: true, email_sent: true } : { success: true, email_sent: false, password: tempPassword });
+    return jsonRes(
+      req,
+      200,
+      emailSent
+        ? { success: true, email_sent: true, id: newAuthUser.user.id }
+        : { success: true, email_sent: false, password: tempPassword, id: newAuthUser.user.id }
+    );
   } catch (err) {
     console.error("Unhandled error:", (err as Error).message);
     return jsonRes(req, 500, { error: "Internal server error." });

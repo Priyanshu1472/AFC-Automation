@@ -2,7 +2,7 @@
 // Visually reuses the .alert / alert-{variant} classes from App.css so
 // toasts and inline alerts look like the same design language.
 
-export default function Toast({ variant = "info", onClose, children }) {
+export default function Toast({ variant = "info", duration = 5000, onClose, children }) {
   return (
     <div className={`alert alert-${variant} toast`} role="status">
       <div className="alert-content" style={{ flex: 1 }}>{children}</div>
@@ -18,6 +18,8 @@ export default function Toast({ variant = "info", onClose, children }) {
           </svg>
         </button>
       )}
+      {/* Visual countdown to auto-dismiss — omitted for sticky (duration:0) toasts. */}
+      {duration > 0 && <div className="toast-countdown" style={{ "--toast-duration": `${duration}ms` }} aria-hidden="true" />}
     </div>
   );
 }

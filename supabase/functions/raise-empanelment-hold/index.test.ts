@@ -66,7 +66,7 @@ Deno.test("raise-empanelment-hold - PO who isn't assigned to this application is
 Deno.test("raise-empanelment-hold - DGM from a different team is rejected", async () => {
   const res = await handleRequest(
     req({ application_id: APP_ID, flags: VALID_FLAGS }),
-    client({ id: CALLER_ID, role: "dgm", team: "CBBO", is_active: true }, appRow({ status: "dgm_review", team: "BPDD" })) as never,
+    client({ id: CALLER_ID, role: "dgm", team: "BIID", is_active: true }, appRow({ status: "dgm_review", team: "BPDD" })) as never,
   );
   assertEquals(res.status, 403);
 });

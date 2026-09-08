@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { can } from "../../lib/roles";
+import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
@@ -40,7 +42,7 @@ const STATUS_OPTIONS = [
 
 function StatusBadge({ status }) {
   const config = STATUS_MAP[status] || { label: status, variant: "neutral" };
-  return <Badge variant={config.variant} dot>{config.label}</Badge>;
+  return <Badge variant={config.variant} dot className="bl-status-badge">{config.label}</Badge>;
 }
 
 function SearchIcon() {
@@ -67,7 +69,7 @@ function DetailField({ label, value }) {
   );
 }
 
-function BADetailModal({ ba, invStatus, onClose }) {
+function BADetailModal({ ba, invStatus, canReview, onReview, onClose }) {
   if (!ba) return null;
   return (
     <div className="bl-modal-backdrop" onClick={onClose}>
@@ -79,6 +81,7 @@ function BADetailModal({ ba, invStatus, onClose }) {
           </div>
           <div className="bl-modal-header-right">
             <StatusBadge status={invStatus} />
+            {canReview && <Button variant="primary" size="sm" onClick={onReview}>Review</Button>}
             <button className="bl-modal-close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
           </div>
         </div>
@@ -140,26 +143,43 @@ function BADetailModal({ ba, invStatus, onClose }) {
   );
 }
 
-function StatCard({ label, value, colorClass, loading }) {
+const QUICK_FILTERS = {
+  all: { label: "Total", match: () => true },
+  in_review: {
+    label: "In Review",
+    match: (a) => ["po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "on_hold"].includes(a.status),
+  },
+  accepted: { label: "Accepted", match: (a) => a.status === "accepted" },
+  rejected: { label: "Rejected", match: (a) => a.status === "rejected" },
+};
+
+function StatCard({ label, value, colorClass, loading, active, onClick }) {
   return (
-    <div className={`bl-stat-card bl-stat-${colorClass}`}>
+    <button
+      type="button"
+      className={`bl-stat-card bl-stat-${colorClass}${active ? " bl-stat-active" : ""}`}
+      onClick={onClick}
+    >
       <div className="bl-stat-value">{loading ? "—" : value}</div>
       <div className="bl-stat-label">{label}</div>
-    </div>
+    </button>
   );
 }
 
 export default function EmpanelmentListPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
 
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [quickFilter, setQuickFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedBA, setSelectedBA] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState(null);
+  const [selectedAppId, setSelectedAppId] = useState(null);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [teamFilter, setTeamFilter] = useState("all");
 
   const fetchApplications = useCallback(async () => {
     // RLS (can_view_empanelment_application) scopes the visible rows
@@ -189,14 +209,45 @@ export default function EmpanelmentListPage() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchApplications]);
 
-  const stats = useMemo(() => ({
-    total: applications.length,
-    filled: applications.filter((a) => a.ba_reg).length,
-    inReview: applications.filter((a) => ["po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "on_hold"].includes(a.status)).length,
-    accepted: applications.filter((a) => a.status === "accepted").length,
-  }), [applications]);
+  // Only org-wide roles (md/cfo/cs/admin) get a visible team switcher —
+  // team-scoped roles (dgm/po/etc.) fall back to their activeTeam, same
+  // convention as LeadListPage/EmpanelmentDashboardPage.
+  const canFilterTeam = can.viewAllTeams(profile?.role);
+  const teams = useTeamOptions();
+  const teamOptions = [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))];
+  const effectiveTeamFilter = canFilterTeam ? teamFilter : (activeTeam || "all");
 
-  const filtered = applications.filter((a) => {
+  // Scoped by team the same way the table below is (effectiveTeamFilter) —
+  // otherwise these tiles kept counting every RLS-permitted application
+  // across all teams while the table itself was narrowed to just one.
+  const teamScoped = useMemo(
+    () => (effectiveTeamFilter === "all" ? applications : applications.filter((a) => a.team === effectiveTeamFilter)),
+    [applications, effectiveTeamFilter]
+  );
+
+  const stats = useMemo(() => ({
+    total: teamScoped.length,
+    inReview: teamScoped.filter((a) => QUICK_FILTERS.in_review.match(a)).length,
+    accepted: teamScoped.filter((a) => a.status === "accepted").length,
+    rejected: teamScoped.filter((a) => a.status === "rejected").length,
+  }), [teamScoped]);
+
+  function selectQuickFilter(key) {
+    // Clicking the active card again clears it back to Total.
+    setQuickFilter((current) => (current === key ? "all" : key));
+    setStatusFilter("all");
+  }
+
+  function selectStatusFilter(value) {
+    setStatusFilter(value);
+    setQuickFilter("all");
+  }
+
+  function selectTeamFilter(value) {
+    setTeamFilter(value);
+  }
+
+  const filtered = teamScoped.filter((a) => {
     const q = search.toLowerCase();
     const sectorsServed = Array.isArray(a.ba_reg?.sectors_served) ? a.ba_reg.sectors_served.join(" ") : (a.ba_reg?.sectors_served || "");
     const assignments = a.ba_reg?.assignments ? (typeof a.ba_reg.assignments === "string" ? a.ba_reg.assignments : JSON.stringify(a.ba_reg.assignments)) : "";
@@ -208,7 +259,7 @@ export default function EmpanelmentListPage() {
       (a.ba_reg?.core_expertise || "").toLowerCase().includes(q) ||
       sectorsServed.toLowerCase().includes(q) ||
       assignments.toLowerCase().includes(q);
-    return matchSearch && (statusFilter === "all" || a.status === statusFilter);
+    return matchSearch && QUICK_FILTERS[quickFilter].match(a) && (statusFilter === "all" || a.status === statusFilter);
   });
 
   const canSend = ["associate_consultant", "project_assistant"].includes(profile?.role);
@@ -235,10 +286,10 @@ export default function EmpanelmentListPage() {
           </div>
 
           <div className="bl-stats-grid">
-            <StatCard label="Total" value={stats.total} colorClass="blue" loading={loading} />
-            <StatCard label="Forms Filled" value={stats.filled} colorClass="amber" loading={loading} />
-            <StatCard label="In Review" value={stats.inReview} colorClass="purple" loading={loading} />
-            <StatCard label="Accepted" value={stats.accepted} colorClass="green" loading={loading} />
+            <StatCard label="Total" value={stats.total} colorClass="blue" loading={loading} active={quickFilter === "all"} onClick={() => selectQuickFilter("all")} />
+            <StatCard label="In Review" value={stats.inReview} colorClass="purple" loading={loading} active={quickFilter === "in_review"} onClick={() => selectQuickFilter("in_review")} />
+            <StatCard label="Accepted" value={stats.accepted} colorClass="green" loading={loading} active={quickFilter === "accepted"} onClick={() => selectQuickFilter("accepted")} />
+            <StatCard label="Rejected" value={stats.rejected} colorClass="red" loading={loading} active={quickFilter === "rejected"} onClick={() => selectQuickFilter("rejected")} />
           </div>
 
           <Card className="bl-filter-card">
@@ -248,6 +299,11 @@ export default function EmpanelmentListPage() {
                 <input type="text" className="input bl-search" placeholder="Search by email, organisation, contact, app code, sector, expertise…" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <div className="bl-filter-right">
+                {canFilterTeam && (
+                  <div style={{ minWidth: 160 }}>
+                    <Select options={teamOptions} value={teamFilter} onChange={selectTeamFilter} placeholder="All Teams" />
+                  </div>
+                )}
                 <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={statusFilter !== "all" ? 1 : 0} />
               </div>
             </Card.Body>
@@ -267,7 +323,11 @@ export default function EmpanelmentListPage() {
                   </thead>
                   <tbody>
                     {filtered.map((a) => (
-                      <tr key={a.id}>
+                      <tr
+                        key={a.id}
+                        className={a.ba_reg ? "bl-row-clickable" : undefined}
+                        onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedStatus(a.status); setSelectedAppId(a.id); } : undefined}
+                      >
                         <td><span className="bl-app-code">{a.application_code || "—"}</span></td>
                         <td className="bl-email" title={a.ba_email || ""}>{fmt(a.ba_email)}</td>
                         <td>{a.ba_reg?.org_name ? <span className="bl-org" title={a.ba_reg.org_name}>{fmt(a.ba_reg.org_name)}</span> : <span className="bl-not-filled">Not filled yet</span>}</td>
@@ -275,11 +335,8 @@ export default function EmpanelmentListPage() {
                         <td>{a.team ? <Badge variant="neutral">{a.team}</Badge> : "—"}</td>
                         <td className="bl-date">{fmtDate(a.created_at)}</td>
                         <td><StatusBadge status={a.status} /></td>
-                        <td>
+                        <td onClick={(e) => e.stopPropagation()}>
                           <div className="bl-actions">
-                            {a.ba_reg && (
-                              <Button variant="secondary" size="sm" onClick={() => { setSelectedBA(a.ba_reg); setSelectedStatus(a.status); }}>View</Button>
-                            )}
                             {a.ba_reg && canReview && (
                               <Button variant="primary" size="sm" onClick={() => navigate(`/empanelment/${a.id}`)}>Review</Button>
                             )}
@@ -293,15 +350,21 @@ export default function EmpanelmentListPage() {
             )}
           </Card>
 
-          <p className="bl-record-count">Showing {filtered.length} of {applications.length} records</p>
+          <p className="bl-record-count">Showing {filtered.length} of {teamScoped.length} records</p>
         </div>
       </div>
 
-      <BADetailModal ba={selectedBA} invStatus={selectedStatus} onClose={() => { setSelectedBA(null); setSelectedStatus(null); }} />
+      <BADetailModal
+        ba={selectedBA}
+        invStatus={selectedStatus}
+        canReview={canReview}
+        onReview={() => navigate(`/empanelment/${selectedAppId}`)}
+        onClose={() => { setSelectedBA(null); setSelectedStatus(null); setSelectedAppId(null); }}
+      />
 
       <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={() => setStatusFilter("all")}>
         <FilterField label="Status">
-          <Select options={STATUS_OPTIONS} value={statusFilter} onChange={setStatusFilter} placeholder="All Statuses" />
+          <Select options={STATUS_OPTIONS} value={statusFilter} onChange={selectStatusFilter} placeholder="All Statuses" />
         </FilterField>
       </FilterDrawer>
     </div>

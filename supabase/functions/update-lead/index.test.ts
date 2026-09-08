@@ -16,7 +16,8 @@ function callerRow(overrides: Record<string, unknown> = {}) {
 function leadRow(overrides: Record<string, unknown> = {}) {
   return {
     id: LEAD_ID, status: "pa_action_required", created_by: CALLER_ID, person_responsible_id: PR_ID,
-    lead_number: "LH-2026-000001", documents: [], ...overrides,
+    lead_number: "LH-2026-000001", documents: [], title: "Preparation of DPR for Smart City Project",
+    portal_name: "GeM", bid_number: "BID-123", declined_from_status: "pmt_review", ...overrides,
   };
 }
 
@@ -118,13 +119,53 @@ Deno.test("handleRequest - accepts an SRM Approval Authority (same permissions a
   assertEquals(res.status, 200);
 });
 
-Deno.test("handleRequest - success moves the lead back to pmt_review", async () => {
+// A pa_action_required lead is a plain in-place edit, same as pa_review —
+// saving never resubmits it into the approval pipeline (that's a separate,
+// deliberate action via the Lead Approval Note's Accept flow). Checked
+// against every decline source, since this used to route differently
+// depending on which stage declined it.
+for (const declinedFrom of ["dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review"]) {
+  Deno.test(`handleRequest - editing a lead declined from ${declinedFrom} leaves it at pa_action_required, does not resubmit`, async () => {
+    const client = buildClient({ lead: leadRow({ declined_from_status: declinedFrom }) });
+    const res = await handleRequest(formReq(baseFields()), client as never);
+    assertEquals(res.status, 200);
+    const body = await res.json();
+    assertEquals(body.success, true);
+    assertEquals(body.status, "pa_action_required");
+  });
+}
+
+Deno.test("handleRequest - editing a pa_action_required lead only logs 'edited', never 'resubmitted'", async () => {
   const client = buildClient({});
   const res = await handleRequest(formReq(baseFields()), client as never);
   assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const activityInsertCalls = log.filter((entry) => entry.table === "lead_activity_log").flatMap((entry) => entry.calls.filter((c) => c[0] === "insert"));
+  assertEquals(activityInsertCalls.length, 1);
+  assertEquals(activityInsertCalls[0][1]?.includes('"edited"'), true);
+  assertEquals(activityInsertCalls[0][1]?.includes("resubmitted"), false);
+});
+
+Deno.test("handleRequest - a resubmit_comment field, if sent, is simply ignored (no such feature anymore)", async () => {
+  const client = buildClient({ lead: leadRow({ declined_from_status: "md_review" }) });
+  const res = await handleRequest(formReq(baseFields({ resubmit_comment: "Fixed the budget line." })), client as never);
+  assertEquals(res.status, 200);
   const body = await res.json();
-  assertEquals(body.success, true);
-  assertEquals(body.status, "pmt_review");
+  assertEquals(body.status, "pa_action_required");
+});
+
+Deno.test("handleRequest - title/portal_name/bid_number in the request body are ignored — server keeps the lead's existing values", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(
+    formReq(baseFields({ title: "Sneaky new title", portal_name: "Sneaky portal", bid_number: "Sneaky bid" })),
+    client as never
+  );
+  assertEquals(res.status, 200);
+  const updateCall = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log
+    .find((entry) => entry.table === "leads" && entry.calls.some((c) => c[0] === "update"));
+  const updatePayload = updateCall?.calls.find((c) => c[0] === "update")?.[1] ?? "";
+  assertEquals(updatePayload.includes("Sneaky"), false);
 });
 
 Deno.test("handleRequest - a pa_review lead can be edited in place, status unchanged", async () => {

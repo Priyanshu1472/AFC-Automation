@@ -29,10 +29,22 @@
 .dpc-chevron--open { transform: rotate(180deg); }
 
 /* ── Panel ───────────────────────────────────────────────────── */
+/* position: fixed with top/left/bottom set inline by the component (via
+   getBoundingClientRect), and rendered through a portal into document.body
+   — not a plain absolute-positioned child of .dpc-root. .dpc-root can sit
+   inside a scrollable container (e.g. the filter drawer body, which has
+   overflow-y: auto), and per the CSS overflow spec that implicitly forces
+   overflow-x to auto too, silently clipping any absolutely-positioned
+   descendant that spills past the container's bounds. Fixed positioning
+   plus a portal escapes that clipping entirely. */
 .dpc-panel {
-  position: absolute;
-  bottom: calc(100% + 6px); left: 0;
-  z-index: var(--z-dropdown);
+  position: fixed;
+  /* Above --z-modal, not just --z-dropdown — this panel is frequently
+     triggered from inside a filter drawer (z-index: var(--z-modal)), and
+     being portaled to document.body means it no longer inherits the
+     drawer's stacking context, so it must out-rank the drawer explicitly
+     or it would render invisibly behind it. */
+  z-index: calc(var(--z-modal) + 1);
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
