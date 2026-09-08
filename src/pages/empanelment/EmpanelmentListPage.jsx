@@ -40,6 +40,8 @@ const STATUS_OPTIONS = [
   ...Object.entries(STATUS_MAP).map(([value, cfg]) => ({ value, label: cfg.label })),
 ];
 
+const PAGE_SIZE = 10;
+
 function StatusBadge({ status }) {
   const config = STATUS_MAP[status] || { label: status, variant: "neutral" };
   return <Badge variant={config.variant} dot className="bl-status-badge">{config.label}</Badge>;
@@ -180,6 +182,7 @@ export default function EmpanelmentListPage() {
   const [selectedAppId, setSelectedAppId] = useState(null);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [teamFilter, setTeamFilter] = useState("all");
+  const [page, setPage] = useState(1);
 
   const fetchApplications = useCallback(async () => {
     // RLS (can_view_empanelment_application) scopes the visible rows
@@ -262,6 +265,15 @@ export default function EmpanelmentListPage() {
     return matchSearch && QUICK_FILTERS[quickFilter].match(a) && (statusFilter === "all" || a.status === statusFilter);
   });
 
+  // Search/filters run over every matching application — the page slice
+  // below is purely a display concern that keeps the rendered table light.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Any change to what's being filtered snaps back to the first page.
+  useEffect(() => { setPage(1); }, [search, quickFilter, statusFilter, effectiveTeamFilter]);
+
   const canSend = ["associate_consultant", "project_assistant"].includes(profile?.role);
   // Admin included so it can open the full read-only review page (timeline,
   // documents, etc.) — it has no action branch there, so it lands view-only.
@@ -322,7 +334,7 @@ export default function EmpanelmentListPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((a) => (
+                    {paged.map((a) => (
                       <tr
                         key={a.id}
                         className={a.ba_reg ? "bl-row-clickable" : undefined}
@@ -350,7 +362,22 @@ export default function EmpanelmentListPage() {
             )}
           </Card>
 
-          <p className="bl-record-count">Showing {filtered.length} of {teamScoped.length} records</p>
+          <div className="bl-pagination">
+            <p className="bl-record-count">
+              Showing {filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} records
+            </p>
+            {totalPages > 1 && (
+              <div className="bl-pagination-controls">
+                <Button variant="secondary" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+                  ← Previous
+                </Button>
+                <span className="bl-pagination-page">Page {currentPage} of {totalPages}</span>
+                <Button variant="secondary" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+                  Next →
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
