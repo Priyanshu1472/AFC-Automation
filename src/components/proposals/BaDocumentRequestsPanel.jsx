@@ -1,16 +1,16 @@
-// "Documents Required from BA" card — the lead's Person Responsible,
+// "Documents Required from BP" card — the lead's Person Responsible,
 // Reviewer, or Approval Authority lists what's needed from the Business
 // Associate with a justification for each, then sends the compiled list +
 // an email in one action. Items are plain direct-RLS writes (see
 // can_edit_proposal() and proposal_document_requests' RLS) while unsent;
 // sending is a dedicated edge function so the email + sent_at bookkeeping
-// happen atomically. The BA is meant to upload each document themselves
+// happen atomically. The BP is meant to upload each document themselves
 // once their own portal for this exists — not built yet in this
 // iteration, so for now AFC attaches whatever arrives some other way
-// (email, WhatsApp, etc.) as a stand-in for whatever the BA hasn't
+// (email, WhatsApp, etc.) as a stand-in for whatever the BP hasn't
 // uploaded directly. Reminders are capped to once every 24 hours (both
 // here and server-side in the edge function) so a double-click can't spam
-// the BA's inbox.
+// the BP's inbox.
 import { useState } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import Card from "../../components/ui/Card";
@@ -156,9 +156,9 @@ export default function BaDocumentRequestsPanel({ proposalId, proposal, items, p
 
   return (
     <Card>
-      <Collapsible title="Documents Required from BA">
+      <Collapsible title="Documents Required from BP">
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
-        {!hasBa && <p className="text-secondary text-sm" style={{ margin: "0 0 var(--space-3)" }}>This lead has no linked Business Associate.</p>}
+        {!hasBa && <p className="text-secondary text-sm" style={{ margin: "0 0 var(--space-3)" }}>This lead has no linked Business Partner.</p>}
 
         {sent.length > 0 && (
           <div className="pp-list-group">
@@ -187,7 +187,7 @@ export default function BaDocumentRequestsPanel({ proposalId, proposal, items, p
         {canManage && !locked && hasBa && items.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap", marginTop: "var(--space-4)" }}>
             <Button variant="primary" loading={sending} disabled={onCooldown} onClick={handleSend}>
-              {(proposal?.ba_send_count || 0) > 0 ? "Send Reminder to BA" : `Send to BA (${items.length})`}
+              {(proposal?.ba_send_count || 0) > 0 ? "Send Reminder to BP" : `Send to BP (${items.length})`}
             </Button>
             {onCooldown && <span className="text-secondary text-sm">Next reminder available {fmtDateTime(nextReminderAt)}</span>}
           </div>

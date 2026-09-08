@@ -280,12 +280,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         // technically "pending" their review — see generate-lead-approval-
         // note's pending-review guard for why that's otherwise blocked).
         extraFields = { approval_note_pr_reviewed: true, approval_note_pending_pr_review: false };
-        // A Business Associate is optional at creation, but required before
+        // A Business Partner is optional at creation, but required before
         // a lead can move on to PMT review — the Person Responsible picks
         // one here (or confirms the one already set) as part of accepting.
         if (!leadRow.assigned_ba_id) {
           const baId = typeof body.assigned_ba_id === "string" ? body.assigned_ba_id : "";
-          if (!baId) return jsonRes(req, 400, { error: "Select a BA" });
+          if (!baId) return jsonRes(req, 400, { error: "Select a Business Partner" });
           const baErr = await validateBusinessAssociate(adminClient, baId, leadRow.team);
           if (baErr) return jsonRes(req, 400, { error: baErr });
           extraFields.assigned_ba_id = baId;

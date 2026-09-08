@@ -12,10 +12,10 @@ import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import "../../styles/ApplicationReviewPage.css";
 
-// Not a real business_associates row — picking this just flags that the BA
+// Not a real business_associates row — picking this just flags that the BP
 // is still undecided. It never reaches the backend: submitForDgmApproval
 // treats it the same as nothing being selected, since assigned_ba_id is a
-// real FK and advance-lead-stage requires an actual, validated BA before a
+// real FK and advance-lead-stage requires an actual, validated BP before a
 // lead can move on to DGM/PMT review.
 const TBD_BA_VALUE = "__tbd__";
 
@@ -76,7 +76,7 @@ export default function LeadApprovalNotePreviewPage() {
       return;
     }
     if (needsBaSelection && (!selectedBaId || selectedBaId === TBD_BA_VALUE)) {
-      showToast("Select a BA", "danger");
+      showToast("Select a Business Partner", "danger");
       return;
     }
     setSubmitting(true);
@@ -164,7 +164,7 @@ export default function LeadApprovalNotePreviewPage() {
                         {needsBaSelection && (
                           <div className="ar-field">
                             <label className="ar-label">
-                              Business Associate <span className="ar-required">*</span>
+                              Business Partner <span className="ar-required">*</span>
                             </label>
                             <Select
                               options={[
@@ -173,7 +173,7 @@ export default function LeadApprovalNotePreviewPage() {
                               ]}
                               value={selectedBaId}
                               onChange={setSelectedBaId}
-                              placeholder={baOptions.length ? "Select a BA" : "No active BAs found on your team."}
+                              placeholder={baOptions.length ? "Select a Business Partner" : "No active BPs found on your team."}
                               disabled={submitting}
                             />
                           </div>

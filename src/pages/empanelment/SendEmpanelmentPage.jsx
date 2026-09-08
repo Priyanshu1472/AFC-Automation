@@ -57,10 +57,10 @@ function StepBar({ current }) {
   );
 }
 
-function SenderInfoRow({ profile, team, dgmUser }) {
+function SenderInfoRow({ profile, team, advisorName }) {
   const items = [
     { label: "Sent by", value: profile?.full_name },
-    { label: "Advised by", value: dgmUser?.full_name || profile?.full_name },
+    { label: "Advised by", value: advisorName || profile?.full_name },
     { label: "Team", value: team, highlight: true },
     { label: "Office", value: capitalise(profile?.office) },
   ];
@@ -78,7 +78,7 @@ function SenderInfoRow({ profile, team, dgmUser }) {
 
 function EmailPreview({ to, advisedByName, advisedByDesig, acName }) {
   return (
-    <div className="sef-email-chrome" role="img" aria-label="Preview of the email the BA will receive">
+    <div className="sef-email-chrome" role="img" aria-label="Preview of the email the BP will receive">
       <div className="sef-email-chrome-bar" aria-hidden="true">
         <div className="sef-email-chrome-dots"><span /><span /><span /></div>
         <span className="sef-email-chrome-title">Email Preview</span>
@@ -86,7 +86,7 @@ function EmailPreview({ to, advisedByName, advisedByDesig, acName }) {
       <div className="sef-email-head">
         <div className="sef-email-avatar" aria-hidden="true">{(to[0] || "B").toUpperCase()}</div>
         <div className="sef-email-head-info">
-          <div className="sef-email-subject">Business Associate Empanelment Form — AFC India Limited</div>
+          <div className="sef-email-subject">Business Partner Empanelment Form — AFC India Limited</div>
           <div className="sef-email-meta-row">
             <span className="sef-email-from">noreply@pmis.afcindia.org.in</span>
             <span className="sef-email-arrow" aria-hidden="true">→</span>
@@ -98,7 +98,7 @@ function EmailPreview({ to, advisedByName, advisedByDesig, acName }) {
         <p className="sef-email-salutation">Dear Sir / Ma'am,</p>
         <p className="sef-email-para">Greetings from AFC India Limited!</p>
         <p className="sef-email-para">
-          As advised by <strong>{advisedByName}</strong> ({advisedByDesig}), please find enclosed the link for the Business Associate (BA)
+          As advised by <strong>{advisedByName}</strong> ({advisedByDesig}), please find enclosed the link for the Business Partner (BP)
           empanelment form for your kind perusal.
         </p>
         <p className="sef-email-para">Kindly fill in the form at your earliest convenience to initiate the empanelment process with AFC India Limited.</p>
@@ -140,10 +140,18 @@ export default function SendEmpanelmentPage() {
   const { profile, activeTeam } = useAuth();
   const team = activeTeam ?? profile?.team;
 
-  const [form, setForm] = useState({ projectOfficer: "", baEmail: "" });
+  const [form, setForm] = useState({ projectOfficer: "", baEmail: "", advisorId: "" });
   const [fieldErrors, setFieldErrors] = useState({});
   const [projectOfficers, setProjectOfficers] = useState([]);
-  const [dgmUser, setDgmUser] = useState(null);
+  // Falls back to the team's Project Assistants when there's no active
+  // Project Officer to assign as reviewer (none on the team, or the only
+  // one(s) are deactivated) — tracks which pool is currently shown so the
+  // label/warning can reflect it.
+  const [reviewerRole, setReviewerRole] = useState("project_officer");
+  // The advising authority the invite goes out under — the team's active
+  // DGMs and AGMs. The sender picks (DGM listed first); auto-selected when
+  // there's only one.
+  const [advisors, setAdvisors] = useState([]);
   const [loadingPOs, setLoadingPOs] = useState(true);
   const [step, setStep] = useState(0);
   const [sending, setSending] = useState(false);
@@ -155,12 +163,20 @@ export default function SendEmpanelmentPage() {
       setLoadingPOs(false);
       return;
     }
-    const [{ data: pos }, { data: dgm }] = await Promise.all([
+    const [{ data: pos }, { data: advs }] = await Promise.all([
       supabase.from("afc_users").select("id, full_name, email").eq("role", "project_officer").eq("team", team).eq("is_active", true).order("full_name"),
-      supabase.from("afc_users").select("id, full_name, email").eq("role", "dgm").eq("team", team).eq("is_active", true).limit(1).maybeSingle(),
+      supabase.from("afc_users").select("id, full_name, email, role").in("role", ["dgm", "agm"]).eq("team", team).eq("is_active", true).order("role", { ascending: false }).order("full_name"),
     ]);
-    setProjectOfficers(pos || []);
-    setDgmUser(dgm || null);
+    if (pos && pos.length > 0) {
+      setProjectOfficers(pos);
+      setReviewerRole("project_officer");
+    } else {
+      const { data: pas } = await supabase.from("afc_users").select("id, full_name, email").eq("role", "project_assistant").eq("team", team).eq("is_active", true).order("full_name");
+      setProjectOfficers(pas || []);
+      setReviewerRole("project_assistant");
+    }
+    setAdvisors(advs || []);
+    setForm((p) => ({ ...p, advisorId: p.advisorId || advs?.[0]?.id || "" }));
     setLoadingPOs(false);
   }, [team]);
 
@@ -169,14 +185,17 @@ export default function SendEmpanelmentPage() {
   }, [fetchPOs]);
 
   const selectedPO = projectOfficers.find((p) => p.id === form.projectOfficer);
-  const advisedByName = dgmUser?.full_name || profile?.full_name || "";
-  const advisedByDesig = dgmUser ? ROLE_LABELS.dgm : ROLE_LABELS[profile?.role] || profile?.role || "";
+  const selectedAdvisor = advisors.find((a) => a.id === form.advisorId) || null;
+  const advisedByName = selectedAdvisor?.full_name || profile?.full_name || "";
+  const advisedByDesig = selectedAdvisor ? (ROLE_LABELS[selectedAdvisor.role] || selectedAdvisor.role) : (ROLE_LABELS[profile?.role] || profile?.role || "");
   const poOptions = projectOfficers.map((po) => ({ value: po.id, label: `${po.full_name} (${po.email})` }));
+  const advisorOptions = advisors.map((a) => ({ value: a.id, label: `${a.full_name} — ${ROLE_LABELS[a.role] || a.role}` }));
+  const reviewerLabel = ROLE_LABELS[reviewerRole] || "Project Officer";
 
   function handleGoToPreview() {
     const errors = {};
-    if (!form.projectOfficer) errors.projectOfficer = "Please select a Project Officer.";
-    if (!form.baEmail.trim()) errors.baEmail = "BA email is required.";
+    if (!form.projectOfficer) errors.projectOfficer = `Please select a ${reviewerLabel}.`;
+    if (!form.baEmail.trim()) errors.baEmail = "BP email is required.";
     else if (!isValidEmail(form.baEmail)) errors.baEmail = "Enter a valid email address.";
 
     if (Object.keys(errors).length > 0) {
@@ -192,7 +211,7 @@ export default function SendEmpanelmentPage() {
     setSending(true);
     try {
       const { data, error } = await supabase.functions.invoke("send-empanelment-invite", {
-        body: { ba_email: form.baEmail.trim().toLowerCase(), project_officer_id: form.projectOfficer, team },
+        body: { ba_email: form.baEmail.trim().toLowerCase(), project_officer_id: form.projectOfficer, advisor_id: form.advisorId || null, team },
       });
       if (error) {
         setSendError(await extractFunctionErrorMessage(error, "Failed to send invitation."));
@@ -212,7 +231,7 @@ export default function SendEmpanelmentPage() {
   }
 
   function handleSendAnother() {
-    setForm({ projectOfficer: "", baEmail: "" });
+    setForm({ projectOfficer: "", baEmail: "", advisorId: advisors[0]?.id || "" });
     setFieldErrors({});
     setSendError("");
     setSentToEmail("");
@@ -242,23 +261,39 @@ export default function SendEmpanelmentPage() {
           {step === 0 && (
             <div className="sef-layout">
               <Card className="sef-main-card">
-                <Card.Header title="Send Empanelment Form" subtitle="Select a Project Officer and enter the BA's email address." action={<Badge variant="brand">Step 1 of 2</Badge>} />
+                <Card.Header title="Send Empanelment Form" subtitle={`Select a ${reviewerLabel} and enter the BP's email address.`} action={<Badge variant="brand">Step 1 of 2</Badge>} />
                 <Card.Body className="sef-card-body">
-                  <SenderInfoRow profile={profile} team={team} dgmUser={dgmUser} />
+                  <SenderInfoRow profile={profile} team={team} advisorName={advisedByName} />
                   <div className="sef-divider" />
 
+                  {advisors.length > 1 && (
+                    <div className="sef-field">
+                      <label className="sef-label" htmlFor="sef-advisor-select">Advising Authority <span className="sef-required">*</span></label>
+                      <Select
+                        id="sef-advisor-select"
+                        options={advisorOptions}
+                        value={form.advisorId}
+                        onChange={(val) => setForm((p) => ({ ...p, advisorId: val }))}
+                        placeholder="Select the advising DGM or AGM"
+                      />
+                    </div>
+                  )}
+
                   <div className="sef-field">
-                    <label className="sef-label" htmlFor="sef-po-select">Project Officer <span className="sef-required">*</span></label>
+                    <label className="sef-label" htmlFor="sef-po-select">{reviewerLabel} <span className="sef-required">*</span></label>
+                    {reviewerRole === "project_assistant" && projectOfficers.length > 0 && (
+                      <Alert variant="info">No active Project Officer on team <strong>{team}</strong> — assign a Project Assistant instead.</Alert>
+                    )}
                     {projectOfficers.length === 0 ? (
-                      <Alert variant="warning">No active Project Officers found in team <strong>{team}</strong>.</Alert>
+                      <Alert variant="warning">No active Project Officers or Project Assistants found in team <strong>{team}</strong>.</Alert>
                     ) : (
-                      <Select id="sef-po-select" options={poOptions} value={form.projectOfficer} onChange={(val) => { setForm((p) => ({ ...p, projectOfficer: val })); setFieldErrors((e) => ({ ...e, projectOfficer: "" })); }} placeholder="Select a Project Officer" />
+                      <Select id="sef-po-select" options={poOptions} value={form.projectOfficer} onChange={(val) => { setForm((p) => ({ ...p, projectOfficer: val })); setFieldErrors((e) => ({ ...e, projectOfficer: "" })); }} placeholder={`Select a ${reviewerLabel}`} />
                     )}
                     {fieldErrors.projectOfficer && <span className="sef-field-error" role="alert">{fieldErrors.projectOfficer}</span>}
                   </div>
 
                   <div className="sef-field">
-                    <label className="sef-label" htmlFor="sef-ba-email">Business Associate Email <span className="sef-required">*</span></label>
+                    <label className="sef-label" htmlFor="sef-ba-email">Business Partner Email <span className="sef-required">*</span></label>
                     <input
                       id="sef-ba-email"
                       className={`input${fieldErrors.baEmail ? " input-error" : ""}`}
@@ -288,7 +323,7 @@ export default function SendEmpanelmentPage() {
                 <Card.Body className="sef-summary-body">
                   <div className="sef-summary-group">
                     <div className="sef-summary-item"><span className="sef-summary-label">Sending to</span><span className="sef-summary-value sef-summary-email">{form.baEmail}</span></div>
-                    <div className="sef-summary-item"><span className="sef-summary-label">Project Officer</span><span className="sef-summary-value">{selectedPO?.full_name || "—"}</span></div>
+                    <div className="sef-summary-item"><span className="sef-summary-label">{reviewerLabel}</span><span className="sef-summary-value">{selectedPO?.full_name || "—"}</span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Advised by</span><span className="sef-summary-value">{advisedByName} <span className="sef-summary-role">({advisedByDesig})</span></span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Sent by</span><span className="sef-summary-value">{profile?.full_name}</span></div>
                     <div className="sef-summary-item sef-summary-last"><span className="sef-summary-label">Team / Office</span><span className="sef-summary-value">{team} · {capitalise(profile?.office)}</span></div>
@@ -302,7 +337,7 @@ export default function SendEmpanelmentPage() {
                 </Card.Body>
               </Card>
               <div className="sef-email-wrap">
-                <p className="sef-email-wrap-label">Email preview — what the BA will receive</p>
+                <p className="sef-email-wrap-label">Email preview — what the BP will receive</p>
                 <EmailPreview to={form.baEmail} advisedByName={advisedByName} advisedByDesig={advisedByDesig} acName={profile?.full_name} />
               </div>
             </div>

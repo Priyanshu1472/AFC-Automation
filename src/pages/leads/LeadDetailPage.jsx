@@ -488,7 +488,7 @@ export default function LeadDetailPage() {
                     value={
                       lead.source === "suo_moto"
                         ? "Suo Moto"
-                        : `${(lead.lead_type || "rfp").toUpperCase()} (${lead.source === "ba" ? "BA Source" : "In House"})`
+                        : `${(lead.lead_type || "rfp").toUpperCase()} (${lead.source === "ba" ? "BP Source" : "In House"})`
                     }
                   />
                   {lead.source === "suo_moto" ? (
@@ -520,7 +520,7 @@ export default function LeadDetailPage() {
                   <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
                   <Row label="Approval Authority" value={fmt(lead.authority?.full_name)} />
                   <Row label="DGM" value={fmt(lead.dgm?.full_name)} />
-                  <Row label="Business Associate" value={fmt(lead.ba?.full_name)} />
+                  <Row label="Business Partner" value={fmt(lead.ba?.full_name)} />
                 </Card.Body>
               </Card>
 

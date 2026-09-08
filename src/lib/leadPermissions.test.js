@@ -161,26 +161,34 @@ describe("isActionRequiredForViewer", () => {
 });
 
 describe("isMyLead", () => {
-  it("matches the creator", () => {
-    const profile = { id: "user-1" };
-    expect(isMyLead(profile, { created_by: "user-1", person_responsible_id: "someone-else" })).toBe(true);
-  });
-
   it("matches the Person Responsible", () => {
     const profile = { id: "user-1" };
     expect(isMyLead(profile, { created_by: "someone-else", person_responsible_id: "user-1" })).toBe(true);
   });
 
-  it("does NOT match Reviewer, Approval Authority, or handled-by-DGM — those belong on Team Leads instead", () => {
+  it("matches the Reviewer", () => {
+    const profile = { id: "user-1" };
+    expect(isMyLead(profile, { created_by: "someone-else", person_responsible_id: "someone-else-2", reviewer_id: "user-1" })).toBe(true);
+  });
+
+  it("matches the Approval Authority", () => {
+    const profile = { id: "user-1" };
+    expect(isMyLead(profile, { created_by: "someone-else", person_responsible_id: "someone-else-2", approval_authority_id: "user-1" })).toBe(true);
+  });
+
+  it("does NOT match a creator who isn't otherwise named — that lead belongs on Team Leads", () => {
+    const profile = { id: "user-1" };
+    expect(isMyLead(profile, { created_by: "user-1", person_responsible_id: "someone-else", reviewer_id: "someone-else-2", approval_authority_id: "someone-else-3" })).toBe(false);
+  });
+
+  it("does NOT match handled-by-DGM or plain team ownership — those belong on Team Leads instead", () => {
     const profile = { id: "user-1" };
     const base = { created_by: "someone-else", person_responsible_id: "someone-else-2" };
-    expect(isMyLead(profile, { ...base, reviewer_id: "user-1" })).toBe(false);
-    expect(isMyLead(profile, { ...base, approval_authority_id: "user-1" })).toBe(false);
     expect(isMyLead(profile, { ...base, handled_by_dgm_id: "user-1" })).toBe(false);
   });
 
   it("returns false with no profile", () => {
-    expect(isMyLead(null, { created_by: "user-1" })).toBe(false);
+    expect(isMyLead(null, { person_responsible_id: "user-1" })).toBe(false);
   });
 });
 
@@ -198,7 +206,7 @@ describe("isTeamLead", () => {
     }
   });
 
-  it("does not match a Business Associate against an unrelated team", () => {
+  it("does not match a Business Partner against an unrelated team", () => {
     const profile = { id: "ba-1", role: "business_associate", teams: [] };
     expect(isTeamLead(profile, { team: "BPDD" })).toBe(false);
   });

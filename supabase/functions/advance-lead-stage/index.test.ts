@@ -102,7 +102,7 @@ Deno.test("accept - requires the Lead Approval Note to be generated first", asyn
   assertEquals((await res.json()).error, "Generate the Lead Approval Note before submitting for DGM approval.");
 });
 
-Deno.test("accept - success moves to dgm_initial_review when the lead already has a BA", async () => {
+Deno.test("accept - success moves to dgm_initial_review when the lead already has a BP", async () => {
   const client = buildClient({ lead: leadRow({ assigned_ba_id: "existing-ba" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
   assertEquals(res.status, 200);
@@ -126,14 +126,14 @@ Deno.test("accept - notifies only this lead's own team's DGM(s), not every G3 co
   assertEquals(rows.map((r: { user_id: string }) => r.user_id), ["team-dgm-1"]);
 });
 
-Deno.test("accept - requires a BA when the lead has none and none is provided", async () => {
+Deno.test("accept - requires a BP when the lead has none and none is provided", async () => {
   const client = buildClient({});
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
   assertEquals(res.status, 400);
-  assertEquals((await res.json()).error, "Select a BA");
+  assertEquals((await res.json()).error, "Select a Business Partner");
 });
 
-Deno.test("accept - rejects a BA from a different team", async () => {
+Deno.test("accept - rejects a BP from a different team", async () => {
   const client = createFakeAdminClient({
     afc_users: [
       { data: callerRow(), error: null },
@@ -145,7 +145,7 @@ Deno.test("accept - rejects a BA from a different team", async () => {
   assertEquals(res.status, 400);
 });
 
-Deno.test("accept - accepts and assigns a BA when caller selects one", async () => {
+Deno.test("accept - accepts and assigns a BP when caller selects one", async () => {
   const client = createFakeAdminClient({
     afc_users: [
       { data: callerRow(), error: null },

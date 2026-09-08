@@ -114,7 +114,7 @@ type ViewableLead = {
 //   - PMT/PMT Extended/G3 committee membership: org-wide, only while the
 //     lead is at the stage that committee reviews.
 //   - Always: creator/Person Responsible/Reviewer/Approval Authority/
-//     handling DGM, or the assigned Business Associate.
+//     handling DGM, or the assigned Business Partner.
 export function canViewLead(caller: ViewerCaller, lead: ViewableLead): boolean {
   const callerTeams = caller.teams ?? (caller.team ? [caller.team] : []);
   if (["md", "admin", "cfo", "cs"].includes(caller.role)) return true;

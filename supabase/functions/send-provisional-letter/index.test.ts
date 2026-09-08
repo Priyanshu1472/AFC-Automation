@@ -23,7 +23,7 @@ function pngBytes(): Uint8Array {
 function appRow(overrides: Record<string, unknown> = {}) {
   return {
     id: APP_ID, status: "filled", ba_email: "ba@org.com", team: "BPDD",
-    sent_by: "sender-1", application_code: "12345", provisional_letter_sent: false,
+    sent_by: "sender-1", dgm_id: CALLER_ID, application_code: "12345", provisional_letter_sent: false,
     ...overrides,
   };
 }
@@ -47,20 +47,35 @@ function req(body: Record<string, unknown>) {
   return authedReq("https://x.com/send-provisional-letter", { token: fakeJwt({ sub: CALLER_ID }), body: { pin: CALLER_PIN, ...body } });
 }
 
-Deno.test("send-provisional-letter - rejects a non-DGM caller", async () => {
+Deno.test("send-provisional-letter - rejects a caller who isn't a DGM or AGM", async () => {
   const res = await handleRequest(req({ application_id: APP_ID }), client({ caller: { id: CALLER_ID, role: "md", is_active: true, pin_hash: CALLER_PIN_HASH } }) as never);
   assertEquals(res.status, 403);
 });
 
-Deno.test("send-provisional-letter - rejects a DGM from a different team", async () => {
+Deno.test("send-provisional-letter - rejects a DGM/AGM who isn't the assigned advisor", async () => {
   const res = await handleRequest(
     req({ application_id: APP_ID }),
-    client({ caller: { id: CALLER_ID, role: "dgm", team: "BIID", is_active: true, pin_hash: CALLER_PIN_HASH }, app: appRow({ team: "BPDD" }) }) as never,
+    client({ app: appRow({ dgm_id: "someone-else" }) }) as never,
   );
   assertEquals(res.status, 403);
 });
 
-Deno.test("send-provisional-letter - rejects before the BA has submitted the form", async () => {
+Deno.test("send-provisional-letter - the assigned AGM can send it", async () => {
+  const fake = client({ caller: { id: CALLER_ID, role: "agm", team: "BPDD", is_active: true, email: "agm@afc.com", pin_hash: CALLER_PIN_HASH } });
+  const original = globalThis.fetch;
+  globalThis.fetch = ((url: string, init?: RequestInit) => {
+    if (init?.method === "POST") return Promise.resolve(new Response(JSON.stringify({ id: "e1" }), { status: 200 }));
+    return Promise.resolve(new Response(pngBytes(), { status: 200 }));
+  }) as unknown as typeof fetch;
+  try {
+    const res = await handleRequest(req({ application_id: APP_ID }), fake as never);
+    assertEquals(res.status, 200);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("send-provisional-letter - rejects before the BP has submitted the form", async () => {
   const res = await handleRequest(req({ application_id: APP_ID }), client({ app: appRow({ status: "sent" }) }) as never);
   assertEquals(res.status, 400);
 });

@@ -188,6 +188,12 @@
   color: var(--danger);
 }
 
+.sef-field-hint {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
 /* ── Button rows ──────────────────────────────────────────── */
 .sef-btn-row {
   display: flex;

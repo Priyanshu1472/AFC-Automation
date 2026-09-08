@@ -6,7 +6,7 @@ import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import "../../styles/BaFormPage.css";
 
-// Shared building blocks for the public BA pages (BaFormPage,
+// Shared building blocks for the public BP pages (BaFormPage,
 // EmpanelmentCorrectionPage, ApplicationStatusPage) so all three render the
 // same widgets/layout instead of drifting apart.
 

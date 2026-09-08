@@ -1,5 +1,5 @@
 // supabase/functions/get-empanelment-status/index.ts
-// JWT verification must be OFF (public, BA-facing). Given an application
+// JWT verification must be OFF (public, BP-facing). Given an application
 // code, returns a status-only view of the application — current stage,
 // activity timeline, and (when relevant) open compliance flags or final
 // remarks — for the public "Check Application Status" page. Unlike

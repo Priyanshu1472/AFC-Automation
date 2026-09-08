@@ -295,7 +295,7 @@ export async function buildLeadApprovalNotePdf(opts: {
     scopeText ? `\nScope of Work:\n${scopeText}` : "",
   ].filter(Boolean).join("\n") || "—";
 
-  const implementationArrangement = opts.lead.assigned_ba_id ? "Business Associate" : "In-house";
+  const implementationArrangement = opts.lead.assigned_ba_id ? "Business Partner" : "In-house";
 
   const rows = [
     { label: "Nature of Lead", value: data.nature_of_lead || "—" },
@@ -303,8 +303,8 @@ export async function buildLeadApprovalNotePdf(opts: {
     { label: "Client Name with address*", value: [opts.lead.client_name, data.client_address].filter(Boolean).join("\n") || "—" },
     { label: "Brief write-up on nature and objective of the proposed assignment*", value: briefValue },
     { label: "Project Timeline", value: data.project_timeline || "—" },
-    { label: "Proposed Implementation Arrangements* (In-house/BA)", value: implementationArrangement },
-    ...(opts.lead.assigned_ba_id ? [{ label: "Name of BA*", value: opts.baOrgName || "—" }] : []),
+    { label: "Proposed Implementation Arrangements* (In-house/BP)", value: implementationArrangement },
+    ...(opts.lead.assigned_ba_id ? [{ label: "Name of BP*", value: opts.baOrgName || "—" }] : []),
     {
       label: "Financial Requirement*",
       value: [
@@ -507,7 +507,7 @@ function humanizeRole(role: string | null | undefined): string {
 type Row = Record<string, any>;
 
 // Re-fetches everything the note needs fresh from the DB (lead, its
-// Person Responsible, its BA's org name via the existing
+// Person Responsible, its BP's org name via the existing
 // get_team_business_associates RPC, and the full activity log), builds the
 // PDF in the given mode, uploads it, and writes the updated `documents`
 // array back onto the lead. Used both by generate-lead-approval-note (the

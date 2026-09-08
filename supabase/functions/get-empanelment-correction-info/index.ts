@@ -1,6 +1,6 @@
 // supabase/functions/get-empanelment-correction-info/index.ts
-// JWT verification must be OFF (public, BA-facing). Given an application
-// code, returns the BA's full submitted registration (so the correction page
+// JWT verification must be OFF (public, BP-facing). Given an application
+// code, returns the BP's full submitted registration (so the correction page
 // can show the whole form for context) plus the list of currently-open
 // compliance flags, which alone determine what's actually editable —
 // enforced again server-side in submit-empanelment-correction.

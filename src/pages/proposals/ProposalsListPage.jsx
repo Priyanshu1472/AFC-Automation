@@ -85,7 +85,7 @@ export default function ProposalsListPage() {
 
           <Card className="pp-filter-card">
             <Card.Body className="pp-filters">
-              <input type="text" className="input pp-search" placeholder="Search by lead number, client, or BA…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <input type="text" className="input pp-search" placeholder="Search by lead number, client, or BP…" value={search} onChange={(e) => setSearch(e.target.value)} />
             </Card.Body>
           </Card>
 
@@ -96,7 +96,7 @@ export default function ProposalsListPage() {
               <div className="pp-table-wrap">
                 <table className="table">
                   <thead>
-                    <tr><th>Lead Number</th><th>Client</th><th>BA</th><th>Person Responsible</th><th>Submission Date</th><th>Status</th><th>Outcome</th><th>Actions</th></tr>
+                    <tr><th>Lead Number</th><th>Client</th><th>BP</th><th>Person Responsible</th><th>Submission Date</th><th>Status</th><th>Outcome</th><th>Actions</th></tr>
                   </thead>
                   <tbody>
                     {filtered.map((l) => {

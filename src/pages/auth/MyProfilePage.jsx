@@ -11,7 +11,7 @@ import SetPasswordForm from "./SetPasswordForm";
 import SetPinForm from "./SetPinForm";
 import "../../styles/CreateUserPage.css";
 
-// Self-service page for both AFC staff and Business Associate portal
+// Self-service page for both AFC staff and Business Partner portal
 // accounts — name can be corrected here (email/role/team/office stay
 // admin-managed), and password can be changed voluntarily without going
 // through the forced first-login flow.

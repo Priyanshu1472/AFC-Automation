@@ -1,10 +1,10 @@
 // supabase/functions/send-ba-document-request/index.ts
-// JWT must be ON. Emails the lead's linked BA the FULL current itemized
-// list every time it's called — first call is "Send to BA", every call
+// JWT must be ON. Emails the lead's linked BP the FULL current itemized
+// list every time it's called — first call is "Send to BP", every call
 // after is effectively a reminder (the "Send Reminder" button on the panel
 // is always visible, not gated on unsent items existing). Marks any
 // still-unsent rows' sent_at on the way, but never refuses to send just
-// because everything was already sent once. BA-facing response UI is out
+// because everything was already sent once. BP-facing response UI is out
 // of scope for now; this is a one-way notice.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -45,22 +45,22 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
-    // Managing/sending the BA document list is the lead's own team's job
+    // Managing/sending the BP document list is the lead's own team's job
     // (Person Responsible, Reviewer, Approval Authority) — MD/Admin can
     // view but not act. Mirrors the client gate in
     // ProposalPreparationPage.jsx (canManageDocs).
     const authorized = [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(caller.id);
-    if (!authorized) return jsonRes(req, 403, { error: "Only the lead's Person Responsible, Reviewer, or Approval Authority can send this to the BA." });
+    if (!authorized) return jsonRes(req, 403, { error: "Only the lead's Person Responsible, Reviewer, or Approval Authority can send this to the BP." });
 
     const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date();
     if (proposal.locked || pastDeadline) {
       return jsonRes(req, 400, { error: "This proposal is locked and can no longer be edited." });
     }
 
-    if (!lead.assigned_ba_id) return jsonRes(req, 400, { error: "This lead has no linked Business Associate to send a request to." });
+    if (!lead.assigned_ba_id) return jsonRes(req, 400, { error: "This lead has no linked Business Partner to send a request to." });
 
     const { data: ba } = await adminClient.from("afc_users").select("email").eq("id", lead.assigned_ba_id).maybeSingle();
-    if (!ba?.email) return jsonRes(req, 400, { error: "The linked Business Associate has no email on file." });
+    if (!ba?.email) return jsonRes(req, 400, { error: "The linked Business Partner has no email on file." });
 
     const { data: proposalRow, error: prepErr } = await adminClient
       .from("proposal_preparations")

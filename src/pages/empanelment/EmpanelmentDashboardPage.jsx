@@ -15,7 +15,7 @@ import "../../styles/EmpanelmentDashboardPage.css";
 // shared, matching the existing convention in this codebase.
 const STATUS_MAP = {
   sent: { label: "Sent", variant: "info" },
-  filled: { label: "BA Filled", variant: "warning" },
+  filled: { label: "BP Filled", variant: "warning" },
   po_review: { label: "PO Review", variant: "warning" },
   cfo_cs_review: { label: "CFO / CS", variant: "info" },
   po_final_review: { label: "PO Final", variant: "warning" },
@@ -40,7 +40,7 @@ const DATE_RANGES = [
 // colorblind-validated (see EmpanelmentDashboardPage.css), so this sequence
 // must not be reshuffled at render time.
 const DONUT_BUCKETS = [
-  { key: "awaiting", label: "Awaiting BA", match: (s) => s === "sent" || s === "filled", colorVar: "--edb-cat-1" },
+  { key: "awaiting", label: "Awaiting BP", match: (s) => s === "sent" || s === "filled", colorVar: "--edb-cat-1" },
   { key: "accepted", label: "Accepted", match: (s) => s === "accepted", colorVar: "--edb-cat-2" },
   { key: "cfo_cs", label: "CFO / CS Review", match: (s) => s === "cfo_cs_review", colorVar: "--edb-cat-3" },
   { key: "po", label: "PO Review", match: (s) => s === "po_review" || s === "po_final_review", colorVar: "--edb-cat-4" },
@@ -408,8 +408,8 @@ export default function EmpanelmentDashboardPage() {
   const insights = useMemo(() => {
     const list = [];
     if (stalled.length > 0) list.push({ tone: "warn", icon: Icon.alert, text: `${stalled.length} application${stalled.length > 1 ? "s" : ""} stalled for 5+ days without movement.` });
-    if (onHold > 0) list.push({ tone: "warn", icon: Icon.pause, text: `${onHold} application${onHold > 1 ? "s are" : " is"} on hold awaiting a BA correction.` });
-    if (total - provisionalSent > 0 && (role === "dgm" || role === "md")) list.push({ tone: "info", icon: Icon.mail, text: `${total - provisionalSent} application${total - provisionalSent > 1 ? "s haven't" : " hasn't"} had a provisional letter sent yet.` });
+    if (onHold > 0) list.push({ tone: "warn", icon: Icon.pause, text: `${onHold} application${onHold > 1 ? "s are" : " is"} on hold awaiting a BP correction.` });
+    if (total - provisionalSent > 0 && (role === "dgm" || role === "agm" || role === "md")) list.push({ tone: "info", icon: Icon.mail, text: `${total - provisionalSent} application${total - provisionalSent > 1 ? "s haven't" : " hasn't"} had a provisional letter sent yet.` });
     if (acceptRate !== null && acceptRate >= 70) list.push({ tone: "good", icon: Icon.check, text: `Strong acceptance rate of ${acceptRate}% across decided applications.` });
     if (avgTat !== null) list.push({ tone: "info", icon: Icon.trending, text: `Applications take an average of ${avgTat} day${avgTat !== 1 ? "s" : ""} from being sent to being accepted.` });
     if (stalled.length === 0 && total > 0) list.push({ tone: "good", icon: Icon.check, text: "No stalled applications — the pipeline is moving well." });
@@ -484,7 +484,7 @@ export default function EmpanelmentDashboardPage() {
           <StatTile label="In Progress" value={inProgress} sub="Active pipeline" variant="warning" icon={Icon.clock} onClick={() => handleKpiClick("progress", "In Progress", filtered.filter((a) => IN_PROGRESS_STATUSES.includes(a.status)))} active={activeKpi === "progress"} />
           <StatTile label="Empanelled" value={accepted} sub={acceptRate !== null ? `${acceptRate}% acceptance rate` : "—"} variant="success" icon={Icon.check} onClick={() => handleKpiClick("accepted", "Empanelled", filtered.filter((a) => a.status === "accepted"))} active={activeKpi === "accepted"} />
           <StatTile label="Rejected" value={rejected} sub="Final decisions" variant="danger" icon={Icon.x} onClick={() => handleKpiClick("rejected", "Rejected", filtered.filter((a) => a.status === "rejected"))} active={activeKpi === "rejected"} />
-          <StatTile label="On Hold" value={onHold} sub="Awaiting BA correction" variant="neutral" icon={Icon.pause} onClick={() => handleKpiClick("hold", "On Hold", filtered.filter((a) => a.status === "on_hold"))} active={activeKpi === "hold"} />
+          <StatTile label="On Hold" value={onHold} sub="Awaiting BP correction" variant="neutral" icon={Icon.pause} onClick={() => handleKpiClick("hold", "On Hold", filtered.filter((a) => a.status === "on_hold"))} active={activeKpi === "hold"} />
           {avgTat !== null && <StatTile label="Avg. Time to Accept" value={`${avgTat}d`} sub="Sent → accepted" variant="info" icon={Icon.trending} />}
           <StatTile label="Provisional Letters Sent" value={provisionalSent} sub={`${total - provisionalSent} not yet sent`} variant="info" icon={Icon.mail} />
         </div>
@@ -518,7 +518,7 @@ export default function EmpanelmentDashboardPage() {
         </div>
 
         <div className="edb-charts-grid edb-charts-grid-2">
-          <ChartCard title="Sector-wise Coverage" subtitle="Top sectors served by empanelled BAs">
+          <ChartCard title="Sector-wise Coverage" subtitle="Top sectors served by empanelled BPs">
             {sectorBreakdown.length === 0 ? <p className="text-secondary text-sm">No sector data yet.</p> : (
               <div className="edb-bar-list">
                 {sectorBreakdown.map((s) => (

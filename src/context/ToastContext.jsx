@@ -4,7 +4,7 @@ import Toast from "../components/ui/Toast";
 
 export const ToastContext = createContext(null);
 
-const DEFAULT_DURATION = 5000;
+const DEFAULT_DURATION = 6000;
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);

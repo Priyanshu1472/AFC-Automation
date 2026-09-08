@@ -2,9 +2,9 @@ import { useState } from "react";
 import { ROLE_LABELS } from "../../lib/roles";
 import "../../styles/ApplicationReviewPage.css";
 
-// actor_role can be "ba" for BA-originated activity log entries (e.g. a
+// actor_role can be "ba" for BP-originated activity log entries (e.g. a
 // correction submission), which isn't a real staff role in ROLE_LABELS.
-const ROLE_DISPLAY = { ...ROLE_LABELS, ba: "Business Associate" };
+const ROLE_DISPLAY = { ...ROLE_LABELS, ba: "Business Partner" };
 
 export const STATUS_FLOW = [
   { key: "sent", label: "Sent" },
@@ -15,9 +15,24 @@ export const STATUS_FLOW = [
   { key: "md_review", label: "MD" },
 ];
 
+// Two of the review steps belong to a role that isn't fixed:
+//  - PO / PO Final go to a Project Assistant when the team has no active
+//    Project Officer (see SendEmpanelmentPage).
+//  - DGM goes to an AGM when the sender assigned an AGM as the advising
+//    authority instead of a DGM.
+// The stepper/badges swap wording to match the person actually assigned.
+const PO_STEP_KEYS = new Set(["po_review", "po_final_review"]);
+export function stepLabel(stepKey, label, reviewerRole, advisorRole) {
+  if (PO_STEP_KEYS.has(stepKey) && reviewerRole === "project_assistant") {
+    return stepKey === "po_final_review" ? "PA Final" : "PA";
+  }
+  if (stepKey === "dgm_review" && advisorRole === "agm") return "AGM";
+  return label;
+}
+
 // Spelled-out labels for the public (no-login) status-check page — the
 // abbreviations above are fine for AFC staff, who already know the review
-// hierarchy, but confusing for a BA looking the process up cold.
+// hierarchy, but confusing for a BP looking the process up cold.
 const STATUS_FLOW_FULL_LABELS = {
   sent: "Sent",
   po_review: "Project Officer",
@@ -26,6 +41,12 @@ const STATUS_FLOW_FULL_LABELS = {
   dgm_review: "Deputy General Manager",
   md_review: "Managing Director",
 };
+const STATUS_FLOW_FULL_LABELS_PA = {
+  ...STATUS_FLOW_FULL_LABELS,
+  po_review: "Project Assistant",
+  po_final_review: "Project Assistant (Final Review)",
+};
+const STATUS_FLOW_FULL_LABEL_AGM = "Assistant General Manager";
 
 export const STATUS_BADGE = {
   sent: "info", filled: "warning", po_review: "warning",
@@ -36,12 +57,17 @@ export const STATUS_BADGE = {
 function CheckIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>; }
 function XIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>; }
 
-export function ProgressStepper({ currentStatus, publicView = false }) {
+export function ProgressStepper({ currentStatus, publicView = false, reviewerRole, advisorRole }) {
   const keys = STATUS_FLOW.map((s) => s.key);
   const isAccepted = currentStatus === "accepted";
   const isRejected = currentStatus === "rejected";
   const isHold = currentStatus === "on_hold";
   const currentIdx = isAccepted || isRejected ? keys.length - 1 : keys.indexOf(currentStatus);
+  const isPA = reviewerRole === "project_assistant";
+  const fullLabels = {
+    ...(isPA ? STATUS_FLOW_FULL_LABELS_PA : STATUS_FLOW_FULL_LABELS),
+    ...(advisorRole === "agm" ? { dgm_review: STATUS_FLOW_FULL_LABEL_AGM } : {}),
+  };
 
   return (
     <div className={`ar-stepper${publicView ? " ar-stepper-public" : ""}`}>
@@ -55,7 +81,7 @@ export function ProgressStepper({ currentStatus, publicView = false }) {
               <div className={["ar-step-dot", isRejectedStep ? "ar-step-rejected" : "", isCurrent ? "ar-step-current" : "", isDone ? "ar-step-done" : ""].filter(Boolean).join(" ")}>
                 {isRejectedStep ? <XIcon /> : isDone || isAccepted ? <CheckIcon /> : null}
               </div>
-              <span className={["ar-step-label", isRejectedStep ? "ar-step-label-rejected" : "", isCurrent ? "ar-step-label-current" : "", isDone ? "ar-step-label-done" : ""].filter(Boolean).join(" ")}>{publicView ? STATUS_FLOW_FULL_LABELS[step.key] : step.label}</span>
+              <span className={["ar-step-label", isRejectedStep ? "ar-step-label-rejected" : "", isCurrent ? "ar-step-label-current" : "", isDone ? "ar-step-label-done" : ""].filter(Boolean).join(" ")}>{publicView ? fullLabels[step.key] : stepLabel(step.key, step.label, reviewerRole, advisorRole)}</span>
             </div>
           </div>
         );
@@ -79,10 +105,10 @@ export function TimelineAccordion({ logs, showActorName = true }) {
               <div className="ar-acc-dot" />
               <div className="ar-acc-meta">
                 <span className="ar-acc-name">
-                  {showActorName ? (log.actor?.full_name || "Business Associate") : roleLabel}
+                  {showActorName ? (log.actor?.full_name || "Business Partner") : roleLabel}
                   {showActorName && <span className="ar-acc-role"> ({roleLabel})</span>}
                 </span>
-                <span className="ar-acc-action">{log.action.replace(/_/g, " ").toUpperCase()}</span>
+                <span className="ar-acc-action">{log.action.replace(/_/g, " ").toUpperCase().replace(/^BA /, "BP ")}</span>
               </div>
               <div className="ar-acc-right">
                 <span className="ar-acc-time">{time}</span>
