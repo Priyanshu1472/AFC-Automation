@@ -16,7 +16,7 @@ function FieldRow({ fieldKey, label, checked, comment, onToggle, onCommentChange
         <textarea
           className="input chm-row-comment"
           rows={2}
-          placeholder="Explain what needs correcting — the BA sees this exact note…"
+          placeholder="Explain what needs correcting — the BP sees this exact note…"
           value={comment}
           onChange={(e) => onCommentChange(fieldKey, e.target.value)}
           autoFocus
@@ -82,7 +82,7 @@ export default function ComplianceHoldModal({ applicationId, onClose, onSuccess 
 
   return (
     <Modal onClose={onClose} size="lg" className="chm-modal" closeOnBackdrop={!submitting}>
-      <Modal.Header title="Raise Compliance Hold" subtitle="Tick every field or document that needs correction and explain each one. The BA is emailed and can only edit what you flag here." onClose={!submitting ? onClose : undefined} />
+      <Modal.Header title="Raise Compliance Hold" subtitle="Tick every field or document that needs correction and explain each one. The BP is emailed and can only edit what you flag here." onClose={!submitting ? onClose : undefined} />
 
       <div className="chm-toolbar">
         <div className="chm-search">

@@ -299,7 +299,7 @@ export default function BaFormPage() {
 
   return (
     <div className="bf-page">
-      <FormNav subtitle="Business Associate Empanelment" onBack={() => navigate("/login")} />
+      <FormNav subtitle="Business Partner Empanelment" onBack={() => navigate("/login")} />
       <main className="bf-content">
         <div className="bf-hero">
           <h1 className="bf-hero-title">Empanelment Application Form</h1>

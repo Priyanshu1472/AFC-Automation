@@ -2,7 +2,7 @@
 // JWT must be ON. Caller must be an active associate_consultant or
 // project_assistant (same send permissions).
 // Generates a 5-digit application code, creates the empanelment_applications
-// row, and emails the BA the invite + code.
+// row, and emails the BP the invite + code.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -53,7 +53,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
   const { ba_email, project_officer_id, advisor_id, team: requestedTeam } = body;
   if (!ba_email || typeof ba_email !== "string" || !isValidEmail(ba_email)) {
-    return jsonRes(req, 400, { error: "A valid BA email is required." });
+    return jsonRes(req, 400, { error: "A valid BP email is required." });
   }
   if (!project_officer_id || typeof project_officer_id !== "string") {
     return jsonRes(req, 400, { error: "Project Officer is required." });
@@ -131,7 +131,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       advisor = dgm || null;
     }
 
-    // One active (non-terminal) invitation per BA email at a time.
+    // One active (non-terminal) invitation per BP email at a time.
     const { data: existing } = await adminClient
       .from("empanelment_applications")
       .select("id, status, application_code")
@@ -172,7 +172,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">Greetings from AFC India Limited!</p>
       <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
         As advised by <strong>${escapeHtml(advisedByName)}</strong> (${escapeHtml(advisedByDesig)}), please find enclosed the link for the
-        Business Associate (BA) empanelment form for your kind perusal.
+        Business Partner (BP) empanelment form for your kind perusal.
       </p>
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:20px 24px;margin:0 0 24px;">
         <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:0.08em;">Your Application Code</p>
@@ -186,7 +186,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const emailSent = await sendResendEmail({
       to: normalizedEmail,
-      subject: "Business Associate Empanelment Form — AFC India Limited",
+      subject: "Business Partner Empanelment Form — AFC India Limited",
       html,
     });
 

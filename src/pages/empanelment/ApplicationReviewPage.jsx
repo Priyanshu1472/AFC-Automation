@@ -245,7 +245,7 @@ export default function ApplicationReviewPage() {
   }
   function handleRejectPinSuccess(data) {
     setShowRejectPin(false);
-    showBanner(`Application rejected. Rejection email ${data.email_sent ? "sent to" : "failed to send to"} BA.`, data.email_sent ? "success" : "warning");
+    showBanner(`Application rejected. Rejection email ${data.email_sent ? "sent to" : "failed to send to"} BP.`, data.email_sent ? "success" : "warning");
     setComment("");
     setRejectRemark("");
     fetchApp();
@@ -318,7 +318,7 @@ export default function ApplicationReviewPage() {
               <Card>
                 <Card.Header title="Application Info" />
                 <Card.Body className="ar-detail-body">
-                  <Row label="BA Email" value={app.ba_email} />
+                  <Row label="BP Email" value={app.ba_email} />
                   <Row label="Sent By (AC)" value={app.ac?.full_name} />
                   <Row label="Project Officer" value={app.po?.full_name} />
                   <Row label={advisorLabel} value={app.dgm?.full_name} />
@@ -395,7 +395,7 @@ export default function ApplicationReviewPage() {
                   </Card.Body>
                 </Card>
               ) : (
-                <Card><Card.Body><p className="ar-empty-text">The Business Associate has not filled out the form yet.</p></Card.Body></Card>
+                <Card><Card.Body><p className="ar-empty-text">The Business Partner has not filled out the form yet.</p></Card.Body></Card>
               )}
             </div>
 
@@ -414,7 +414,7 @@ export default function ApplicationReviewPage() {
                       )}
                       <div className="ar-field">
                         <label className="ar-label">{app.status === "po_final_review" ? "Your Final Comment (optional)" : "Technical Review Comment"}{app.status !== "po_final_review" && <span className="ar-required"> *</span>}</label>
-                        <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={app.status === "po_final_review" ? "Add any additional comments before forwarding to DGM..." : "Review the BA's technical details and write your comments..."} rows={4} />
+                        <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={app.status === "po_final_review" ? "Add any additional comments before forwarding to DGM..." : "Review the BP's technical details and write your comments..."} rows={4} />
                       </div>
                       {app.status === "po_final_review"
                         ? (<>
@@ -476,7 +476,7 @@ export default function ApplicationReviewPage() {
                   <Card.Header title="Provisional Letter" action={app.provisional_letter_sent ? <Badge variant="success">Sent</Badge> : null} />
                   <Card.Body className="ar-action-body">
                     <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
-                      A non-final, provisional empanelment letter emailed to the BA — separate from the MD&apos;s final acceptance email.
+                      A non-final, provisional empanelment letter emailed to the BP — separate from the MD&apos;s final acceptance email.
                     </p>
                     <Button variant="secondary" block disabled={app.provisional_letter_sent} icon={<DocumentIcon />} onClick={() => setShowProvisionalPin(true)}>
                       {app.provisional_letter_sent ? "Provisional Letter Already Sent" : "Send Provisional Letter"}
@@ -487,10 +487,10 @@ export default function ApplicationReviewPage() {
 
               {app.status === "on_hold" && (
                 <Card className="ar-final-card" style={{ borderColor: "rgba(219,36,36,0.3)" }}>
-                  <Card.Header title="On Hold — Awaiting BA Correction" action={<Badge variant="warning">On Hold</Badge>} />
+                  <Card.Header title="On Hold — Awaiting BP Correction" action={<Badge variant="warning">On Hold</Badge>} />
                   <Card.Body className="ar-action-body">
                     <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
-                      The BA was emailed and can submit corrections for the item(s) below. Review will resume from the stage that raised this hold once they do.
+                      The BP was emailed and can submit corrections for the item(s) below. Review will resume from the stage that raised this hold once they do.
                     </p>
                     <div className="ar-flag-list">
                       {openFlags.map((f) => (
@@ -545,7 +545,7 @@ export default function ApplicationReviewPage() {
         <ComplianceHoldModal
           applicationId={app.id}
           onClose={() => setShowHoldModal(false)}
-          onSuccess={(data) => { setShowHoldModal(false); showBanner(`Application put on hold. ${data.flags_count} item(s) flagged. Correction email ${data.email_sent ? "sent" : "failed to send"} to the BA.`, data.email_sent ? "success" : "warning"); fetchApp(); }}
+          onSuccess={(data) => { setShowHoldModal(false); showBanner(`Application put on hold. ${data.flags_count} item(s) flagged. Correction email ${data.email_sent ? "sent" : "failed to send"} to the BP.`, data.email_sent ? "success" : "warning"); fetchApp(); }}
         />
       )}
     </div>

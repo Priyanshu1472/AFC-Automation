@@ -1,6 +1,6 @@
 // supabase/functions/_shared/empanelmentLetterPdf.ts
 // The final Empanelment Letter — attached to the same email that carries
-// the BA's portal credentials on MD accept. Distinct from the DGM's
+// the BP's portal credentials on MD accept. Distinct from the DGM's
 // provisional letter (_shared/provisionalLetterPdf.ts): this one is final,
 // references the application's actual sectors, and is issued and signed by
 // the accepting MD (not the team's DGM — the DGM only signs the
@@ -61,7 +61,7 @@ export async function generateEmpanelmentPDF(opts: {
   }
   await sdGap(e, 14);
 
-  await sdPara(e, [bold("Sub: "), plain("Empanelment as Business Associate — AFC India Limited")], S);
+  await sdPara(e, [bold("Sub: "), plain("Empanelment as Business Partner — AFC India Limited")], S);
   await sdGap(e, 3);
   await sd(e, () => e.drawRule());
   await sdGap(e, 8);
@@ -74,7 +74,7 @@ export async function generateEmpanelmentPDF(opts: {
     bold(opts.orgName),
     plain(", and we are pleased to officially empanel "),
     bold(opts.orgName),
-    plain(" as an approved Business Associate of AFC India Limited for providing services in "),
+    plain(" as an approved Business Partner of AFC India Limited for providing services in "),
     bold(opts.sectors),
     plain(" on mutually agreed terms and conditions and revenue/risk sharing basis."),
   ], S);

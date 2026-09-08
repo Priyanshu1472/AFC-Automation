@@ -1,7 +1,7 @@
 // supabase/functions/_shared/provisionalLetterPdf.ts
 // The advising authority's non-final, provisional empanelment letter —
 // distinct from the MD's final Empanelment Letter
-// (_shared/empanelmentLetterPdf.ts). Sendable at any stage once the BA has
+// (_shared/empanelmentLetterPdf.ts). Sendable at any stage once the BP has
 // filled the form, signed by the application's assigned advisor (a DGM or an
 // AGM) with the designation line following their actual role. Ported from
 // the previous AFC empanelment app's send-provisional-mail function.
@@ -71,7 +71,7 @@ export async function generateProvisionalPDF(opts: {
 
   await sdPara(e, [
     bold("Sub: "),
-    plain("Provisional Empanelment as Business Associate — AFC India Limited"),
+    plain("Provisional Empanelment as Business Partner — AFC India Limited"),
   ], S);
   await sdGap(e, 3);
   await sd(e, () => e.drawRule());
@@ -87,7 +87,7 @@ export async function generateProvisionalPDF(opts: {
     bold(opts.applicationCode),
     plain(" has been reviewed and evaluated by AFC India Limited. Based on the preliminary assessment of your organization's capabilities and credentials, we are pleased to provisionally empanel "),
     bold(opts.orgName),
-    plain(" as a Business Associate of AFC India Limited."),
+    plain(" as a Business Partner of AFC India Limited."),
   ], S);
   await sdGap(e, 10);
 
@@ -101,7 +101,7 @@ export async function generateProvisionalPDF(opts: {
       plain(" from the date of this letter, i.e., up to "),
       bold(opts.validUntil),
       plain(". If the final empanelment process is not completed within this period, this provisional empanelment shall automatically lapse.")],
-    [plain("During the provisional period, your organization shall not represent itself as an empanelled Business Associate of AFC India Limited for any commercial, contractual, or marketing purpose without the prior written consent of AFC India Limited.")],
+    [plain("During the provisional period, your organization shall not represent itself as an empanelled Business Partner of AFC India Limited for any commercial, contractual, or marketing purpose without the prior written consent of AFC India Limited.")],
     [plain("AFC India Limited reserves the right to withdraw this provisional empanelment at any stage without assigning any reason, if it is found that the information provided by your organization is incorrect, misleading, or incomplete.")],
     [plain("No financial obligation or liability shall accrue to AFC India Limited by virtue of this provisional empanelment letter.")],
   ];

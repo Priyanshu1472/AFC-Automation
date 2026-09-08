@@ -95,7 +95,7 @@ function generateTempPassword(length = 14): string {
   return chars.join("");
 }
 
-// Creates the BA's portal login on acceptance. Best-effort: any failure here
+// Creates the BP's portal login on acceptance. Best-effort: any failure here
 // is logged and swallowed — it must never block the MD's accept action.
 // Returns the temp password to include in the decision email, or null if an
 // account already existed (nothing new to email) or provisioning failed.
@@ -110,7 +110,7 @@ async function provisionBaAccount(
   const { data: existing } = await admin.from("afc_users").select("id, team").eq("email", baEmail).maybeSingle();
   if (existing) {
     await admin.from("empanelment_applications").update({ ba_user_id: existing.id }).eq("id", applicationId);
-    // Backfills a pre-existing BA account provisioned before team-scoping was
+    // Backfills a pre-existing BP account provisioned before team-scoping was
     // added — never overwrites a team it already has.
     if (!existing.team) {
       await admin.from("afc_users").update({ team: applicationTeam }).eq("id", existing.id);
@@ -125,7 +125,7 @@ async function provisionBaAccount(
     email_confirm: true,
   });
   if (authErr || !authUser?.user) {
-    console.error("Failed to create BA auth account:", authErr?.message);
+    console.error("Failed to create BP auth account:", authErr?.message);
     return null;
   }
 
@@ -139,7 +139,7 @@ async function provisionBaAccount(
     must_change_password: true,
   });
   if (profileErr) {
-    console.error("Failed to create BA profile row:", profileErr.message);
+    console.error("Failed to create BP profile row:", profileErr.message);
     await admin.auth.admin.deleteUser(authUser.user.id).catch(() => {});
     return null;
   }

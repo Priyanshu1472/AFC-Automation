@@ -1,10 +1,10 @@
 // supabase/functions/send-provisional-letter/index.ts
 // JWT must be ON. Only the application's assigned advising authority (the DGM
 // or AGM in empanelment_applications.dgm_id) can send this — it's a
-// non-final, provisional empanelment letter (PDF) emailed to the BA, distinct
+// non-final, provisional empanelment letter (PDF) emailed to the BP, distinct
 // from the MD's final acceptance email (see the "Empanelment Letter" attached
 // in advance-empanelment-stage's md_accept). Sendable at ANY stage once the
-// BA has filled the form — not gated behind MD's recommendation. PDF layout
+// BP has filled the form — not gated behind MD's recommendation. PDF layout
 // ported from the previous AFC empanelment app's send-provisional-mail
 // function, adapted to this schema (empanelment_applications/
 // ba_registrations instead of empanelment_invitations). Letterhead engine
@@ -59,7 +59,7 @@ function buildEmailBody(orgName: string, refNumber: string, validUntil: string):
     </div>`;
 }
 
-// Any stage once the BA has filled the form — the DGM doesn't have to wait
+// Any stage once the BP has filled the form — the DGM doesn't have to wait
 // for their own review turn, let alone MD's recommendation.
 const ALLOWED_STATUSES = new Set([
   "filled", "po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "accepted", "on_hold",
@@ -99,7 +99,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id) {
     return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can send its provisional letter." });
   }
-  if (!ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: `The BA hasn't submitted their form yet, so there's nothing to send a letter for.` });
+  if (!ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: `The BP hasn't submitted their form yet, so there's nothing to send a letter for.` });
   if (app.provisional_letter_sent) return jsonRes(req, 400, { error: "A provisional letter has already been sent for this application." });
 
   const pinErr = await verifyActionPin(adminClient, caller.id, caller.pin_hash, pin);
@@ -114,7 +114,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .select("org_name, contact_person, designation, reg_address")
       .eq("application_id", application_id)
       .maybeSingle();
-    if (!reg) return jsonRes(req, 400, { error: "The BA hasn't submitted their form yet." });
+    if (!reg) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet." });
 
     const orgName = reg.org_name || "the Organization";
 

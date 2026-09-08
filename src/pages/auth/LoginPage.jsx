@@ -58,7 +58,7 @@ function BusinessAssociateMenu() {
   return (
     <div className="login-ba-menu" ref={ref}>
       <button type="button" className="login-ba-trigger" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu">
-        Business Associate <ChevronDownIcon open={open} />
+        Business Partner <ChevronDownIcon open={open} />
       </button>
       {open && (
         <div className="login-ba-dropdown" role="menu">

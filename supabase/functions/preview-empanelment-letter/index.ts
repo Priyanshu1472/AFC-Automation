@@ -65,7 +65,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         .select("org_name, contact_person, designation, reg_address, sectors_served")
         .eq("application_id", application_id)
         .maybeSingle();
-      if (!baData) return jsonRes(req, 400, { error: "The BA hasn't submitted their form yet." });
+      if (!baData) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet." });
 
       const built = await buildEmpanelmentLetter(adminClient, baData, caller.id);
       if (!built) return jsonRes(req, 500, { error: "Could not generate the letter preview. Please try again." });
@@ -75,7 +75,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // type === "provisional" — mirrors send-provisional-letter's authorization exactly, minus the PIN check.
     if (!["dgm", "agm"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM or AGM can preview the provisional letter." });
     if (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id) return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can preview its provisional letter." });
-    if (!PROVISIONAL_ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: "The BA hasn't submitted their form yet, so there's nothing to preview." });
+    if (!PROVISIONAL_ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet, so there's nothing to preview." });
     if (app.provisional_letter_sent) return jsonRes(req, 400, { error: "A provisional letter has already been sent for this application." });
 
     const { data: reg } = await adminClient
@@ -83,7 +83,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .select("org_name, contact_person, designation, reg_address")
       .eq("application_id", application_id)
       .maybeSingle();
-    if (!reg) return jsonRes(req, 400, { error: "The BA hasn't submitted their form yet." });
+    if (!reg) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet." });
 
     const built = await buildProvisionalLetter(adminClient, app, reg, caller.id);
     if (!built) return jsonRes(req, 500, { error: "Could not generate the letter preview. Please try again." });

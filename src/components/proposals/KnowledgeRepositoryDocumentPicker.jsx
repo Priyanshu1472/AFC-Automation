@@ -2,7 +2,7 @@
 // one of that project's documents. Stays generic about what happens after
 // selection — the caller (AfcChecklistPanel) does the actual download +
 // re-upload into the proposal. Reads go straight to Supabase (projects/
-// project_documents both allow any non-BA staff role to SELECT).
+// project_documents both allow any non-BP staff role to SELECT).
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import Modal from "../../components/ui/Modal";

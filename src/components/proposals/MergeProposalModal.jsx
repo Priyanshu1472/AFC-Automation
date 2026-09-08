@@ -1,4 +1,4 @@
-// "Merge Proposal" — checks for missing BA/AFC documents, lets AFC pick
+// "Merge Proposal" — checks for missing BP/AFC documents, lets AFC pick
 // which attached documents go into the final package and in what order,
 // then flattens them into one editable .docx (see proposalMergeBuilder.js
 // for how — every page becomes an embedded image, matching how AFC's real
@@ -42,7 +42,7 @@ export default function MergeProposalModal({ proposalId, baItems, checklistItems
   const available = useMemo(() => {
     const list = [];
     baItems.filter((it) => it.file_path).forEach((it) => list.push({
-      key: `ba_${it.id}`, label: it.item_name, fileName: it.file_name, filePath: it.file_path, group: "Documents from BA",
+      key: `ba_${it.id}`, label: it.item_name, fileName: it.file_name, filePath: it.file_path, group: "Documents from BP",
     }));
     checklistItems.filter((it) => it.file_path).forEach((it) => list.push({
       key: `checklist_${it.id}`, label: it.item_name, fileName: it.file_name, filePath: it.file_path, group: "AFC Checklist",
@@ -147,7 +147,7 @@ export default function MergeProposalModal({ proposalId, baItems, checklistItems
         {step === "warn" && (
           <div>
             <p style={{ marginBottom: "var(--space-3)" }}>
-              {missingBa > 0 && <>{missingBa} document{missingBa > 1 ? "s" : ""} requested from the BA {missingBa > 1 ? "haven't" : "hasn't"} been attached yet. </>}
+              {missingBa > 0 && <>{missingBa} document{missingBa > 1 ? "s" : ""} requested from the BP {missingBa > 1 ? "haven't" : "hasn't"} been attached yet. </>}
               {missingChecklist > 0 && <>{missingChecklist} AFC checklist item{missingChecklist > 1 ? "s" : ""} {missingChecklist > 1 ? "have" : "has"} no file attached yet. </>}
             </p>
             <p className="text-secondary text-sm">You can still continue and merge with what's available — those items just won't be in the final document.</p>

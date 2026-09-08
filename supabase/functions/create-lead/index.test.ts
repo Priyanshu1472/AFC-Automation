@@ -99,7 +99,7 @@ Deno.test("handleRequest - ba source without assigned_ba_id is rejected", async 
   const res = await handleRequest(formReq(baseFields({ source: "ba" })), client as never);
   assertEquals(res.status, 400);
   const body = await res.json();
-  assertEquals(body.error, "Select a Business Associate for a BA Source lead.");
+  assertEquals(body.error, "Select a Business Partner for a BP Source lead.");
 });
 
 Deno.test("handleRequest - ba source with a valid assigned_ba_id succeeds", async () => {
@@ -114,7 +114,7 @@ Deno.test("handleRequest - suo_moto source without assigned_ba_id is rejected", 
   const res = await handleRequest(formReq(baseFields({ source: "suo_moto" })), client as never);
   assertEquals(res.status, 400);
   const body = await res.json();
-  assertEquals(body.error, "Select a Business Associate for a Suo Moto lead.");
+  assertEquals(body.error, "Select a Business Partner for a Suo Moto lead.");
 });
 
 Deno.test("handleRequest - suo_moto source with a valid assigned_ba_id succeeds and stores the Suo-Moto-only dates", async () => {
@@ -169,7 +169,7 @@ Deno.test("handleRequest - rejects a Person Responsible on a different team", as
   assertEquals(res.status, 400);
 });
 
-Deno.test("handleRequest - rejects a Business Associate as Person Responsible", async () => {
+Deno.test("handleRequest - rejects a Business Partner as Person Responsible", async () => {
   const client = buildClient({ prTarget: { data: { id: PR_ID, role: "business_associate", team: TEAM, committee: null, is_active: true }, error: null } });
   const res = await handleRequest(formReq(baseFields()), client as never);
   assertEquals(res.status, 400);
@@ -187,7 +187,7 @@ Deno.test("handleRequest - rejects a Reviewer on a different team", async () => 
   assertEquals(res.status, 400);
 });
 
-Deno.test("handleRequest - rejects a Business Associate as Reviewer", async () => {
+Deno.test("handleRequest - rejects a Business Partner as Reviewer", async () => {
   const client = buildClient({ reviewerTarget: { data: { id: REVIEWER_ID, role: "business_associate", team: TEAM, committee: null, is_active: true }, error: null } });
   const res = await handleRequest(formReq(baseFields()), client as never);
   assertEquals(res.status, 400);

@@ -280,7 +280,7 @@ Deno.test("md_reject - wrong PIN blocks the rejection even with a valid comment"
   assertEquals((await res.json()).error, "Incorrect PIN.");
 });
 
-Deno.test("md_reject - correct PIN rejects the application and emails the BA", async () => {
+Deno.test("md_reject - correct PIN rejects the application and emails the BP", async () => {
   const client = buildClient({
     caller: callerRow({ role: "md" }),
     app: appRow({ status: "md_review" }),
@@ -314,7 +314,7 @@ Deno.test("md_accept - wrong PIN blocks acceptance", async () => {
   assertEquals(res.status, 400);
 });
 
-Deno.test("md_accept - correct PIN accepts, reuses an existing BA login (no new account), and skips the letter when the logo can't be fetched", async () => {
+Deno.test("md_accept - correct PIN accepts, reuses an existing BP login (no new account), and skips the letter when the logo can't be fetched", async () => {
   const client = buildClient({
     caller: callerRow({ role: "md" }),
     app: appRow({ status: "md_review" }),
@@ -332,13 +332,13 @@ Deno.test("md_accept - correct PIN accepts, reuses an existing BA login (no new 
   });
 });
 
-Deno.test("md_accept - correct PIN accepts and provisions a brand-new BA portal login when none exists", async () => {
+Deno.test("md_accept - correct PIN accepts and provisions a brand-new BP portal login when none exists", async () => {
   const client = buildClient({
     caller: callerRow({ role: "md" }),
     app: appRow({ status: "md_review" }),
     routes: {
       afc_users: [
-        { data: null, error: null }, // no existing BA account
+        { data: null, error: null }, // no existing BP account
         { data: [{ id: "teammate-1" }], error: null },
       ],
     },

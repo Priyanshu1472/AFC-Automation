@@ -46,7 +46,7 @@ const EMP_ACTION_META = {
   md_accepted:                 { label: "MD Accepted",             variant: "success" },
   md_accepted_email_failed:    { label: "MD Accepted (email failed)", variant: "warning" },
   hold_raised:                 { label: "Compliance Hold Raised",  variant: "warning" },
-  ba_corrected:                { label: "BA Submitted Correction", variant: "info" },
+  ba_corrected:                { label: "BP Submitted Correction", variant: "info" },
   provisional_letter_sent:     { label: "Provisional Letter Sent", variant: "success" },
 };
 const EMP_ACTION_OPTIONS = [
@@ -56,7 +56,7 @@ const EMP_ACTION_OPTIONS = [
 const EMP_ROLE_OPTIONS = [
   { value: "all", label: "All Roles" },
   ...Object.entries(ROLE_LABELS).map(([k, v]) => ({ value: k, label: v })),
-  { value: "ba", label: "Business Associate" },
+  { value: "ba", label: "Business Partner" },
 ];
 
 const PAGE_SIZE = 20;
@@ -285,7 +285,7 @@ export default function AuditLogsPage() {
                             {new Date(log.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </td>
-                        <td className="al-actor">{log.actor?.full_name || (isEmp ? "Business Associate" : "—")}</td>
+                        <td className="al-actor">{log.actor?.full_name || (isEmp ? "Business Partner" : "—")}</td>
                         <td>
                           <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp ? log.actor_role : log.action_by_role] || (isEmp ? log.actor_role : log.action_by_role) || "—"}</Badge>
                         </td>
@@ -314,7 +314,7 @@ export default function AuditLogsPage() {
                     onClick={isEmp ? (log.application_id ? () => navigate(`/empanelment/${log.application_id}`) : undefined) : () => setSelectedLog(log)}
                   >
                     <div className="al-mobile-card-top">
-                      <span className="al-actor">{log.actor?.full_name || (isEmp ? "Business Associate" : "—")}</span>
+                      <span className="al-actor">{log.actor?.full_name || (isEmp ? "Business Partner" : "—")}</span>
                       <ActionBadge action={log.action} meta={actionMeta} />
                     </div>
                     <div className="al-mobile-card-meta">

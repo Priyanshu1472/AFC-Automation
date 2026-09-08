@@ -1,5 +1,5 @@
 // supabase/functions/submit-empanelment-correction/index.ts
-// JWT verification must be OFF for this function (public, BA-facing).
+// JWT verification must be OFF for this function (public, BP-facing).
 // Security: anon key check + rate limiting. Only fields with an OPEN
 // compliance_flags row for this application may be corrected — enforced
 // server-side, not just hidden in the UI. Resumes review at whichever stage

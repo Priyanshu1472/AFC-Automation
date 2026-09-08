@@ -63,7 +63,7 @@ Deno.test("send-empanelment-invite - rejects a caller with no team assigned", as
   assertEquals(res.status, 400);
 });
 
-Deno.test("send-empanelment-invite - rejects an invalid BA email", async () => {
+Deno.test("send-empanelment-invite - rejects an invalid BP email", async () => {
   const res = await handleRequest(req({ ba_email: "not-an-email", project_officer_id: PO_ID }), client({}) as never);
   assertEquals(res.status, 400);
 });
@@ -73,7 +73,7 @@ Deno.test("send-empanelment-invite - rejects a project officer not on the caller
   assertEquals(res.status, 400);
 });
 
-Deno.test("send-empanelment-invite - rejects a duplicate active invitation for the same BA email", async () => {
+Deno.test("send-empanelment-invite - rejects a duplicate active invitation for the same BP email", async () => {
   const res = await handleRequest(
     req({ ba_email: "ba@org.com", project_officer_id: PO_ID }),
     client({ existing: { id: "existing-app", status: "po_review", application_code: "54321" } }) as never,

@@ -24,7 +24,7 @@ function fmtJsonb(val) {
 
 const STATUS_MAP = {
   sent: { label: "Sent", variant: "info" },
-  filled: { label: "BA Filled", variant: "warning" },
+  filled: { label: "BP Filled", variant: "warning" },
   po_review: { label: "PO Review", variant: "warning" },
   cfo_cs_review: { label: "CFO/CS Review", variant: "info" },
   po_final_review: { label: "PO Final", variant: "warning" },
@@ -341,7 +341,7 @@ export default function EmpanelmentListPage() {
                 <table className="table bl-table">
                   <thead>
                     <tr>
-                      <th>App Code</th><th>BA Email</th><th>Organisation</th>
+                      <th>App Code</th><th>BP Email</th><th>Organisation</th>
                       <th>Contact</th><th>Team</th><th>Sent On</th><th>Status</th><th>Actions</th>
                     </tr>
                   </thead>

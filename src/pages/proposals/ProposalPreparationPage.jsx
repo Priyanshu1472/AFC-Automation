@@ -1,4 +1,4 @@
-// Proposal Preparation for an MD-approved lead — fee notes, BA document
+// Proposal Preparation for an MD-approved lead — fee notes, BP document
 // requests, an internal AFC checklist, the three proposal document slots,
 // and the lock + client-outcome step. Reached from "Open Proposal" once a
 // lead's status is 'md_approved'. Attaches directly to the existing `leads`
@@ -119,7 +119,7 @@ export default function ProposalPreparationPage() {
     [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(profile.id)
   );
   const isMd = profile && ["md", "admin"].includes(profile.role);
-  // The BA-requests and AFC checklist lists are day-to-day working
+  // The BP-requests and AFC checklist lists are day-to-day working
   // documents for the lead's own team (Person Responsible, Reviewer,
   // Approval Authority) — MD/Admin can see them but never add/edit/delete,
   // unlike the rest of this page where MD/Admin get the usual override.
@@ -163,7 +163,7 @@ export default function ProposalPreparationPage() {
 
           {!proposal.locked && pastDeadline && (
             <Alert variant="warning">
-              The submission deadline ({fmtDate(lead.submission_deadline)}) has passed, so this proposal is now read-only — that's why Fee Notes, BA Documents, the AFC Checklist, and Proposal Documents show no add/edit options for anyone. Lock it in "Lock &amp; Client Response" below to record the client's outcome.
+              The submission deadline ({fmtDate(lead.submission_deadline)}) has passed, so this proposal is now read-only — that's why Fee Notes, BP Documents, the AFC Checklist, and Proposal Documents show no add/edit options for anyone. Lock it in "Lock &amp; Client Response" below to record the client's outcome.
             </Alert>
           )}
 
@@ -189,7 +189,7 @@ export default function ProposalPreparationPage() {
                 <div className="pp-summary-item"><span>Person Responsible</span><strong>{lead.pr?.full_name || "—"}</strong></div>
                 <div className="pp-summary-item"><span>Reviewer</span><strong>{lead.rev?.full_name || "—"}</strong></div>
                 <div className="pp-summary-item"><span>Approval Authority</span><strong>{lead.aa?.full_name || "—"}</strong></div>
-                <div className="pp-summary-item"><span>Business Associate</span><strong>{lead.ba?.full_name || "—"}</strong></div>
+                <div className="pp-summary-item"><span>Business Partner</span><strong>{lead.ba?.full_name || "—"}</strong></div>
               </div>
             </Collapsible>
           </Card>

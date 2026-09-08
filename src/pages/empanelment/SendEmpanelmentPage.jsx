@@ -78,7 +78,7 @@ function SenderInfoRow({ profile, team, advisorName }) {
 
 function EmailPreview({ to, advisedByName, advisedByDesig, acName }) {
   return (
-    <div className="sef-email-chrome" role="img" aria-label="Preview of the email the BA will receive">
+    <div className="sef-email-chrome" role="img" aria-label="Preview of the email the BP will receive">
       <div className="sef-email-chrome-bar" aria-hidden="true">
         <div className="sef-email-chrome-dots"><span /><span /><span /></div>
         <span className="sef-email-chrome-title">Email Preview</span>
@@ -86,7 +86,7 @@ function EmailPreview({ to, advisedByName, advisedByDesig, acName }) {
       <div className="sef-email-head">
         <div className="sef-email-avatar" aria-hidden="true">{(to[0] || "B").toUpperCase()}</div>
         <div className="sef-email-head-info">
-          <div className="sef-email-subject">Business Associate Empanelment Form — AFC India Limited</div>
+          <div className="sef-email-subject">Business Partner Empanelment Form — AFC India Limited</div>
           <div className="sef-email-meta-row">
             <span className="sef-email-from">noreply@pmis.afcindia.org.in</span>
             <span className="sef-email-arrow" aria-hidden="true">→</span>
@@ -98,7 +98,7 @@ function EmailPreview({ to, advisedByName, advisedByDesig, acName }) {
         <p className="sef-email-salutation">Dear Sir / Ma'am,</p>
         <p className="sef-email-para">Greetings from AFC India Limited!</p>
         <p className="sef-email-para">
-          As advised by <strong>{advisedByName}</strong> ({advisedByDesig}), please find enclosed the link for the Business Associate (BA)
+          As advised by <strong>{advisedByName}</strong> ({advisedByDesig}), please find enclosed the link for the Business Partner (BP)
           empanelment form for your kind perusal.
         </p>
         <p className="sef-email-para">Kindly fill in the form at your earliest convenience to initiate the empanelment process with AFC India Limited.</p>
@@ -195,7 +195,7 @@ export default function SendEmpanelmentPage() {
   function handleGoToPreview() {
     const errors = {};
     if (!form.projectOfficer) errors.projectOfficer = `Please select a ${reviewerLabel}.`;
-    if (!form.baEmail.trim()) errors.baEmail = "BA email is required.";
+    if (!form.baEmail.trim()) errors.baEmail = "BP email is required.";
     else if (!isValidEmail(form.baEmail)) errors.baEmail = "Enter a valid email address.";
 
     if (Object.keys(errors).length > 0) {
@@ -261,7 +261,7 @@ export default function SendEmpanelmentPage() {
           {step === 0 && (
             <div className="sef-layout">
               <Card className="sef-main-card">
-                <Card.Header title="Send Empanelment Form" subtitle={`Select a ${reviewerLabel} and enter the BA's email address.`} action={<Badge variant="brand">Step 1 of 2</Badge>} />
+                <Card.Header title="Send Empanelment Form" subtitle={`Select a ${reviewerLabel} and enter the BP's email address.`} action={<Badge variant="brand">Step 1 of 2</Badge>} />
                 <Card.Body className="sef-card-body">
                   <SenderInfoRow profile={profile} team={team} advisorName={advisedByName} />
                   <div className="sef-divider" />
@@ -293,7 +293,7 @@ export default function SendEmpanelmentPage() {
                   </div>
 
                   <div className="sef-field">
-                    <label className="sef-label" htmlFor="sef-ba-email">Business Associate Email <span className="sef-required">*</span></label>
+                    <label className="sef-label" htmlFor="sef-ba-email">Business Partner Email <span className="sef-required">*</span></label>
                     <input
                       id="sef-ba-email"
                       className={`input${fieldErrors.baEmail ? " input-error" : ""}`}
@@ -337,7 +337,7 @@ export default function SendEmpanelmentPage() {
                 </Card.Body>
               </Card>
               <div className="sef-email-wrap">
-                <p className="sef-email-wrap-label">Email preview — what the BA will receive</p>
+                <p className="sef-email-wrap-label">Email preview — what the BP will receive</p>
                 <EmailPreview to={form.baEmail} advisedByName={advisedByName} advisedByDesig={advisedByDesig} acName={profile?.full_name} />
               </div>
             </div>

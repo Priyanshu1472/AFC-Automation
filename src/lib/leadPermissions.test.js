@@ -206,7 +206,7 @@ describe("isTeamLead", () => {
     }
   });
 
-  it("does not match a Business Associate against an unrelated team", () => {
+  it("does not match a Business Partner against an unrelated team", () => {
     const profile = { id: "ba-1", role: "business_associate", teams: [] };
     expect(isTeamLead(profile, { team: "BPDD" })).toBe(false);
   });

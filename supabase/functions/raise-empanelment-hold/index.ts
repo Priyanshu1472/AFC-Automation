@@ -1,7 +1,7 @@
 // supabase/functions/raise-empanelment-hold/index.ts
 // JWT must be ON. Caller must be the assigned PO/DGM, or MD, acting at the
 // stage where they're the active reviewer. Puts the application on hold,
-// records one compliance_flags row per flagged field, and emails the BA a
+// records one compliance_flags row per flagged field, and emails the BP a
 // link + reminder of their application code to submit a correction.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -116,11 +116,11 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     });
 
     // Let the rest of the pipeline know review is paused — informational,
-    // not action_required (the next step is the BA's, via their own
+    // not action_required (the next step is the BP's, via their own
     // public correction form, not anything in-app for staff).
     const holdPayload = {
       title: "Compliance hold raised",
-      sub_text: `${flagRows.length} item(s) flagged on ${orgName}'s application. Review is paused until the BA submits a correction.`,
+      sub_text: `${flagRows.length} item(s) flagged on ${orgName}'s application. Review is paused until the BP submits a correction.`,
       type: "info",
       link: `/empanelment/${application_id}`,
     };

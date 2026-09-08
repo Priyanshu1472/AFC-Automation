@@ -75,7 +75,7 @@ Deno.test("send-provisional-letter - the assigned AGM can send it", async () => 
   }
 });
 
-Deno.test("send-provisional-letter - rejects before the BA has submitted the form", async () => {
+Deno.test("send-provisional-letter - rejects before the BP has submitted the form", async () => {
   const res = await handleRequest(req({ application_id: APP_ID }), client({ app: appRow({ status: "sent" }) }) as never);
   assertEquals(res.status, 400);
 });

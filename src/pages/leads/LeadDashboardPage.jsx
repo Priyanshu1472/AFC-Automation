@@ -372,7 +372,7 @@ export default function LeadDashboardPage() {
   );
 
   const sourceBreakdown = useMemo(() => {
-    const labels = { in_house: "In House", ba: "BA Source", suo_moto: "Suo Moto" };
+    const labels = { in_house: "In House", ba: "BP Source", suo_moto: "Suo Moto" };
     return Object.entries(labels).map(([key, label]) => ({ key, label, count: filtered.filter((l) => l.source === key).length }));
   }, [filtered]);
 

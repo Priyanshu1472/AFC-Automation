@@ -2,9 +2,9 @@ import { useState } from "react";
 import { ROLE_LABELS } from "../../lib/roles";
 import "../../styles/ApplicationReviewPage.css";
 
-// actor_role can be "ba" for BA-originated activity log entries (e.g. a
+// actor_role can be "ba" for BP-originated activity log entries (e.g. a
 // correction submission), which isn't a real staff role in ROLE_LABELS.
-const ROLE_DISPLAY = { ...ROLE_LABELS, ba: "Business Associate" };
+const ROLE_DISPLAY = { ...ROLE_LABELS, ba: "Business Partner" };
 
 export const STATUS_FLOW = [
   { key: "sent", label: "Sent" },
@@ -32,7 +32,7 @@ export function stepLabel(stepKey, label, reviewerRole, advisorRole) {
 
 // Spelled-out labels for the public (no-login) status-check page — the
 // abbreviations above are fine for AFC staff, who already know the review
-// hierarchy, but confusing for a BA looking the process up cold.
+// hierarchy, but confusing for a BP looking the process up cold.
 const STATUS_FLOW_FULL_LABELS = {
   sent: "Sent",
   po_review: "Project Officer",
@@ -105,7 +105,7 @@ export function TimelineAccordion({ logs, showActorName = true }) {
               <div className="ar-acc-dot" />
               <div className="ar-acc-meta">
                 <span className="ar-acc-name">
-                  {showActorName ? (log.actor?.full_name || "Business Associate") : roleLabel}
+                  {showActorName ? (log.actor?.full_name || "Business Partner") : roleLabel}
                   {showActorName && <span className="ar-acc-role"> ({roleLabel})</span>}
                 </span>
                 <span className="ar-acc-action">{log.action.replace(/_/g, " ").toUpperCase()}</span>
