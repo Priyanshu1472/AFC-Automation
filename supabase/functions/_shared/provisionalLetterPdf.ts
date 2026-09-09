@@ -144,7 +144,10 @@ export async function buildProvisionalLetter(
   admin: AdminClient,
   app: { application_code: string | null },
   reg: { org_name: string | null; contact_person: string | null; designation: string | null; reg_address: string | null },
-  signatoryId: string
+  signatoryId: string,
+  // When re-rendering an already-sent letter for viewing, pass the send date
+  // so the reproduced PDF is dated correctly rather than "today".
+  opts: { dateOverride?: string | null } = {}
 ): Promise<BuiltProvisionalLetter | null> {
   const { data: signatoryRow } = await admin.from("afc_users").select("full_name, role, signature_path").eq("id", signatoryId).maybeSingle();
   const signatureBytes = await fetchSignatureBytes(admin, signatoryRow?.signature_path);
@@ -172,7 +175,7 @@ export async function buildProvisionalLetter(
   const pdfBytes = await generateProvisionalPDF({
     logoBytes,
     refNumber,
-    date: formatDateDDMMYYYY(today),
+    date: opts.dateOverride || formatDateDDMMYYYY(today),
     contactPerson,
     designation: reg.designation || "Authorized Signatory",
     orgName,

@@ -383,6 +383,13 @@
 [data-theme="dark"] .ar-comment-purple .ar-comment-label { color: #a78bfa; }
 [data-theme="dark"] .ar-comment-pink   .ar-comment-label { color: #f9a8d4; }
 
+/* ── Context comments shown above every acting role's buttons ── */
+.ar-context-comments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 /* ── PO Final review notice ──────────────────────────────── */
 .ar-po-final-notice {
   display: flex;

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../lib/supabase";
+import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { useToast } from "../../hooks/useToast";
 import { can } from "../../lib/roles";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
@@ -9,6 +10,7 @@ import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Select from "../../components/ui/Select";
+import Tooltip from "../../components/ui/Tooltip";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import "../../styles/EmpanelmentListPage.css";
@@ -26,7 +28,7 @@ const STATUS_MAP = {
   sent: { label: "Sent", variant: "info" },
   filled: { label: "BP Filled", variant: "warning" },
   po_review: { label: "PO Review", variant: "warning" },
-  cfo_cs_review: { label: "CFO/CS Review", variant: "info" },
+  cfo_cs_review: { label: "CFO / CS", variant: "info" },
   po_final_review: { label: "PO Final", variant: "warning" },
   dgm_review: { label: "DGM Review", variant: "neutral" },
   md_review: { label: "MD Review", variant: "neutral" },
@@ -39,6 +41,25 @@ const STATUS_OPTIONS = [
   { value: "all", label: "All Statuses" },
   ...Object.entries(STATUS_MAP).map(([value, cfg]) => ({ value, label: cfg.label })),
 ];
+
+const DATE_FILTER_OPTIONS = [
+  { value: "all", label: "All Time" },
+  { value: "week", label: "Last Week" },
+  { value: "month", label: "Last Month" },
+  { value: "3months", label: "Last 3 Months" },
+  { value: "year", label: "Last Year" },
+];
+
+// Cutoff for the "Sent On" date filter — applied against created_at.
+function dateFilterCutoff(key) {
+  if (key === "all") return null;
+  const d = new Date();
+  if (key === "week") d.setDate(d.getDate() - 7);
+  else if (key === "month") d.setMonth(d.getMonth() - 1);
+  else if (key === "3months") d.setMonth(d.getMonth() - 3);
+  else if (key === "year") d.setFullYear(d.getFullYear() - 1);
+  return d;
+}
 
 const PAGE_SIZE = 10;
 
@@ -55,6 +76,67 @@ function StatusBadge({ status, reviewerRole, advisorRole }) {
     label = label.replace("DGM", "AGM");
   }
   return <Badge variant={config.variant} dot className="bl-status-badge">{label}</Badge>;
+}
+
+function EyeIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>;
+}
+function FileTextIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>;
+}
+function AwardIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg>;
+}
+
+// The letter state shown beside the view button. Once the final
+// (MD-signed) Empanelment Letter is issued, it replaces the provisional
+// one — never both at once. Each icon opens the actual letter PDF in a
+// new tab (regenerated on demand via preview-empanelment-letter).
+function LetterIcons({ app }) {
+  const { showToast } = useToast();
+  const [busy, setBusy] = useState(null);
+  const hasEmpanelment = !!app.empanelment_ref || app.status === "accepted";
+  const hasProvisional = !!app.provisional_letter_sent && !hasEmpanelment;
+  if (!hasEmpanelment && !hasProvisional) return null;
+  const empTooltip = app.empanelment_ref
+    ? `Open empanelment letter · Ref ${app.empanelment_ref}${app.empanelment_expires_at ? ` · valid until ${fmtDate(app.empanelment_expires_at)}` : ""}`
+    : "Open empanelment letter";
+
+  async function openLetter(e, type) {
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(type);
+    try {
+      const { data, error } = await supabase.functions.invoke("preview-empanelment-letter", {
+        body: { application_id: app.id, type },
+      });
+      if (error) { showToast(await extractFunctionErrorMessage(error, "Could not open the letter."), "danger"); return; }
+      if (!data?.success || !data?.pdf_base64) { showToast(data?.error || "Could not open the letter.", "danger"); return; }
+      const bytes = Uint8Array.from(atob(data.pdf_base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      showToast(err.message || "Could not open the letter.", "danger");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="bl-letter-icons">
+      {hasProvisional && (
+        <Tooltip text={busy === "provisional" ? "Opening…" : `Open provisional letter${app.provisional_sent_at ? ` · sent ${fmtDate(app.provisional_sent_at)}` : ""}`}>
+          <button type="button" className="bl-letter-icon bl-letter-provisional" onClick={(e) => openLetter(e, "provisional")} disabled={!!busy} aria-label="Open provisional letter"><FileTextIcon /></button>
+        </Tooltip>
+      )}
+      {hasEmpanelment && (
+        <Tooltip text={busy === "final" ? "Opening…" : empTooltip}>
+          <button type="button" className="bl-letter-icon bl-letter-empanelment" onClick={(e) => openLetter(e, "final")} disabled={!!busy} aria-label="Open empanelment letter"><AwardIcon /></button>
+        </Tooltip>
+      )}
+    </div>
+  );
 }
 
 function SearchIcon() {
@@ -81,7 +163,7 @@ function DetailField({ label, value }) {
   );
 }
 
-function BADetailModal({ ba, invStatus, invReviewerRole, invAdvisorRole, canReview, onReview, onClose }) {
+function BADetailModal({ ba, appRow, invStatus, invReviewerRole, invAdvisorRole, canReview, onReview, onClose }) {
   if (!ba) return null;
   return (
     <div className="bl-modal-backdrop" onClick={onClose}>
@@ -93,7 +175,12 @@ function BADetailModal({ ba, invStatus, invReviewerRole, invAdvisorRole, canRevi
           </div>
           <div className="bl-modal-header-right">
             <StatusBadge status={invStatus} reviewerRole={invReviewerRole} advisorRole={invAdvisorRole} />
-            {canReview && <Button variant="primary" size="sm" onClick={onReview}>Review</Button>}
+            {appRow && <LetterIcons app={appRow} />}
+            {canReview && (
+              <Tooltip text="View application">
+                <button type="button" className="bl-icon-btn" aria-label="View application" onClick={onReview}><EyeIcon /></button>
+              </Tooltip>
+            )}
             <button className="bl-modal-close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
           </div>
         </div>
@@ -187,11 +274,13 @@ export default function EmpanelmentListPage() {
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
   const [selectedBA, setSelectedBA] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [selectedAppId, setSelectedAppId] = useState(null);
   const [selectedReviewerRole, setSelectedReviewerRole] = useState(null);
   const [selectedAdvisorRole, setSelectedAdvisorRole] = useState(null);
+  const [selectedAppRow, setSelectedAppRow] = useState(null);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [teamFilter, setTeamFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -262,8 +351,10 @@ export default function EmpanelmentListPage() {
     setTeamFilter(value);
   }
 
+  const dateCutoff = dateFilterCutoff(dateFilter);
   const filtered = teamScoped.filter((a) => {
     const q = search.toLowerCase();
+    if (dateCutoff && (!a.created_at || new Date(a.created_at) < dateCutoff)) return false;
     const sectorsServed = Array.isArray(a.ba_reg?.sectors_served) ? a.ba_reg.sectors_served.join(" ") : (a.ba_reg?.sectors_served || "");
     const assignments = a.ba_reg?.assignments ? (typeof a.ba_reg.assignments === "string" ? a.ba_reg.assignments : JSON.stringify(a.ba_reg.assignments)) : "";
     const matchSearch =
@@ -284,7 +375,7 @@ export default function EmpanelmentListPage() {
   const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   // Any change to what's being filtered snaps back to the first page.
-  useEffect(() => { setPage(1); }, [search, quickFilter, statusFilter, effectiveTeamFilter]);
+  useEffect(() => { setPage(1); }, [search, quickFilter, statusFilter, dateFilter, effectiveTeamFilter]);
 
   const canSend = ["associate_consultant", "project_assistant"].includes(profile?.role);
   // Admin included so it can open the full read-only review page (timeline,
@@ -328,7 +419,7 @@ export default function EmpanelmentListPage() {
                     <Select options={teamOptions} value={teamFilter} onChange={selectTeamFilter} placeholder="All Teams" />
                   </div>
                 )}
-                <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={statusFilter !== "all" ? 1 : 0} />
+                <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={(statusFilter !== "all" ? 1 : 0) + (dateFilter !== "all" ? 1 : 0)} />
               </div>
             </Card.Body>
           </Card>
@@ -341,8 +432,8 @@ export default function EmpanelmentListPage() {
                 <table className="table bl-table">
                   <thead>
                     <tr>
-                      <th>App Code</th><th>BP Email</th><th>Organisation</th>
-                      <th>Contact</th><th>Team</th><th>Sent On</th><th>Status</th><th>Actions</th>
+                      <th className="bl-col-code">App Code</th><th>BP Email</th><th>Organisation</th>
+                      <th className="bl-col-contact">Contact</th>{canFilterTeam && <th className="bl-col-team">Team</th>}<th className="bl-col-date">Sent On</th><th className="bl-col-status">Status</th><th className="bl-col-actions">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -350,20 +441,23 @@ export default function EmpanelmentListPage() {
                       <tr
                         key={a.id}
                         className={a.ba_reg ? "bl-row-clickable" : undefined}
-                        onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedStatus(a.status); setSelectedAppId(a.id); setSelectedReviewerRole(a.po?.role || null); setSelectedAdvisorRole(a.dgm?.role || null); } : undefined}
+                        onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedStatus(a.status); setSelectedAppId(a.id); setSelectedAppRow(a); setSelectedReviewerRole(a.po?.role || null); setSelectedAdvisorRole(a.dgm?.role || null); } : undefined}
                       >
-                        <td><span className="bl-app-code">{a.application_code || "—"}</span></td>
+                        <td className="bl-col-code"><span className="bl-app-code">{a.application_code || "—"}</span></td>
                         <td className="bl-email" title={a.ba_email || ""}>{fmt(a.ba_email)}</td>
                         <td>{a.ba_reg?.org_name ? <span className="bl-org" title={a.ba_reg.org_name}>{fmt(a.ba_reg.org_name)}</span> : <span className="bl-not-filled">Not filled yet</span>}</td>
-                        <td className="bl-contact" title={a.ba_reg?.contact_person || ""}>{fmt(a.ba_reg?.contact_person)}</td>
-                        <td>{a.team ? <Badge variant="neutral">{a.team}</Badge> : "—"}</td>
-                        <td className="bl-date">{fmtDate(a.created_at)}</td>
-                        <td><StatusBadge status={a.status} reviewerRole={a.po?.role} advisorRole={a.dgm?.role} /></td>
-                        <td onClick={(e) => e.stopPropagation()}>
+                        <td className="bl-contact bl-col-contact" title={a.ba_reg?.contact_person || ""}>{fmt(a.ba_reg?.contact_person)}</td>
+                        {canFilterTeam && <td className="bl-col-team">{a.team ? <Badge variant="neutral" className="bl-team-badge">{a.team}</Badge> : "—"}</td>}
+                        <td className="bl-date bl-col-date">{fmtDate(a.created_at)}</td>
+                        <td className="bl-col-status"><StatusBadge status={a.status} reviewerRole={a.po?.role} advisorRole={a.dgm?.role} /></td>
+                        <td className="bl-col-actions" onClick={(e) => e.stopPropagation()}>
                           <div className="bl-actions">
                             {a.ba_reg && canReview && (
-                              <Button variant="primary" size="sm" onClick={() => navigate(`/empanelment/${a.id}`)}>Review</Button>
+                              <Tooltip text="View application">
+                                <button type="button" className="bl-icon-btn" aria-label="View application" onClick={() => navigate(`/empanelment/${a.id}`)}><EyeIcon /></button>
+                              </Tooltip>
                             )}
+                            <LetterIcons app={a} />
                           </div>
                         </td>
                       </tr>
@@ -395,17 +489,21 @@ export default function EmpanelmentListPage() {
 
       <BADetailModal
         ba={selectedBA}
+        appRow={selectedAppRow}
         invStatus={selectedStatus}
         invReviewerRole={selectedReviewerRole}
         invAdvisorRole={selectedAdvisorRole}
         canReview={canReview}
         onReview={() => navigate(`/empanelment/${selectedAppId}`)}
-        onClose={() => { setSelectedBA(null); setSelectedStatus(null); setSelectedAppId(null); setSelectedReviewerRole(null); setSelectedAdvisorRole(null); }}
+        onClose={() => { setSelectedBA(null); setSelectedStatus(null); setSelectedAppId(null); setSelectedAppRow(null); setSelectedReviewerRole(null); setSelectedAdvisorRole(null); }}
       />
 
-      <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={() => setStatusFilter("all")}>
+      <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={() => { setStatusFilter("all"); setDateFilter("all"); }}>
         <FilterField label="Status">
           <Select options={STATUS_OPTIONS} value={statusFilter} onChange={selectStatusFilter} placeholder="All Statuses" />
+        </FilterField>
+        <FilterField label="Sent On">
+          <Select options={DATE_FILTER_OPTIONS} value={dateFilter} onChange={setDateFilter} placeholder="All Time" />
         </FilterField>
       </FilterDrawer>
     </div>

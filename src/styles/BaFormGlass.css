@@ -121,6 +121,17 @@
 .bf-page > *,
 .bf-success-page > * { position: relative; z-index: 1; }
 
+/* The application-code modal renders as a direct child of .bf-page, so the
+   rule above would otherwise pin its backdrop to `position: relative` and
+   drop it into the form flow (it scrolled in above the form instead of
+   overlaying it). Keep it a real viewport-fixed overlay. */
+.bf-page > .bf-modal-backdrop,
+.bf-success-page > .bf-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+}
+
 /* ── Nav → glass bar ─────────────────────────────────────── */
 .bf-page .bf-nav {
   height: 66px;

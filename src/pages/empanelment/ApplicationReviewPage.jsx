@@ -55,6 +55,44 @@ function CommentCard({ label, text, colorClass }) {
   return <div className={`ar-comment ar-comment-${colorClass}`}><span className="ar-comment-label">{label}</span><p className="ar-comment-text">{text}</p></div>;
 }
 
+// The comment(s) from the step that just handed the application to whoever is
+// acting now — shown above their action buttons, the same way the PO already
+// saw CFO/CS notes. Only the immediately-preceding step, newest-first like the
+// timeline: if the MD sent it back to the DGM, the DGM sees the MD's remark
+// (and nothing older); on the normal path they see the prior reviewer's note.
+function getContextComments(app, logs) {
+  const out = [];
+  const advLabel = app.dgm?.role === "agm" ? "AGM" : "DGM";
+  const poLabel = app.po?.role === "project_assistant" ? "Project Assistant" : "Project Officer";
+  // Newest activity entry that carries a comment — tells us whether the app
+  // arrived here via a send-back or moved forward normally.
+  const lastAction = logs.find((l) => l.comment && l.actor_role !== "ba");
+
+  if (app.status === "cfo_cs_review") {
+    if (lastAction?.action === "po_resent_cfo_cs") {
+      out.push({ label: `Sent Back by ${poLabel}`, text: lastAction.comment, colorClass: "orange" });
+    } else if (app.po_comment) {
+      out.push({ label: `${poLabel}'s Review`, text: app.po_comment, colorClass: "cyan" });
+    }
+  } else if (app.status === "po_final_review") {
+    if (lastAction?.action === "dgm_sent_back") {
+      out.push({ label: `Sent Back by ${advLabel}`, text: lastAction.comment, colorClass: "orange" });
+    } else {
+      if (app.cfo_comment) out.push({ label: "CFO Comment", text: app.cfo_comment, colorClass: "cyan" });
+      if (app.cs_comment) out.push({ label: "CS Comment", text: app.cs_comment, colorClass: "green" });
+    }
+  } else if (app.status === "dgm_review") {
+    if (lastAction?.action === "md_sent_back") {
+      out.push({ label: "Sent Back by Managing Director", text: lastAction.comment, colorClass: "orange" });
+    } else if (app.po_final_comment) {
+      out.push({ label: `${poLabel}'s Final Comment`, text: app.po_final_comment, colorClass: "cyan" });
+    }
+  } else if (app.status === "md_review") {
+    if (app.dgm_comment) out.push({ label: `${advLabel} Recommendation`, text: app.dgm_comment, colorClass: "purple" });
+  }
+  return out;
+}
+
 // MD-only now (DGM can no longer reject — see the removed dgm_reject
 // button/handler below). No preview step: the PIN modal that follows this
 // one is the actual safety gate, so this is just remarks capture.
@@ -208,7 +246,7 @@ export default function ApplicationReviewPage() {
   }
   async function handlePOFinalForward() {
     const data = await runAction("po_final_forward");
-    if (data) { showBanner("Forwarded to DGM."); setComment(""); fetchApp(); }
+    if (data) { showBanner(`Forwarded to ${app?.dgm?.role === "agm" ? "AGM" : "DGM"}.`); setComment(""); fetchApp(); }
   }
   async function handlePOResendCfoCs() {
     const data = await runAction("po_resend_cfo_cs");
@@ -232,12 +270,12 @@ export default function ApplicationReviewPage() {
   async function handleDGMSendBack() {
     if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
     const data = await runAction("dgm_send_back");
-    if (data) { showBanner("Sent back to Project Officer."); setComment(""); fetchApp(); }
+    if (data) { showBanner(`Sent back to ${app?.po?.role === "project_assistant" ? "Project Assistant" : "Project Officer"}.`); setComment(""); fetchApp(); }
   }
   async function handleMDSendBack() {
     if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
     const data = await runAction("md_send_back");
-    if (data) { showBanner("Sent back to DGM."); setComment(""); fetchApp(); }
+    if (data) { showBanner(`Sent back to ${app?.dgm?.role === "agm" ? "AGM" : "DGM"}.`); setComment(""); fetchApp(); }
   }
   function handleAcceptPinSuccess() {
     setShowAcceptPin(false);
@@ -285,6 +323,7 @@ export default function ApplicationReviewPage() {
   const advisorRole = app.dgm?.role;
   const advisorLabel = advisorRole === "agm" ? "AGM" : "DGM";
   const isAssignedAdvisor = ["dgm", "agm"].includes(role) && app.dgm_id === profile.id;
+  const contextComments = getContextComments(app, auditLogs);
 
   return (
     <div className="app-shell">
@@ -404,21 +443,20 @@ export default function ApplicationReviewPage() {
                 <Card className="ar-action-card">
                   <Card.Header title="Your Action" action={<Badge variant="brand">{ROLE_LABELS[role]}</Badge>} />
                   <Card.Body className="ar-action-body">
+                    {contextComments.length > 0 && (
+                      <div className="ar-context-comments">
+                        {contextComments.map((c, i) => <CommentCard key={i} label={c.label} text={c.text} colorClass={c.colorClass} />)}
+                      </div>
+                    )}
+
                     {["project_officer", "project_assistant"].includes(role) && (<>
-                      {app.status === "po_final_review" && (
-                        <div className="ar-po-final-notice">
-                          <p className="ar-po-final-title">CFO / CS have reviewed this application</p>
-                          {app.cfo_comment && <CommentCard label="CFO Comment" text={app.cfo_comment} colorClass="cyan" />}
-                          {app.cs_comment && <CommentCard label="CS Comment" text={app.cs_comment} colorClass="green" />}
-                        </div>
-                      )}
                       <div className="ar-field">
                         <label className="ar-label">{app.status === "po_final_review" ? "Your Final Comment (optional)" : "Technical Review Comment"}{app.status !== "po_final_review" && <span className="ar-required"> *</span>}</label>
-                        <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={app.status === "po_final_review" ? "Add any additional comments before forwarding to DGM..." : "Review the BP's technical details and write your comments..."} rows={4} />
+                        <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={app.status === "po_final_review" ? `Add any additional comments before forwarding to ${advisorLabel}...` : "Review the BP's technical details and write your comments..."} rows={4} />
                       </div>
                       {app.status === "po_final_review"
                         ? (<>
-                            <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handlePOFinalForward}>{actionLoading ? "Forwarding..." : "Forward to DGM"}</Button>
+                            <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handlePOFinalForward}>{actionLoading ? "Forwarding..." : `Forward to ${advisorLabel}`}</Button>
                             <Button variant="secondary" block disabled={actionLoading} onClick={handlePOResendCfoCs}>Send Back to CFO &amp; CS for Review</Button>
                           </>)
                         : <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handlePOForward}>{actionLoading ? "Forwarding..." : "Forward to CFO and CS"}</Button>}

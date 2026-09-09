@@ -135,7 +135,11 @@ export type BuiltEmpanelmentLetter = {
 export async function buildEmpanelmentLetter(
   admin: AdminClient,
   baData: { org_name: string | null; contact_person: string | null; designation: string | null; reg_address: string | null; sectors_served: unknown } | null,
-  mdId: string
+  mdId: string,
+  // When re-rendering an already-issued letter for viewing, pass the values
+  // persisted at issue time so the reproduced PDF matches what was emailed
+  // instead of drifting (the ref is a live COUNT; the dates are "today").
+  opts: { refOverride?: string | null; dateOverride?: string | null; validUntilOverride?: string | null } = {}
 ): Promise<BuiltEmpanelmentLetter | null> {
   if (!baData) return null;
 
@@ -149,11 +153,14 @@ export async function buildEmpanelmentLetter(
 
   const today = new Date();
   const validUntilDate = addMonths(today, 36); // 3 years
-  const validUntil = formatDateLong(validUntilDate);
+  const validUntil = opts.validUntilOverride || formatDateLong(validUntilDate);
   const year = today.getFullYear();
 
-  const { count } = await admin.from("empanelment_applications").select("id", { count: "exact", head: true }).not("empanelment_ref", "is", null);
-  const refNumber = `AFC/BA/${year}/${String((count ?? 0) + 1).padStart(3, "0")}`;
+  let refNumber = opts.refOverride || "";
+  if (!refNumber) {
+    const { count } = await admin.from("empanelment_applications").select("id", { count: "exact", head: true }).not("empanelment_ref", "is", null);
+    refNumber = `AFC/BA/${year}/${String((count ?? 0) + 1).padStart(3, "0")}`;
+  }
 
   const sectorsArr = Array.isArray(baData.sectors_served) ? baData.sectors_served as string[] : [];
   const sectors = sectorsArr.length ? sectorsArr.join(", ") + " and other areas of common interest" : "areas of common interest as may be mutually agreed";
@@ -161,7 +168,7 @@ export async function buildEmpanelmentLetter(
   const pdfBytes = await generateEmpanelmentPDF({
     logoBytes,
     refNumber,
-    date: formatDateDDMMYYYY(today),
+    date: opts.dateOverride || formatDateDDMMYYYY(today),
     contactPerson: baData.contact_person ? `Mr./Ms. ${baData.contact_person}` : "Sir / Ma'am",
     designation: baData.designation || "Authorized Signatory",
     orgName: baData.org_name || "the Organization",

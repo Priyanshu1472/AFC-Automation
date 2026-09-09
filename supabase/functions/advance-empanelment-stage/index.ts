@@ -263,6 +263,16 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     .maybeSingle();
   const orgName = baData?.org_name || app.ba_email;
 
+  // The advising-authority stage can belong to an AGM instead of a DGM
+  // (see send-empanelment-invite). Resolve the real role once so every
+  // user-facing label below reads "AGM"/"DGM" to match who's assigned.
+  let advisorRole = "dgm";
+  if (app.dgm_id) {
+    const { data: advisor } = await adminClient.from("afc_users").select("role").eq("id", app.dgm_id).maybeSingle();
+    if (advisor?.role) advisorRole = advisor.role;
+  }
+  const advLabel = advisorLabel(advisorRole);
+
   function forbidden(msg: string) {
     return jsonRes(req, 403, { error: msg });
   }
@@ -310,13 +320,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         if (otherDone) {
           await notifyUser(adminClient, app.project_officer_id, {
             title: "Empanelment application awaiting your review",
-            sub_text: `${orgName}'s application cleared CFO and CS review. Please give it a final look before forwarding to the DGM.`,
+            sub_text: `${orgName}'s application cleared CFO and CS review. Please give it a final look before forwarding to the ${advLabel}.`,
             type: "action_required",
             link: `/empanelment/${app.id}`,
           });
           await emailUser(adminClient, app.project_officer_id, {
             subject: "Empanelment Application Awaiting Your Final Review — AFC India Limited",
-            html: actionRequiredEmailHtml(orgName, app.id, "give it a final look before forwarding to the DGM, now that CFO and CS review is complete"),
+            html: actionRequiredEmailHtml(orgName, app.id, `give it a final look before forwarding to the ${advLabel}, now that CFO and CS review is complete`),
           });
         }
         return jsonRes(req, 200, { success: true, status: otherDone ? "po_final_review" : "cfo_cs_review", forwarded: !!otherDone });
@@ -351,7 +361,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         if (!PO_REVIEWER_ROLES.includes(caller.role) || caller.id !== app.project_officer_id) return forbidden("Only the assigned Project Officer can forward this application.");
         if (app.status !== "po_final_review") return badState("po_final_review");
         await adminClient.from("empanelment_applications").update({ status: "dgm_review", po_final_comment: trimmedComment || null }).eq("id", app.id);
-        await logActivity(adminClient, app.id, caller.id, caller.role, "po_final_forwarded", trimmedComment || "Forwarded to DGM.");
+        await logActivity(adminClient, app.id, caller.id, caller.role, "po_final_forwarded", trimmedComment || `Forwarded to ${advLabel}.`);
         const dgmPayload = {
           title: "Empanelment application awaiting your review",
           sub_text: `${orgName}'s application was forwarded by the ${reviewerLabel(caller.role)}.`,
