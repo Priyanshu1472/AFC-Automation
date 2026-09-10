@@ -1,6 +1,6 @@
 // supabase/functions/save-fee-notes/index.ts
 // JWT must be ON. Person Responsible / Reviewer / Approval Authority (or
-// md/admin) save 1-3 fee notes (EMD / Tender Fee / PBG) together — each
+// md/admin) save 1-3 fee notes (EMD / Tender Fee / Processing Fee) together — each
 // note_type upserts its own row (unique proposal_id+note_type), so "3
 // needed -> 3 rows, 1 needed -> 1 row" falls out of which types are passed.
 // submit:true on an item moves it draft/rejected -> pending_md and
@@ -16,7 +16,7 @@ import { notifyRole, emailRole } from "../_shared/notify.ts";
 import { wrapEmailBody, escapeHtml } from "../_shared/email.ts";
 
 const NOTE_TYPES = new Set(["emd", "tender_fee", "pbg"]);
-const NOTE_LABELS: Record<string, string> = { emd: "EMD Note", tender_fee: "Tender Fee Note", pbg: "PBG Note" };
+const NOTE_LABELS: Record<string, string> = { emd: "EMD Note", tender_fee: "Tender Fee Note", pbg: "Processing Fee Note" };
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
@@ -37,7 +37,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   const notes = body.notes;
   if (typeof proposalId !== "string" || !proposalId) return jsonRes(req, 400, { error: "proposal_id is required." });
   if (!Array.isArray(notes) || notes.length === 0) return jsonRes(req, 400, { error: "At least one fee note is required." });
-  if (notes.length > 3) return jsonRes(req, 400, { error: "At most 3 fee notes (EMD, Tender Fee, PBG) can be saved at once." });
+  if (notes.length > 3) return jsonRes(req, 400, { error: "At most 3 fee notes (EMD, Tender Fee, Processing Fee) can be saved at once." });
 
   const seenTypes = new Set<string>();
   for (const n of notes) {

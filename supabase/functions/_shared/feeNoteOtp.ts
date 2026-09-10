@@ -1,6 +1,6 @@
 // supabase/functions/_shared/feeNoteOtp.ts
 // One-time codes gating the MD's approve/reject decision on a fee note
-// (EMD / Tender Fee / PBG). A code is generated, hashed, stored, and
+// (EMD / Tender Fee / Processing Fee). A code is generated, hashed, stored, and
 // emailed to the ACTOR'S OWN registered address (never anywhere else) —
 // verification happens inside the same request that performs the real
 // action, so nothing mutates and no decision email goes out until the code

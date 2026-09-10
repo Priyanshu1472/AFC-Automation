@@ -62,7 +62,7 @@ export const COMMITTEE_STAGE_STATUS = {
 // The DB values (online/offline/both) stay as-is — only the display text
 // changed, from generic "Online"/"Offline" to what they actually mean here.
 export const DELIVERY_TYPE_LABELS = {
-  online: "Portal, Email",
+  online: "Online",
   offline: "Hardcopy",
-  both: "Both (Portal, Email & Hardcopy)",
+  both: "Both (Online & Hardcopy)",
 };

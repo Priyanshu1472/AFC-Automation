@@ -28,6 +28,17 @@ function formReq(fields: Record<string, string>, token = fakeJwt({ sub: CALLER_I
   return new Request("https://x.com/create-lead", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: fd });
 }
 
+function pdfFile(name: string): File {
+  return new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00])], name, { type: "application/pdf" });
+}
+
+function formReqWithFiles(fields: Record<string, string>, files: File[], token = fakeJwt({ sub: CALLER_ID })): Request {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) fd.set(k, v);
+  for (const f of files) fd.append("document", f, f.name);
+  return new Request("https://x.com/create-lead", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: fd });
+}
+
 // afc_users is queried in a fixed order: caller (getCallerProfile), the
 // Person Responsible's team lookup, then getTargetUser for Person
 // Responsible/Reviewer/Approval Authority (validateAssignment/
@@ -248,4 +259,48 @@ Deno.test("handleRequest - does not notify the caller if they assigned themselve
   const notifyInserts = log.filter((l) => l.table === "notifications").map((l) => JSON.parse(l.calls.find((c) => c[0] === "insert")![1])[0]);
   const notifiedIds = notifyInserts.map((n: { user_id: string }) => n.user_id);
   assertEquals(notifiedIds.sort(), [AUTHORITY_ID, REVIEWER_ID].sort());
+});
+
+// ── Multiple document upload ────────────────────────────────────
+Deno.test("handleRequest - accepts more than one document and stores all of them on the lead", async () => {
+  const client = buildClient({});
+  const files = [pdfFile("tender.pdf"), pdfFile("annexure-1.pdf"), pdfFile("annexure-2.pdf")];
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const insertCall = log.find((l) => l.table === "leads" && l.calls.some((c) => c[0] === "insert"));
+  const insertBody = JSON.parse(insertCall!.calls.find((c) => c[0] === "insert")![1]);
+  assertEquals(insertBody.documents.length, 3);
+  assertEquals(insertBody.documents.map((d: { name: string }) => d.name), ["tender.pdf", "annexure-1.pdf", "annexure-2.pdf"]);
+});
+
+Deno.test("handleRequest - a lead with zero documents still succeeds (documents stays optional)", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const insertCall = log.find((l) => l.table === "leads" && l.calls.some((c) => c[0] === "insert"));
+  const insertBody = JSON.parse(insertCall!.calls.find((c) => c[0] === "insert")![1]);
+  assertEquals(insertBody.documents, []);
+});
+
+Deno.test("handleRequest - rejects more than the max number of documents", async () => {
+  const client = buildClient({});
+  const files = Array.from({ length: 11 }, (_, i) => pdfFile(`doc-${i}.pdf`));
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "You can attach at most 10 documents.");
+});
+
+Deno.test("handleRequest - one invalid document among several rejects the whole request and cleans up what was already uploaded", async () => {
+  const client = buildClient({});
+  const badFile = new File([new Uint8Array([0, 0, 0, 0])], "not-a-pdf.pdf", { type: "application/pdf" });
+  const files = [pdfFile("tender.pdf"), badFile];
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 400);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  assertEquals(log.some((l) => l.table === "leads" && l.calls.some((c) => c[0] === "insert")), false);
 });

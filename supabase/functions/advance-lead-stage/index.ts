@@ -157,6 +157,11 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
   // PR for changes, same shape as every earlier-stage decline (see the
   // "md_decline" case for who gets notified).
   md_review: { md_approve: "md_approved", md_decline: "pa_action_required", drop: "pa_dropped" },
+  // The one action still available once a lead is fully approved — the
+  // creator or Person Responsible withdrawing it after the fact (see the
+  // "drop" case for the extra written-justification requirement this one
+  // stage adds on top of the usual PIN gate).
+  md_approved: { drop: "pa_dropped" },
   // "accept" also reaches pa_action_required -> dgm_initial_review — every
   // decline source (DGM, PMT, PMT Extended, G3, MD) resubmits through the
   // exact same generate-note-then-accept procedure as the very first
@@ -379,6 +384,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         // creator or the current Person Responsible (who has, by this
         // point, accepted the lead) can withdraw it.
         if (!isCreator && !isPr) return forbidden("Only the lead's creator or Person Responsible can withdraw this lead.");
+        // Withdrawing a lead the MD has already approved is a bigger deal
+        // than dropping it at any earlier stage — require a written
+        // justification here specifically; every other stage's drop keeps
+        // comment optional, unchanged.
+        if (leadRow.status === "md_approved" && !trimmedComment) {
+          return jsonRes(req, 400, { error: "A justification is required to drop an approved lead." });
+        }
         break;
       }
 

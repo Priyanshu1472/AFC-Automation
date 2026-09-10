@@ -57,7 +57,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     approval_authority_id: lead?.approval_authority_id || "",
   }));
   const isSuoMoto = form.source === "suo_moto";
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [personResponsibleOptions, setPersonResponsibleOptions] = useState([]);
   const [reviewerOptions, setReviewerOptions] = useState([]);
   const [approvalAuthorityOptions, setApprovalAuthorityOptions] = useState([]);
@@ -129,22 +129,26 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
         setDuplicates([]);
         return;
       }
+      // Duplicate detection only ever compares one document — with multiple
+      // files selected, the first is as good a signal as any for this
+      // client-side nudge (the real, exhaustive check is server-side).
+      const first = files[0];
       const { data } = await supabase.rpc("find_similar_leads", {
         p_title: form.title.trim(),
         p_team: team,
         p_bid_number: form.bid_number.trim() || null,
-        p_document_name: file?.name || null,
-        p_document_size: file?.size || null,
+        p_document_name: first?.name || null,
+        p_document_size: first?.size || null,
       });
       setDuplicates((data || []).filter((d) => d.id !== lead?.id));
     }, 400);
-  }, [team, form.title, form.bid_number, file, lead?.id]);
+  }, [team, form.title, form.bid_number, files, lead?.id]);
 
   useEffect(() => {
     checkDuplicates();
     return () => dupTimer.current && clearTimeout(dupTimer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.title, form.bid_number, file]);
+  }, [form.title, form.bid_number, files]);
 
   function validate() {
     const errs = {};
@@ -182,7 +186,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       fd.set("person_responsible_id", form.person_responsible_id);
       fd.set("reviewer_id", form.reviewer_id);
       fd.set("approval_authority_id", form.approval_authority_id);
-      if (file) fd.set("document", file, file.name);
+      for (const f of files) fd.append("document", f, f.name);
 
       const { data, error } = await supabase.functions.invoke(mode === "create" ? "create-lead" : "update-lead", { body: fd });
       if (error) {
@@ -490,17 +494,46 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
         <Card.Header title="Documents" />
         <Card.Body>
           <div className="field">
-            <label className="field-label">{isSuoMoto ? "Supporting Document (optional)" : "RFP / Tender Document"}</label>
+            <label className="field-label">{isSuoMoto ? "Supporting Document(s) (optional)" : "RFP / Tender Document(s)"}</label>
             <label className="lf-file-drop">
               <input
                 type="file"
                 accept=".pdf,.doc,.docx"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                multiple
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files || []);
+                  // Appends to whatever's already selected rather than
+                  // replacing it — picking files from the OS dialog twice
+                  // (e.g. one at a time) accumulates instead of losing the
+                  // first round. Re-picking the same input value fires
+                  // onChange again even for an unchanged selection, so
+                  // clear it after reading.
+                  if (picked.length) setFiles((prev) => [...prev, ...picked]);
+                  e.target.value = "";
+                }}
                 disabled={submitting}
               />
-              {file ? file.name : "Choose file (PDF / DOC)"}
+              {files.length ? `${files.length} file${files.length > 1 ? "s" : ""} selected — click to add more` : "Choose files (PDF / DOC)"}
             </label>
-            <span className="field-hint">Used for duplicate detection (file name + size) — any match shows up under Name of Assignment above.</span>
+            {files.length > 0 && (
+              <ul className="lf-file-list">
+                {files.map((f, i) => (
+                  <li key={`${f.name}-${f.size}-${i}`} className="lf-file-item">
+                    <span className="lf-file-item-name" title={f.name}>{f.name}</span>
+                    <button
+                      type="button"
+                      className="lf-file-remove"
+                      aria-label={`Remove ${f.name}`}
+                      disabled={submitting}
+                      onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <span className="field-hint">Used for duplicate detection (first file's name + size) — any match shows up under Name of Assignment above.</span>
           </div>
         </Card.Body>
       </Card>

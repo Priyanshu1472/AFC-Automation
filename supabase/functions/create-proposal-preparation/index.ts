@@ -8,6 +8,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { getOrgWideHolders } from "../_shared/leadAuth.ts";
+import { addProposalChatParticipants } from "../_shared/proposalChat.ts";
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
@@ -30,7 +32,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   try {
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, status, person_responsible_id, reviewer_id, approval_authority_id")
+      .select("id, status, person_responsible_id, reviewer_id, approval_authority_id, assigned_ba_id")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -46,19 +48,48 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const { data: existing } = await adminClient
       .from("proposal_preparations")
-      .select("id")
+      .select("id, chat_opened_at")
       .eq("lead_id", leadId)
       .maybeSingle();
-    if (existing) return jsonRes(req, 200, { success: true, proposal_id: existing.id });
 
-    const { data: created, error: insertErr } = await adminClient
-      .from("proposal_preparations")
-      .insert({ lead_id: leadId, created_by: caller.id })
-      .select("id")
-      .single();
-    if (insertErr) throw new Error(insertErr.message);
+    let proposalId: string;
+    // Re-sync on every visit, not just first creation — covers a proposal
+    // whose Reviewer/Approval Authority/BP was reassigned on the lead after
+    // the proposal was first opened, and backfills chat_opened_at + the
+    // roster for a proposal created before this chat feature existed
+    // (existing.chat_opened_at null). Upserts are cheap/no-ops when nothing
+    // actually changed, so re-running this isn't wasteful.
+    let needsChatOpen = true;
+    if (existing) {
+      proposalId = existing.id;
+      needsChatOpen = !existing.chat_opened_at;
+    } else {
+      const { data: created, error: insertErr } = await adminClient
+        .from("proposal_preparations")
+        .insert({ lead_id: leadId, created_by: caller.id, chat_opened_at: new Date().toISOString() })
+        .select("id")
+        .single();
+      if (insertErr) throw new Error(insertErr.message);
+      proposalId = created.id;
+    }
 
-    return jsonRes(req, 200, { success: true, proposal_id: created.id });
+    if (needsChatOpen && existing) {
+      const { error: openErr } = await adminClient
+        .from("proposal_preparations")
+        .update({ chat_opened_at: new Date().toISOString() })
+        .eq("id", proposalId);
+      if (openErr) console.error("Failed to backfill chat_opened_at:", openErr.message);
+    }
+
+    // Chat roster: the lead's three named assignees, its assigned Business
+    // Partner (only on their own proposal), and every MD org-wide (on
+    // every proposal). ignoreDuplicates upserts make this safe to re-run.
+    const namedIds = [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id, lead.assigned_ba_id].filter(Boolean);
+    const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
+    await addProposalChatParticipants(adminClient, proposalId, namedIds, "named");
+    await addProposalChatParticipants(adminClient, proposalId, mdHolders, "md");
+
+    return jsonRes(req, 200, { success: true, proposal_id: proposalId });
   } catch (err) {
     console.error("Unhandled error:", (err as Error).message);
     return jsonRes(req, 500, { error: (err as Error).message || "Internal server error." });

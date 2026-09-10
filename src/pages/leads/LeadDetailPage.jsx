@@ -96,6 +96,14 @@ const ACTIONS_BY_STATUS = {
     { key: "__edit_resubmit", label: "Resubmit Lead Approval Form", variant: "primary" },
     { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
   ],
+  // The one action still available once MD has approved the lead —
+  // withdrawing it after the fact. Unlike every earlier stage's drop, this
+  // one requires a written justification (requiresReason), not just the
+  // PIN — see advance-lead-stage's "drop" case for the matching
+  // server-side requirement.
+  md_approved: [
+    { key: "drop", label: "Drop Lead", variant: "danger", requiresReason: true, requiresPin: true },
+  ],
 };
 
 // The creator filled the Lead Approval Note themselves — it's a Draft
@@ -223,7 +231,8 @@ export default function LeadDetailPage() {
         // drop (whether or not they're also PR) — a non-creator PR has no
         // Drop here at all, only Accept/Reject; PR gains Drop once they've
         // actually accepted (pmt_review onward), never before. Creator or
-        // PR at every other non-terminal status.
+        // PR at every other stage, md_approved included (the one action
+        // still open once MD has approved — see ACTIONS_BY_STATUS.md_approved).
         case "drop":
           if (lead.status === "pa_review") return profile?.id === lead.created_by;
           // DGM sent this back for changes — only they should re-review it,
@@ -527,7 +536,14 @@ export default function LeadDetailPage() {
             </div>
 
             <div className="ar-right">
-              {actions.length > 0 && !isTerminal && (
+              {/* md_approved is "terminal" for the success-banner purposes
+                  below, but not for actions — it's the one status where a
+                  terminal lead still has something actionable (Drop, for
+                  the creator/PR). md_declined has no ACTIONS_BY_STATUS entry
+                  at all (actions.length is already 0 there); pa_dropped's
+                  own "Claim Lead" action deliberately keeps its existing
+                  isTerminal-suppressed behavior, unchanged by this. */}
+              {actions.length > 0 && (!isTerminal || lead.status === "md_approved") && (
                 <Card className="ar-action-card">
                   <Card.Header title="Your Action" />
                   <Card.Body className="ar-action-body">

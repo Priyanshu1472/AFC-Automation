@@ -3,7 +3,7 @@
 export const FEE_NOTE_TYPES = [
   { key: "emd", label: "EMD Note" },
   { key: "tender_fee", label: "Tender Fee Note" },
-  { key: "pbg", label: "PBG Note" },
+  { key: "pbg", label: "Processing Fee Note" },
 ];
 
 export const FEE_NOTE_LABELS = Object.fromEntries(FEE_NOTE_TYPES.map((t) => [t.key, t.label]));

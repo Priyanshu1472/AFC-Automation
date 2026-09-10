@@ -1,4 +1,4 @@
-// Fee Notes card for Proposal Preparation — EMD / Tender Fee / PBG,
+// Fee Notes card for Proposal Preparation — EMD / Tender Fee / Processing Fee,
 // independently tracked (unique proposal_id+note_type) but creatable
 // together: "Prepare Fee Notes" opens one form where any combination of the
 // three can be checked and saved/submitted in a single call. MD approval

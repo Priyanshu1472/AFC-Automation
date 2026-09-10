@@ -1,6 +1,6 @@
 // supabase/functions/decide-fee-note-md/index.ts
 // JWT must be ON. MD's final decision on a fee note (EMD / Tender Fee /
-// PBG), gated by the OTP issued via request-fee-note-otp. Nothing mutates
+// Processing Fee), gated by the OTP issued via request-fee-note-otp. Nothing mutates
 // and no notification goes out until the code is confirmed. There's no
 // committee chain to route a rejection back to — a rejected note is simply
 // edited and resubmitted by Person Responsible/Reviewer via save-fee-notes.
@@ -11,7 +11,7 @@ import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { verifyFeeNoteOtp } from "../_shared/feeNoteOtp.ts";
 import { notifyUsers } from "../_shared/notify.ts";
 
-const NOTE_LABELS: Record<string, string> = { emd: "EMD Note", tender_fee: "Tender Fee Note", pbg: "PBG Note" };
+const NOTE_LABELS: Record<string, string> = { emd: "EMD Note", tender_fee: "Tender Fee Note", pbg: "Processing Fee Note" };
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });

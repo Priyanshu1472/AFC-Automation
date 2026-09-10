@@ -23,6 +23,7 @@ import ProposalDocumentsPanel from "../../components/proposals/ProposalDocuments
 import MergeProposalModal from "../../components/proposals/MergeProposalModal";
 import ProposalLockPanel from "../../components/proposals/ProposalLockPanel";
 import ClientResponseBanner from "../../components/proposals/ClientResponseBanner";
+import ProposalChatPanel from "../../components/proposals/ProposalChatPanel";
 import { isProposalLocked, CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS } from "../../lib/proposalPrep";
 import "../../styles/ProposalPreparationPage.css";
 
@@ -138,9 +139,15 @@ export default function ProposalPreparationPage() {
                 <h1>{lead.title}</h1>
                 <p>Proposal Preparation{lead.client_name ? ` · ${lead.client_name}` : ""}{lead.portal_name ? ` · ${lead.portal_name}` : ""}</p>
               </div>
-              <Button variant="secondary" onClick={() => navigate("/leads")}>Back to Leads</Button>
+              <Button variant="secondary" onClick={() => navigate("/proposals")}>Back to Proposals</Button>
             </div>
           </div>
+
+          <ProposalChatPanel
+            proposalId={proposal.id}
+            chatOpenedAt={proposal.chat_opened_at}
+            locked={locked}
+          />
 
           {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 

@@ -38,6 +38,17 @@ function formReq(fields: Record<string, string>, token = fakeJwt({ sub: CALLER_I
   return new Request("https://x.com/update-lead", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: fd });
 }
 
+function pdfFile(name: string): File {
+  return new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00])], name, { type: "application/pdf" });
+}
+
+function formReqWithFiles(fields: Record<string, string>, files: File[], token = fakeJwt({ sub: CALLER_ID })): Request {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) fd.set(k, v);
+  for (const f of files) fd.append("document", f, f.name);
+  return new Request("https://x.com/update-lead", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: fd });
+}
+
 function buildClient(opts: {
   caller?: Record<string, unknown>;
   lead?: Record<string, unknown> | null;
@@ -243,4 +254,39 @@ Deno.test("handleRequest - saving with no reassignment sends no notifications", 
   const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
   const notifyInserts = log.filter((l) => l.table === "notifications");
   assertEquals(notifyInserts.length, 0);
+});
+
+// ── Multiple document upload ────────────────────────────────────
+Deno.test("handleRequest - adds more than one new document alongside a lead's existing ones", async () => {
+  const client = buildClient({
+    lead: leadRow({ documents: [{ name: "existing.pdf", path: "p/existing.pdf", size: 100, uploaded_at: "2026-01-01T00:00:00Z" }] }),
+  });
+  const files = [pdfFile("annexure-1.pdf"), pdfFile("annexure-2.pdf")];
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const updateCall = log.find((l) => l.table === "leads" && l.calls.some((c) => c[0] === "update"));
+  const updateBody = JSON.parse(updateCall!.calls.find((c) => c[0] === "update")![1]);
+  assertEquals(updateBody.documents.map((d: { name: string }) => d.name), ["existing.pdf", "annexure-1.pdf", "annexure-2.pdf"]);
+});
+
+Deno.test("handleRequest - rejects going over the max combined document count", async () => {
+  const existing = Array.from({ length: 9 }, (_, i) => ({ name: `doc-${i}.pdf`, path: `p/doc-${i}.pdf`, size: 10, uploaded_at: "2026-01-01T00:00:00Z" }));
+  const client = buildClient({ lead: leadRow({ documents: existing }) });
+  const files = [pdfFile("new-1.pdf"), pdfFile("new-2.pdf")];
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "A lead can have at most 10 documents.");
+});
+
+Deno.test("handleRequest - one invalid document among several rejects the whole update", async () => {
+  const client = buildClient({});
+  const badFile = new File([new Uint8Array([0, 0, 0, 0])], "not-a-pdf.pdf", { type: "application/pdf" });
+  const files = [pdfFile("tender.pdf"), badFile];
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 400);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  assertEquals(log.some((l) => l.table === "leads" && l.calls.some((c) => c[0] === "update")), false);
 });

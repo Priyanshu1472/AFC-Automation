@@ -4,18 +4,46 @@
 // the lead's three assignees, same rule as LeadListPage/LeadDetailPage's
 // row action — this page exists so that rule has somewhere to be browsed
 // from besides the Leads table itself.
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
+import { useTeamOptions } from "../../hooks/useTeamOptions";
+import { can } from "../../lib/roles";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
+import Select from "../../components/ui/Select";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
-import { ArrowRightIcon } from "../../components/icons";
+import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
+import { ChatIcon, ArrowRightIcon } from "../../components/icons";
 import { CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS, canOpenProposal } from "../../lib/proposalPrep";
 import "../../styles/ProposalPreparationPage.css";
+
+// "In Preparation" covers both "no proposal_preparations row yet" and "row
+// exists but the client hasn't responded" — i.e. everything that isn't yet
+// a final outcome. "Accepted" reads client_response === "awarded" (the
+// underlying field's own value/label, per CLIENT_RESPONSE_LABELS) since
+// that's this app's term for a proposal the client accepted.
+const QUICK_FILTERS = {
+  all: { label: "Total", match: () => true },
+  in_preparation: { label: "In Preparation", match: (l) => (l.proposal?.client_response || "pending") === "pending" },
+  accepted: { label: "Accepted", match: (l) => l.proposal?.client_response === "awarded" },
+  rejected: { label: "Rejected", match: (l) => l.proposal?.client_response === "rejected" },
+};
+
+const PREP_STATUS_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "not_started", label: "Not Started" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "locked", label: "Locked" },
+];
+
+function prepStatusOf(l) {
+  if (!l.proposal) return "not_started";
+  return l.proposal.locked ? "locked" : "in_progress";
+}
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -28,9 +56,18 @@ export default function ProposalsListPage() {
 
   const [leads, setLeads] = useState([]);
   const [proposalByLead, setProposalByLead] = useState({});
+  const [unreadCounts, setUnreadCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [quickFilter, setQuickFilter] = useState("all");
+  const [prepStatusFilter, setPrepStatusFilter] = useState("all");
+  const [teamFilter, setTeamFilter] = useState("all");
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
+  const canFilterTeam = can.viewAllTeams(profile?.role);
+  const teams = useTeamOptions();
+  const teamOptions = [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))];
 
   const fetchAll = useCallback(async () => {
     const { data: leadRows, error: err } = await supabase
@@ -53,9 +90,51 @@ export default function ProposalsListPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  const fetchUnreadCounts = useCallback(async () => {
+    const { data } = await supabase.rpc("proposal_chat_unread_counts");
+    const map = {};
+    for (const row of data || []) map[row.proposal_id] = row.unread_count;
+    setUnreadCounts(map);
+  }, []);
 
-  const filtered = leads.filter((l) => {
+  useEffect(() => { fetchAll(); fetchUnreadCounts(); }, [fetchAll, fetchUnreadCounts]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("proposals-list")
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => fetchAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "proposal_preparations" }, () => fetchAll())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "proposal_chat_messages" }, () => fetchUnreadCounts())
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [fetchAll, fetchUnreadCounts]);
+
+  // Proposal fields merged onto each lead row up front, so every match()/
+  // filter below stays single-argument — same convention QUICK_FILTERS
+  // follows on LeadListPage/EmpanelmentListPage.
+  const merged = useMemo(
+    () => leads.map((l) => ({ ...l, proposal: proposalByLead[l.id] || null })),
+    [leads, proposalByLead]
+  );
+
+  const teamScoped = useMemo(
+    () => (teamFilter === "all" ? merged : merged.filter((l) => l.team === teamFilter)),
+    [merged, teamFilter]
+  );
+
+  const stats = useMemo(() => {
+    const result = {};
+    for (const [key, cfg] of Object.entries(QUICK_FILTERS)) result[key] = teamScoped.filter(cfg.match).length;
+    return result;
+  }, [teamScoped]);
+
+  function selectQuickFilter(key) {
+    setQuickFilter((current) => (current === key ? "all" : key));
+  }
+
+  const filtered = teamScoped.filter((l) => {
+    if (!QUICK_FILTERS[quickFilter].match(l)) return false;
+    if (prepStatusFilter !== "all" && prepStatusOf(l) !== prepStatusFilter) return false;
     if (!search) return true;
     const s = search.toLowerCase();
     return (
@@ -83,9 +162,34 @@ export default function ProposalsListPage() {
 
           {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
+          <div className="pp-stats-grid">
+            <button type="button" className={`pp-stat-card pp-stat-blue${quickFilter === "all" ? " pp-stat-active" : ""}`} onClick={() => selectQuickFilter("all")}>
+              <div className="pp-stat-value">{stats.all}</div>
+              <div className="pp-stat-label">Total</div>
+            </button>
+            <button type="button" className={`pp-stat-card pp-stat-purple${quickFilter === "in_preparation" ? " pp-stat-active" : ""}`} onClick={() => selectQuickFilter("in_preparation")}>
+              <div className="pp-stat-value">{stats.in_preparation}</div>
+              <div className="pp-stat-label">In Preparation</div>
+            </button>
+            <button type="button" className={`pp-stat-card pp-stat-green${quickFilter === "accepted" ? " pp-stat-active" : ""}`} onClick={() => selectQuickFilter("accepted")}>
+              <div className="pp-stat-value">{stats.accepted}</div>
+              <div className="pp-stat-label">Accepted</div>
+            </button>
+            <button type="button" className={`pp-stat-card pp-stat-red${quickFilter === "rejected" ? " pp-stat-active" : ""}`} onClick={() => selectQuickFilter("rejected")}>
+              <div className="pp-stat-value">{stats.rejected}</div>
+              <div className="pp-stat-label">Rejected</div>
+            </button>
+          </div>
+
           <Card className="pp-filter-card">
             <Card.Body className="pp-filters">
               <input type="text" className="input pp-search" placeholder="Search by lead number, client, or BP…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              {canFilterTeam && (
+                <div style={{ minWidth: 160 }}>
+                  <Select options={teamOptions} value={teamFilter} onChange={setTeamFilter} placeholder="All Teams" />
+                </div>
+              )}
+              <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={prepStatusFilter !== "all" ? 1 : 0} />
             </Card.Body>
           </Card>
 
@@ -100,13 +204,20 @@ export default function ProposalsListPage() {
                   </thead>
                   <tbody>
                     {filtered.map((l) => {
-                      const proposal = proposalByLead[l.id];
+                      const proposal = l.proposal;
                       const overdue = !!l.submission_deadline && new Date(l.submission_deadline) < new Date() && !proposal?.locked;
                       const canOpen = canOpenProposal(l, profile);
                       return (
-                        <tr key={l.id}>
+                        <tr key={l.id} className="pp-row-clickable" onClick={() => navigate(`/proposals/${l.id}`)}>
                           <td>
-                            <button type="button" className="pp-lead-number-link" onClick={() => navigate(`/leads/${l.id}`)}>
+                            <button
+                              type="button"
+                              className="pp-lead-number-link"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/leads/${l.id}`);
+                              }}
+                            >
                               {l.lead_number}
                             </button>
                           </td>
@@ -124,14 +235,30 @@ export default function ProposalsListPage() {
                               <span className="pp-td-muted">—</span>
                             )}
                           </td>
-                          <td>
-                            {canOpen ? (
-                              <button type="button" className="pp-icon-btn" title="Open Proposal" aria-label="Open proposal" onClick={() => navigate(`/proposals/${l.id}`)}>
-                                <ArrowRightIcon />
-                              </button>
-                            ) : (
-                              <span className="pp-td-muted">—</span>
-                            )}
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="pp-action-icons">
+                              {proposal?.chat_opened_at && (
+                                <button
+                                  type="button"
+                                  className="pp-icon-btn pp-icon-chat"
+                                  title="Discussion"
+                                  aria-label={unreadCounts[proposal.id] > 0 ? `Discussion, ${unreadCounts[proposal.id]} unread` : "Discussion"}
+                                  onClick={() => navigate(`/proposals/${l.id}`)}
+                                >
+                                  <ChatIcon />
+                                  {unreadCounts[proposal.id] > 0 && (
+                                    <span className="pp-icon-badge">{unreadCounts[proposal.id] > 9 ? "9+" : unreadCounts[proposal.id]}</span>
+                                  )}
+                                </button>
+                              )}
+                              {canOpen ? (
+                                <button type="button" className="pp-icon-btn" title="Open Proposal" aria-label="Open proposal" onClick={() => navigate(`/proposals/${l.id}`)}>
+                                  <ArrowRightIcon />
+                                </button>
+                              ) : (
+                                !proposal?.chat_opened_at && <span className="pp-td-muted">—</span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -143,6 +270,12 @@ export default function ProposalsListPage() {
           </Card>
         </div>
       </div>
+
+      <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={() => setPrepStatusFilter("all")}>
+        <FilterField label="Preparation Status">
+          <Select options={PREP_STATUS_OPTIONS} value={prepStatusFilter} onChange={setPrepStatusFilter} placeholder="All" />
+        </FilterField>
+      </FilterDrawer>
     </div>
   );
 }

@@ -14,10 +14,12 @@ export const leadCan = {
   // A true drop, no reassignment. At pa_review, only the creator can drop
   // (whether or not they're also PR) — a non-creator PR has no Drop here at
   // all, only Accept/Reject; PR gains Drop once they've actually accepted
-  // (pmt_review onward), never before. Creator or PR at every other
-  // non-terminal status.
+  // (pmt_review onward), never before. Creator or PR at every other status,
+  // md_approved included — the one action still open on an approved lead
+  // (server-side requires a written justification there, see
+  // advance-lead-stage's "drop" case).
   drop: (profile, lead) => {
-    if (["md_approved", "md_declined", "pa_dropped"].includes(lead.status)) return false;
+    if (["md_declined", "pa_dropped"].includes(lead.status)) return false;
     if (lead.status === "pa_review") return profile?.id === lead.created_by;
     // DGM sent this back for changes — only they should re-review it, so
     // there's no Withdraw here, only Edit & Resubmit.

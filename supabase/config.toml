@@ -522,6 +522,12 @@ verify_jwt = true
 import_map = "./functions/create-proposal-preparation/deno.json"
 entrypoint = "./functions/create-proposal-preparation/index.ts"
 
+[functions.send-proposal-chat-message]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-proposal-chat-message/deno.json"
+entrypoint = "./functions/send-proposal-chat-message/index.ts"
+
 [functions.get-proposal-document-url]
 enabled = true
 verify_jwt = true

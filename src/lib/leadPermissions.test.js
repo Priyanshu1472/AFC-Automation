@@ -32,7 +32,20 @@ describe("leadCan", () => {
     expect(leadCan.drop(user, inPmtReview)).toBe(true); // creator can still withdraw
     expect(leadCan.drop({ id: "someone-else" }, inPmtReview)).toBe(true); // PR, now that they've accepted, can too
     expect(leadCan.drop({ id: "bystander" }, inPmtReview)).toBe(false);
-    expect(leadCan.drop(user, { ...inPmtReview, status: "md_approved" })).toBe(false); // terminal
+  });
+
+  it("drop is still available once MD has approved the lead — the one action left, for the creator or PR", () => {
+    const approved = { status: "md_approved", created_by: "user-1", person_responsible_id: "someone-else" };
+    expect(leadCan.drop(user, approved)).toBe(true); // creator
+    expect(leadCan.drop({ id: "someone-else" }, approved)).toBe(true); // PR
+    expect(leadCan.drop({ id: "bystander" }, approved)).toBe(false);
+  });
+
+  it("drop is unavailable once MD has declined the lead, or it's already dropped — genuinely terminal", () => {
+    const declined = { status: "md_declined", created_by: "user-1", person_responsible_id: "user-1" };
+    expect(leadCan.drop(user, declined)).toBe(false);
+    const dropped = { status: "pa_dropped", created_by: "user-1", person_responsible_id: "user-1" };
+    expect(leadCan.drop(user, dropped)).toBe(false);
   });
 
   it("drop at pa_action_required allows creator or Person Responsible", () => {

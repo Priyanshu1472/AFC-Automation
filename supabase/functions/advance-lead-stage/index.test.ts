@@ -681,6 +681,44 @@ Deno.test("drop - creator (not Person Responsible) can drop a pa_action_required
   assertEquals(res.status, 200);
 });
 
+// ── drop once MD has approved — the one action still open, and the one
+// stage where drop requires a written justification on top of the PIN ──
+Deno.test("drop - the creator can withdraw an already MD-approved lead, given a justification", async () => {
+  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: CALLER_ID }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop", comment: "Client cancelled the tender." }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), { success: true, status: "pa_dropped" });
+});
+
+Deno.test("drop - the current Person Responsible can also withdraw an MD-approved lead, given a justification", async () => {
+  // default leadRow: person_responsible_id === CALLER_ID, created_by is someone else
+  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: "someone-else" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop", comment: "Budget withdrawn by client." }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("drop - a bystander cannot withdraw an MD-approved lead", async () => {
+  const client = buildClient({
+    lead: leadRow({ status: "md_approved", created_by: "someone-else", person_responsible_id: "someone-else-2" }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop", comment: "Not my call." }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("drop - requires a justification once MD has approved the lead, unlike every earlier stage", async () => {
+  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: CALLER_ID }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "A justification is required to drop an approved lead.");
+});
+
+Deno.test("drop - a whitespace-only comment does not satisfy the MD-approved justification requirement", async () => {
+  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: CALLER_ID }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop", comment: "   " }), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "A justification is required to drop an approved lead.");
+});
+
 // ── reject_reassign (PR rejecting a lead they didn't create) ──
 Deno.test("reject_reassign - rejects a caller who isn't Person Responsible", async () => {
   const client = buildClient({ lead: leadRow({ person_responsible_id: "someone-else" }) });

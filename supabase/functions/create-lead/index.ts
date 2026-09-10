@@ -20,6 +20,7 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 
 const BUCKET = "lead-documents";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILES = 10;
 const MAGIC: Record<string, number[]> = {
   "application/pdf": [0x25, 0x50, 0x44, 0x46],
   "application/msword": [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1],
@@ -132,22 +133,26 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       if (baErr) return jsonRes(req, 400, { error: baErr });
     }
 
-    const file = formData.get("document");
-    let documents: Array<{ name: string; path: string; size: number; uploaded_at: string }> = [];
-    let uploadedPath: string | null = null;
+    const files = formData.getAll("document").filter((f): f is File => f instanceof File && f.size > 0);
+    if (files.length > MAX_FILES) return jsonRes(req, 400, { error: `You can attach at most ${MAX_FILES} documents.` });
+    const documents: Array<{ name: string; path: string; size: number; uploaded_at: string }> = [];
+    const uploadedPaths: string[] = [];
     const leadId = crypto.randomUUID();
 
-    if (file instanceof File && file.size > 0) {
+    for (const file of files) {
       const docErr = await validateDocument(file);
-      if (docErr) return jsonRes(req, 400, { error: docErr });
+      if (docErr) {
+        if (uploadedPaths.length) await adminClient.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
+        return jsonRes(req, 400, { error: docErr });
+      }
       const uploaded = await uploadDocument(adminClient, leadId, file);
-      documents = [uploaded];
-      uploadedPath = uploaded.path;
+      documents.push(uploaded);
+      uploadedPaths.push(uploaded.path);
     }
 
     const { data: leadNumberData, error: numErr } = await adminClient.rpc("next_lead_number", { p_team: team });
     if (numErr || !leadNumberData) {
-      if (uploadedPath) await adminClient.storage.from(BUCKET).remove([uploadedPath]).catch(() => {});
+      if (uploadedPaths.length) await adminClient.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
       return jsonRes(req, 500, { error: "Failed to generate a lead number. Please try again." });
     }
 
@@ -184,7 +189,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .single();
 
     if (insertErr || !lead) {
-      if (uploadedPath) await adminClient.storage.from(BUCKET).remove([uploadedPath]).catch(() => {});
+      if (uploadedPaths.length) await adminClient.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
       console.error("Lead insert failed:", insertErr?.message);
       return jsonRes(req, 500, { error: "Failed to create lead. Please try again." });
     }

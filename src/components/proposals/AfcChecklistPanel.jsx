@@ -16,6 +16,7 @@ import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import FileUploadButton from "./FileUploadButton";
 import KnowledgeRepositoryDocumentPicker from "./KnowledgeRepositoryDocumentPicker";
+import ConfirmDialog from "../ui/ConfirmDialog";
 
 const BUCKET = "proposal-documents";
 const KNOWLEDGE_BUCKET = "project-documents";
@@ -32,6 +33,8 @@ export default function AfcChecklistPanel({ proposalId, items, profile, canManag
   const [busyId, setBusyId] = useState(null);
   const [pickerFor, setPickerFor] = useState(null);
   const [error, setError] = useState("");
+  const [removeTarget, setRemoveTarget] = useState(null);
+  const [removing, setRemoving] = useState(false);
 
   async function handleAdd() {
     if (!name.trim()) { setError("Item name is required."); return; }
@@ -50,9 +53,15 @@ export default function AfcChecklistPanel({ proposalId, items, profile, canManag
   }
 
   async function handleRemove(id) {
-    const { error: delErr } = await supabase.from("proposal_afc_checklist_items").delete().eq("id", id);
-    if (delErr) { setError(delErr.message); return; }
-    onChanged();
+    setRemoving(true);
+    try {
+      const { error: delErr } = await supabase.from("proposal_afc_checklist_items").delete().eq("id", id);
+      if (delErr) { setError(delErr.message); return; }
+      setRemoveTarget(null);
+      onChanged();
+    } finally {
+      setRemoving(false);
+    }
   }
 
   async function handleUploadFromComputer(item, file) {
@@ -154,7 +163,7 @@ export default function AfcChecklistPanel({ proposalId, items, profile, canManag
             </div>
           )}
           {canManage && !locked && (
-            <button type="button" className="pp-list-remove" onClick={() => handleRemove(it.id)} aria-label="Remove">×</button>
+            <button type="button" className="pp-list-remove" onClick={() => setRemoveTarget(it)} aria-label="Remove">×</button>
           )}
         </div>
       </div>
@@ -178,6 +187,17 @@ export default function AfcChecklistPanel({ proposalId, items, profile, canManag
         <KnowledgeRepositoryDocumentPicker
           onSelect={(doc) => handlePickFromKnowledgeRepository(pickerFor, doc)}
           onClose={() => setPickerFor(null)}
+        />
+      )}
+      {removeTarget && (
+        <ConfirmDialog
+          title="Remove item?"
+          message={`Are you sure you want to remove "${removeTarget.item_name}"?${removeTarget.file_path ? " Its attached file will be removed too." : ""}`}
+          confirmLabel="Yes"
+          cancelLabel="Cancel"
+          loading={removing}
+          onConfirm={() => handleRemove(removeTarget.id)}
+          onCancel={() => setRemoveTarget(null)}
         />
       )}
     </Card>
