@@ -397,7 +397,7 @@ export default function UserListPage() {
             <>
               {/* Desktop / wide screens */}
               <div className="table-wrapper ul-desktop-table">
-                <table className="table">
+                <table className="table ul-flat-table">
                   <thead>
                     <tr>
                       <th>Name</th>

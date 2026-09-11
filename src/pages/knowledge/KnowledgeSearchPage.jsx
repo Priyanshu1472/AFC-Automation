@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useShortlist } from "../../hooks/useShortlist";
 import ShortlistModal from "../../components/knowledge/ShortlistModal";
+import CompanyDocumentsPanel from "../../components/knowledge/CompanyDocumentsPanel";
 import AppHeader from "../../components/shared/AppHeader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import "../../styles/KnowledgeSearchPage.css";
@@ -33,6 +34,7 @@ const IconSearch = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="
 const IconPlus = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>);
 const IconBookmark = ({ filled = false }) => (<svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg>);
 const IconEye = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>);
+const IconBuilding = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="2" width="16" height="20" rx="1" /><line x1="9" y1="6" x2="9" y2="6.01" /><line x1="15" y1="6" x2="15" y2="6.01" /><line x1="9" y1="10" x2="9" y2="10.01" /><line x1="15" y1="10" x2="15" y2="10.01" /><line x1="9" y1="14" x2="9" y2="14.01" /><line x1="15" y1="14" x2="15" y2="14.01" /><line x1="10" y1="22" x2="10" y2="18" /><line x1="14" y1="22" x2="14" y2="18" /></svg>);
 
 export default function KnowledgeSearchPage() {
   const navigate = useNavigate();
@@ -73,6 +75,7 @@ export default function KnowledgeSearchPage() {
   }
 
   const [slProject, setSlProject] = useState(null);
+  const [showCompanyDocs, setShowCompanyDocs] = useState(false);
   const { shortlists, createShortlist, addToShortlist, isInAnyShortlist, getProjectShortlists } = useShortlist();
 
   useEffect(() => {
@@ -352,6 +355,10 @@ export default function KnowledgeSearchPage() {
                   <button className={`kr-view-btn${viewMode === "folder" ? " kr-view-btn--active" : ""}`} onClick={() => setViewMode("folder")} title="Folder View"><IconGrid /></button>
                   <button className={`kr-view-btn${viewMode === "table" ? " kr-view-btn--active" : ""}`} onClick={() => setViewMode("table")} title="Table View"><IconTable /></button>
                 </div>
+                <button className="kr-btn-shortlists" onClick={() => setShowCompanyDocs(true)}>
+                  <span className="kr-btn-icon"><IconBuilding /></span>
+                  <span className="kr-btn-label">Company Documents</span>
+                </button>
                 <button className="kr-btn-shortlists" onClick={() => navigate("/knowledge/shortlists")}>
                   <span className="kr-btn-icon"><IconBookmark /></span>
                   <span className="kr-btn-label">Shortlists</span>
@@ -422,6 +429,8 @@ export default function KnowledgeSearchPage() {
               {loading ? <div className="kr-loading">Loading projects…</div> : viewMode === "folder" ? renderFolder() : renderTable()}
             </div>
           </div>
+
+          {showCompanyDocs && <CompanyDocumentsPanel onClose={() => setShowCompanyDocs(false)} />}
 
           {slProject && (
             <ShortlistModal

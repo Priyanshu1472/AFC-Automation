@@ -59,6 +59,42 @@ const EMP_ROLE_OPTIONS = [
   { value: "ba", label: "Business Partner" },
 ];
 
+// Lead Generation pipeline actions — mirrors advance-lead-stage's `switch
+// (action)` cases exactly, plus "created"/"edited" from create-lead/
+// update-lead (see supabase/functions/_shared/leadActivity.ts, the one
+// place every one of these gets logged). View-only tab: Admin can see
+// this org-wide (can_view_lead() already includes 'admin' — see
+// 20260903030000_lead_committee_visibility_through_pipeline.sql) but
+// never the chat (20260910020000_lead_chat_admin_view_only.sql) or any
+// action button (LeadDetailPage suppresses both for role === "admin").
+const LEAD_ACTION_META = {
+  created:                   { label: "Lead Created",                 variant: "success" },
+  edited:                    { label: "Lead Edited",                  variant: "info" },
+  accept:                    { label: "Approval Note Submitted",      variant: "info" },
+  submit_for_pr_review:      { label: "Submitted for PR Review",      variant: "info" },
+  pr_review_accept:          { label: "PR Accepted Note",             variant: "success" },
+  pr_review_reject:          { label: "PR Rejected Note",             variant: "danger" },
+  drop:                      { label: "Dropped",                      variant: "danger" },
+  reject_reassign:           { label: "Rejected & Reassigned",        variant: "warning" },
+  claim:                     { label: "Lead Claimed",                 variant: "info" },
+  dgm_initial_approve:       { label: "DGM Approved → PMT",           variant: "success" },
+  dgm_initial_decline:       { label: "DGM Declined",                 variant: "danger" },
+  pmt_approve:               { label: "PMT Approved → MD",            variant: "success" },
+  pmt_escalate:              { label: "PMT Escalated → PMT Extended", variant: "warning" },
+  pmt_decline:               { label: "PMT Declined",                 variant: "danger" },
+  pmt_extended_approve:      { label: "PMT Extended Approved → MD",   variant: "success" },
+  pmt_extended_forward_dgm:  { label: "PMT Extended Forwarded → G3",  variant: "warning" },
+  pmt_extended_decline:      { label: "PMT Extended Declined",        variant: "danger" },
+  dgm_accept:                { label: "G3 Accepted → MD",             variant: "success" },
+  dgm_decline:               { label: "G3 Declined",                  variant: "danger" },
+  md_approve:                { label: "MD Approved",                  variant: "success" },
+  md_decline:                { label: "MD Declined",                  variant: "danger" },
+};
+const LEAD_ACTION_OPTIONS = [
+  { value: "all", label: "All Actions" },
+  ...Object.entries(LEAD_ACTION_META).map(([k, v]) => ({ value: k, label: v.label })),
+];
+
 const PAGE_SIZE = 20;
 
 function ActionBadge({ action, meta }) {
@@ -72,9 +108,9 @@ function fmtDateTime(iso) {
   return `${d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} · ${d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-// Account-management entries only — the Empanelment Activity tab already
-// navigates to the full application review page on click, which shows
-// everything in far more depth than a modal could.
+// Account-management entries only — the Empanelment Activity and Lead
+// Activity tabs already navigate to the full application/lead page on
+// click, which shows everything in far more depth than a modal could.
 function AuditLogDetailModal({ log, onClose }) {
   if (!log) return null;
   return (
@@ -118,6 +154,7 @@ function AuditLogDetailModal({ log, onClose }) {
 const TABS = [
   { key: "account", label: "Account Management" },
   { key: "empanelment", label: "Empanelment Activity" },
+  { key: "lead", label: "Lead Activity" },
 ];
 
 export default function AuditLogsPage() {
@@ -137,9 +174,10 @@ export default function AuditLogsPage() {
   const [selectedLog, setSelectedLog] = useState(null);
 
   const isEmp = tab === "empanelment";
-  const actionOptions = isEmp ? EMP_ACTION_OPTIONS : ACTION_OPTIONS;
+  const isLead = tab === "lead";
+  const actionOptions = isEmp ? EMP_ACTION_OPTIONS : isLead ? LEAD_ACTION_OPTIONS : ACTION_OPTIONS;
   const roleOptions = isEmp ? EMP_ROLE_OPTIONS : ROLE_OPTIONS;
-  const actionMeta = isEmp ? EMP_ACTION_META : ACTION_META;
+  const actionMeta = isEmp ? EMP_ACTION_META : isLead ? LEAD_ACTION_META : ACTION_META;
 
   const activeFilterCount = [filterAction !== "all", filterRole !== "all", !!filterDate].filter(Boolean).length;
 
@@ -171,10 +209,28 @@ export default function AuditLogsPage() {
     return query;
   }, []);
 
+  // Org-wide, read-only — can_view_lead() already grants admin select
+  // access to every lead's activity log regardless of team/committee (see
+  // 20260903030000_lead_committee_visibility_through_pipeline.sql), so no
+  // extra RLS was needed just for this tab to work.
+  const fetchLeadLogs = useCallback(async (currentPage, opts) => {
+    let query = supabase
+      .from("lead_activity_log")
+      .select("*, actor:actor_id(full_name, role), lead:lead_id(lead_number, title, team, status)", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE - 1);
+
+    if (opts.action !== "all") query = query.eq("action", opts.action);
+    if (opts.role !== "all") query = query.eq("actor_role", opts.role);
+    if (opts.date) query = query.gte("created_at", opts.date + "T00:00:00").lte("created_at", opts.date + "T23:59:59");
+    if (opts.search.trim()) query = query.ilike("comment", `%${opts.search.trim()}%`);
+    return query;
+  }, []);
+
   const fetchLogs = useCallback(
     async (currentPage, opts) => {
       setLoading(true);
-      const { data, error, count } = await (isEmp ? fetchEmpLogs(currentPage, opts) : fetchAccountLogs(currentPage, opts));
+      const { data, error, count } = await (isEmp ? fetchEmpLogs(currentPage, opts) : isLead ? fetchLeadLogs(currentPage, opts) : fetchAccountLogs(currentPage, opts));
       if (error) setBanner(error.message);
       else {
         setLogs(data || []);
@@ -182,7 +238,7 @@ export default function AuditLogsPage() {
       }
       setLoading(false);
     },
-    [isEmp, fetchAccountLogs, fetchEmpLogs]
+    [isEmp, isLead, fetchAccountLogs, fetchEmpLogs, fetchLeadLogs]
   );
 
   useEffect(() => {
@@ -222,7 +278,7 @@ export default function AuditLogsPage() {
       <div className="app-container">
         <div className="page-header">
           <h1>Audit Logs</h1>
-          <p>Complete history of account-management and empanelment pipeline actions across the system.</p>
+          <p>Complete history of account-management, empanelment, and lead generation pipeline actions across the system.</p>
         </div>
 
         <div className="al-tabs">
@@ -265,7 +321,7 @@ export default function AuditLogsPage() {
                       <th>Date &amp; Time</th>
                       <th>Actor</th>
                       <th>Role</th>
-                      {isEmp ? <th>Application</th> : <th>Team</th>}
+                      {isEmp ? <th>Application</th> : isLead ? <th>Lead</th> : <th>Team</th>}
                       <th>Action</th>
                       <th>Comment</th>
                     </tr>
@@ -274,8 +330,14 @@ export default function AuditLogsPage() {
                     {logs.map((log) => (
                       <tr
                         key={log.id}
-                        className={isEmp ? (log.application_id ? "al-row-clickable" : "") : "al-row-clickable"}
-                        onClick={isEmp ? (log.application_id ? () => navigate(`/empanelment/${log.application_id}`) : undefined) : () => setSelectedLog(log)}
+                        className={isEmp ? (log.application_id ? "al-row-clickable" : "") : isLead ? (log.lead_id ? "al-row-clickable" : "") : "al-row-clickable"}
+                        onClick={
+                          isEmp
+                            ? (log.application_id ? () => navigate(`/empanelment/${log.application_id}`) : undefined)
+                            : isLead
+                            ? (log.lead_id ? () => navigate(`/leads/${log.lead_id}`) : undefined)
+                            : () => setSelectedLog(log)
+                        }
                       >
                         <td className="al-date-cell">
                           <span className="al-date">
@@ -287,10 +349,15 @@ export default function AuditLogsPage() {
                         </td>
                         <td className="al-actor">{log.actor?.full_name || (isEmp ? "Business Partner" : "—")}</td>
                         <td>
-                          <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp ? log.actor_role : log.action_by_role] || (isEmp ? log.actor_role : log.action_by_role) || "—"}</Badge>
+                          <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp || isLead ? log.actor_role : log.action_by_role] || (isEmp || isLead ? log.actor_role : log.action_by_role) || "—"}</Badge>
                         </td>
                         {isEmp ? (
                           <td className="al-team">{log.application?.application_code || "—"}</td>
+                        ) : isLead ? (
+                          <td className="al-team">
+                            {log.lead?.lead_number || "—"}
+                            {log.lead?.team && <span className="text-xs text-tertiary" style={{ display: "block" }}>{log.lead.team}</span>}
+                          </td>
                         ) : (
                           <td className="al-team">{log.actor?.team || "—"}</td>
                         )}
@@ -311,7 +378,13 @@ export default function AuditLogsPage() {
                   <div
                     key={log.id}
                     className="al-mobile-card"
-                    onClick={isEmp ? (log.application_id ? () => navigate(`/empanelment/${log.application_id}`) : undefined) : () => setSelectedLog(log)}
+                    onClick={
+                      isEmp
+                        ? (log.application_id ? () => navigate(`/empanelment/${log.application_id}`) : undefined)
+                        : isLead
+                        ? (log.lead_id ? () => navigate(`/leads/${log.lead_id}`) : undefined)
+                        : () => setSelectedLog(log)
+                    }
                   >
                     <div className="al-mobile-card-top">
                       <span className="al-actor">{log.actor?.full_name || (isEmp ? "Business Partner" : "—")}</span>
@@ -322,9 +395,10 @@ export default function AuditLogsPage() {
                         {new Date(log.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} ·{" "}
                         {new Date(log.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                       </span>
-                      <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp ? log.actor_role : log.action_by_role] || (isEmp ? log.actor_role : log.action_by_role) || "—"}</Badge>
+                      <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp || isLead ? log.actor_role : log.action_by_role] || (isEmp || isLead ? log.actor_role : log.action_by_role) || "—"}</Badge>
                       {isEmp && log.application?.application_code && <span className="text-xs text-tertiary">{log.application.application_code}</span>}
-                      {!isEmp && log.actor?.team && <span className="text-xs text-tertiary">{log.actor.team}</span>}
+                      {isLead && log.lead?.lead_number && <span className="text-xs text-tertiary">{log.lead.lead_number}{log.lead.team ? ` · ${log.lead.team}` : ""}</span>}
+                      {!isEmp && !isLead && log.actor?.team && <span className="text-xs text-tertiary">{log.actor.team}</span>}
                     </div>
                     {log.comment && <div className="al-comment-text">{log.comment}</div>}
                   </div>

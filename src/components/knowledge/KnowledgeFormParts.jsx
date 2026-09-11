@@ -250,17 +250,23 @@ export function KeywordDropdown({ allKeywords, selectedKeywords, onToggle, onAdd
   );
 }
 
-const BUCKET = "project-documents";
+const PROJECT_BUCKET = "project-documents";
 
-// Opens a document that lives in the private bucket by generating a
+// Opens a document that lives in a private bucket by generating a
 // short-lived signed URL on demand — nothing here is ever a public URL.
-export async function openProjectDocument(storagePath) {
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 300);
+// Shared by every Knowledge Repository document store (project-documents,
+// company-documents, ...) — same bucket-agnostic pattern, just parameterized.
+export async function openStorageDocument(bucket, storagePath) {
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(storagePath, 300);
   if (error || !data?.signedUrl) {
     alert("Could not open this document. Please try again.");
     return;
   }
   window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+}
+
+export async function openProjectDocument(storagePath) {
+  return openStorageDocument(PROJECT_BUCKET, storagePath);
 }
 
 // ── Document Upload ───────────────────────────────────────────
@@ -285,7 +291,7 @@ export function DocumentUpload({ projectId, documents, onAdd, onRemove }) {
     try {
       if (projectId) {
         const path = `${projectId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-        const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file);
+        const { error: upErr } = await supabase.storage.from(PROJECT_BUCKET).upload(path, file);
         if (upErr) throw upErr;
         const { data: inserted, error: insErr } = await supabase
           .from("project_documents")
@@ -293,7 +299,7 @@ export function DocumentUpload({ projectId, documents, onAdd, onRemove }) {
           .select()
           .single();
         if (insErr) {
-          await supabase.storage.from(BUCKET).remove([path]);
+          await supabase.storage.from(PROJECT_BUCKET).remove([path]);
           throw insErr;
         }
         onAdd(inserted);
@@ -314,7 +320,7 @@ export function DocumentUpload({ projectId, documents, onAdd, onRemove }) {
   async function handleRemove(i, doc) {
     if (doc.id) {
       await supabase.from("project_documents").delete().eq("id", doc.id);
-      if (doc.storage_path) await supabase.storage.from(BUCKET).remove([doc.storage_path]);
+      if (doc.storage_path) await supabase.storage.from(PROJECT_BUCKET).remove([doc.storage_path]);
     }
     onRemove(i, doc);
   }

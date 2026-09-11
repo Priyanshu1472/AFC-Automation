@@ -66,6 +66,23 @@ describe("user management is Admin-only", () => {
   });
 });
 
+describe("Company Documents write access is Admin-only", () => {
+  it("can.manageCompanyDocuments is true only for admin", () => {
+    expect(can.manageCompanyDocuments("admin")).toBe(true);
+    for (const r of Object.keys(ROLES).filter((r) => r !== "admin")) {
+      expect(can.manageCompanyDocuments(r)).toBe(false);
+    }
+  });
+
+  it("every non-business_associate role can still reach Knowledge Repository (view/download Company Documents)", () => {
+    expect(KNOWLEDGE_REPOSITORY_ROLES).not.toContain("business_associate");
+    expect(KNOWLEDGE_REPOSITORY_ROLES).toContain("admin");
+    for (const r of Object.keys(ROLES).filter((r) => r !== "business_associate")) {
+      expect(KNOWLEDGE_REPOSITORY_ROLES).toContain(r);
+    }
+  });
+});
+
 describe("can.viewAllTeams / filterReportsByTeamOffice", () => {
   it("viewAllTeams includes md/cfo/cs/admin only", () => {
     for (const r of ["md", "cfo", "cs", "admin"]) expect(can.viewAllTeams(r)).toBe(true);

@@ -211,6 +211,10 @@ export default function LeadDetailPage() {
 
   function availableActions() {
     if (!lead) return [];
+    // Admin has org-wide VIEW-ONLY access to every lead (for the Audit
+    // Logs "Lead Activity" tab) — never an actor on any lead, regardless
+    // of any coincidental id/role/committee match below.
+    if (profile?.role === "admin") return [];
     // A creator-drafted note is sitting with the PR for Accept/Edit/Reject
     // — swap in that trio (PR only; everyone else, including the creator,
     // sees "Viewing only" until the PR acts) instead of the normal
@@ -633,8 +637,12 @@ export default function LeadDetailPage() {
 
               {/* Floating bubble (portaled to <body>) rather than an inline
                   card — LeadChatPanel renders nothing itself when the chat
-                  hasn't opened yet. */}
-              <LeadChatPanel leadId={lead.id} chatOpenedAt={lead.chat_opened_at} locked={lead.status === "md_approved"} />
+                  hasn't opened yet. Admin never gets the chat at all — it's
+                  view-only access to the lead, not a seat in the
+                  conversation (also enforced server-side in RLS). */}
+              {profile?.role !== "admin" && (
+                <LeadChatPanel leadId={lead.id} chatOpenedAt={lead.chat_opened_at} locked={lead.status === "md_approved"} />
+              )}
 
               <Card>
                 <Card.Header title="Timeline" />

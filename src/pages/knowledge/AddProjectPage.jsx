@@ -217,7 +217,7 @@ export default function AddProjectPage() {
 
                 <div className="ap-field">
                   <label>Telephone</label>
-                  <input type="text" placeholder="e.g. +91 98300 00000" value={form.telephone} onChange={(e) => handleFormChange("telephone", e.target.value)} />
+                  <input type="text" placeholder="e.g. +91 00000 00000" value={form.telephone} onChange={(e) => handleFormChange("telephone", e.target.value)} />
                 </div>
 
                 <div className="ap-field">
@@ -240,7 +240,7 @@ export default function AddProjectPage() {
 
                 <div className="ap-field">
                   <label>Duration of Assignment (months)</label>
-                  <input type="text" readOnly value={durationAuto || ""} placeholder="Auto-calculated from dates" style={{ background: "var(--surface-2, #f5f5f5)", cursor: "not-allowed" }} />
+                  <input type="text" readOnly value={durationAuto || ""} placeholder="Auto-calculated from dates" style={{ background: "var(--surface-2, #222b26)", cursor: "not-allowed" }} />
                 </div>
 
                 <div className="ap-field">

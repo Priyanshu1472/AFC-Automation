@@ -1,10 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useShortlist } from "../../hooks/useShortlist";
+import { useToast } from "../../hooks/useToast";
 import { buildProjectRows, buildPreviewHTML } from "../../utils/docxBuilder";
+import {
+  buildKnowledgeDocumentsDocxChildren,
+  buildKnowledgeShortlistProfilesPdf,
+  buildKnowledgeShortlistSupportingsPdf,
+  buildKnowledgeShortlistBothPdf,
+  downloadBlob,
+  openPdfInNewTab,
+} from "../../utils/knowledgeDocumentEmbed";
 import AppHeader from "../../components/shared/AppHeader";
-import PreviewModal from "../../components/ui/PreviewModal";
 import "../../styles/ShortlistsPage.css";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -23,6 +31,50 @@ const IconPin = () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="non
 const IconWord = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" /></svg>);
 const IconPDF = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>);
 
+// A4, matching the page geometry every other Knowledge Repository export uses.
+const PAGE_SETUP = { properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 720, right: 720, bottom: 720, left: 720 } } } };
+
+async function withDocxClasses(fn) {
+  const { Document, Packer, Table, WidthType, Paragraph, TextRun, ImageRun, HeadingLevel, TableRow, TableCell, BorderStyle, VerticalAlign, AlignmentType } = await import("https://esm.sh/docx@8.5.0");
+  return fn({ Document, Packer, Table, WidthType, Paragraph, TextRun, ImageRun, HeadingLevel, TableRow, TableCell, BorderStyle, VerticalAlign, AlignmentType });
+}
+
+// A "Download X" trigger that opens a small PDF/Word menu instead of
+// downloading immediately — mirrors ProjectDetailsPage's own export menu.
+// Open state is controlled by the parent card so it can lift its own
+// overflow:hidden while a menu is showing (otherwise the menu gets
+// clipped by the card's rounded-corner clipping, especially when the
+// card is collapsed and there's no room below the button).
+function ExportMenuButton({ label, disabled, busy, busyLabel, open, onOpenChange, onSelect }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e) { if (ref.current && !ref.current.contains(e.target)) onOpenChange(false); }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open, onOpenChange]);
+
+  return (
+    <div ref={ref} className="slv-export-menu-root">
+      <button type="button" className="slv-export-btn" disabled={disabled} onClick={() => onOpenChange(!open)}>
+        {busy ? busyLabel : label}
+        {!busy && <IconChevron />}
+      </button>
+      {open && !disabled && (
+        <div className="slv-export-menu" role="menu">
+          <button type="button" className="slv-export-menu-item" role="menuitem" onClick={() => { onOpenChange(false); onSelect("pdf"); }}>
+            <IconPDF /> PDF
+          </button>
+          <button type="button" className="slv-export-menu-item" role="menuitem" onClick={() => { onOpenChange(false); onSelect("docx"); }}>
+            <IconWord /> Word (.docx)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 async function fetchShortlistProjects(shortlistId) {
   const { data } = await supabase
     .from("shortlist_projects")
@@ -37,53 +89,23 @@ async function fetchShortlistProjects(shortlistId) {
   return data || [];
 }
 
-async function exportShortlistDocx(shortlistName, items) {
-  try {
-    const { Document, Packer, Table, WidthType, Paragraph, TextRun, TableRow, TableCell, BorderStyle, VerticalAlign, AlignmentType } = await import("https://esm.sh/docx@8.5.0");
-    const docxClasses = { Paragraph, TextRun, TableRow, TableCell, BorderStyle, WidthType, VerticalAlign, AlignmentType };
-    const sections = [];
-
-    for (let i = 0; i < items.length; i++) {
-      const { project, keywords, selectedKwNames } = items[i];
-      const { rows, TW, colWidths } = buildProjectRows(project, keywords, selectedKwNames, docxClasses, i + 1);
-      sections.push({
-        properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 720, right: 720, bottom: 720, left: 720 } } },
-        children: [new Table({ width: { size: TW, type: WidthType.DXA }, columnWidths: colWidths, rows })],
-      });
-    }
-
-    const wordDoc = new Document({ styles: { default: { document: { run: { font: "Times New Roman", size: 20 } } } }, sections });
-    const blob = await Packer.toBlob(wordDoc);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${shortlistName.replace(/[^a-z0-9]/gi, "_")}_shortlist.docx`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error("Export failed:", err);
-    alert("Export failed. Try again.");
-  }
-}
-
-function buildShortlistPreviewHTML(items) {
-  return items.map((item, i) => buildPreviewHTML(item.project, item.keywords, item.selectedKwNames, i + 1)).join('<div style="page-break-after:always;margin:32px 0;border-top:2px dashed #ccc;"></div>');
-}
-
 function ShortlistCard({ shortlist, onOpenDetails, onRemoveProject, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const [projects, setProjects] = useState([]);
   const [loading] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [preview, setPreview] = useState(null);
+  const [busy, setBusy] = useState(null); // 'profile' | 'supportings' | 'both' | null
+  const [busyLabel, setBusyLabel] = useState("");
+  const [openMenu, setOpenMenu] = useState(null); // 'profile' | 'supportings' | 'both' | null
   const [confirmDel, setConfirmDel] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { showToast } = useToast();
+  const fileBase = () => (shortlist.name || "shortlist").replace(/[^a-z0-9]/gi, "_");
 
   const count = shortlist.shortlist_projects?.length || 0;
 
   async function buildExportItems() {
     const raw = await fetchShortlistProjects(shortlist.id);
-    return raw
+    const items = raw
       .map((sp) => {
         const project = sp.projects;
         const kwDetails = sp.project_keyword_details?.[0]?.project_keyword_details || [];
@@ -91,6 +113,17 @@ function ShortlistCard({ shortlist, onOpenDetails, onRemoveProject, onDelete }) 
         return { project, keywords, selectedKwNames: sp.selected_kw_names || [] };
       })
       .filter((item) => item.project);
+
+    // One batched fetch for every project's documents (not one query per
+    // project) — same project_documents table ProjectDetailsPage already
+    // reads, just grouped by project_id here.
+    const projectIds = items.map((it) => it.project.id);
+    const docsByProject = {};
+    if (projectIds.length > 0) {
+      const { data: docs } = await supabase.from("project_documents").select("*").in("project_id", projectIds).order("created_at");
+      (docs || []).forEach((d) => { (docsByProject[d.project_id] ||= []).push(d); });
+    }
+    return items.map((it) => ({ ...it, documents: docsByProject[it.project.id] || [] }));
   }
 
   function handleExpand() {
@@ -101,33 +134,130 @@ function ShortlistCard({ shortlist, onOpenDetails, onRemoveProject, onDelete }) 
     setExpanded((e) => !e);
   }
 
-  async function handleWordPreview() {
-    setExporting(true);
+  // "Download Profile" — every project's info page only, no documents.
+  async function downloadProfile(format) {
+    setBusy("profile");
+    setBusyLabel("Preparing…");
     try {
       const items = await buildExportItems();
-      setPreview({
-        html: buildShortlistPreviewHTML(items),
-        title: shortlist.name,
-        downloadLabel: "Download Word",
-        onDownload: async () => { await exportShortlistDocx(shortlist.name, items); setPreview(null); },
-      });
+      if (format === "docx") {
+        await withDocxClasses(async (docxClasses) => {
+          const { Document, Packer, Table, WidthType } = docxClasses;
+          const sections = items.map((item, i) => {
+            const { rows, TW, colWidths } = buildProjectRows(item.project, item.keywords, item.selectedKwNames, docxClasses, i + 1);
+            return { ...PAGE_SETUP, children: [new Table({ width: { size: TW, type: WidthType.DXA }, columnWidths: colWidths, rows })] };
+          });
+          const wordDoc = new Document({ styles: { default: { document: { run: { font: "Times New Roman", size: 20 } } } }, sections });
+          const blob = await Packer.toBlob(wordDoc);
+          downloadBlob(blob, `${fileBase()}_Profile.docx`);
+        });
+      } else {
+        const blob = await buildKnowledgeShortlistProfilesPdf({
+          items: items.map((it) => ({ label: it.project.title, projectInfoHtml: buildPreviewHTML(it.project, it.keywords, it.selectedKwNames, 1) })),
+          onProgress: (i, total, name) => setBusyLabel(`Project ${i} of ${total}: ${name}`),
+        });
+        openPdfInNewTab(blob, `${fileBase()}_Profile.pdf`);
+      }
+      showToast(format === "docx" ? "Profiles downloaded." : "Profiles opened in a new tab.", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Export failed.", "danger");
     } finally {
-      setExporting(false);
+      setBusy(null);
+      setBusyLabel("");
     }
   }
 
-  async function handlePDFPreview() {
-    setExporting(true);
+  // "Download Supportings" — every project's uploaded documents only, no
+  // project-info pages. Projects with nothing uploaded are skipped.
+  async function downloadSupportings(format) {
+    setBusy("supportings");
+    setBusyLabel("Preparing…");
     try {
       const items = await buildExportItems();
-      setPreview({
-        html: buildShortlistPreviewHTML(items),
-        title: shortlist.name,
-        downloadLabel: "Print / Save PDF",
-        onDownload: () => { setPreview(null); setTimeout(() => window.print(), 200); },
-      });
+      const withDocs = items.filter((it) => it.documents.length);
+      if (withDocs.length === 0) {
+        showToast("No uploaded documents found in this shortlist.", "danger");
+        return;
+      }
+      if (format === "docx") {
+        await withDocxClasses(async (docxClasses) => {
+          const { Document, Packer, Paragraph, TextRun, HeadingLevel } = docxClasses;
+          const children = [];
+          for (let i = 0; i < withDocs.length; i++) {
+            const item = withDocs[i];
+            children.push(new Paragraph({ heading: HeadingLevel.TITLE, pageBreakBefore: i > 0, children: [new TextRun(item.project.title)] }));
+            children.push(...await buildKnowledgeDocumentsDocxChildren(
+              item.documents, docxClasses, supabase,
+              (docIdx, docTotal, name) => setBusyLabel(`${item.project.title}: ${name} (${docIdx}/${docTotal})`),
+              { standalone: true }
+            ));
+          }
+          const wordDoc = new Document({ styles: { default: { document: { run: { font: "Times New Roman", size: 20 } } } }, sections: [{ ...PAGE_SETUP, children }] });
+          const blob = await Packer.toBlob(wordDoc);
+          downloadBlob(blob, `${fileBase()}_Supporting_Documents.docx`);
+        });
+      } else {
+        const blob = await buildKnowledgeShortlistSupportingsPdf({
+          items: withDocs.map((it) => ({ label: it.project.title, documents: it.documents })),
+          supabase,
+          onProgress: (i, total, name) => setBusyLabel(name),
+        });
+        openPdfInNewTab(blob, `${fileBase()}_Supporting_Documents.pdf`);
+      }
+      showToast(format === "docx" ? "Supporting documents downloaded." : "Supporting documents opened in a new tab.", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Export failed.", "danger");
     } finally {
-      setExporting(false);
+      setBusy(null);
+      setBusyLabel("");
+    }
+  }
+
+  // "Download Both" — every project's profile page(s) first, then every
+  // project's uploaded documents, matching the single-project page's order.
+  async function downloadBoth(format) {
+    setBusy("both");
+    setBusyLabel("Preparing…");
+    try {
+      const items = await buildExportItems();
+      const withDocs = items.filter((it) => it.documents.length);
+      if (format === "docx") {
+        await withDocxClasses(async (docxClasses) => {
+          const { Document, Packer, Table, WidthType, Paragraph, TextRun, HeadingLevel } = docxClasses;
+          const sections = items.map((item, i) => {
+            const { rows, TW, colWidths } = buildProjectRows(item.project, item.keywords, item.selectedKwNames, docxClasses, i + 1);
+            return { ...PAGE_SETUP, children: [new Table({ width: { size: TW, type: WidthType.DXA }, columnWidths: colWidths, rows })] };
+          });
+          for (let i = 0; i < withDocs.length; i++) {
+            const item = withDocs[i];
+            const docChildren = await buildKnowledgeDocumentsDocxChildren(
+              item.documents, docxClasses, supabase,
+              (docIdx, docTotal, name) => setBusyLabel(`${item.project.title}: ${name} (${docIdx}/${docTotal})`),
+              { standalone: true }
+            );
+            sections.push({ ...PAGE_SETUP, children: [new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun(item.project.title)] }), ...docChildren] });
+          }
+          const wordDoc = new Document({ styles: { default: { document: { run: { font: "Times New Roman", size: 20 } } } }, sections });
+          const blob = await Packer.toBlob(wordDoc);
+          downloadBlob(blob, `${fileBase()}.docx`);
+        });
+      } else {
+        const blob = await buildKnowledgeShortlistBothPdf({
+          items: items.map((it) => ({ label: it.project.title, projectInfoHtml: buildPreviewHTML(it.project, it.keywords, it.selectedKwNames, 1), documents: it.documents })),
+          supabase,
+          onProgress: (i, total, name) => setBusyLabel(name),
+        });
+        openPdfInNewTab(blob, `${fileBase()}.pdf`);
+      }
+      showToast(format === "docx" ? "Download complete." : "Opened in a new tab.", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Export failed.", "danger");
+    } finally {
+      setBusy(null);
+      setBusyLabel("");
     }
   }
 
@@ -145,7 +275,7 @@ function ShortlistCard({ shortlist, onOpenDetails, onRemoveProject, onDelete }) 
 
   return (
     <>
-      <div className={`slv-card${expanded ? " slv-card--open" : ""}`}>
+      <div className={`slv-card${expanded ? " slv-card--open" : ""}${openMenu ? " slv-card--menu-open" : ""}`}>
         <div className="slv-card-header">
           <button className="slv-card-toggle" onClick={handleExpand}>
             <span className={`slv-chevron${expanded ? " slv-chevron--open" : ""}`}><IconChevron /></span>
@@ -161,8 +291,33 @@ function ShortlistCard({ shortlist, onOpenDetails, onRemoveProject, onDelete }) 
           </button>
 
           <div className="slv-card-actions">
-            <button className="slv-export-btn" onClick={handleWordPreview} disabled={exporting || count === 0} title="Preview / Download as Word"><IconWord /> Word</button>
-            <button className="slv-export-btn" onClick={handlePDFPreview} disabled={exporting || count === 0} title="Preview / Save as PDF"><IconPDF /> PDF</button>
+            <ExportMenuButton
+              label="Download Profile"
+              busy={busy === "profile"}
+              busyLabel={busyLabel}
+              disabled={busy !== null || count === 0}
+              open={openMenu === "profile"}
+              onOpenChange={(v) => setOpenMenu(v ? "profile" : null)}
+              onSelect={downloadProfile}
+            />
+            <ExportMenuButton
+              label="Download Supportings"
+              busy={busy === "supportings"}
+              busyLabel={busyLabel}
+              disabled={busy !== null || count === 0}
+              open={openMenu === "supportings"}
+              onOpenChange={(v) => setOpenMenu(v ? "supportings" : null)}
+              onSelect={downloadSupportings}
+            />
+            <ExportMenuButton
+              label="Download Both"
+              busy={busy === "both"}
+              busyLabel={busyLabel}
+              disabled={busy !== null || count === 0}
+              open={openMenu === "both"}
+              onOpenChange={(v) => setOpenMenu(v ? "both" : null)}
+              onSelect={downloadBoth}
+            />
             {!confirmDel ? (
               <button className="slv-icon-btn slv-icon-btn--danger" onClick={() => setConfirmDel(true)} title="Delete shortlist"><IconTrash /></button>
             ) : (
@@ -209,10 +364,6 @@ function ShortlistCard({ shortlist, onOpenDetails, onRemoveProject, onDelete }) 
           </div>
         )}
       </div>
-
-      {preview && (
-        <PreviewModal html={preview.html} title={preview.title} downloadLabel={preview.downloadLabel} onDownload={preview.onDownload} onClose={() => setPreview(null)} />
-      )}
     </>
   );
 }
