@@ -71,6 +71,13 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         .single();
       if (insertErr) throw new Error(insertErr.message);
       proposalId = created.id;
+
+      // Fee notes (EMD / Tender Fee / Processing Fee) are deliberately NOT
+      // created here — an eagerly-created stub could end up with a blank
+      // amount if Person Responsible never touched it before generating the
+      // PDF. Each note is created lazily the first time Person Responsible
+      // fills the edit form and generates its PDF (see save-fee-note's
+      // create-or-update branch, FeeNotesPanel.jsx).
     }
 
     if (needsChatOpen && existing) {

@@ -1,17 +1,21 @@
 // supabase/functions/decide-fee-note-md/index.ts
-// JWT must be ON. MD's final decision on a fee note (EMD / Tender Fee /
-// Processing Fee), gated by the OTP issued via request-fee-note-otp. Nothing mutates
-// and no notification goes out until the code is confirmed. There's no
-// committee chain to route a rejection back to — a rejected note is simply
-// edited and resubmitted by Person Responsible/Reviewer via save-fee-notes.
+// JWT must be ON. MD's final decision on the Bid Payment Requisition Note,
+// gated by the MD's own 4-digit action PIN (same
+// verifyActionPin used across the Lead/Empanelment workflows) — replaces
+// the previous email-OTP round trip (request-fee-note-otp/feeNoteOtp.ts,
+// both deleted). Approval stamps md_decided_by/at as the MD's signature on
+// the note. Rejection sends the note all the way back to draft, clearing
+// both the Person Responsible's and Approval Authority's signatures since
+// a changed note needs fresh sign-off from both before it can reach the MD
+// again (see advance-fee-note-stage for the first two hops).
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
-import { verifyFeeNoteOtp } from "../_shared/feeNoteOtp.ts";
+import { verifyActionPin } from "../_shared/pin.ts";
 import { notifyUsers } from "../_shared/notify.ts";
 
-const NOTE_LABELS: Record<string, string> = { emd: "EMD Note", tender_fee: "Tender Fee Note", pbg: "Processing Fee Note" };
+const NOTE_LABEL = "Bid Payment Requisition Note";
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
@@ -20,6 +24,10 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   const callerResult = await getCallerProfile(req, adminClient);
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
+  // No admin override, same as the two earlier hops in advance-fee-note-
+  // stage — md_decided_by prints under "Managing Director" on the note, so
+  // it must actually be an MD who decided, not an admin acting on their
+  // behalf (matches this function's original, pre-PIN behavior).
   if (caller.role !== "md") return jsonRes(req, 403, { error: "Only the MD can decide at this stage." });
 
   let body: Record<string, unknown>;
@@ -34,20 +42,20 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   const remark = typeof body.remark === "string" ? body.remark.trim() : null;
   if (typeof feeNoteId !== "string" || !feeNoteId) return jsonRes(req, 400, { error: "fee_note_id is required." });
   if (decision !== "approved" && decision !== "rejected") return jsonRes(req, 400, { error: "Invalid decision." });
+  if (decision === "rejected" && !remark) return jsonRes(req, 400, { error: "A remark is required when sending a note back." });
 
-  const otpAction = decision === "approved" ? "md_approve" : "md_reject";
-  const verified = await verifyFeeNoteOtp(adminClient, { userId: caller.id, feeNoteId, action: otpAction, otp: body.otp });
-  if (!verified) return jsonRes(req, 400, { error: "Invalid or expired verification code." });
+  const pinErr = await verifyActionPin(adminClient, caller.id, caller.pin_hash, body.pin);
+  if (pinErr) return jsonRes(req, 400, { error: pinErr });
 
   try {
     const { data: note, error: fetchErr } = await adminClient
       .from("fee_notes")
-      .select("id, note_type, proposal_id, status")
+      .select("id, proposal_id, status")
       .eq("id", feeNoteId)
       .maybeSingle();
     if (fetchErr || !note) return jsonRes(req, 404, { error: "Fee note not found." });
     if (note.status !== "pending_md") {
-      return jsonRes(req, 400, { error: `This fee note is "${note.status}", not "pending_md".` });
+      return jsonRes(req, 400, { error: `This fee note is "${note.status}", not "pending_md". It may have just been updated by someone else — refresh and try again.` });
     }
 
     const { data: proposal } = await adminClient
@@ -57,14 +65,16 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .maybeSingle();
     const { data: lead } = await adminClient
       .from("leads")
-      .select("title, person_responsible_id, reviewer_id")
+      .select("title, person_responsible_id, reviewer_id, approval_authority_id")
       .eq("id", proposal?.lead_id)
       .maybeSingle();
 
-    const { error: updErr } = await adminClient
-      .from("fee_notes")
-      .update({ status: decision, md_decided_by: caller.id, md_decided_at: new Date().toISOString(), md_remark: remark })
-      .eq("id", feeNoteId);
+    const updates: Record<string, unknown> =
+      decision === "approved"
+        ? { status: "approved", md_decided_by: caller.id, md_decided_at: new Date().toISOString(), md_remark: remark }
+        : { status: "draft", md_decided_by: null, md_decided_at: null, md_remark: null, pr_signed_by: null, pr_signed_at: null, aa_signed_by: null, aa_signed_at: null };
+
+    const { error: updErr } = await adminClient.from("fee_notes").update(updates).eq("id", feeNoteId).eq("status", "pending_md");
     if (updErr) throw new Error(updErr.message);
 
     await adminClient.from("fee_note_events").insert({
@@ -72,13 +82,13 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       action: decision === "approved" ? "md_approved" : "md_rejected", remark,
     });
 
-    const noteLabel = NOTE_LABELS[note.note_type] || note.note_type;
-    await notifyUsers(adminClient, [lead?.person_responsible_id, lead?.reviewer_id], {
-      title: decision === "approved" ? `${noteLabel} approved` : `${noteLabel} needs changes`,
+    const noteLabel = NOTE_LABEL;
+    await notifyUsers(adminClient, [lead?.person_responsible_id, lead?.reviewer_id, lead?.approval_authority_id], {
+      title: decision === "approved" ? `${noteLabel} approved` : `${noteLabel} sent back`,
       sub_text: decision === "approved"
         ? `The MD approved the ${noteLabel} for "${lead?.title}".`
-        : `The MD sent the ${noteLabel} for "${lead?.title}" back: ${remark || "no remark given"}`,
-      type: "info",
+        : `The MD sent the ${noteLabel} for "${lead?.title}" back: ${remark}`,
+      type: decision === "approved" ? "info" : "action_required",
       link: "/leads",
     });
 

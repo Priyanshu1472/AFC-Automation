@@ -1,5 +1,5 @@
 {
   "tasks": {
-    "test": "deno test --allow-env --no-check"
+    "test": "deno test --allow-env --allow-read --no-check"
   }
 }

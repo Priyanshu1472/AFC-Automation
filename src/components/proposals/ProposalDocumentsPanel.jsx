@@ -11,6 +11,7 @@ import Collapsible from "../../components/ui/Collapsible";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import { PROPOSAL_DOCUMENT_TYPES } from "../../lib/proposalPrep";
+import { FolderIcon, FileTextIcon } from "../icons";
 
 const BUCKET = "proposal-documents";
 
@@ -72,7 +73,7 @@ export default function ProposalDocumentsPanel({ proposalId, documents, canManag
 
   return (
     <Card>
-      <Collapsible title="Proposal Documents" subtitle="Technical, Financial, and a third slot for any additional proposal document.">
+      <Collapsible title="Proposal Documents" subtitle="Technical, Financial, and a third slot for any additional proposal document." icon={<FolderIcon />}>
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         <div className="pp-doc-grid">
           {PROPOSAL_DOCUMENT_TYPES.map((t) => {
@@ -83,7 +84,7 @@ export default function ProposalDocumentsPanel({ proposalId, documents, canManag
                 <div className="pp-doc-card-title">{t.label}</div>
                 {doc ? (
                   <div className="pp-doc-card-file">
-                    <div className="pp-doc-card-filename" title={doc.file_name}>{doc.file_name}</div>
+                    <div className="pp-doc-card-filename" title={doc.file_name}><FileTextIcon /> {doc.file_name}</div>
                     <div className="pp-doc-card-meta">{fmtSize(doc.file_size)}</div>
                     <div className="pp-doc-card-actions">
                       <Button variant="secondary" size="sm" onClick={() => handleView(doc)}>View</Button>

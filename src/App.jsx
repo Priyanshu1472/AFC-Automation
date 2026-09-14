@@ -39,6 +39,7 @@ import LeadDashboardPage from "./pages/leads/LeadDashboardPage";
 import LeadReportsPage from "./pages/leads/LeadReportsPage";
 import ProposalsListPage from "./pages/proposals/ProposalsListPage";
 import ProposalPreparationPage from "./pages/proposals/ProposalPreparationPage";
+import FeeNoteEditPage from "./pages/proposals/FeeNoteEditPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES } from "./lib/roles";
 
@@ -246,6 +247,14 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
                       <ProposalsListPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/proposals/:leadId/fee-note"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <FeeNoteEditPage />
                     </ProtectedRoute>
                   }
                 />

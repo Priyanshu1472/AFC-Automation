@@ -5,6 +5,10 @@
 // row (see 20260820040000_proposal_preparation_schema.sql) rather than a
 // separate "project" entity, since nothing downstream of an approved lead
 // exists yet.
+//
+// Deliberately no merge/assembly step — this page is just a place to
+// collect and store the proposal's documents; actually building the final
+// proposal happens outside this system.
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
@@ -13,18 +17,18 @@ import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Collapsible from "../../components/ui/Collapsible";
 import Badge from "../../components/ui/Badge";
-import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import FeeNotesPanel from "../../components/proposals/FeeNotesPanel";
 import BaDocumentRequestsPanel from "../../components/proposals/BaDocumentRequestsPanel";
 import AfcChecklistPanel from "../../components/proposals/AfcChecklistPanel";
 import ProposalDocumentsPanel from "../../components/proposals/ProposalDocumentsPanel";
-import MergeProposalModal from "../../components/proposals/MergeProposalModal";
 import ProposalLockPanel from "../../components/proposals/ProposalLockPanel";
 import ClientResponseBanner from "../../components/proposals/ClientResponseBanner";
 import ProposalChatPanel from "../../components/proposals/ProposalChatPanel";
+import { FileTextIcon, UsersIcon, CheckCircleIcon } from "../../components/icons";
 import { isProposalLocked, CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS } from "../../lib/proposalPrep";
+import "../../styles/ApplicationReviewPage.css";
 import "../../styles/ProposalPreparationPage.css";
 
 function fmtDate(d) {
@@ -45,7 +49,6 @@ export default function ProposalPreparationPage() {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [showMerge, setShowMerge] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setError("");
@@ -119,7 +122,10 @@ export default function ProposalPreparationPage() {
     ["md", "admin"].includes(profile.role) ||
     [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(profile.id)
   );
-  const isMd = profile && ["md", "admin"].includes(profile.role);
+  // Strictly "md" (no admin override) — only used by FeeNotesPanel, where
+  // md_decided_by prints under "Managing Director" on the note itself, so
+  // whoever approves must actually hold that role.
+  const isMd = profile && profile.role === "md";
   // The BP-requests and AFC checklist lists are day-to-day working
   // documents for the lead's own team (Person Responsible, Reviewer,
   // Approval Authority) — MD/Admin can see them but never add/edit/delete,
@@ -133,15 +139,25 @@ export default function ProposalPreparationPage() {
       <AppHeader />
       <div className="app-container">
         <div className="pp-page animate-fadeUp">
-          <div className="page-header">
-            <div className="page-title-row">
-              <div>
-                <h1>{lead.title}</h1>
-                <p>Proposal Preparation{lead.client_name ? ` · ${lead.client_name}` : ""}{lead.portal_name ? ` · ${lead.portal_name}` : ""}</p>
+          <button className="ar-back-btn" onClick={() => navigate("/proposals")}>← Back to Proposals</button>
+
+          <Card className="ar-header-card">
+            <Card.Body className="ar-header-body">
+              <div className="ar-header-left">
+                <div className="ar-header-badges">
+                  <Badge variant="brand">Proposal</Badge>
+                  <Badge variant={proposal.locked ? "neutral" : "success"} dot>{proposal.locked ? "Locked" : "In Progress"}</Badge>
+                </div>
+                <h1 className="ar-header-email">{lead.title}</h1>
+                <p className="ar-header-meta">
+                  {lead.lead_number}
+                  {lead.client_name ? <> · {lead.client_name}</> : ""}
+                  {lead.portal_name ? <> · {lead.portal_name}</> : ""}
+                  {" "}· Created: <strong>{fmtDate(proposal.created_at)}</strong>
+                </p>
               </div>
-              <Button variant="secondary" onClick={() => navigate("/proposals")}>Back to Proposals</Button>
-            </div>
-          </div>
+            </Card.Body>
+          </Card>
 
           <ProposalChatPanel
             proposalId={proposal.id}
@@ -156,9 +172,17 @@ export default function ProposalPreparationPage() {
           )}
 
           {proposal.locked && proposal.client_response !== "pending" && (
-            <div className="pp-outcome-status">
-              <span>Client Response:</span>
-              <Badge variant={CLIENT_RESPONSE_VARIANTS[proposal.client_response]}>{CLIENT_RESPONSE_LABELS[proposal.client_response]}</Badge>
+            <div className="pp-outcome-banner">
+              <div className="pp-outcome-banner-main">
+                <CheckCircleIcon />
+                <span>Client Response:</span>
+                <Badge variant={CLIENT_RESPONSE_VARIANTS[proposal.client_response]}>{CLIENT_RESPONSE_LABELS[proposal.client_response]}</Badge>
+              </div>
+              {proposal.client_response_at && (
+                <span className="pp-outcome-banner-meta">
+                  Recorded on {fmtDate(proposal.client_response_at)}{proposal.responder?.full_name ? ` by ${proposal.responder.full_name}` : ""}
+                </span>
+              )}
             </div>
           )}
 
@@ -174,37 +198,38 @@ export default function ProposalPreparationPage() {
             </Alert>
           )}
 
-          <Card>
-            <Collapsible title="Lead Details">
-              <div className="pp-summary">
-                <div className="pp-summary-item"><span>Title of Proposal</span><strong>{lead.title}</strong></div>
-                <div className="pp-summary-item">
-                  <span>Lead Number</span>
-                  <strong><button type="button" className="pp-lead-number-link" onClick={() => navigate(`/leads/${lead.id}`)}>{lead.lead_number}</button></strong>
+          <div className="pp-summary-row">
+            <Card className="pp-summary-card">
+              <Collapsible title="Lead Details" icon={<FileTextIcon />} expandable={false}>
+                <div className="pp-summary">
+                  <div className="pp-summary-item">
+                    <span>Lead Number</span>
+                    <strong><button type="button" className="pp-lead-number-link" onClick={() => navigate(`/leads/${lead.id}`, { state: { from: "proposal" } })}>{lead.lead_number}</button></strong>
+                  </div>
+                  <div className="pp-summary-item"><span>Client Name</span><strong>{lead.client_name || "—"}</strong></div>
+                  <div className="pp-summary-item"><span>Reference Number</span><strong>{lead.bid_number || "—"}</strong></div>
+                  <div className="pp-summary-item"><span>Last Date</span><strong className={pastDeadline ? "pp-overdue" : ""}>{fmtDate(lead.submission_deadline)}</strong></div>
                 </div>
-                <div className="pp-summary-item"><span>Client Name</span><strong>{lead.client_name || "—"}</strong></div>
-                <div className="pp-summary-item"><span>Reference Number (if any)</span><strong>{lead.bid_number || "—"}</strong></div>
-                <div className="pp-summary-item"><span>Status</span><strong>{proposal.locked ? <Badge variant="neutral">Locked</Badge> : <Badge variant="success">In Progress</Badge>}</strong></div>
-                <div className="pp-summary-item"><span>Last Date</span><strong className={pastDeadline ? "pp-overdue" : ""}>{fmtDate(lead.submission_deadline)}</strong></div>
-              </div>
-            </Collapsible>
-          </Card>
+              </Collapsible>
+            </Card>
 
-          <Card>
-            <Collapsible title="Responsibles">
-              <div className="pp-summary">
-                <div className="pp-summary-item"><span>Person Responsible</span><strong>{lead.pr?.full_name || "—"}</strong></div>
-                <div className="pp-summary-item"><span>Reviewer</span><strong>{lead.rev?.full_name || "—"}</strong></div>
-                <div className="pp-summary-item"><span>Approval Authority</span><strong>{lead.aa?.full_name || "—"}</strong></div>
-                <div className="pp-summary-item"><span>Business Partner</span><strong>{lead.ba?.full_name || "—"}</strong></div>
-              </div>
-            </Collapsible>
-          </Card>
+            <Card className="pp-summary-card">
+              <Collapsible title="Responsibles" icon={<UsersIcon />} expandable={false}>
+                <div className="pp-summary">
+                  <div className="pp-summary-item"><span>Person Responsible</span><strong>{lead.pr?.full_name || "—"}</strong></div>
+                  <div className="pp-summary-item"><span>Reviewer</span><strong>{lead.rev?.full_name || "—"}</strong></div>
+                  <div className="pp-summary-item"><span>Approval Authority</span><strong>{lead.aa?.full_name || "—"}</strong></div>
+                  <div className="pp-summary-item"><span>Business Partner</span><strong>{lead.ba?.full_name || "—"}</strong></div>
+                </div>
+              </Collapsible>
+            </Card>
+          </div>
 
           <FeeNotesPanel
             proposalId={proposal.id}
             feeNotes={feeNotes}
-            canManage={canManage}
+            lead={lead}
+            profile={profile}
             isMd={isMd}
             locked={locked}
             onChanged={fetchAll}
@@ -237,23 +262,6 @@ export default function ProposalPreparationPage() {
             locked={locked}
             onChanged={fetchAll}
           />
-
-          <Card>
-            <Collapsible title="Merge Proposal" subtitle="Assemble the documents you've collected into one final, editable .docx.">
-              {canManage && <Button variant="primary" onClick={() => setShowMerge(true)}>Merge Proposal</Button>}
-            </Collapsible>
-          </Card>
-
-          {showMerge && (
-            <MergeProposalModal
-              proposalId={proposal.id}
-              baItems={baItems}
-              checklistItems={checklistItems}
-              documents={documents}
-              profile={profile}
-              onClose={() => setShowMerge(false)}
-            />
-          )}
 
           <ProposalLockPanel
             proposalId={proposal.id}

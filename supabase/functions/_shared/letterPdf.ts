@@ -305,7 +305,12 @@ export class PageEngine {
   // paragraph (sdPara's before/after check alone let a line slip past
   // FOOTER_SAFE and overlap the footer whenever a paragraph started near
   // the bottom of the page but its wrapped tail didn't fit).
-  async drawPara(segments: Segment[], size: number, indent = 0) {
+  // justify: when true, non-final lines of a wrapped paragraph get their
+  // inter-word gaps stretched to fill the line width (the last line of a
+  // paragraph, and any single-line paragraph, is left ragged — standard
+  // justified-text convention). Off by default so existing callers
+  // (letters, empanelment/approval PDFs) render exactly as before.
+  async drawPara(segments: Segment[], size: number, indent = 0, justify = false) {
     const xStart = this.LEFT + indent;
     const maxW = this.MAX_W - indent;
     const tokens: { w: string; bold: boolean }[] = [];
@@ -319,10 +324,12 @@ export class PageEngine {
     let lineTokens: typeof tokens = [];
     let lineWidth = 0;
 
-    const flushLine = async () => {
+    const flushLine = async (isLast: boolean) => {
       if (!lineTokens.length) return;
       if (this.y < this.FOOTER_SAFE) await this.newPage();
       let x = xStart;
+      const gaps = lineTokens.length - 1;
+      const extraPerGap = justify && !isLast && gaps > 0 ? Math.max(0, (maxW - lineWidth) / gaps) : 0;
       for (let i = 0; i < lineTokens.length; i++) {
         const { w, bold: isBold } = lineTokens[i];
         const f = isBold ? this.fonts.bold : this.fonts.reg;
@@ -330,7 +337,7 @@ export class PageEngine {
         x += f.widthOfTextAtSize(w, size);
         if (i < lineTokens.length - 1) {
           const nf = lineTokens[i + 1].bold ? this.fonts.bold : this.fonts.reg;
-          x += nf.widthOfTextAtSize(" ", size);
+          x += nf.widthOfTextAtSize(" ", size) + extraPerGap;
         }
       }
       this.y -= this.LINE_H;
@@ -344,7 +351,7 @@ export class PageEngine {
       const wW = f.widthOfTextAtSize(token.w, size);
       const test = lineWidth + (lineTokens.length ? spW : 0) + wW;
       if (test > maxW && lineTokens.length) {
-        await flushLine();
+        await flushLine(false);
         lineTokens = [token];
         lineWidth = wW;
       } else {
@@ -352,7 +359,7 @@ export class PageEngine {
         lineWidth = lineWidth + (lineTokens.length > 1 ? spW : 0) + wW;
       }
     }
-    await flushLine();
+    await flushLine(true);
   }
 }
 
@@ -365,9 +372,9 @@ export async function sdLine(e: PageEngine, text: string, size: number, isBold: 
   await sd(e, () => e.drawTextLine(text, size, isBold));
 }
 
-export async function sdPara(e: PageEngine, segs: Segment[], size: number, indent = 0) {
+export async function sdPara(e: PageEngine, segs: Segment[], size: number, indent = 0, justify = false) {
   if (e.y < e.FOOTER_SAFE) await e.newPage();
-  await e.drawPara(segs, size, indent);
+  await e.drawPara(segs, size, indent, justify);
   if (e.y < e.FOOTER_SAFE) await e.newPage();
 }
 

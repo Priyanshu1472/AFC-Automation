@@ -17,6 +17,7 @@ import Alert from "../../components/ui/Alert";
 import FileUploadButton from "./FileUploadButton";
 import KnowledgeRepositoryDocumentPicker from "./KnowledgeRepositoryDocumentPicker";
 import ConfirmDialog from "../ui/ConfirmDialog";
+import { ListChecksIcon, EyeIcon, TrashIcon, BookIcon } from "../icons";
 
 const BUCKET = "proposal-documents";
 const KNOWLEDGE_BUCKET = "project-documents";
@@ -133,49 +134,64 @@ export default function AfcChecklistPanel({ proposalId, items, profile, canManag
 
   function renderRow(it) {
     return (
-      <div key={it.id} className="pp-list-row pp-list-row-file">
-        <div>
-          <div className="pp-list-row-title">{it.item_name}</div>
-        </div>
-        <div className="pp-list-row-file-area">
+      <tr key={it.id}>
+        <td>{it.item_name}</td>
+        <td className="pp-table-nowrap">
           {it.file_path ? (
-            <div className="pp-list-row-file-info">
-              <Badge variant="success">{it.source === "knowledge_repository" ? "From Knowledge Repository" : "Uploaded"}</Badge>
-              <span className="pp-list-row-filename" title={it.file_name}>{it.file_name}</span>
-              <span className="pp-doc-card-meta">{fmtSize(it.file_size)}</span>
-              <Button variant="secondary" size="sm" onClick={() => handleView(it)}>View</Button>
-              {canManage && !locked && (
-                <>
-                  <FileUploadButton label={busyId === it.id ? "Uploading…" : "Replace File"} disabled={busyId === it.id} onSelect={(file) => handleUploadFromComputer(it, file)} />
-                  <Button variant="ghost" size="sm" disabled={busyId === it.id} onClick={() => setPickerFor(it)}>From Knowledge Repository</Button>
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="pp-list-row-file-info">
-              <Badge variant="warning">Pending</Badge>
-              {canManage && !locked && (
-                <>
-                  <FileUploadButton label={busyId === it.id ? "Uploading…" : "Attach File"} disabled={busyId === it.id} onSelect={(file) => handleUploadFromComputer(it, file)} />
-                  <Button variant="ghost" size="sm" disabled={busyId === it.id} onClick={() => setPickerFor(it)}>From Knowledge Repository</Button>
-                </>
-              )}
-            </div>
-          )}
-          {canManage && !locked && (
-            <button type="button" className="pp-list-remove" onClick={() => setRemoveTarget(it)} aria-label="Remove">×</button>
-          )}
-        </div>
-      </div>
+            <>
+              {it.file_name} <span className="pp-doc-card-meta">({fmtSize(it.file_size)})</span>
+            </>
+          ) : "—"}
+        </td>
+        <td>
+          {it.file_path
+            ? <Badge variant="success">Done</Badge>
+            : <Badge variant="warning">Pending</Badge>}
+        </td>
+        <td className="pp-table-actions">
+          <div className="pp-icon-btn-row">
+            {it.file_path && (
+              <button type="button" className="pp-row-icon-btn" title="View" aria-label="View" onClick={() => handleView(it)}>
+                <EyeIcon />
+              </button>
+            )}
+            {canManage && !locked && (
+              <>
+                <FileUploadButton label={busyId === it.id ? "…" : (it.file_path ? "Replace" : "Attach")} disabled={busyId === it.id} onSelect={(file) => handleUploadFromComputer(it, file)} />
+                <button type="button" className="pp-row-icon-btn" title="Pick from Knowledge Repository" aria-label="Pick from Knowledge Repository" disabled={busyId === it.id} onClick={() => setPickerFor(it)}>
+                  <BookIcon />
+                </button>
+                <button type="button" className="pp-row-icon-btn" title="Remove" aria-label="Remove" onClick={() => setRemoveTarget(it)}>
+                  <TrashIcon />
+                </button>
+              </>
+            )}
+          </div>
+        </td>
+      </tr>
     );
   }
 
   return (
     <Card>
-      <Collapsible title="AFC Checklist">
+      <Collapsible title="AFC Internal Checklist" icon={<ListChecksIcon />}>
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         {items.length === 0 && <p className="text-secondary text-sm" style={{ margin: 0 }}>No items added yet.</p>}
-        {items.length > 0 && <div className="pp-list-group">{items.map(renderRow)}</div>}
+        {items.length > 0 && (
+          <div className="pp-table-wrap">
+            <table className="pp-table">
+              <thead>
+                <tr>
+                  <th>Document Name</th>
+                  <th>File</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>{items.map(renderRow)}</tbody>
+            </table>
+          </div>
+        )}
         {canManage && !locked && (
           <div className="pp-add-row">
             <input type="text" className="input" placeholder="e.g. Annexure III — Undertaking" value={name} onChange={(e) => setName(e.target.value)} />

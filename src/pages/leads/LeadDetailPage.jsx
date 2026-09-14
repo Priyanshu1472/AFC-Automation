@@ -157,15 +157,24 @@ export default function LeadDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  // Opened from Home's "Needs your action" panel (see HomePage.jsx) — exit
-  // there instead of the Leads list, since that's where the user actually
-  // came from.
-  const backTo = location.state?.from === "home" ? "/home" : "/leads";
+  // Exit back to wherever the user actually came from — Home's "Needs your
+  // action" panel, or a Proposal's "Lead Number" link — instead of always
+  // dropping them on the full Leads list, which loses their place.
+  const backTo = location.state?.from === "home" ? "/home"
+    : location.state?.from === "proposal" ? `/proposals/${id}`
+    : "/leads";
+  const backLabel = location.state?.from === "home" ? "Back to Home"
+    : location.state?.from === "proposal" ? "Back to Proposal"
+    : "Back to Leads";
   const { profile } = useAuth();
   const { showToast } = useToast();
 
   const [lead, setLead] = useState(null);
   const [logs, setLogs] = useState([]);
+  // Client contact details (address / telephone / email) are captured on
+  // the Bid Payment Requisition Note during Proposal Preparation, not on the
+  // lead itself — surfaced read-only here once that note exists.
+  const [clientContact, setClientContact] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);
   const [reason, setReason] = useState("");
@@ -193,6 +202,23 @@ export default function LeadDetailPage() {
       .eq("lead_id", id)
       .order("created_at", { ascending: false });
     setLogs(activity || []);
+
+    const { data: proposal } = await supabase
+      .from("proposal_preparations")
+      .select("id")
+      .eq("lead_id", id)
+      .maybeSingle();
+    if (proposal) {
+      const { data: feeNote } = await supabase
+        .from("fee_notes")
+        .select("client_address, client_telephone, client_email")
+        .eq("proposal_id", proposal.id)
+        .maybeSingle();
+      setClientContact(feeNote || null);
+    } else {
+      setClientContact(null);
+    }
+
     setLoading(false);
   }, [id]);
 
@@ -432,7 +458,7 @@ export default function LeadDetailPage() {
       <AppHeader />
       <div className="app-container">
         <div className="ar-page">
-          <button className="ar-back-btn" onClick={() => navigate(backTo)}>← {backTo === "/home" ? "Back to Home" : "Back to Leads"}</button>
+          <button className="ar-back-btn" onClick={() => navigate(backTo)}>← {backLabel}</button>
 
           <Card className="ar-header-card">
             <Card.Body className="ar-header-body">
@@ -532,6 +558,26 @@ export default function LeadDetailPage() {
                   <Row label="Business Partner" value={fmt(lead.ba?.full_name)} />
                 </Card.Body>
               </Card>
+
+              {clientContact && (
+                <Card>
+                  <Card.Header title="Client Contact Details" subtitle="Captured on the Bid Payment Requisition Note" />
+                  <Card.Body className="ar-detail-body">
+                    <div className="ar-row">
+                      <span className="ar-row-label">Address</span>
+                      <span className="ar-row-value">{clientContact.client_address || <em className="ar-empty-text">Not added yet</em>}</span>
+                    </div>
+                    <div className="ar-row">
+                      <span className="ar-row-label">Telephone</span>
+                      <span className="ar-row-value">{clientContact.client_telephone || <em className="ar-empty-text">Not added yet</em>}</span>
+                    </div>
+                    <div className="ar-row">
+                      <span className="ar-row-label">Email</span>
+                      <span className="ar-row-value">{clientContact.client_email || <em className="ar-empty-text">Not added yet</em>}</span>
+                    </div>
+                  </Card.Body>
+                </Card>
+              )}
 
             </div>
 

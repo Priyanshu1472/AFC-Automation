@@ -20,6 +20,7 @@ import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import FileUploadButton from "./FileUploadButton";
 import ConfirmDialog from "../ui/ConfirmDialog";
+import { PaperclipIcon, EyeIcon, TrashIcon, InfoIcon } from "../icons";
 
 const BUCKET = "proposal-documents";
 const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -131,55 +132,78 @@ export default function BaDocumentRequestsPanel({ proposalId, proposal, items, p
 
   function renderRow(it) {
     return (
-      <div key={it.id} className="pp-list-row pp-list-row-file">
-        <div>
-          <div className="pp-list-row-title">{it.item_name}</div>
-          {it.justification && <div className="pp-list-row-sub">{it.justification}</div>}
-        </div>
-        <div className="pp-list-row-file-area">
-          {it.file_path ? (
-            <div className="pp-list-row-file-info">
-              <Badge variant="success">Received</Badge>
-              <span className="pp-list-row-filename" title={it.file_name}>{it.file_name}</span>
-              <span className="pp-doc-card-meta">{fmtSize(it.file_size)}</span>
-              <Button variant="secondary" size="sm" onClick={() => handleView(it)}>View</Button>
-              {canManage && !locked && (
-                <FileUploadButton label={busyId === it.id ? "Uploading…" : "Replace File"} disabled={busyId === it.id} onSelect={(file) => handleUpload(it, file)} />
-              )}
-            </div>
-          ) : (
-            <div className="pp-list-row-file-info">
-              <Badge variant="warning">Pending</Badge>
-              {canManage && !locked && (
-                <FileUploadButton label={busyId === it.id ? "Uploading…" : "Attach File"} disabled={busyId === it.id} onSelect={(file) => handleUpload(it, file)} />
-              )}
-            </div>
-          )}
-          {canManage && !locked && !it.sent_at && (
-            <button type="button" className="pp-list-remove" onClick={() => setRemoveTarget(it)} aria-label="Remove">×</button>
-          )}
-        </div>
+      <tr key={it.id}>
+        <td>{it.item_name}</td>
+        <td>{it.justification || "—"}</td>
+        <td>{it.file_path ? <Badge variant="success">Received</Badge> : <Badge variant="warning">Pending</Badge>}</td>
+        <td className="pp-table-nowrap">
+          {it.file_path ? <>{it.file_name} <span className="pp-doc-card-meta">({fmtSize(it.file_size)})</span></> : "—"}
+        </td>
+        <td className="pp-table-actions">
+          <div className="pp-icon-btn-row">
+            {it.file_path && (
+              <button type="button" className="pp-row-icon-btn" title="View" aria-label="View" onClick={() => handleView(it)}>
+                <EyeIcon />
+              </button>
+            )}
+            {canManage && !locked && (
+              <FileUploadButton label={busyId === it.id ? "…" : (it.file_path ? "Replace" : "Attach")} disabled={busyId === it.id} onSelect={(file) => handleUpload(it, file)} />
+            )}
+            {canManage && !locked && !it.sent_at && (
+              <button type="button" className="pp-row-icon-btn" title="Remove" aria-label="Remove" onClick={() => setRemoveTarget(it)}>
+                <TrashIcon />
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
+  function renderTable(rows) {
+    return (
+      <div className="pp-table-wrap">
+        <table className="pp-table">
+          <thead>
+            <tr>
+              <th>Document Name</th>
+              <th>Justification</th>
+              <th>Status</th>
+              <th>File</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>{rows.map(renderRow)}</tbody>
+        </table>
       </div>
     );
   }
 
   return (
     <Card>
-      <Collapsible title="Documents Required from Business Partner">
+      <Collapsible
+        title="Documents Required from Business Partner"
+        icon={<PaperclipIcon />}
+        action={items.length > 0 && <Badge variant="neutral">{sent.length} / {items.length} Sent</Badge>}
+      >
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
-        {!hasBa && <p className="text-secondary text-sm" style={{ margin: "0 0 var(--space-3)" }}>This lead has no linked Business Partner.</p>}
+        {!hasBa && (
+          <div className="pp-note-bar" style={{ marginTop: 0, marginBottom: "var(--space-3)" }}>
+            <span className="pp-note-bar-text"><InfoIcon /> No Business Partner linked to this lead.</span>
+          </div>
+        )}
 
         {sent.length > 0 && (
-          <div className="pp-list-group">
-            <div className="pp-list-group-label">Sent</div>
-            {sent.map(renderRow)}
+          <div className="pp-table-group">
+            <div className="pp-table-group-label success">Sent to BP</div>
+            {renderTable(sent)}
           </div>
         )}
 
         {unsent.length > 0 && (
-          <div className="pp-list-group">
-            {sent.length > 0 && <div className="pp-list-group-label">Not yet sent</div>}
-            {unsent.map(renderRow)}
+          <div className="pp-table-group">
+            {sent.length > 0 && <div className="pp-table-group-label pending">Not yet sent</div>}
+            {renderTable(unsent)}
           </div>
         )}
 

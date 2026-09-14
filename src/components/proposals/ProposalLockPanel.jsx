@@ -13,6 +13,7 @@ import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import { CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS } from "../../lib/proposalPrep";
+import { LockIcon } from "../icons";
 
 function fmtDateTime(d) {
   if (!d) return "—";
@@ -38,48 +39,52 @@ export default function ProposalLockPanel({ proposalId, proposal, pastDeadline, 
 
   return (
     <Card>
-      <Collapsible title="Lock & Client Response" subtitle="Lock once submitted to the client, then record their answer.">
+      <Collapsible title="Lock & Client Response" subtitle="Lock once submitted to the client, then record their answer." icon={<LockIcon />}>
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
-        {proposal.locked ? (
-          <p className="text-secondary text-sm" style={{ margin: "0 0 var(--space-4)" }}>
-            Locked {proposal.lock_reason === "manual" ? "manually" : "automatically (deadline passed)"} on {fmtDateTime(proposal.locked_at)}
-            {proposal.locker?.full_name ? ` by ${proposal.locker.full_name}` : ""}.
-          </p>
-        ) : pastDeadline ? (
-          <Alert variant="warning">
-            The submission deadline has passed — further edits are blocked. Lock the proposal to record the client&apos;s response.
-          </Alert>
-        ) : (
-          <p className="text-secondary text-sm" style={{ margin: "0 0 var(--space-4)" }}>
-            Once the proposal is submitted to the client, lock it here — editing stops immediately either way.
-          </p>
-        )}
-
-        {!proposal.locked && canManage && (
-          <Button variant="danger" loading={locking} onClick={handleLock}>Lock Proposal</Button>
-        )}
-
-        {proposal.locked && (
-          <div className="pp-outcome">
-            <div className="pp-outcome-status">
-              <span>Client Response:</span>
-              <Badge variant={CLIENT_RESPONSE_VARIANTS[proposal.client_response]}>{CLIENT_RESPONSE_LABELS[proposal.client_response]}</Badge>
-            </div>
-            {proposal.client_response !== "pending" && (
-              <p className="text-secondary text-sm" style={{ margin: "var(--space-2) 0 0" }}>
-                Recorded {fmtDateTime(proposal.client_response_at)}
-                {proposal.responder?.full_name ? ` by ${proposal.responder.full_name}` : ""}.
-                {proposal.client_response_remark ? ` "${proposal.client_response_remark}"` : ""}
+        <div className={proposal.locked ? "pp-lock-grid" : undefined}>
+          <div>
+            {proposal.locked ? (
+              <p className="text-secondary text-sm" style={{ margin: "0 0 var(--space-4)" }}>
+                Locked {proposal.lock_reason === "manual" ? "manually" : "automatically (deadline passed)"} on {fmtDateTime(proposal.locked_at)}
+                {proposal.locker?.full_name ? ` by ${proposal.locker.full_name}` : ""}.
+              </p>
+            ) : pastDeadline ? (
+              <Alert variant="warning">
+                The submission deadline has passed — further edits are blocked. Lock the proposal to record the client&apos;s response.
+              </Alert>
+            ) : (
+              <p className="text-secondary text-sm" style={{ margin: "0 0 var(--space-4)" }}>
+                Once the proposal is submitted to the client, lock it here — editing stops immediately either way.
               </p>
             )}
-            {proposal.client_response === "pending" && (
-              <p className="text-secondary text-sm" style={{ margin: "var(--space-2) 0 0" }}>
-                Still pending — record it in the banner at the top of the page.
-              </p>
+
+            {!proposal.locked && canManage && (
+              <Button variant="danger" loading={locking} onClick={handleLock}>Lock Proposal</Button>
             )}
           </div>
-        )}
+
+          {proposal.locked && (
+            <div className="pp-outcome">
+              <div className="pp-outcome-status">
+                <span>Client Response:</span>
+                <Badge variant={CLIENT_RESPONSE_VARIANTS[proposal.client_response]}>{CLIENT_RESPONSE_LABELS[proposal.client_response]}</Badge>
+              </div>
+              {proposal.client_response !== "pending" && (
+                <p className="text-secondary text-sm" style={{ margin: "var(--space-2) 0 0" }}>
+                  Recorded {fmtDateTime(proposal.client_response_at)}
+                  {proposal.responder?.full_name ? ` by ${proposal.responder.full_name}` : ""}.
+                  {proposal.client_response_remark ? ` "${proposal.client_response_remark}"` : ""}
+                </p>
+              )}
+              {proposal.client_response === "pending" && (
+                <p className="text-secondary text-sm" style={{ margin: "var(--space-2) 0 0" }}>
+                  Still pending — record it in the banner at the top of the page.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </Collapsible>
     </Card>
   );

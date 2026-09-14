@@ -47,19 +47,42 @@
   color: var(--text-primary);
 }
 
-.pp-summary {
+/* Lead Details and Responsibles are both compact summary cards, now that
+   Lead Details no longer repeats the title already shown as the page's
+   own h1 — side by side on wide screens instead of two full-width cards
+   stacked one after another, which just reads as more scrolling for the
+   same information. */
+.pp-summary-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+}
+.pp-summary-card { height: 100%; }
+@media (max-width: 860px) {
+  .pp-summary-row { grid-template-columns: 1fr; }
+}
+
+/* Lead Details / Responsibles — a stacked label:value row per field,
+   fixed-width label column so every value lines up, with a divider
+   between rows (not a wrapping grid of boxes, which read as cramped and
+   inconsistent once these cards went from full-width to side by side). */
+.pp-summary {
+  display: flex;
+  flex-direction: column;
 }
 
 .pp-summary-item {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
+.pp-summary-item:last-child { border-bottom: none; }
 
 .pp-summary-item span {
+  flex: 0 0 130px;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -67,38 +90,99 @@
 }
 
 .pp-summary-item strong {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
   font-size: var(--text-sm);
   color: var(--text-primary);
   font-weight: 600;
 }
 
+@media (max-width: 420px) {
+  .pp-summary-item { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .pp-summary-item span { flex-basis: auto; }
+  .pp-summary-item strong { text-align: left; }
+}
+
 .pp-overdue { color: var(--color-danger, #dc2626); }
 
-/* Fee notes */
-.pp-fee-note-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-4);
+/* Shared data table — Fee Note lines, AFC Checklist, BP Documents */
+.pp-table-wrap { overflow-x: auto; }
+
+.pp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
 }
 
-.pp-fee-note-card {
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
+.pp-table th {
+  text-align: left;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  font-weight: 600;
+  padding: 0 var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--card-border);
 }
 
-.pp-fee-note-card-head {
+.pp-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.pp-table tr:last-child td { border-bottom: none; }
+.pp-table th:first-child, .pp-table td:first-child { padding-left: 0; font-weight: 600; }
+.pp-table th:last-child, .pp-table td:last-child { padding-right: 0; }
+.pp-table td.pp-table-actions { white-space: nowrap; width: 1%; }
+.pp-table td.pp-table-nowrap { white-space: nowrap; }
+
+/* Small square icon-only action button, reused in every doc/checklist row.
+   Named distinctly from the Proposals list page's own .pp-icon-btn (its
+   floating chat/action buttons) so the two never collide. */
+.pp-row-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.pp-row-icon-btn svg { width: 15px; height: 15px; display: block; }
+.pp-row-icon-btn:hover:not(:disabled) { background: var(--bg-surface-3); color: var(--text-primary); border-color: var(--border-strong); }
+.pp-row-icon-btn:disabled { opacity: 0.55; cursor: wait; }
+
+.pp-icon-btn-row { display: inline-flex; align-items: center; gap: var(--space-1); }
+
+/* Info bar under a table — a note + an action button in one row */
+.pp-note-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--brand-600) 10%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--brand-600) 25%, transparent);
 }
-
-.pp-fee-note-card-title { font-weight: 600; color: var(--text-primary); font-size: var(--text-sm); }
-
-.pp-fee-note-card-body { margin-top: var(--space-2); }
-
-.pp-fee-note-amount { font-weight: 700; color: var(--text-primary); font-size: var(--text-base); }
+.pp-note-bar-text {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.pp-note-bar-text svg { flex-shrink: 0; color: var(--brand-600); }
 
 .pp-fee-note-justification {
   margin: 4px 0 0;
@@ -113,10 +197,17 @@
   font-size: var(--text-xs);
 }
 
-.pp-fee-note-md-actions {
+.pp-fee-note-icons {
   display: flex;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.pp-fee-note-meta {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 
 .pp-fee-note-field + .pp-fee-note-field { margin-top: var(--space-4); }
@@ -132,189 +223,119 @@
 
 .pp-fee-note-inputs {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.pp-fee-line {
+  border-top: 1px solid var(--card-border);
+  padding: var(--space-2) 0;
+}
+.pp-fee-line:first-of-type { border-top: none; }
+
+.pp-fee-line-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-3);
   margin-top: var(--space-2);
   padding-left: 26px;
 }
 
 @media (max-width: 640px) {
-  .pp-fee-note-inputs { grid-template-columns: 1fr; }
+  .pp-fee-note-inputs,
+  .pp-fee-line-inputs { grid-template-columns: 1fr; }
 }
 
-/* Simple item lists (BA requests / checklist) */
-.pp-list-group + .pp-list-group { margin-top: var(--space-3); }
+/* Fee Note edit page: the form on the left, a live read-only preview of
+   page 1 on the right (see FeeNoteEditPage.jsx / feeNoteDraft.js) — one
+   input, one output, nothing to keep in sync by hand. */
+.pp-fnp-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 460px);
+  gap: var(--space-5);
+  align-items: start;
+}
+.pp-fnp-form { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.pp-fnp-preview-col { position: sticky; top: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
 
-.pp-list-group-label {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 6px;
+@media (max-width: 900px) {
+  .pp-fnp-layout { grid-template-columns: 1fr; }
+  .pp-fnp-preview-col { position: static; order: -1; }
 }
 
-.pp-list-row {
+.pp-fnp-preview-head { display: flex; align-items: center; justify-content: space-between; padding-inline: 2px; }
+.pp-fnp-preview-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); font-weight: 600; }
+.pp-fnp-live-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--success); }
+.pp-fnp-live-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pp-fnp-pulse 1.8s ease-in-out infinite; }
+@keyframes pp-fnp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pp-fnp-live-dot { animation: none; } }
+
+/* Deliberately fixed "paper" colors, not theme tokens — a document page
+   reads as white/ink regardless of the app's own light/dark mode, same as
+   a Word doc would. */
+.pp-fnp-page {
+  background: #fdfcf8;
+  color: #1c1c1a;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 40px 40px 32px;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.pp-fnp-page p { margin: 0 0 12px; }
+.pp-fnp-body { text-align: justify; text-justify: inter-word; }
+.pp-fnp-page ol { margin: 0 0 12px; padding-left: 20px; }
+.pp-fnp-page li { margin-bottom: 6px; }
+.pp-fnp-note-title { text-align: center; font-weight: 700; font-size: 14.5px; letter-spacing: .02em; margin-bottom: 2px; }
+.pp-fnp-note-date { text-align: right; font-size: 12px; color: #4a4a44; margin-bottom: 14px; }
+.pp-fnp-placeholder { color: #ab9f7c; font-style: italic; }
+.pp-fnp-thanks { margin-bottom: 20px; }
+.pp-fnp-sig-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
+.pp-fnp-sig { min-height: 38px; margin-bottom: 18px; }
+.pp-fnp-sig-name { font-weight: 700; font-size: 12.5px; }
+.pp-fnp-sig-role { font-size: 11.5px; color: #4a4a44; }
+.pp-fnp-sig-md { grid-column: 2; text-align: right; }
+.pp-fnp-encl { margin-bottom: 8px; }
+
+/* Client-response banner at the top of the page, once recorded */
+.pp-outcome-banner {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-}
-
-.pp-list-row + .pp-list-row { border-top: 1px solid var(--card-border); }
-
-.pp-list-row-title { font-weight: 500; color: var(--text-primary); font-size: var(--text-sm); }
-.pp-list-row-sub { color: var(--text-tertiary); font-size: var(--text-xs); margin-top: 2px; }
-
-.pp-list-remove {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-tertiary);
-  font-size: 18px;
-  line-height: 1;
-  padding: 0 4px;
-  flex-shrink: 0;
-}
-.pp-list-remove:hover { color: var(--color-danger, #dc2626); }
-
-.pp-add-row {
-  display: flex;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
   flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--success) 12%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
 }
-.pp-add-row .input { flex: 1; min-width: 160px; }
-
-/* BA / AFC checklist rows with an attached-file area */
-.pp-list-row-file { flex-wrap: wrap; align-items: center; }
-.pp-list-row-file-area {
+.pp-outcome-banner-main {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
-}
-.pp-list-row-file-info {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-.pp-list-row-filename {
   font-size: var(--text-sm);
-  color: var(--text-primary);
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 600;
+  color: var(--success-dark, var(--success));
 }
-/* Knowledge Repository picker modal */
-.pp-picker-row {
-  width: 100%;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-}
-.pp-picker-row:hover .pp-list-row-title { color: var(--brand-600); }
-.pp-picker-back {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--brand-600);
-  font-size: var(--text-sm);
-  padding: 0 0 var(--space-3);
+.pp-outcome-banner-meta {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
-/* Merge Proposal modal */
-.pp-merge-grid {
+/* Lock & outcome */
+.pp-lock-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-6);
 }
 @media (max-width: 640px) {
-  .pp-merge-grid { grid-template-columns: 1fr; }
-}
-.pp-merge-available-row { align-items: center; }
-.pp-merge-order-row { align-items: center; gap: var(--space-3); }
-.pp-merge-order-num {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--brand-100, #dbeafe);
-  color: var(--brand-600);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.pp-merge-order-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-.pp-merge-order-actions .pp-icon-btn {
-  width: 24px;
-  height: 24px;
-  font-size: 11px;
-}
-.pp-merge-order-actions .pp-icon-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+  .pp-lock-grid { grid-template-columns: 1fr; }
 }
 
-/* Proposal documents */
-.pp-doc-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-4);
-}
-
-.pp-doc-card {
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-}
-
-.pp-doc-card-title { font-weight: 600; color: var(--text-primary); font-size: var(--text-sm); }
-
-.pp-doc-card-file { margin-top: var(--space-2); }
-.pp-doc-card-filename {
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pp-doc-card-meta { color: var(--text-tertiary); font-size: var(--text-xs); margin-top: 2px; }
-.pp-doc-card-actions { margin-top: var(--space-2); }
-
-.pp-doc-file-wrap { display: block; }
-.pp-doc-file-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-.pp-doc-file-label {
-  display: inline-block;
-  font-size: var(--text-sm);
-  color: var(--color-primary, #2563eb);
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-/* Lock & outcome */
 .pp-outcome { margin-top: var(--space-2); }
 .pp-outcome-status {
   display: flex;
@@ -460,4 +481,130 @@
   font-weight: 700;
   line-height: 16px;
   text-align: center;
+}
+
+/* ── Proposal Documents (BP requests / AFC checklist / doc slots) ────── */
+
+.pp-table-group-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: var(--space-1) 0;
+}
+.pp-table-group-label.success { color: var(--success-dark, var(--success)); }
+.pp-table-group-label.pending { color: var(--warning-dark); }
+.pp-table-group + .pp-table-group { margin-top: var(--space-4); }
+
+/* Simple item lists (AFC checklist rows, Knowledge Repository picker) */
+.pp-list-group + .pp-list-group { margin-top: var(--space-3); }
+
+.pp-list-group-label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.pp-list-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+.pp-list-row + .pp-list-row { border-top: 1px solid var(--card-border); }
+.pp-list-row-title { font-weight: 500; color: var(--text-primary); font-size: var(--text-sm); }
+.pp-list-row-sub { color: var(--text-tertiary); font-size: var(--text-xs); margin-top: 2px; }
+
+.pp-list-row-file { align-items: center; }
+.pp-list-row-file-area { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.pp-list-row-file-info { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.pp-list-row-filename { font-size: var(--text-sm); color: var(--text-primary); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pp-list-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+.pp-list-remove:hover { color: var(--color-danger, #dc2626); }
+
+.pp-add-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+.pp-add-row .input { flex: 1; min-width: 160px; }
+
+/* Knowledge Repository picker modal */
+.pp-picker-row {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.pp-picker-row:hover .pp-list-row-title { color: var(--brand-600); }
+.pp-picker-back {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--brand-600);
+  font-size: var(--text-sm);
+  padding: 0 0 var(--space-3);
+}
+
+/* Proposal documents (Technical / Financial / Proposal 3 slots) */
+.pp-doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+
+.pp-doc-card {
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.pp-doc-card-title { font-weight: 600; color: var(--text-primary); font-size: var(--text-sm); }
+
+.pp-doc-card-file { margin-top: var(--space-2); }
+.pp-doc-card-filename {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pp-doc-card-meta { color: var(--text-tertiary); font-size: var(--text-xs); margin-top: 2px; }
+.pp-doc-card-actions { margin-top: var(--space-2); }
+
+.pp-doc-file-wrap { display: block; }
+.pp-doc-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.pp-doc-file-label {
+  display: inline-block;
+  font-size: var(--text-sm);
+  color: var(--color-primary, #2563eb);
+  cursor: pointer;
+  text-decoration: underline;
 }
