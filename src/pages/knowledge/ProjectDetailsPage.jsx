@@ -3,12 +3,13 @@ import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useShortlist } from "../../hooks/useShortlist";
-import { buildProjectRows, buildPreviewHTML, formatMonth, printHtml } from "../../utils/docxBuilder";
+import { useToast } from "../../hooks/useToast";
+import { buildProjectRows, buildPreviewHTML, formatMonth } from "../../utils/docxBuilder";
+import { buildKnowledgeDocumentsDocxChildren, buildKnowledgeProjectPdf, buildKnowledgeSupportingsPdf, downloadBlob, openPdfInNewTab } from "../../utils/knowledgeDocumentEmbed";
 import { openProjectDocument } from "../../components/knowledge/KnowledgeFormParts";
 import AppHeader from "../../components/shared/AppHeader";
 import PageLoader from "../../components/ui/PageLoader";
 import Alert from "../../components/ui/Alert";
-import PreviewModal from "../../components/ui/PreviewModal";
 import ShortlistModal from "../../components/knowledge/ShortlistModal";
 import "../../styles/ProjectDetailsPage.css";
 
@@ -16,6 +17,41 @@ const IconWord = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="no
 const IconPDF = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>);
 const IconEdit = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>);
 const IconBookmark = ({ filled }) => (<svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg>);
+const IconChevron = () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>);
+
+// A single "Download X" trigger that opens a small PDF/Word menu instead
+// of immediately downloading — three of these (Profile / Supportings /
+// Both) replace the old single Word+PDF button pair.
+function ExportMenuButton({ label, disabled, busy, busyLabel, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="pd-export-menu-root">
+      <button type="button" className="btn-export btn-export-word" disabled={disabled} onClick={() => setOpen((o) => !o)}>
+        {busy ? busyLabel : label}
+        {!busy && <IconChevron />}
+      </button>
+      {open && !disabled && (
+        <div className="pd-export-menu" role="menu">
+          <button type="button" className="pd-export-menu-item" role="menuitem" onClick={() => { setOpen(false); onSelect("pdf"); }}>
+            <IconPDF /> PDF
+          </button>
+          <button type="button" className="pd-export-menu-item" role="menuitem" onClick={() => { setOpen(false); onSelect("docx"); }}>
+            <IconWord /> Word (.docx)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function KeywordDropdown({ keywords, selectedKws, onToggle, onSelectAll, onClear }) {
   const [open, setOpen] = useState(false);
@@ -100,10 +136,11 @@ export default function ProjectDetailsPage() {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [selectedKws, setSelectedKws] = useState(new Set());
-  const [preview, setPreview] = useState(null);
   const [showSlModal, setShowSlModal] = useState(false);
+  const [busy, setBusy] = useState(null); // 'profile' | 'supportings' | 'both' | null
+  const [busyLabel, setBusyLabel] = useState("");
+  const { showToast } = useToast();
 
   const { shortlists, createShortlist, addToShortlist, isInAnyShortlist, getProjectShortlists } = useShortlist();
 
@@ -138,45 +175,135 @@ export default function ProjectDetailsPage() {
     await addToShortlist(project.id, selectedKwNames, sl.id);
   };
 
-  async function doDocxDownload() {
-    setExporting(true);
+  const fileBase = () => (project.title || "project").replace(/[^a-z0-9]/gi, "_");
+
+  async function withDocxClasses(fn) {
+    const { Document, Packer, Table, WidthType, Paragraph, TextRun, ImageRun, HeadingLevel, TableRow, TableCell, BorderStyle, VerticalAlign, AlignmentType } = await import("https://esm.sh/docx@8.5.0");
+    return fn({ Document, Packer, Table, WidthType, Paragraph, TextRun, ImageRun, HeadingLevel, TableRow, TableCell, BorderStyle, VerticalAlign, AlignmentType });
+  }
+
+  // "Download Profile" — just the project-info table (the first page of
+  // what the old combined export produced), no uploaded documents.
+  async function downloadProfile(format) {
+    setBusy("profile");
+    setBusyLabel("Preparing…");
     try {
-      const { Document, Packer, Table, WidthType, Paragraph, TextRun, TableRow, TableCell, BorderStyle, VerticalAlign, AlignmentType } = await import("https://esm.sh/docx@8.5.0");
-      const docxClasses = { Paragraph, TextRun, TableRow, TableCell, BorderStyle, WidthType, VerticalAlign, AlignmentType };
-      const { rows, TW, colWidths } = buildProjectRows(project, keywords, selectedKwNames, docxClasses, 1, documents);
-
-      const wordDoc = new Document({
-        styles: { default: { document: { run: { font: "Times New Roman", size: 20 } } } },
-        sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 720, right: 720, bottom: 720, left: 720 } } }, children: [new Table({ width: { size: TW, type: WidthType.DXA }, columnWidths: colWidths, rows })] }],
-      });
-
-      const blob = await Packer.toBlob(wordDoc);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${(project.title || "project").replace(/[^a-z0-9]/gi, "_")}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setPreview(null);
+      if (format === "docx") {
+        await withDocxClasses(async (docxClasses) => {
+          const { Document, Packer, Table, WidthType } = docxClasses;
+          const { rows, TW, colWidths } = buildProjectRows(project, keywords, selectedKwNames, docxClasses, 1, documents);
+          const wordDoc = new Document({
+            styles: { default: { document: { run: { font: "Times New Roman", size: 20 } } } },
+            sections: [{
+              properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 720, right: 720, bottom: 720, left: 720 } } },
+              children: [new Table({ width: { size: TW, type: WidthType.DXA }, columnWidths: colWidths, rows })],
+            }],
+          });
+          const blob = await Packer.toBlob(wordDoc);
+          downloadBlob(blob, `${fileBase()}_Profile.docx`);
+        });
+      } else {
+        const html = buildPreviewHTML(project, keywords, selectedKwNames, 1, documents);
+        const blob = await buildKnowledgeProjectPdf({ projectInfoHtml: html, documents: [], supabase, onProgress: () => {} });
+        openPdfInNewTab(blob, `${fileBase()}_Profile.pdf`);
+      }
+      showToast(format === "docx" ? "Profile downloaded." : "Profile opened in a new tab.", "success");
     } catch (err) {
       console.error(err);
-      alert("Export failed.");
+      showToast("Export failed.", "danger");
     } finally {
-      setExporting(false);
+      setBusy(null);
+      setBusyLabel("");
     }
   }
 
-  const handleWordPreview = () => setPreview({ html: buildPreviewHTML(project, keywords, selectedKwNames, 1, documents), title: project.title, downloadLabel: "Download Word", onDownload: doDocxDownload });
+  // "Download Supportings" — just the uploaded documents, no project-info
+  // table. Disabled in the UI when there are none.
+  async function downloadSupportings(format) {
+    if (!documents.length) return;
+    setBusy("supportings");
+    setBusyLabel("Preparing…");
+    try {
+      if (format === "docx") {
+        await withDocxClasses(async (docxClasses) => {
+          const { Document, Packer } = docxClasses;
+          const documentChildren = await buildKnowledgeDocumentsDocxChildren(
+            documents, docxClasses, supabase,
+            (i, total, name) => setBusyLabel(`Adding ${i} of ${total}: ${name}`),
+            { standalone: true }
+          );
+          const wordDoc = new Document({
+            styles: { default: { document: { run: { font: "Times New Roman", size: 20 } } } },
+            sections: [{
+              properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 720, right: 720, bottom: 720, left: 720 } } },
+              children: documentChildren,
+            }],
+          });
+          const blob = await Packer.toBlob(wordDoc);
+          downloadBlob(blob, `${fileBase()}_Supporting_Documents.docx`);
+        });
+      } else {
+        const blob = await buildKnowledgeSupportingsPdf({
+          documents,
+          title: project.title,
+          supabase,
+          onProgress: (i, total, name) => setBusyLabel(`Adding ${i} of ${total}: ${name}`),
+        });
+        openPdfInNewTab(blob, `${fileBase()}_Supporting_Documents.pdf`);
+      }
+      showToast(format === "docx" ? "Supporting documents downloaded." : "Supporting documents opened in a new tab.", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Export failed.", "danger");
+    } finally {
+      setBusy(null);
+      setBusyLabel("");
+    }
+  }
 
-  const handlePDFPreview = () => {
-    const html = buildPreviewHTML(project, keywords, selectedKwNames, 1, documents);
-    setPreview({
-      html,
-      title: project.title,
-      downloadLabel: "Print / Save PDF",
-      onDownload: () => { setPreview(null); setTimeout(() => printHtml(html, project.title || "project"), 150); },
-    });
-  };
+  // "Download Both" — the project-info table plus every uploaded document
+  // merged in, exactly what the old single Word/PDF buttons produced.
+  async function downloadBoth(format) {
+    setBusy("both");
+    setBusyLabel(documents.length ? "Preparing…" : "");
+    try {
+      if (format === "docx") {
+        await withDocxClasses(async (docxClasses) => {
+          const { Document, Packer, Table, WidthType } = docxClasses;
+          const { rows, TW, colWidths } = buildProjectRows(project, keywords, selectedKwNames, docxClasses, 1, documents);
+          const documentChildren = await buildKnowledgeDocumentsDocxChildren(
+            documents, docxClasses, supabase,
+            (i, total, name) => setBusyLabel(`Adding document ${i} of ${total}: ${name}`)
+          );
+          const wordDoc = new Document({
+            styles: { default: { document: { run: { font: "Times New Roman", size: 20 } } } },
+            sections: [{
+              properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 720, right: 720, bottom: 720, left: 720 } } },
+              children: [new Table({ width: { size: TW, type: WidthType.DXA }, columnWidths: colWidths, rows }), ...documentChildren],
+            }],
+          });
+          const blob = await Packer.toBlob(wordDoc);
+          downloadBlob(blob, `${fileBase()}.docx`);
+        });
+      } else {
+        const html = buildPreviewHTML(project, keywords, selectedKwNames, 1, documents);
+        const blob = await buildKnowledgeProjectPdf({
+          projectInfoHtml: html,
+          documents,
+          supabase,
+          onProgress: (i, total, name) => setBusyLabel(total > 1 ? `Adding ${i} of ${total}: ${name}` : "Preparing PDF…"),
+        });
+        openPdfInNewTab(blob, `${fileBase()}.pdf`);
+      }
+      showToast(format === "docx" ? "Download complete." : "Opened in a new tab.", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Export failed.", "danger");
+    } finally {
+      setBusy(null);
+      setBusyLabel("");
+    }
+  }
 
   if (loading) return <PageLoader text="Loading project details…" />;
 
@@ -215,12 +342,27 @@ export default function ProjectDetailsPage() {
                 <IconBookmark filled={shortlisted} />
                 {shortlisted ? "Shortlisted ✓" : "Shortlist"}
               </button>
-              <button className="btn-export btn-export-word" onClick={handleWordPreview} disabled={exporting}>
-                <IconWord /> Word
-              </button>
-              <button className="btn-export btn-export-pdf" onClick={handlePDFPreview}>
-                <IconPDF /> PDF
-              </button>
+              <ExportMenuButton
+                label="Download Profile"
+                busy={busy === "profile"}
+                busyLabel={busyLabel}
+                disabled={busy !== null}
+                onSelect={downloadProfile}
+              />
+              <ExportMenuButton
+                label="Download Supportings"
+                busy={busy === "supportings"}
+                busyLabel={busyLabel}
+                disabled={busy !== null || documents.length === 0}
+                onSelect={downloadSupportings}
+              />
+              <ExportMenuButton
+                label="Download Both"
+                busy={busy === "both"}
+                busyLabel={busyLabel}
+                disabled={busy !== null}
+                onSelect={downloadBoth}
+              />
             </div>
           </div>
 
@@ -299,8 +441,6 @@ export default function ProjectDetailsPage() {
               </div>
             )}
           </div>
-
-          {preview && <PreviewModal html={preview.html} title={preview.title} downloadLabel={preview.downloadLabel} onDownload={preview.onDownload} onClose={() => setPreview(null)} />}
 
           {showSlModal && project && (
             <ShortlistModal projectTitle={project.title} shortlists={shortlists} alreadyIn={alreadyInSlIds} onAddToExisting={handleAddToExisting} onCreateNew={handleCreateNew} onClose={() => setShowSlModal(false)} />

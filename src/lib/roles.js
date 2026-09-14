@@ -93,6 +93,13 @@ export const can = {
 
   viewUsersPage: (role) => USERS_PAGE_ROLES.includes(role),
   viewAuditLog: (role) => AUDIT_LOG_ROLES.includes(role),
+
+  // Company Documents (Knowledge Repository) — everyone in
+  // KNOWLEDGE_REPOSITORY_ROLES can view/download; only Admin can
+  // upload/update/delete. Mirrors company_documents' RLS policies exactly
+  // (see 20260910000000_company_documents.sql) — this is UI-only gating,
+  // never the actual enforcement.
+  manageCompanyDocuments: (role) => role === "admin",
 };
 
 export function isTeamUser(role) {

@@ -94,6 +94,42 @@
 }
 .btn-export-pdf:hover { border-color: var(--border-strong); color: var(--text-primary); }
 
+/* ── Export dropdown (Profile / Supportings / Both, each PDF or Word) ── */
+.pd-export-menu-root { position: relative; display: inline-block; }
+
+.pd-export-menu {
+  position: absolute;
+  top: calc(100% + 6px); right: 0;
+  min-width: 150px;
+  z-index: var(--z-dropdown);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  animation: slideIn var(--duration-fast) var(--ease-out);
+}
+
+.pd-export-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.pd-export-menu-item:hover { background: var(--bg-surface-2); }
+.pd-export-menu-item:disabled { opacity: 0.5; cursor: not-allowed; background: none; }
+
 /* ── Page header block ──────────────────────────────────────── */
 .details-header {
   display: flex;

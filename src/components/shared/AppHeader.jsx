@@ -95,14 +95,14 @@ export default function AppHeader() {
           <NavLink to="/home" className={navLinkClass} onClick={closeMenu}>
             Home
           </NavLink>
-          {canSeeEmpanelment && (
-            <NavLink to="/empanelment" className={navLinkClass} onClick={closeMenu}>
-              Empanelment
-            </NavLink>
-          )}
           {canSeeKnowledge && (
             <NavLink to="/knowledge" className={navLinkClass} onClick={closeMenu}>
               Knowledge Repository
+            </NavLink>
+          )}
+          {canSeeEmpanelment && (
+            <NavLink to="/empanelment" className={navLinkClass} onClick={closeMenu}>
+              Empanelment
             </NavLink>
           )}
           {canSeeLeads && (
