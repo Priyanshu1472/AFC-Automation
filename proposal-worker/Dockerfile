@@ -1,11 +1,18 @@
 FROM python:3.12-slim
 
-# LibreOffice headless (writer covers .doc/.docx, calc covers .xls/.xlsx)
-# plus a broader font set so a converted document doesn't silently
-# substitute a visually-different font for whatever the source used.
+# LibreOffice headless (writer covers .doc/.docx, calc covers .xls/.xlsx,
+# draw owns the PDF-import filter that convert_pdf_to_docx needs — without
+# it, converting a PDF to .docx fails with "source file could not be
+# loaded" even though writer/calc alone convert office docs to PDF just
+# fine) plus a JRE (some LibreOffice filters — including PDF import —
+# warn/fail without one: "failed to launch javaldx") and a broader font
+# set so a converted document doesn't silently substitute a
+# visually-different font for whatever the source used.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
     libreoffice-calc \
+    libreoffice-draw \
+    default-jre-headless \
     fonts-liberation \
     fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
