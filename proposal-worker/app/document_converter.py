@@ -32,12 +32,20 @@ class ConversionError(Exception):
     pass
 
 
-def _run_soffice_convert(input_path: Path, output_dir: Path, to_format: str) -> Path:
+def _run_soffice_convert(input_path: Path, output_dir: Path, to_format: str, infilter: str | None = None) -> Path:
     """Never uses a shell string (subprocess.run gets a plain argv list —
     no shell=True, so nothing in a filename can be interpreted as a shell
     command), and gives each invocation its own LibreOffice profile
     directory so two concurrent jobs (see config.MAX_CONCURRENT_JOBS)
     never contend on the same lock file.
+
+    `infilter` forces which import filter opens the source file, rather
+    than relying on soffice's own autodetection — needed for PDF->DOCX
+    specifically (see convert_pdf_to_docx): without it, soffice's
+    autodetection for a .pdf source under --convert-to doesn't reliably
+    pick the PDF-as-editable-document import path and fails outright with
+    "source file could not be loaded", even with libreoffice-draw (which
+    owns that import filter) installed.
     """
     profile_dir = output_dir / f"lo_profile_{uuid.uuid4().hex}"
     profile_dir.mkdir(parents=True, exist_ok=True)
@@ -50,9 +58,10 @@ def _run_soffice_convert(input_path: Path, output_dir: Path, to_format: str) -> 
         "--nodefault",
         f"-env:UserInstallation=file://{profile_dir.as_posix()}",
         "--convert-to", to_format,
-        "--outdir", str(output_dir),
-        str(input_path),
     ]
+    if infilter:
+        argv += ["--infilter", infilter]
+    argv += ["--outdir", str(output_dir), str(input_path)]
 
     try:
         result = subprocess.run(
@@ -83,6 +92,7 @@ def convert_to_pdf(input_path: Path, output_dir: Path) -> Path:
 
 def convert_pdf_to_docx(input_path: Path, output_dir: Path) -> Path:
     """Converts the final assembled PDF to an editable .docx — see this
-    module's docstring for the fidelity tradeoff.
+    module's docstring for the fidelity tradeoff, and _run_soffice_convert
+    for why this needs an explicit infilter.
     """
-    return _run_soffice_convert(input_path, output_dir, "docx:MS Word 2007 XML")
+    return _run_soffice_convert(input_path, output_dir, "docx:MS Word 2007 XML", infilter="writer_pdf_import")
