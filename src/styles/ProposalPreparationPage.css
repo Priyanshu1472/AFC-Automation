@@ -693,3 +693,24 @@
 .pp-job-date { font-size: var(--text-sm); color: var(--text-primary); font-weight: 500; }
 .pp-job-error { font-size: var(--text-xs); color: var(--color-danger, #dc2626); margin-top: 2px; }
 .pp-job-actions { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
+
+.pp-assembly-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: 6px;
+}
+.pp-assembly-list-header .pp-list-group-label { margin-bottom: 0; }
+
+.pp-assembly-select-all {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-xs);
+  color: var(--color-primary, #2563eb);
+  cursor: pointer;
+  text-decoration: underline;
+  flex-shrink: 0;
+}
+.pp-assembly-select-all:disabled { opacity: 0.5; cursor: not-allowed; }

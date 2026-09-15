@@ -13,7 +13,8 @@ import Collapsible from "../ui/Collapsible";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import Alert from "../ui/Alert";
-import { MergeIcon } from "../icons";
+import ConfirmDialog from "../ui/ConfirmDialog";
+import { MergeIcon, TrashIcon } from "../icons";
 import ProposalAssemblyModal from "./ProposalAssemblyModal";
 
 const STATUS_META = {
@@ -39,6 +40,8 @@ export default function ProposalFinalAssemblyPanel({ proposalId, baItems, checkl
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState("");
   const [openingId, setOpeningId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase
@@ -75,6 +78,21 @@ export default function ProposalFinalAssemblyPanel({ proposalId, baItems, checkl
       setError(err.message || "Something went wrong.");
     } finally {
       setOpeningId(null);
+    }
+  }
+
+  async function handleDelete(job) {
+    setDeleting(true);
+    setError("");
+    try {
+      const { error: delErr } = await supabase.from("proposal_generation_jobs").delete().eq("id", job.id);
+      if (delErr) { setError(delErr.message); return; }
+      const paths = [job.output_pdf_path, job.output_docx_path].filter(Boolean);
+      if (paths.length) await supabase.storage.from("proposal-documents").remove(paths);
+      setDeleteTarget(null);
+      fetchJobs();
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -128,6 +146,11 @@ export default function ProposalFinalAssemblyPanel({ proposalId, baItems, checkl
                       )}
                     </>
                   )}
+                  {canManage && !locked && (
+                    <button type="button" className="pp-icon-btn" title="Delete this generation" aria-label="Delete this generation" onClick={() => setDeleteTarget(job)}>
+                      <TrashIcon />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -143,6 +166,17 @@ export default function ProposalFinalAssemblyPanel({ proposalId, baItems, checkl
           documents={documents}
           onClose={() => setShowModal(false)}
           onCreated={() => { setShowModal(false); fetchJobs(); }}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete this generation?"
+          message={`Are you sure you want to remove this Final Proposal generation from ${fmtDateTime(deleteTarget.created_at)}?${deleteTarget.output_pdf_path ? " Its generated file(s) will be removed too." : ""}`}
+          confirmLabel="Delete"
+          loading={deleting}
+          onConfirm={() => handleDelete(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
     </Card>

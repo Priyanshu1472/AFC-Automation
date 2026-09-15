@@ -78,6 +78,19 @@ export default function ProposalAssemblyModal({ proposalId, baItems, checklistIt
     });
   }
 
+  // Keeps whatever order the user's already built, just appends every
+  // not-yet-selected document after it — doesn't discard manual reordering.
+  function selectAll() {
+    setSequence((seq) => {
+      const already = new Set(seq.map((s) => s.key));
+      return [...seq, ...available.filter((d) => !already.has(d.key))];
+    });
+  }
+  function deselectAll() {
+    setSequence([]);
+  }
+  const allSelected = available.length > 0 && selectedKeys.size === available.length;
+
   async function handleGenerate() {
     if (sequence.length === 0) { setError("Please select at least one document."); return; }
     setSubmitting(true);
@@ -104,7 +117,14 @@ export default function ProposalAssemblyModal({ proposalId, baItems, checklistIt
 
         <div className="pp-assembly-grid">
           <div>
-            <div className="pp-list-group-label">Available Documents</div>
+            <div className="pp-assembly-list-header">
+              <div className="pp-list-group-label">Available Documents</div>
+              {available.length > 0 && (
+                <button type="button" className="pp-assembly-select-all" disabled={submitting} onClick={allSelected ? deselectAll : selectAll}>
+                  {allSelected ? "Deselect All" : "Select All"}
+                </button>
+              )}
+            </div>
             {available.length === 0 && (
               <p className="text-secondary text-sm">
                 Nothing eligible yet — attach a file to a Business Partner request, an AFC checklist item, or a Proposal Document slot above first.
