@@ -63,7 +63,12 @@ def _run_soffice_convert(input_path: Path, output_dir: Path, to_format: str, inf
         "--convert-to", to_format,
     ]
     if infilter:
-        argv += ["--infilter", infilter]
+        # Must be ONE argv token with "=" — soffice's own arg parser
+        # rejects "--infilter" and the value as two separate argv items
+        # ("Error in option: --infilter", confirmed against a real
+        # container run), which silently fell through to the exact same
+        # autodetection failure this was meant to fix.
+        argv += [f"--infilter={infilter}"]
     argv += ["--outdir", str(output_dir), str(input_path)]
 
     try:
