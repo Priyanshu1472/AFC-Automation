@@ -21,11 +21,14 @@ README for how to smoke-test this module once the Docker image is
 built) — every OTHER module in this worker (numbering, TOC, assembly,
 overlay, bookmarks, filenames) is unit-tested for real with actual PDFs.
 """
+import logging
 import subprocess
 import uuid
 from pathlib import Path
 
 from app.config import LIBREOFFICE_TIMEOUT_SECONDS
+
+log = logging.getLogger("document_converter")
 
 
 class ConversionError(Exception):
@@ -79,8 +82,20 @@ def _run_soffice_convert(input_path: Path, output_dir: Path, to_format: str, inf
     output_ext = to_format.split(":", 1)[0]
     expected_output = output_dir / f"{input_path.stem}.{output_ext}"
     if result.returncode != 0 or not expected_output.exists():
-        stderr_tail = (result.stderr or "").strip()[-500:]
-        raise ConversionError(f"Unable to convert \"{input_path.name}\" to .{output_ext}.{(' ' + stderr_tail) if stderr_tail else ''}")
+        # soffice's actual failure reason is often on stdout, not stderr
+        # (the javaldx line that WAS showing up is themself just a benign
+        # startup warning, not the real cause) — log everything available
+        # so the next failure is diagnosable from one log capture instead
+        # of guessing blind. Full detail goes to the worker's own log
+        # (server-side only); the user-facing GenerationError message
+        # built from this stays short (see proposal_generator.py).
+        listing = sorted(p.name for p in output_dir.iterdir()) if output_dir.exists() else []
+        log.warning(
+            "soffice convert failed: argv=%s exit=%s\n--- stdout ---\n%s\n--- stderr ---\n%s\n--- %s contents ---\n%s",
+            argv, result.returncode, (result.stdout or "").strip(), (result.stderr or "").strip(), output_dir, listing,
+        )
+        detail_tail = ((result.stderr or "") + " " + (result.stdout or "")).strip()[-500:]
+        raise ConversionError(f"Unable to convert \"{input_path.name}\" to .{output_ext}.{(' ' + detail_tail) if detail_tail else ''}")
 
     return expected_output
 
