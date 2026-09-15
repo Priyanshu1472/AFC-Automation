@@ -48,12 +48,20 @@ def claim_next_job(client: Client) -> dict | None:
     return candidate
 
 
-def mark_completed(client: Client, job_id: str, output_file_name: str, output_file_path: str, output_file_size: int) -> None:
+def mark_completed(client: Client, job_id: str, result: dict) -> None:
+    """`result` carries the PDF (always present) and DOCX (best-effort —
+    see document_converter.py's docstring on why PDF->DOCX can fail or be
+    skipped without failing the whole job) output file info — see
+    proposal_generator.run_job for its exact shape.
+    """
     client.table(JOBS_TABLE).update({
         "status": "completed",
-        "output_file_name": output_file_name,
-        "output_file_path": output_file_path,
-        "output_file_size": output_file_size,
+        "output_pdf_name": result["pdf_name"],
+        "output_pdf_path": result["pdf_path"],
+        "output_pdf_size": result["pdf_size"],
+        "output_docx_name": result.get("docx_name"),
+        "output_docx_path": result.get("docx_path"),
+        "output_docx_size": result.get("docx_size"),
         "completed_at": _now_iso(),
     }).eq("id", job_id).execute()
 
@@ -77,9 +85,15 @@ def download_source_file(client: Client, storage_path: str, dest: Path) -> None:
     dest.write_bytes(data)
 
 
-def upload_final_pdf(client: Client, storage_path: str, data: bytes) -> None:
+_CONTENT_TYPES = {
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+
+def upload_final_file(client: Client, storage_path: str, data: bytes, ext: str) -> None:
     client.storage.from_(BUCKET).upload(
-        storage_path, data, file_options={"content-type": "application/pdf", "upsert": "true"}
+        storage_path, data, file_options={"content-type": _CONTENT_TYPES[ext], "upsert": "true"}
     )
 
 

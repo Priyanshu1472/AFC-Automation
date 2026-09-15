@@ -2,7 +2,10 @@
 // (ProposalAssemblyModal) plus a history of past generation jobs. Each
 // job is processed out-of-band by proposal-worker (see its README); this
 // panel just creates jobs and reflects their status back, live, via
-// Supabase Realtime on proposal_generation_jobs.
+// Supabase Realtime on proposal_generation_jobs. A completed job always
+// has a PDF; the Word download is derived FROM that PDF by the worker
+// and is best-effort (see document_converter.py) — its button only
+// renders when output_docx_path actually came back.
 import { useState, useEffect, useCallback } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import Card from "../ui/Card";
@@ -57,12 +60,13 @@ export default function ProposalFinalAssemblyPanel({ proposalId, baItems, checkl
     return () => supabase.removeChannel(channel);
   }, [proposalId, fetchJobs]);
 
-  async function handleView(job) {
+  async function handleView(job, format, path) {
+    if (!path) return;
     setError("");
-    setOpeningId(job.id);
+    setOpeningId(`${job.id}_${format}`);
     try {
       const { data, error: fnError } = await supabase.functions.invoke("get-proposal-document-url", {
-        body: { path: job.output_file_path, proposal_id: proposalId },
+        body: { path, proposal_id: proposalId },
       });
       if (fnError) { setError(await extractFunctionErrorMessage(fnError, "Failed to open document.")); return; }
       if (!data?.url) { setError(data?.error || "Failed to open document."); return; }
@@ -81,7 +85,7 @@ export default function ProposalFinalAssemblyPanel({ proposalId, baItems, checkl
     <Card>
       <Collapsible
         title="Final Proposal"
-        subtitle="Assemble the documents collected above into one client-facing PDF."
+        subtitle="Assemble the documents collected above into one client-facing PDF, with a Word version generated from it."
         icon={<MergeIcon />}
         action={latest && <Badge variant={STATUS_META[latest.status]?.variant || "neutral"}>{STATUS_META[latest.status]?.label || latest.status}</Badge>}
       >
@@ -107,14 +111,22 @@ export default function ProposalFinalAssemblyPanel({ proposalId, baItems, checkl
                 <div className="pp-job-meta">
                   <span className="pp-job-date">{fmtDateTime(job.created_at)} · {(job.selected_items || []).length} document{(job.selected_items || []).length === 1 ? "" : "s"}</span>
                   {job.status === "failed" && job.error_message && <span className="pp-job-error">{job.error_message}</span>}
-                  {job.status === "completed" && job.output_file_name && (
-                    <span className="pp-list-row-sub">{job.output_file_name}{job.output_file_size ? ` (${fmtSize(job.output_file_size)})` : ""}</span>
+                  {job.status === "completed" && job.output_pdf_name && (
+                    <span className="pp-list-row-sub">
+                      {job.output_pdf_name}{job.output_pdf_size ? ` (${fmtSize(job.output_pdf_size)})` : ""}
+                      {!job.output_docx_path && " · Word version unavailable for this generation"}
+                    </span>
                   )}
                 </div>
                 <div className="pp-job-actions">
                   <Badge variant={STATUS_META[job.status]?.variant || "neutral"}>{STATUS_META[job.status]?.label || job.status}</Badge>
                   {job.status === "completed" && (
-                    <Button variant="secondary" size="sm" loading={openingId === job.id} onClick={() => handleView(job)}>View</Button>
+                    <>
+                      <Button variant="secondary" size="sm" loading={openingId === `${job.id}_pdf`} onClick={() => handleView(job, "pdf", job.output_pdf_path)}>PDF</Button>
+                      {job.output_docx_path && (
+                        <Button variant="secondary" size="sm" loading={openingId === `${job.id}_docx`} onClick={() => handleView(job, "docx", job.output_docx_path)}>Word</Button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

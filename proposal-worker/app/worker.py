@@ -23,9 +23,9 @@ def process_one_job(job: dict) -> None:
     client = supabase_client.get_client()
     job_id = job["id"]
     try:
-        name, path, size = run_job(client, job)
-        supabase_client.mark_completed(client, job_id, name, path, size)
-        log.info("Job %s completed -> %s", job_id, path)
+        result = run_job(client, job)
+        supabase_client.mark_completed(client, job_id, result)
+        log.info("Job %s completed -> %s%s", job_id, result["pdf_path"], "" if result.get("docx_path") else " (PDF only, DOCX conversion failed)")
     except GenerationError as exc:
         supabase_client.mark_failed(client, job_id, str(exc))
         log.warning("Job %s failed: %s", job_id, exc)

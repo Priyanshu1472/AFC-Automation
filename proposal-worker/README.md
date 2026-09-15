@@ -1,16 +1,24 @@
 # Proposal Worker
 
-Assembles a Final Proposal PDF from documents already stored in the main
-app's `proposal-documents` Supabase Storage bucket: converts DOCX/DOC/
-XLS/XLSX to PDF with LibreOffice (real rendering, not a rasterized
-approximation), preserves PDFs exactly as uploaded, and adds a cover,
-Table of Contents, and page numbering — see the module docstrings in
-`app/` for how each piece works, and `tests/` for what's actually
-verified (page-numbering math, TOC pagination, bookmark placement, full
-orchestration — all runnable without LibreOffice; only the LibreOffice
-conversion step itself isn't covered by these tests, since LibreOffice
-isn't available in a plain Python environment — see "Smoke-testing the
-LibreOffice step" below).
+Assembles a Final Proposal PDF (and a Word download generated from it)
+from documents already stored in the main app's `proposal-documents`
+Supabase Storage bucket: converts DOCX/DOC/XLS/XLSX to PDF with
+LibreOffice (real rendering, not a rasterized approximation), preserves
+PDFs exactly as uploaded, and adds a cover, Table of Contents, and page
+numbering — see the module docstrings in `app/` for how each piece
+works, and `tests/` for what's actually verified (page-numbering math,
+TOC pagination, bookmark placement, full orchestration — all runnable
+without LibreOffice; only the LibreOffice conversion step itself isn't
+covered by these tests, since LibreOffice isn't available in a plain
+Python environment — see "Smoke-testing the LibreOffice step" below).
+
+The PDF is the guaranteed, always-produced artifact. The Word (.docx)
+download is generated FROM that finished PDF (same cover/TOC/page
+numbers/order) via LibreOffice's own PDF import — genuinely editable,
+but a lossier reconstruction than the DOCX→PDF direction (PDF's fixed
+page layout becomes Word text-frames, not flowing paragraphs), so it's
+best-effort: a job still completes with the PDF alone if that step fails
+(see `document_converter.py` and `proposal_generator.py`'s docstrings).
 
 It is a separate service from the rest of this app on purpose — see
 `create-proposal-generation-job` (a Supabase Edge Function) for why:
@@ -29,10 +37,12 @@ run inside Supabase's Deno-based Edge Functions.
 3. This worker polls that table (no webhook, no queue service — the
    simplest reliable mechanism for ~300-400 jobs/year), claims a job,
    downloads the selected files, converts/assembles/numbers them, and
-   uploads the final PDF back into the same Storage bucket.
-4. It updates the job row to `completed` (with the output path) or
-   `failed` (with a user-safe error message). The frontend is subscribed
-   to that row via Supabase Realtime and reacts accordingly.
+   uploads the final PDF (and, best-effort, the Word version derived
+   from it) back into the same Storage bucket.
+4. It updates the job row to `completed` (with both output paths, or
+   just the PDF's if the Word conversion failed) or `failed` (with a
+   user-safe error message). The frontend is subscribed to that row via
+   Supabase Realtime and reacts accordingly.
 
 No public endpoint anywhere in this service — it only ever makes outbound
 calls to Supabase, so it deploys as a **background worker**, not a web

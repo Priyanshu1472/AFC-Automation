@@ -14,7 +14,7 @@ from supabase import Client
 from app import supabase_client
 from app.config import MAX_OUTPUT_FILE_SIZE_BYTES
 from app.cover import render_cover_pdf
-from app.document_converter import ConversionError, convert_to_pdf
+from app.document_converter import ConversionError, convert_pdf_to_docx, convert_to_pdf
 from app.filenames import output_filename, sanitize_filename
 from app.page_numbering import Section, build_page_labels, build_toc_entries, compute_arabic_starts, render_page_number_overlay
 from app.pdf_assembler import add_bookmarks, apply_page_number_overlay, assemble_content_pdf, page_count
@@ -54,12 +54,16 @@ def _prepare_section(client: Client, item: dict, index: int, work_dir: Path) -> 
     return Section(label=item["label"], path=str(pdf_path), page_count=pages)
 
 
-def run_job(client: Client, job: dict, include_cover: bool = True) -> tuple[str, str, int]:
-    """Returns (output_file_name, output_file_path, output_file_size).
-    Raises GenerationError on any failure — the caller (worker.py) is
-    responsible for calling mark_failed with its message. `client` is a
-    fresh Client per call (see worker.py) — nothing here is shared
-    mutable state, so this is safe to run concurrently across jobs.
+def run_job(client: Client, job: dict, include_cover: bool = True) -> dict:
+    """Returns a dict: pdf_name/pdf_path/pdf_size (always present) and
+    docx_name/docx_path/docx_size (present only if the PDF->DOCX
+    conversion succeeded — see document_converter.py's docstring on why
+    that direction is best-effort, not guaranteed, and never blocks
+    delivering the PDF). Raises GenerationError on any failure building
+    the PDF itself — the caller (worker.py) is responsible for calling
+    mark_failed with its message. `client` is a fresh Client per call
+    (see worker.py) — nothing here is shared mutable state, so this is
+    safe to run concurrently across jobs.
     """
     proposal_id = job["proposal_id"]
     selected_items = job["selected_items"]
@@ -100,10 +104,33 @@ def run_job(client: Client, job: dict, include_cover: bool = True) -> tuple[str,
                 f"Remove a document or split it into multiple proposals."
             )
 
-        out_name = output_filename(client_name, title)
-        out_path = f"{proposal_id}/final/{sanitize_filename(job['id'])}_{out_name}"
-        supabase_client.upload_final_pdf(client, out_path, final_bytes)
+        job_prefix = sanitize_filename(job["id"])
+        pdf_name = output_filename(client_name, title, "pdf")
+        pdf_path = f"{proposal_id}/final/{job_prefix}_{pdf_name}"
+        supabase_client.upload_final_file(client, pdf_path, final_bytes, "pdf")
 
-        return out_name, out_path, len(final_bytes)
+        result = {"pdf_name": pdf_name, "pdf_path": pdf_path, "pdf_size": len(final_bytes)}
+
+        # Word download — derived FROM the already-finalized PDF (so it
+        # carries the same cover/TOC/page numbers/order), via LibreOffice.
+        # Best-effort: a PDF the worker can merge just fine sometimes isn't
+        # one LibreOffice can reconstruct as DOCX cleanly — that's a
+        # narrower, format-reconstruction failure mode, not a reason to
+        # fail the whole job when the PDF (the guaranteed-fidelity
+        # artifact) already built successfully.
+        try:
+            final_pdf_path = work_dir / "final.pdf"
+            final_pdf_path.write_bytes(final_bytes)
+            docx_local_path = convert_pdf_to_docx(final_pdf_path, work_dir)
+            docx_bytes = docx_local_path.read_bytes()
+
+            docx_name = output_filename(client_name, title, "docx")
+            docx_path = f"{proposal_id}/final/{job_prefix}_{docx_name}"
+            supabase_client.upload_final_file(client, docx_path, docx_bytes, "docx")
+            result.update({"docx_name": docx_name, "docx_path": docx_path, "docx_size": len(docx_bytes)})
+        except Exception:
+            log.warning("PDF->DOCX conversion failed for job %s; PDF-only.", job["id"], exc_info=True)
+
+        return result
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)

@@ -1,4 +1,4 @@
-from app.filenames import is_safe_relative_path, output_filename, sanitize_filename
+from app.filenames import is_safe_relative_path, output_base_name, output_filename, sanitize_filename
 
 
 def test_sanitize_filename_strips_unsafe_characters():
@@ -30,6 +30,12 @@ def test_output_filename_falls_back_to_title_when_no_client():
 def test_output_filename_falls_back_to_generic_when_nothing_usable():
     assert output_filename("", "") == "Proposal_Final.pdf"
     assert output_filename(None, None) == "Proposal_Final.pdf"
+
+
+def test_output_filename_docx_shares_the_same_base_name_as_pdf():
+    assert output_base_name("Smart City Corp", "DPR for Smart City") == "Smart_City_Corp_Final"
+    assert output_filename("Smart City Corp", "DPR for Smart City", "pdf") == "Smart_City_Corp_Final.pdf"
+    assert output_filename("Smart City Corp", "DPR for Smart City", "docx") == "Smart_City_Corp_Final.docx"
 
 
 def test_is_safe_relative_path_accepts_normal_paths():

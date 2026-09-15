@@ -12,6 +12,7 @@ def test_run_job_orchestrates_download_convert_assemble_upload(monkeypatch):
 
     pdf_source_bytes = _make_pdf(2, "A")
     converted_bytes = _make_pdf(3, "B")
+    final_docx_bytes = b"fake docx bytes"
     uploaded = {}
 
     def fake_download(client, storage_path, dest):
@@ -19,18 +20,23 @@ def test_run_job_orchestrates_download_convert_assemble_upload(monkeypatch):
         # bytes don't matter since conversion itself is mocked below.
         dest.write_bytes(pdf_source_bytes if storage_path.endswith(".pdf") else b"docx placeholder")
 
-    def fake_convert(input_path, output_dir):
+    def fake_convert_to_pdf(input_path, output_dir):
         out = output_dir / f"{input_path.stem}.pdf"
         out.write_bytes(converted_bytes)
         return out
 
-    def fake_upload(client, path, data):
-        uploaded["path"] = path
-        uploaded["data"] = data
+    def fake_convert_pdf_to_docx(input_path, output_dir):
+        out = output_dir / f"{input_path.stem}.docx"
+        out.write_bytes(final_docx_bytes)
+        return out
+
+    def fake_upload(client, path, data, ext):
+        uploaded[ext] = {"path": path, "data": data}
 
     monkeypatch.setattr(proposal_generator.supabase_client, "download_source_file", fake_download)
-    monkeypatch.setattr(proposal_generator, "convert_to_pdf", fake_convert)
-    monkeypatch.setattr(proposal_generator.supabase_client, "upload_final_pdf", fake_upload)
+    monkeypatch.setattr(proposal_generator, "convert_to_pdf", fake_convert_to_pdf)
+    monkeypatch.setattr(proposal_generator, "convert_pdf_to_docx", fake_convert_pdf_to_docx)
+    monkeypatch.setattr(proposal_generator.supabase_client, "upload_final_file", fake_upload)
     monkeypatch.setattr(
         proposal_generator.supabase_client,
         "get_proposal_and_lead",
@@ -46,14 +52,46 @@ def test_run_job_orchestrates_download_convert_assemble_upload(monkeypatch):
         ],
     }
 
-    name, path, size = proposal_generator.run_job(fake_client, job)
+    result = proposal_generator.run_job(fake_client, job)
 
-    assert name == "Acme_Corp_Final.pdf"
-    assert path == uploaded["path"]
-    assert path.startswith("prop-1/final/job-1_")
-    assert size == len(uploaded["data"])
+    assert result["pdf_name"] == "Acme_Corp_Final.pdf"
+    assert result["pdf_path"] == uploaded["pdf"]["path"]
+    assert result["pdf_path"].startswith("prop-1/final/job-1_")
+    assert result["pdf_size"] == len(uploaded["pdf"]["data"])
     # 1 cover + TOC (>=1) + 2 (pdf item) + 3 (converted docx item).
-    assert page_count(uploaded["data"]) >= 1 + 1 + 2 + 3
+    assert page_count(uploaded["pdf"]["data"]) >= 1 + 1 + 2 + 3
+
+    assert result["docx_name"] == "Acme_Corp_Final.docx"
+    assert result["docx_path"] == uploaded["docx"]["path"]
+    assert result["docx_size"] == len(final_docx_bytes) == len(uploaded["docx"]["data"])
+
+
+def test_run_job_still_completes_with_pdf_only_when_docx_conversion_fails(monkeypatch):
+    fake_client = MagicMock()
+    pdf_source_bytes = _make_pdf(1, "A")
+    uploaded = {}
+
+    monkeypatch.setattr(proposal_generator.supabase_client, "download_source_file", lambda c, p, dest: dest.write_bytes(pdf_source_bytes))
+    monkeypatch.setattr(proposal_generator, "convert_pdf_to_docx", lambda *a, **kw: (_ for _ in ()).throw(proposal_generator.ConversionError("LibreOffice choked.")))
+    monkeypatch.setattr(proposal_generator.supabase_client, "upload_final_file", lambda client, path, data, ext: uploaded.__setitem__(ext, {"path": path, "data": data}))
+    monkeypatch.setattr(
+        proposal_generator.supabase_client,
+        "get_proposal_and_lead",
+        lambda client, proposal_id: ({"id": proposal_id}, {"title": "T", "client_name": "C"}),
+    )
+
+    job = {
+        "id": "job-1",
+        "proposal_id": "prop-1",
+        "selected_items": [
+            {"source": "document", "source_id": "doc-1", "label": "Technical Proposal", "file_name": "technical.pdf", "file_path": "prop-1/technical.pdf", "ext": "pdf"},
+        ],
+    }
+    result = proposal_generator.run_job(fake_client, job)
+
+    assert result["pdf_path"] == uploaded["pdf"]["path"]
+    assert result.get("docx_path") is None
+    assert "docx" not in uploaded
 
 
 def test_run_job_rejects_empty_selection():
