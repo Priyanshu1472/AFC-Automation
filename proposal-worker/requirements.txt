@@ -1,4 +1,0 @@
-supabase==2.31.0
-pypdf==6.18.1
-reportlab==5.0.1
-python-dotenv==1.0.1

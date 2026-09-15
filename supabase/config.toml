@@ -534,12 +534,6 @@ verify_jwt = true
 import_map = "./functions/get-proposal-document-url/deno.json"
 entrypoint = "./functions/get-proposal-document-url/index.ts"
 
-[functions.create-proposal-generation-job]
-enabled = true
-verify_jwt = true
-import_map = "./functions/create-proposal-generation-job/deno.json"
-entrypoint = "./functions/create-proposal-generation-job/index.ts"
-
 [functions.lock-proposal]
 enabled = true
 verify_jwt = true

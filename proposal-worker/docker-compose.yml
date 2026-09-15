@@ -1,5 +1,0 @@
-services:
-  proposal-worker:
-    build: .
-    env_file: .env
-    restart: unless-stopped
