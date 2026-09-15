@@ -34,3 +34,10 @@ yarn-error.log*
 
 # Demo seed script output (real email addresses + a shared password)
 demo-credentials.md
+
+# Python (proposal-worker/)
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/

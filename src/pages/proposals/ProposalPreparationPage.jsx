@@ -1,14 +1,18 @@
 // Proposal Preparation for an MD-approved lead — fee notes, BP document
 // requests, an internal AFC checklist, the three proposal document slots,
-// and the lock + client-outcome step. Reached from "Open Proposal" once a
-// lead's status is 'md_approved'. Attaches directly to the existing `leads`
-// row (see 20260820040000_proposal_preparation_schema.sql) rather than a
-// separate "project" entity, since nothing downstream of an approved lead
-// exists yet.
+// a Final Proposal assembly step, and the lock + client-outcome step.
+// Reached from "Open Proposal" once a lead's status is 'md_approved'.
+// Attaches directly to the existing `leads` row (see
+// 20260820040000_proposal_preparation_schema.sql) rather than a separate
+// "project" entity, since nothing downstream of an approved lead exists yet.
 //
-// Deliberately no merge/assembly step — this page is just a place to
-// collect and store the proposal's documents; actually building the final
-// proposal happens outside this system.
+// Final Proposal assembly (ProposalFinalAssemblyPanel) lets the user pick
+// which already-uploaded documents belong in the client-facing PDF and in
+// what order — actual generation happens out-of-band in proposal-worker
+// (LibreOffice + pypdf + ReportLab; see supabase/functions/
+// create-proposal-generation-job and proposal-worker/README.md), never
+// auto-including every document (BP/AFC checklist items are often
+// internal-only).
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
@@ -23,6 +27,7 @@ import FeeNotesPanel from "../../components/proposals/FeeNotesPanel";
 import BaDocumentRequestsPanel from "../../components/proposals/BaDocumentRequestsPanel";
 import AfcChecklistPanel from "../../components/proposals/AfcChecklistPanel";
 import ProposalDocumentsPanel from "../../components/proposals/ProposalDocumentsPanel";
+import ProposalFinalAssemblyPanel from "../../components/proposals/ProposalFinalAssemblyPanel";
 import ProposalLockPanel from "../../components/proposals/ProposalLockPanel";
 import ClientResponseBanner from "../../components/proposals/ClientResponseBanner";
 import ProposalChatPanel from "../../components/proposals/ProposalChatPanel";
@@ -261,6 +266,15 @@ export default function ProposalPreparationPage() {
             canManage={canManage}
             locked={locked}
             onChanged={fetchAll}
+          />
+
+          <ProposalFinalAssemblyPanel
+            proposalId={proposal.id}
+            baItems={baItems}
+            checklistItems={checklistItems}
+            documents={documents}
+            canManage={canManage}
+            locked={locked}
           />
 
           <ProposalLockPanel
