@@ -54,6 +54,25 @@
 .kr-view-btn:hover   { color: var(--text-secondary); background: var(--bg-surface-3); }
 .kr-view-btn--active { background: var(--card-bg); color: var(--text-brand); box-shadow: var(--shadow-xs); }
 
+/* ── Search Projects / Find Relevant Experience mode toggle ───── */
+.kr-mode-tabs { display: flex; gap: var(--space-2); }
+.kr-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.kr-mode-tab:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.kr-mode-tab--active { background: var(--brand-500); border-color: var(--brand-500); color: #fff; }
+
 /* ── Shortlists button ──────────────────────────────────────── */
 .kr-btn-shortlists {
   display: inline-flex;
@@ -249,6 +268,8 @@
 }
 .kr-year-chip:hover   { border-color: var(--border-strong); color: var(--text-primary); }
 .kr-year-chip--active { background: var(--brand-500); color: #fff; border-color: var(--brand-500); }
+
+.kr-kw-chip-scroll { max-height: 180px; overflow-y: auto; padding-right: 2px; }
 
 .kr-range-row        { display: flex; align-items: center; gap: var(--space-2); }
 .kr-range-row .input { flex: 1; }

@@ -370,6 +370,7 @@ export default function ProjectDetailsPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div className="details-badge">Project Details</div>
               {project.team && <span className="details-team-badge">{project.team}</span>}
+              {project.status && <span className="details-team-badge">{project.status}</span>}
             </div>
             <h1 className="details-title">{project.title}</h1>
           </div>
@@ -378,6 +379,7 @@ export default function ProjectDetailsPage() {
             <div className="details-card">
               <h3 className="card-section-title">Client Information</h3>
               <div className="detail-row"><span className="detail-label">Client</span><span className="detail-value">{project.client || "—"}</span></div>
+              <div className="detail-row"><span className="detail-label">Client Type</span><span className="detail-value">{project.client_type || "—"}</span></div>
               <div className="detail-row"><span className="detail-label">Representative</span><span className="detail-value">{summary.contactPerson || "—"}</span></div>
             </div>
 

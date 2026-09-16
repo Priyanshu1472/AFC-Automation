@@ -6,6 +6,7 @@ import AppHeader from "../../components/shared/AppHeader";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import { KeywordDropdown, DocumentUpload, INDIAN_STATES, CustomSelect, MonthPicker } from "../../components/knowledge/KnowledgeFormParts";
+import { useProjectIndexing } from "../../hooks/useProjectIndexing";
 import "../../styles/AddProjectPage.css";
 
 function monthsBetween(start, end) {
@@ -21,6 +22,7 @@ export default function EditProjectPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { reindexProject } = useProjectIndexing();
 
   const [form, setForm] = useState(null);
   const [projectTeam, setProjectTeam] = useState(null);
@@ -49,6 +51,8 @@ export default function EditProjectPage() {
       servicesDescription: s.servicesDescription || "",
       clientNameAddress: proj.client || "",
       capitalCost: s.capitalCost || "",
+      clientType: proj.client_type || "",
+      status: proj.status || "",
       country: s.country || "India",
       location: proj.location || "",
       contactPerson: s.contactPerson || "",
@@ -137,7 +141,7 @@ export default function EditProjectPage() {
 
     const { error: updateErr } = await supabase
       .from("projects")
-      .update({ title: form.projectName, client: form.clientNameAddress, summary: summaryData, location: form.location || null, shortform: form.shortform || null })
+      .update({ title: form.projectName, client: form.clientNameAddress, summary: summaryData, location: form.location || null, shortform: form.shortform || null, client_type: form.clientType || null, status: form.status || null })
       .eq("id", id);
 
     if (updateErr) {
@@ -158,6 +162,14 @@ export default function EditProjectPage() {
         await supabase.from("project_keyword_details").insert({ project_id: id, keyword_id: keywordId, description: kwDesc });
       }
     }
+
+    // Fire-and-forget: re-index this project for "Find Relevant
+    // Experience" search (skipped automatically if nothing searchable
+    // actually changed — see useProjectIndexing's content-hash check).
+    reindexProject(
+      { id, title: form.projectName, summary: summaryData },
+      Object.entries(selectedKeywords).map(([name, description]) => ({ name, description }))
+    );
 
     await supabase.from("application_audit_log").insert({
       action: "project_edited",
@@ -238,6 +250,16 @@ export default function EditProjectPage() {
                 <div className="ap-field">
                   <label>Location within Country (State / UT)</label>
                   <CustomSelect value={form.location} onChange={(v) => handleFormChange("location", v)} options={[{ value: "", label: "— Select State / UT —" }, ...INDIAN_STATES.map((s) => ({ value: s, label: s }))]} placeholder="— Select State / UT —" />
+                </div>
+
+                <div className="ap-field">
+                  <label>Client Type</label>
+                  <CustomSelect value={form.clientType} onChange={(v) => handleFormChange("clientType", v)} options={[{ value: "", label: "— Select Client Type —" }, { value: "Government", label: "Government" }, { value: "Private", label: "Private" }]} placeholder="— Select Client Type —" />
+                </div>
+
+                <div className="ap-field">
+                  <label>Project Status</label>
+                  <CustomSelect value={form.status} onChange={(v) => handleFormChange("status", v)} options={[{ value: "", label: "— Select Project Status —" }, { value: "Ongoing", label: "Ongoing" }, { value: "Completed", label: "Completed" }]} placeholder="— Select Project Status —" />
                 </div>
 
                 <div className="ap-field full-width">

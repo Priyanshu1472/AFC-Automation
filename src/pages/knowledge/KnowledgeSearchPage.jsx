@@ -5,8 +5,11 @@ import { useAuth } from "../../hooks/useAuth";
 import { useShortlist } from "../../hooks/useShortlist";
 import ShortlistModal from "../../components/knowledge/ShortlistModal";
 import CompanyDocumentsPanel from "../../components/knowledge/CompanyDocumentsPanel";
+import FindExperiencePanel from "../../components/knowledge/FindExperiencePanel";
+import RebuildIndexPanel from "../../components/knowledge/RebuildIndexPanel";
 import AppHeader from "../../components/shared/AppHeader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
+import { can } from "../../lib/roles";
 import "../../styles/KnowledgeSearchPage.css";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -35,6 +38,7 @@ const IconPlus = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="no
 const IconBookmark = ({ filled = false }) => (<svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg>);
 const IconEye = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>);
 const IconBuilding = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="2" width="16" height="20" rx="1" /><line x1="9" y1="6" x2="9" y2="6.01" /><line x1="15" y1="6" x2="15" y2="6.01" /><line x1="9" y1="10" x2="9" y2="10.01" /><line x1="15" y1="10" x2="15" y2="10.01" /><line x1="9" y1="14" x2="9" y2="14.01" /><line x1="15" y1="14" x2="15" y2="14.01" /><line x1="10" y1="22" x2="10" y2="18" /><line x1="14" y1="22" x2="14" y2="18" /></svg>);
+const IconSparkle = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" /></svg>);
 
 export default function KnowledgeSearchPage() {
   const navigate = useNavigate();
@@ -51,8 +55,14 @@ export default function KnowledgeSearchPage() {
   const [filterMin, setFilterMin] = useState("");
   const [filterMax, setFilterMax] = useState("");
   const [filterLoc, setFilterLoc] = useState("");
+  const [filterKeywords, setFilterKeywords] = useState(new Set());
+  const [kwFilterSearch, setKwFilterSearch] = useState("");
+  const [filterClientType, setFilterClientType] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState("folder");
+  const [viewMode, setViewMode] = useState("table");
+  const [searchMode, setSearchMode] = useState("projects"); // "projects" | "experience"
+  const [showRebuildIndex, setShowRebuildIndex] = useState(false);
 
   // Folder drill-down position lives in the URL (not plain state) so that
   // navigating to a project's details and back restores the exact
@@ -127,6 +137,16 @@ export default function KnowledgeSearchPage() {
     return [...locs].sort();
   }, [enriched]);
 
+  const allKeywordNames = useMemo(() => {
+    return [...new Set(keywords.map((k) => k.name).filter(Boolean))].sort();
+  }, [keywords]);
+
+  const allCountries = useMemo(() => {
+    const countries = new Set();
+    projects.forEach((p) => { const c = p.summary?.country; if (c) countries.add(c); });
+    return [...countries].sort();
+  }, [projects]);
+
   const filtered = useMemo(() => {
     return enriched.filter((p) => {
       if (query) {
@@ -145,9 +165,15 @@ export default function KnowledgeSearchPage() {
       if (filterMin !== "" && (p.capitalCost == null || p.capitalCost < parseFloat(filterMin))) return false;
       if (filterMax !== "" && (p.capitalCost == null || p.capitalCost > parseFloat(filterMax))) return false;
       if (filterLoc && p.location !== filterLoc) return false;
+      if (filterKeywords.size > 0) {
+        const names = new Set(p.kwList.map((k) => k.name));
+        if (![...filterKeywords].some((kw) => names.has(kw))) return false;
+      }
+      if (filterClientType && p.client_type !== filterClientType) return false;
+      if (filterStatus && p.status !== filterStatus) return false;
       return true;
     });
-  }, [enriched, query, filterYears, filterMin, filterMax, filterLoc]);
+  }, [enriched, query, filterYears, filterMin, filterMax, filterLoc, filterKeywords, filterClientType, filterStatus]);
 
   const byYear = useMemo(() => {
     const m = {};
@@ -171,14 +197,24 @@ export default function KnowledgeSearchPage() {
   const updateFilterLoc = (v) => { setFilterLoc(v); resetNavToYears(); };
   const updateFilterMin = (v) => { setFilterMin(v); resetNavToYears(); };
   const updateFilterMax = (v) => { setFilterMax(v); resetNavToYears(); };
+  const updateFilterClientType = (v) => { setFilterClientType(v); resetNavToYears(); };
+  const updateFilterStatus = (v) => { setFilterStatus(v); resetNavToYears(); };
   const toggleYear = (yr) => {
     setFilterYears((prev) => { const next = new Set(prev); next.has(yr) ? next.delete(yr) : next.add(yr); return next; });
     resetNavToYears();
   };
+  const toggleFilterKeyword = (kw) => {
+    setFilterKeywords((prev) => { const next = new Set(prev); next.has(kw) ? next.delete(kw) : next.add(kw); return next; });
+    resetNavToYears();
+  };
 
-  const hasFilters = query || filterYears.size > 0 || filterMin || filterMax || filterLoc;
-  const activeCount = (query ? 1 : 0) + (filterYears.size > 0 ? 1 : 0) + (filterLoc ? 1 : 0) + ((filterMin || filterMax) ? 1 : 0);
-  const clearAll = () => { setQuery(""); setFilterYears(new Set()); setFilterMin(""); setFilterMax(""); setFilterLoc(""); resetNavToYears(); };
+  const hasFilters = query || filterYears.size > 0 || filterMin || filterMax || filterLoc || filterKeywords.size > 0 || filterClientType || filterStatus;
+  const activeCount = (query ? 1 : 0) + (filterYears.size > 0 ? 1 : 0) + (filterLoc ? 1 : 0) + ((filterMin || filterMax) ? 1 : 0) + (filterKeywords.size > 0 ? 1 : 0) + (filterClientType ? 1 : 0) + (filterStatus ? 1 : 0);
+  const clearAll = () => {
+    setQuery(""); setFilterYears(new Set()); setFilterMin(""); setFilterMax(""); setFilterLoc("");
+    setFilterKeywords(new Set()); setKwFilterSearch(""); setFilterClientType(""); setFilterStatus("");
+    resetNavToYears();
+  };
 
   function openSlModal(e, p) {
     e.stopPropagation();
@@ -306,7 +342,7 @@ export default function KnowledgeSearchPage() {
                     <div className="kr-mc-title">{p.title.length > 65 ? p.title.slice(0, 65) + "…" : p.title}{p.shortform && <span className="kr-mc-shortform">{p.shortform}</span>}</div>
                     {p.client && <div className="kr-mc-client">{p.client.length > 50 ? p.client.slice(0, 50) + "…" : p.client}</div>}
                   </div>
-                  <button className={`kr-icon-action${shortlisted ? " kr-icon-action--active" : ""}`} onClick={(e) => openSlModal(e, p)}><IconBookmark filled={shortlisted} /></button>
+                  <span role="button" tabIndex={0} className={`kr-icon-action${shortlisted ? " kr-icon-action--active" : ""}`} onClick={(e) => openSlModal(e, p)}><IconBookmark filled={shortlisted} /></span>
                 </div>
                 <div className="kr-mc-meta">
                   {p.location && <span className="kr-mc-loc"><IconPin /> {p.location}</span>}
@@ -364,6 +400,12 @@ export default function KnowledgeSearchPage() {
                   <span className="kr-btn-label">Shortlists</span>
                   {shortlists.length > 0 && <span className="kr-btn-shortlists-count">{shortlists.length}</span>}
                 </button>
+                {can.manageSearchIndex(profile?.role) && (
+                  <button className="kr-btn-shortlists" onClick={() => setShowRebuildIndex(true)}>
+                    <span className="kr-btn-icon"><IconSparkle /></span>
+                    <span className="kr-btn-label">Search Index</span>
+                  </button>
+                )}
                 {canAdd && (
                   <button className="kr-btn-add" onClick={() => navigate("/knowledge/add")}>
                     <span className="kr-btn-icon"><IconPlus /></span>
@@ -374,6 +416,25 @@ export default function KnowledgeSearchPage() {
             </div>
           </div>
 
+          <div className="kr-mode-tabs">
+            <button type="button" className={`kr-mode-tab${searchMode === "projects" ? " kr-mode-tab--active" : ""}`} onClick={() => setSearchMode("projects")}>
+              <IconSearch /> Search Projects
+            </button>
+            <button type="button" className={`kr-mode-tab${searchMode === "experience" ? " kr-mode-tab--active" : ""}`} onClick={() => setSearchMode("experience")}>
+              <IconSparkle /> Find Relevant Experience
+            </button>
+          </div>
+
+          {searchMode === "experience" && (
+            <div className="card">
+              <div className="card-body">
+                <FindExperiencePanel allLocations={allLocations} allCountries={allCountries} allKeywordNames={allKeywordNames} />
+              </div>
+            </div>
+          )}
+
+          {searchMode === "projects" && (
+          <>
           <div className="card">
             <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
               <div className="kr-search-row">
@@ -391,6 +452,9 @@ export default function KnowledgeSearchPage() {
                   {[...filterYears].sort().map((yr) => (<span key={yr} className="kr-pill">{yr}<button className="kr-pill-x" onClick={() => toggleYear(yr)}>×</button></span>))}
                   {filterLoc && <span className="kr-pill kr-pill--loc"><IconPin /> {filterLoc}<button className="kr-pill-x" onClick={() => updateFilterLoc("")}>×</button></span>}
                   {(filterMin || filterMax) && <span className="kr-pill">₹{filterMin || "0"} – {filterMax || "∞"} Cr<button className="kr-pill-x" onClick={() => { updateFilterMin(""); updateFilterMax(""); }}>×</button></span>}
+                  {[...filterKeywords].sort().map((kw) => (<span key={kw} className="kr-pill">{kw}<button className="kr-pill-x" onClick={() => toggleFilterKeyword(kw)}>×</button></span>))}
+                  {filterClientType && <span className="kr-pill">{filterClientType}<button className="kr-pill-x" onClick={() => updateFilterClientType("")}>×</button></span>}
+                  {filterStatus && <span className="kr-pill">{filterStatus}<button className="kr-pill-x" onClick={() => updateFilterStatus("")}>×</button></span>}
                 </div>
               )}
             </div>
@@ -415,6 +479,34 @@ export default function KnowledgeSearchPage() {
                 <input type="number" className="input" placeholder="Max" value={filterMax} onChange={(e) => updateFilterMax(e.target.value)} />
               </div>
             </FilterField>
+            <FilterField label="Client Type">
+              <select className="input" value={filterClientType} onChange={(e) => updateFilterClientType(e.target.value)}>
+                <option value="">All Client Types</option>
+                <option value="Government">Government</option>
+                <option value="Private">Private</option>
+              </select>
+            </FilterField>
+            <FilterField label="Project Status">
+              <select className="input" value={filterStatus} onChange={(e) => updateFilterStatus(e.target.value)}>
+                <option value="">All Statuses</option>
+                <option value="Ongoing">Ongoing</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </FilterField>
+            <FilterField label="Keywords">
+              <input
+                type="text" className="input" placeholder="Search keywords…"
+                value={kwFilterSearch} onChange={(e) => setKwFilterSearch(e.target.value)}
+                style={{ marginBottom: "var(--space-2)" }}
+              />
+              <div className="kr-year-chips kr-kw-chip-scroll">
+                {allKeywordNames
+                  .filter((kw) => kw.toLowerCase().includes(kwFilterSearch.trim().toLowerCase()))
+                  .map((kw) => (
+                    <button key={kw} className={`kr-year-chip${filterKeywords.has(kw) ? " kr-year-chip--active" : ""}`} onClick={() => toggleFilterKeyword(kw)}>{kw}</button>
+                  ))}
+              </div>
+            </FilterField>
           </FilterDrawer>
 
           <div className="card">
@@ -429,8 +521,11 @@ export default function KnowledgeSearchPage() {
               {loading ? <div className="kr-loading">Loading projects…</div> : viewMode === "folder" ? renderFolder() : renderTable()}
             </div>
           </div>
+          </>
+          )}
 
           {showCompanyDocs && <CompanyDocumentsPanel onClose={() => setShowCompanyDocs(false)} />}
+          {showRebuildIndex && <RebuildIndexPanel onClose={() => setShowRebuildIndex(false)} />}
 
           {slProject && (
             <ShortlistModal

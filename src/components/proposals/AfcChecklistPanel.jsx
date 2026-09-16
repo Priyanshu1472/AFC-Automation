@@ -21,6 +21,7 @@ import { ListChecksIcon, EyeIcon, TrashIcon, BookIcon } from "../icons";
 
 const BUCKET = "proposal-documents";
 const KNOWLEDGE_BUCKET = "project-documents";
+const COMPANY_DOCS_BUCKET = "company-documents";
 
 function fmtSize(bytes) {
   if (!bytes) return "";
@@ -77,7 +78,7 @@ export default function AfcChecklistPanel({ proposalId, items, profile, canManag
       const { error: updErr } = await supabase.from("proposal_afc_checklist_items").update({
         file_name: file.name, file_path: path, file_size: file.size,
         uploaded_at: new Date().toISOString(), uploaded_by: profile.id,
-        source: "upload", source_project_document_id: null, status: "done",
+        source: "upload", source_project_document_id: null, source_company_document_id: null, status: "done",
       }).eq("id", item.id);
       if (updErr) { setError(updErr.message); return; }
 
@@ -90,12 +91,14 @@ export default function AfcChecklistPanel({ proposalId, items, profile, canManag
     }
   }
 
-  async function handlePickFromKnowledgeRepository(item, doc) {
+  async function handlePickFromKnowledgeRepository(item, doc, kind) {
     setPickerFor(null);
     setBusyId(item.id);
     setError("");
     try {
-      const { data: fileBlob, error: dlErr } = await supabase.storage.from(KNOWLEDGE_BUCKET).download(doc.storage_path);
+      const isCompanyDoc = kind === "company_document";
+      const sourceBucket = isCompanyDoc ? COMPANY_DOCS_BUCKET : KNOWLEDGE_BUCKET;
+      const { data: fileBlob, error: dlErr } = await supabase.storage.from(sourceBucket).download(doc.storage_path);
       if (dlErr || !fileBlob) { setError("Failed to fetch document from Knowledge Repository: " + (dlErr?.message || "")); return; }
 
       const path = `${proposalId}/checklist_${item.id}_${Date.now()}_${doc.file_name.replace(/\s+/g, "_")}`;
@@ -105,7 +108,10 @@ export default function AfcChecklistPanel({ proposalId, items, profile, canManag
       const { error: updErr } = await supabase.from("proposal_afc_checklist_items").update({
         file_name: doc.file_name, file_path: path, file_size: fileBlob.size,
         uploaded_at: new Date().toISOString(), uploaded_by: profile.id,
-        source: "knowledge_repository", source_project_document_id: doc.id, status: "done",
+        source: isCompanyDoc ? "company_documents" : "knowledge_repository",
+        source_project_document_id: isCompanyDoc ? null : doc.id,
+        source_company_document_id: isCompanyDoc ? doc.id : null,
+        status: "done",
       }).eq("id", item.id);
       if (updErr) { setError(updErr.message); return; }
 
@@ -201,7 +207,7 @@ export default function AfcChecklistPanel({ proposalId, items, profile, canManag
       </Collapsible>
       {pickerFor && (
         <KnowledgeRepositoryDocumentPicker
-          onSelect={(doc) => handlePickFromKnowledgeRepository(pickerFor, doc)}
+          onSelect={(doc, kind) => handlePickFromKnowledgeRepository(pickerFor, doc, kind)}
           onClose={() => setPickerFor(null)}
         />
       )}

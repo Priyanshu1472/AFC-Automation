@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import AppHeader from "../../components/shared/AppHeader";
 import { KeywordDropdown, DocumentUpload, INDIAN_STATES, CustomSelect, MonthPicker } from "../../components/knowledge/KnowledgeFormParts";
+import { useProjectIndexing } from "../../hooks/useProjectIndexing";
 import "../../styles/AddProjectPage.css";
 
 const BUCKET = "project-documents";
@@ -20,10 +21,12 @@ function monthsBetween(start, end) {
 export default function AddProjectPage() {
   const navigate = useNavigate();
   const { profile, activeTeam } = useAuth();
+  const { reindexProject } = useProjectIndexing();
 
   const [form, setForm] = useState({
     projectName: "", shortform: "", servicesDescription: "",
     clientNameAddress: "", capitalCost: "",
+    clientType: "", status: "",
     country: "India", location: "",
     contactPerson: "", titleDesignation: "", telephone: "", email: "",
     associatedConsultants: "",
@@ -72,9 +75,34 @@ export default function AddProjectPage() {
   const handleAddDoc = (doc) => setDocuments((prev) => [...prev, doc]);
   const handleRemoveDoc = (i) => setDocuments((prev) => prev.filter((_, idx) => idx !== i));
 
+  const REQUIRED_FIELDS = [
+    ["projectName", "Name of the Project"],
+    ["shortform", "Short Form / Abbreviation"],
+    ["capitalCost", "Approx. Value of the Contract"],
+    ["country", "Country"],
+    ["location", "Location within Country (State / UT)"],
+    ["clientType", "Client Type"],
+    ["status", "Project Status"],
+    ["clientNameAddress", "Name and Address of Client"],
+    ["contactPerson", "Contact Person"],
+    ["titleDesignation", "Title / Designation"],
+    ["telephone", "Telephone"],
+    ["email", "Email"],
+    ["startDate", "Start Date"],
+    ["finishDate", "Completion Date"],
+    ["totalStaffMonths", "Total Staff-Months of the Assignment"],
+    ["associatedConsultantMonths", "Professional Staff-Months"],
+    ["associatedConsultants", "Name of Associated Consultants"],
+    ["seniorProfessionalStaff", "Name of Senior Professional Staff & Functions"],
+    ["projectBriefDescription", "Description of Project"],
+    ["servicesDescription", "Description of Actual Services Provided by the Staff"],
+  ];
+
   async function handleSubmit() {
     setError("");
-    if (!form.projectName.trim()) { setError("Project name is required."); return; }
+    for (const [field, label] of REQUIRED_FIELDS) {
+      if (!String(form[field] ?? "").trim()) { setError(`${label} is required.`); return; }
+    }
     if (Object.keys(selectedKeywords).length === 0) { setError("Please select at least one keyword."); return; }
     setLoading(true);
 
@@ -103,6 +131,8 @@ export default function AddProjectPage() {
         summary: summaryData,
         location: form.location || null,
         shortform: form.shortform || null,
+        client_type: form.clientType || null,
+        status: form.status || null,
         team: activeTeam ?? profile?.team ?? null,
         created_by: profile?.id ?? null,
       }])
@@ -127,6 +157,10 @@ export default function AddProjectPage() {
         await supabase.from("project_keyword_details").insert({ project_id: project.id, keyword_id: keywordId, description: kwDesc });
       }
     }
+
+    // Fire-and-forget: index this project for "Find Relevant Experience"
+    // search. Never blocks/fails the save itself.
+    reindexProject(project, Object.entries(selectedKeywords).map(([name, description]) => ({ name, description })));
 
     // Documents were only staged in memory until now — the storage RLS
     // policy needs the project row to already exist to accept the upload.
@@ -181,58 +215,68 @@ export default function AddProjectPage() {
                 </div>
 
                 <div className="ap-field">
-                  <label>Short Form / Abbreviation</label>
-                  <input type="text" placeholder="e.g. SCMP-KOL" value={form.shortform} onChange={(e) => handleFormChange("shortform", e.target.value)} />
+                  <label>Short Form / Abbreviation *</label>
+                  <input required type="text" placeholder="e.g. SCMP-KOL" value={form.shortform} onChange={(e) => handleFormChange("shortform", e.target.value)} />
                 </div>
 
                 <div className="ap-field">
-                  <label>Approx. Value of the Contract (₹ Crore)</label>
-                  <input type="number" placeholder="e.g. 45.50" value={form.capitalCost} onChange={(e) => handleFormChange("capitalCost", e.target.value)} />
+                  <label>Approx. Value of the Contract (₹ Crore) *</label>
+                  <input required type="number" placeholder="e.g. 45.50" value={form.capitalCost} onChange={(e) => handleFormChange("capitalCost", e.target.value)} />
                 </div>
 
                 <div className="ap-field">
-                  <label>Country</label>
-                  <input type="text" placeholder="e.g. India" value={form.country} onChange={(e) => handleFormChange("country", e.target.value)} />
+                  <label>Country *</label>
+                  <input required type="text" placeholder="e.g. India" value={form.country} onChange={(e) => handleFormChange("country", e.target.value)} />
                 </div>
 
                 <div className="ap-field">
-                  <label>Location within Country (State / UT)</label>
+                  <label>Location within Country (State / UT) *</label>
                   <CustomSelect value={form.location} onChange={(v) => handleFormChange("location", v)} options={[{ value: "", label: "— Select State / UT —" }, ...INDIAN_STATES.map((s) => ({ value: s, label: s }))]} placeholder="— Select State / UT —" />
                 </div>
 
+                <div className="ap-field">
+                  <label>Client Type *</label>
+                  <CustomSelect value={form.clientType} onChange={(v) => handleFormChange("clientType", v)} options={[{ value: "", label: "— Select Client Type —" }, { value: "Government", label: "Government" }, { value: "Private", label: "Private" }]} placeholder="— Select Client Type —" />
+                </div>
+
+                <div className="ap-field">
+                  <label>Project Status *</label>
+                  <CustomSelect value={form.status} onChange={(v) => handleFormChange("status", v)} options={[{ value: "", label: "— Select Project Status —" }, { value: "Ongoing", label: "Ongoing" }, { value: "Completed", label: "Completed" }]} placeholder="— Select Project Status —" />
+                </div>
+
                 <div className="ap-field full-width">
-                  <label>Name and Address of Client</label>
-                  <textarea rows={2} placeholder="Client name & full address" value={form.clientNameAddress} onChange={(e) => handleFormChange("clientNameAddress", e.target.value)} />
+                  <label>Name and Address of Client *</label>
+                  <textarea required rows={2} placeholder="Client name & full address" value={form.clientNameAddress} onChange={(e) => handleFormChange("clientNameAddress", e.target.value)} />
                 </div>
 
                 <div className="ap-field">
-                  <label>Contact Person</label>
-                  <input type="text" placeholder="e.g. Mr. A. Roy" value={form.contactPerson} onChange={(e) => handleFormChange("contactPerson", e.target.value)} />
+                  <label>Contact Person *</label>
+                  <input required type="text" placeholder="e.g. Mr. A. Roy" value={form.contactPerson} onChange={(e) => handleFormChange("contactPerson", e.target.value)} />
                 </div>
 
                 <div className="ap-field">
-                  <label>Title / Designation</label>
-                  <input type="text" placeholder="e.g. Chief Engineer" value={form.titleDesignation} onChange={(e) => handleFormChange("titleDesignation", e.target.value)} />
+                  <label>Title / Designation *</label>
+                  <input required type="text" placeholder="e.g. Chief Engineer" value={form.titleDesignation} onChange={(e) => handleFormChange("titleDesignation", e.target.value)} />
                 </div>
 
                 <div className="ap-field">
-                  <label>Telephone</label>
-                  <input type="text" placeholder="e.g. +91 00000 00000" value={form.telephone} onChange={(e) => handleFormChange("telephone", e.target.value)} />
+                  <label>Telephone *</label>
+                  <input required type="text" placeholder="e.g. +91 00000 00000" value={form.telephone} onChange={(e) => handleFormChange("telephone", e.target.value)} />
                 </div>
 
                 <div className="ap-field">
-                  <label>Email</label>
-                  <input type="email" placeholder="e.g. rep@client.gov.in" value={form.email} onChange={(e) => handleFormChange("email", e.target.value)} />
+                  <label>Email *</label>
+                  <input required type="email" placeholder="e.g. rep@client.gov.in" value={form.email} onChange={(e) => handleFormChange("email", e.target.value)} />
                 </div>
 
                 <div className="ap-field">
                   <div className="ap-date-row">
                     <div>
-                      <label>Start Date (month/year)</label>
+                      <label>Start Date (month/year) *</label>
                       <MonthPicker value={form.startDate} onChange={(v) => handleFormChange("startDate", v)} placeholder="Select start month" />
                     </div>
                     <div>
-                      <label>Completion Date (month/year)</label>
+                      <label>Completion Date (month/year) *</label>
                       <MonthPicker value={form.finishDate} onChange={(v) => handleFormChange("finishDate", v)} placeholder="Select finish month" />
                     </div>
                   </div>
@@ -244,33 +288,33 @@ export default function AddProjectPage() {
                 </div>
 
                 <div className="ap-field">
-                  <label>Total Staff-Months of the Assignment</label>
-                  <input type="number" placeholder="e.g. 24" value={form.totalStaffMonths} onChange={(e) => handleFormChange("totalStaffMonths", e.target.value)} />
+                  <label>Total Staff-Months of the Assignment *</label>
+                  <input required type="number" placeholder="e.g. 24" value={form.totalStaffMonths} onChange={(e) => handleFormChange("totalStaffMonths", e.target.value)} />
                 </div>
 
                 <div className="ap-field">
-                  <label>Professional Staff-Months (your firm / sub-consultants)</label>
-                  <input type="number" placeholder="e.g. 8" value={form.associatedConsultantMonths} onChange={(e) => handleFormChange("associatedConsultantMonths", e.target.value)} />
+                  <label>Professional Staff-Months (your firm / sub-consultants) *</label>
+                  <input required type="number" placeholder="e.g. 8" value={form.associatedConsultantMonths} onChange={(e) => handleFormChange("associatedConsultantMonths", e.target.value)} />
                 </div>
 
                 <div className="ap-field full-width">
-                  <label>Name of Associated Consultants, if any</label>
-                  <textarea rows={2} placeholder="e.g. XYZ Advisory Pvt Ltd (leave blank if none)" value={form.associatedConsultants} onChange={(e) => handleFormChange("associatedConsultants", e.target.value)} />
+                  <label>Name of Associated Consultants, if any *</label>
+                  <textarea required rows={2} placeholder="e.g. XYZ Advisory Pvt Ltd" value={form.associatedConsultants} onChange={(e) => handleFormChange("associatedConsultants", e.target.value)} />
                 </div>
 
                 <div className="ap-field full-width">
-                  <label>Name of Senior Professional Staff & Functions</label>
-                  <textarea rows={3} placeholder="e.g. John Doe – Project Director; Jane Smith – Team Leader" value={form.seniorProfessionalStaff} onChange={(e) => handleFormChange("seniorProfessionalStaff", e.target.value)} />
+                  <label>Name of Senior Professional Staff & Functions *</label>
+                  <textarea required rows={3} placeholder="e.g. John Doe – Project Director; Jane Smith – Team Leader" value={form.seniorProfessionalStaff} onChange={(e) => handleFormChange("seniorProfessionalStaff", e.target.value)} />
                 </div>
 
                 <div className="ap-field full-width">
-                  <label>Description of Project</label>
-                  <textarea rows={4} placeholder="Overview of project scope, objectives, outcomes..." value={form.projectBriefDescription} onChange={(e) => handleFormChange("projectBriefDescription", e.target.value)} />
+                  <label>Description of Project *</label>
+                  <textarea required rows={4} placeholder="Overview of project scope, objectives, outcomes..." value={form.projectBriefDescription} onChange={(e) => handleFormChange("projectBriefDescription", e.target.value)} />
                 </div>
 
                 <div className="ap-field full-width">
-                  <label>Description of Actual Services Provided by Your Staff</label>
-                  <textarea rows={3} placeholder="Describe services actually rendered..." value={form.servicesDescription} onChange={(e) => handleFormChange("servicesDescription", e.target.value)} />
+                  <label>Description of Actual Services Provided by the Staff *</label>
+                  <textarea required rows={3} placeholder="Describe services actually rendered..." value={form.servicesDescription} onChange={(e) => handleFormChange("servicesDescription", e.target.value)} />
                 </div>
               </div>
             </div>

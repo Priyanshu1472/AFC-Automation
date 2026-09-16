@@ -100,6 +100,14 @@ export const can = {
   // (see 20260910000000_company_documents.sql) — this is UI-only gating,
   // never the actual enforcement.
   manageCompanyDocuments: (role) => role === "admin",
+
+  // "Rebuild Index" for Find Relevant Experience search — a maintenance
+  // action (re-embed every project's searchable text), not a data-access
+  // permission, so it's gated the same way as other admin-only maintenance
+  // actions. The underlying writes are still governed by
+  // project_experience_embeddings' own RLS (can_edit_project per row), so
+  // this is UI-only gating, not the actual enforcement.
+  manageSearchIndex: (role) => role === "admin",
 };
 
 export function isTeamUser(role) {
