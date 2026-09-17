@@ -1,6 +1,6 @@
 // Preview-and-confirm modal for the fee note actions that actually sign the
-// note — Person Responsible forwarding to Approval Authority, Approval
-// Authority forwarding to MD, and the MD's final approval. Shows the exact
+// note — Person Responsible forwarding to Recommending Authority,
+// Recommending Authority forwarding to MD, and the MD's final approval. Shows the exact
 // PDF the action produces (via preview-fee-note — read-only, nothing
 // changes) next to a PIN confirmation, same layout as Empanelment's
 // LetterPreviewPinModal so the pattern looks and behaves the same way
@@ -19,14 +19,14 @@ import "../../styles/ApplicationReviewPage.css";
 
 const ACTION_META = {
   pr_forward: {
-    label: "forward this note to the Approval Authority",
+    label: "forward this note to the Recommending Authority",
     confirmLabel: "Confirm & Forward",
     run: (feeNoteId, pin) => supabase.functions.invoke("advance-fee-note-stage", { body: { fee_note_id: feeNoteId, action: "pr_forward", pin } }),
   },
-  aa_forward: {
+  ra_forward: {
     label: "forward this note to the MD",
     confirmLabel: "Confirm & Forward",
-    run: (feeNoteId, pin) => supabase.functions.invoke("advance-fee-note-stage", { body: { fee_note_id: feeNoteId, action: "aa_forward", pin } }),
+    run: (feeNoteId, pin) => supabase.functions.invoke("advance-fee-note-stage", { body: { fee_note_id: feeNoteId, action: "ra_forward", pin } }),
   },
   md_approve: {
     label: "approve this note",

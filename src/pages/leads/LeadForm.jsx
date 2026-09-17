@@ -34,7 +34,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
 
   // The lead's working team: fixed to the existing lead's team on edit, or
   // the caller's own currently-active team on create — matches the real
-  // form (no Team selector; Person Responsible/Reviewer/Approval Authority
+  // form (no Team selector; Person Responsible/Reviewer/Recommending Authority
   // are always picked from this one team).
   const team = mode === "edit" ? lead?.team : (activeTeam ?? profile?.team);
 
@@ -54,13 +54,13 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     assigned_ba_id: lead?.assigned_ba_id || "",
     person_responsible_id: lead?.person_responsible_id || profile?.id || "",
     reviewer_id: lead?.reviewer_id || "",
-    approval_authority_id: lead?.approval_authority_id || "",
+    recommending_authority_id: lead?.recommending_authority_id || "",
   }));
   const isSuoMoto = form.source === "suo_moto";
   const [files, setFiles] = useState([]);
   const [personResponsibleOptions, setPersonResponsibleOptions] = useState([]);
   const [reviewerOptions, setReviewerOptions] = useState([]);
-  const [approvalAuthorityOptions, setApprovalAuthorityOptions] = useState([]);
+  const [recommendingAuthorityOptions, setRecommendingAuthorityOptions] = useState([]);
   const [baOptions, setBaOptions] = useState([]);
   const [duplicates, setDuplicates] = useState([]);
   const [errors, setErrors] = useState({});
@@ -72,12 +72,14 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   }
 
   // Person Responsible / Reviewer are informational contacts, not the
-  // workflow gate — the actual PMT/PMT Extended authorization is org-wide
-  // committee membership (checked server-side), not tied to this team, so
-  // both dropdowns just list this team's active members — excluding
-  // Business Partners, who have a team (for the BP-org-name lookup below)
-  // but aren't staff and can't be assigned either role. Approval Authority
-  // is the one field still role-filtered: AGM, SRM (same permissions as AGM
+  // workflow gate — the actual PMT authorization is org-wide committee
+  // membership (checked server-side), not tied to this team, so both
+  // dropdowns just list this team's active members — excluding Business
+  // Partners, who have a team (for the BP-org-name lookup below) but
+  // aren't staff and can't be assigned either role. Recommending Authority
+  // is the one field still role-filtered — and IS the actual workflow gate
+  // at the first review stage (see advance-lead-stage's
+  // recommending_authority_review case): AGM, SRM (same permissions as AGM
   // throughout Lead Generation), or DGM on the team.
   useEffect(() => {
     if (!team) return;
@@ -100,7 +102,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       .eq("is_active", true)
       .in("role", ["agm", "srm", "dgm"])
       .order("full_name")
-      .then(({ data }) => setApprovalAuthorityOptions(toOptions(data)));
+      .then(({ data }) => setRecommendingAuthorityOptions(toOptions(data)));
   }, [team]);
 
   // Each team empanels its own BAs — scoped the same way as Person
@@ -155,7 +157,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     if (!form.title.trim()) errs.title = "Name of Assignment is required.";
     if (!form.person_responsible_id) errs.person_responsible_id = "Person Responsible is required.";
     if (!form.reviewer_id) errs.reviewer_id = "Reviewer is required.";
-    if (!form.approval_authority_id) errs.approval_authority_id = "Approval Authority is required.";
+    if (!form.recommending_authority_id) errs.recommending_authority_id = "Recommending Authority is required.";
     if (form.source === "ba" && !form.assigned_ba_id) errs.assigned_ba_id = "Business Partner is required for a BP Source lead.";
     if (isSuoMoto && !form.assigned_ba_id) errs.assigned_ba_id = "Business Partner is required for a Suo Moto lead.";
     setErrors(errs);
@@ -185,7 +187,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       fd.set("assigned_ba_id", form.assigned_ba_id);
       fd.set("person_responsible_id", form.person_responsible_id);
       fd.set("reviewer_id", form.reviewer_id);
-      fd.set("approval_authority_id", form.approval_authority_id);
+      fd.set("recommending_authority_id", form.recommending_authority_id);
       for (const f of files) fd.append("document", f, f.name);
 
       const { data, error } = await supabase.functions.invoke(mode === "create" ? "create-lead" : "update-lead", { body: fd });
@@ -472,18 +474,18 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
 
           <div className="field">
             <label className="field-label">
-              Approval Authority <span className="required">*</span>
+              Recommending Authority <span className="required">*</span>
             </label>
             <Select
-              options={approvalAuthorityOptions}
-              value={form.approval_authority_id}
-              onChange={(v) => set("approval_authority_id", v)}
+              options={recommendingAuthorityOptions}
+              value={form.recommending_authority_id}
+              onChange={(v) => set("recommending_authority_id", v)}
               placeholder="— Select —"
-              error={errors.approval_authority_id}
+              error={errors.recommending_authority_id}
               disabled={submitting}
             />
-            {errors.approval_authority_id && <span className="field-error">{errors.approval_authority_id}</span>}
-            {approvalAuthorityOptions.length === 0 && (
+            {errors.recommending_authority_id && <span className="field-error">{errors.recommending_authority_id}</span>}
+            {recommendingAuthorityOptions.length === 0 && (
               <span className="field-hint">No AGM, SRM, or DGM found on your team.</span>
             )}
           </div>

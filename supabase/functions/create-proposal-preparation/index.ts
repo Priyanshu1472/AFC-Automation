@@ -1,7 +1,7 @@
 // supabase/functions/create-proposal-preparation/index.ts
 // JWT must be ON. Idempotent create/fetch of the proposal_preparations row
 // for an approved lead — "Open Proposal" calls this on first visit. Caller
-// must be the lead's Person Responsible, Reviewer, or Approval Authority
+// must be the lead's Person Responsible, Reviewer, or Recommending Authority
 // (the authorised signatory needs to reach the page too, to lock/decide
 // outcome later), or md/admin. Mirrors create-lead's shape.
 
@@ -32,14 +32,14 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   try {
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, status, person_responsible_id, reviewer_id, approval_authority_id, assigned_ba_id")
+      .select("id, status, person_responsible_id, reviewer_id, recommending_authority_id, assigned_ba_id")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
     const authorized =
       ["md", "admin"].includes(caller.role) ||
-      [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(caller.id);
+      [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(caller.id);
     if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this lead's proposal." });
 
     if (lead.status !== "md_approved") {
@@ -54,7 +54,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     let proposalId: string;
     // Re-sync on every visit, not just first creation — covers a proposal
-    // whose Reviewer/Approval Authority/BP was reassigned on the lead after
+    // whose Reviewer/Recommending Authority/BP was reassigned on the lead after
     // the proposal was first opened, and backfills chat_opened_at + the
     // roster for a proposal created before this chat feature existed
     // (existing.chat_opened_at null). Upserts are cheap/no-ops when nothing
@@ -91,7 +91,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     // Chat roster: the lead's three named assignees, its assigned Business
     // Partner (only on their own proposal), and every MD org-wide (on
     // every proposal). ignoreDuplicates upserts make this safe to re-run.
-    const namedIds = [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id, lead.assigned_ba_id].filter(Boolean);
+    const namedIds = [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id, lead.assigned_ba_id].filter(Boolean);
     const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
     await addProposalChatParticipants(adminClient, proposalId, namedIds, "named");
     await addProposalChatParticipants(adminClient, proposalId, mdHolders, "md");

@@ -181,8 +181,9 @@ export default function LeadApprovalNoteForm() {
         showToast(data?.error || "Failed to generate the Approval Note.", "danger");
         return;
       }
-      // The Person Responsible filling this in goes straight to DGM
-      // submission, same as before. The creator filling it in is always a
+      // The Person Responsible filling this in goes straight to
+      // Recommending Authority submission, same as before. The creator
+      // filling it in is always a
       // draft awaiting the PR's review first — hand it off instead of
       // navigating to the page only the PR can actually submit from.
       if (profile?.id === lead.person_responsible_id) {

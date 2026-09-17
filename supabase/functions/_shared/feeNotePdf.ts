@@ -5,7 +5,7 @@
 //
 //   Page 1 — the covering "NOTE": subject line, the bidding/borne-by
 //            paragraph, the numbered fee list, the Mumbai -> Delhi transfer
-//            request, then a vertical PR -> Approval Authority -> MD
+//            request, then a vertical PR -> Recommending Authority -> MD
 //            signature stack.
 //   Page 2 — "Format for Requisition of Earnest Money Deposit (EMD)
 //            Amount": the 6-row key/value table (title, client details,
@@ -177,7 +177,7 @@ export type FeeNoteBuildInput = {
   bpName: string | null;
   refLabel: string;
   personResponsible: Signer;
-  approvalAuthority: Signer;
+  recommendingAuthority: Signer;
   md: Signer;
 };
 
@@ -300,7 +300,7 @@ function buildCoverParagraphs(input: FeeNoteBuildInput): { intro: Segment[][]; f
   return { intro, feeLines, tail };
 }
 
-// PR and Approval Authority stack down the left margin, followed by
+// PR and Recommending Authority stack down the left margin, followed by
 // "Encl. as above" as a third left-margin line; the MD's row sits
 // right-justified flush against the right margin, starting at the same y
 // as "Encl. as above" rather than stacked below every other signature —
@@ -467,7 +467,7 @@ export async function generateFeeNotePDF(
   await sdPara(e, [plain("Thanks and regards,")], S);
   await sdGap(e, 10);
 
-  await drawSignatureBlock(e, [input.personResponsible, input.approvalAuthority], input.md);
+  await drawSignatureBlock(e, [input.personResponsible, input.recommendingAuthority], input.md);
 
   // ── Page 2 — Requisition format ──
   await e.newPage();
@@ -533,7 +533,7 @@ export async function buildFeeNotePdfForNote(
       tender_fee_amount, tender_fee_borne_by, tender_fee_payment_mode, tender_fee_dd_in_favour_of, tender_fee_dd_payable_at,
       processing_fee_amount, processing_fee_borne_by, processing_fee_payment_mode, processing_fee_dd_in_favour_of, processing_fee_dd_payable_at,
       submit_to, client_address, client_telephone, client_email, implementation_arrangements,
-      pr_signed_by, pr_signed_at, aa_signed_by, aa_signed_at, md_decided_by, md_decided_at
+      pr_signed_by, pr_signed_at, ra_signed_by, ra_signed_at, md_decided_by, md_decided_at
     `)
     .eq("id", feeNoteId)
     .maybeSingle();
@@ -548,7 +548,7 @@ export async function buildFeeNotePdfForNote(
 
   const { data: lead, error: leadErr } = await admin
     .from("leads")
-    .select("title, client_name, portal_name, bid_number, lead_type, delivery_type, submission_deadline, source, assigned_ba_id, person_responsible_id, approval_authority_id, approval_note_data")
+    .select("title, client_name, portal_name, bid_number, lead_type, delivery_type, submission_deadline, source, assigned_ba_id, person_responsible_id, recommending_authority_id, approval_note_data")
     .eq("id", proposal.lead_id)
     .maybeSingle();
   if (leadErr || !lead) return { ok: false, error: "Lead not found." };
@@ -558,10 +558,10 @@ export async function buildFeeNotePdfForNote(
   // (usually a cache hit after the first call, but not on a cold start)
   // before even starting the signer queries.
   const anyBp = note.emd_borne_by === "bp" || note.tender_fee_borne_by === "bp" || note.processing_fee_borne_by === "bp";
-  const [logoBytes, personResponsible, approvalAuthority, md, baRow] = await Promise.all([
+  const [logoBytes, personResponsible, recommendingAuthority, md, baRow] = await Promise.all([
     fetchLogoBytes(),
     resolveSigner(admin, { nominalId: lead.person_responsible_id, actualId: note.pr_signed_by, signed: !!note.pr_signed_at }),
-    resolveSigner(admin, { nominalId: lead.approval_authority_id, actualId: note.aa_signed_by, signed: !!note.aa_signed_at }),
+    resolveSigner(admin, { nominalId: lead.recommending_authority_id, actualId: note.ra_signed_by, signed: !!note.ra_signed_at }),
     resolveSigner(admin, { nominalId: null, actualId: note.md_decided_by, signed: !!note.md_decided_at, designationOverride: "Managing Director" }),
     (anyBp || lead.assigned_ba_id)
       ? admin.from("afc_users").select("full_name").eq("id", lead.assigned_ba_id).maybeSingle()
@@ -593,7 +593,7 @@ export async function buildFeeNotePdfForNote(
     bpName: (baRow as { data: { full_name?: string } | null })?.data?.full_name || null,
     refLabel: portalRefLabel(lead.portal_name),
     personResponsible,
-    approvalAuthority,
+    recommendingAuthority,
     md,
     logoBytes,
   });

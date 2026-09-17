@@ -131,12 +131,12 @@ export function isValidRole(role) {
 // ─── Lead Generation ────────────────────────────────────────────────
 // Authorization here is the universal afc_users.role/team (same as every
 // other module — set on the Users page, no separate role-assignment
-// system) plus one additional field, `committee`, for the three Lead
-// Generation review committees. G3 is the DGM committee: membership grants
-// DGM-equivalent lead-workflow permission, org-wide (pooled across all
-// DGMs), independent of the member's own role. See useLeadPermissions.js
-// for the actual can()-style predicates.
-export const COMMITTEES = ["PMT", "PMT Extended", "G3"];
+// system) plus one additional field, `committee`, for the PMT review
+// stage (PMT Extended and G3 were removed from the approval chain — see
+// 20260928000000_lead_committee_and_status_simplification.sql — the
+// former G3/DGM-initial gate is now the named Recommending Authority
+// instead). See leadPermissions.js for the actual can()-style predicates.
+export const COMMITTEES = ["PMT"];
 
 // The tier eligible to be Person Responsible for a lead (owns its
 // PA_REVIEW accept/drop step) and to claim a dropped one. SRM has the same

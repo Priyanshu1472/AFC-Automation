@@ -27,7 +27,7 @@ const QUICK_FILTERS = {
   all: { label: "Total", match: () => true },
   in_review: {
     label: "In Review",
-    match: (l) => ["pa_review", "dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review"].includes(l.status),
+    match: (l) => ["pa_review", "recommending_authority_review", "pmt_review", "md_review"].includes(l.status),
   },
   action_required: { label: "Action Required", match: (l, profile) => isActionRequiredForViewer(profile, l) },
   approved: { label: "Approved", match: (l) => l.status === "md_approved" },
@@ -68,13 +68,12 @@ export default function LeadListPage() {
   // { [lead_id]: unread_count } for the current viewer, across every lead
   // they're a chat participant on — powers the badge on the chat icon.
   const [unreadCounts, setUnreadCounts] = useState({});
-  // "mine" (My Leads), "team" (Team Leads), or a committee name ("PMT"/
-  // "PMT Extended"/"G3") — the last is only ever one extra tab, for a
-  // viewer who holds that committee (see committeeTab below). MD is
-  // org-wide and never a lead's creator/Person Responsible, so "My Leads"
-  // would just be empty for them — the page always opens on Team Leads for
-  // that role, ignoring whatever tab was last open (never restored from
-  // sessionStorage either).
+  // "mine" (My Leads), "team" (Team Leads), or a committee name ("PMT") —
+  // the last is only ever one extra tab, for a viewer who holds that
+  // committee (see committeeTab below). MD is org-wide and never a lead's
+  // creator/Person Responsible, so "My Leads" would just be empty for
+  // them — the page always opens on Team Leads for that role, ignoring
+  // whatever tab was last open (never restored from sessionStorage either).
   const [view, setView] = useState(() => (profile?.role === "md" ? "team" : loadStoredFilters().view || "mine"));
   const [search, setSearch] = useState(() => loadStoredFilters().search || "");
   const [quickFilter, setQuickFilter] = useState(() => loadStoredFilters().quickFilter || "all");
@@ -156,7 +155,7 @@ export default function LeadListPage() {
   // The tab's own base set, all drawn from the one RLS-permitted `leads`
   // fetch — no separate query per tab:
   //  - "mine": only leads the viewer is Person Responsible, Reviewer, or
-  //    Approval Authority on (see isMyLead) — a lead they merely created
+  //    Recommending Authority on (see isMyLead) — a lead they merely created
   //    (and aren't otherwise named on) stays on "team", not here.
   //  - "team": every lead going on in the viewer's own team(s) (see
   //    isTeamLead) — an org-wide role's "team" is every team, so this is

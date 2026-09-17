@@ -15,7 +15,9 @@ import PinInput from "../../components/ui/PinInput";
 import PageLoader from "../../components/ui/PageLoader";
 import LeadTimeline from "../../components/leads/LeadTimeline";
 import LeadChatPanel from "../../components/leads/LeadChatPanel";
-import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, dgmInitialApproveLabel } from "../../components/leads/leadStatus";
+import LeadQueryPanel from "../../components/leads/LeadQueryPanel";
+import LeadTransferModal from "../../components/leads/LeadTransferModal";
+import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel } from "../../components/leads/leadStatus";
 // Reuses the ar-* detail/action/timeline/document styles already defined
 // for Empanelment's review page — generic patterns (label/value rows,
 // stepper, action panel, doc list), no Lead-Gen-specific CSS needed yet.
@@ -47,10 +49,10 @@ function Row({ label, value }) {
 // status — the server (advance-lead-stage) is the real authority; this is
 // UX only, filtered again below by the caller's actual tags/assignment.
 // requiresPin mirrors advance-lead-stage's REQUIRE_PIN exactly — every
-// committee/MD decision (accept, approve, escalate/forward, decline, drop)
-// except dgm_initial_decline, which is the one explicit exception (DGM
-// sending a lead back to the assignee doesn't need one), and never
-// edit/resubmit/claim/reject_reassign.
+// committee/MD decision (accept, approve, decline, drop, withdraw) except
+// ra_decline, which is the one explicit exception (the Recommending
+// Authority sending a lead back to the assignee doesn't need one), and
+// never edit/resubmit/claim/reject_reassign.
 const ACTIONS_BY_STATUS = {
   pa_review: [
     // Replaces the old one-click "Accept" — navigates to the Lead Approval
@@ -65,32 +67,23 @@ const ACTIONS_BY_STATUS = {
     { key: "reject_reassign", label: "Reject", variant: "danger" },
   ],
   pa_dropped: [{ key: "claim", label: "Claim Lead", variant: "primary" }],
-  dgm_initial_review: [
-    { key: "dgm_initial_approve", label: "Approve → PMT", variant: "primary", requiresReason: true, requiresPin: true },
-    { key: "dgm_initial_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true },
+  recommending_authority_review: [
+    { key: "ra_approve", label: "Approve → PMT", variant: "primary", requiresReason: true, requiresPin: true },
+    { key: "ra_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true },
     { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
+    { key: "withdraw_submission", label: "Withdraw Submission (edit BA)", variant: "secondary", requiresReason: true, requiresPin: true },
   ],
   pmt_review: [
     { key: "pmt_approve", label: "Approve → MD", variant: "primary", requiresReason: true, requiresPin: true },
-    { key: "pmt_escalate", label: "Escalate to PMT Extended", variant: "secondary", requiresReason: true, requiresPin: true },
     { key: "pmt_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
     { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
-  ],
-  pmt_extended_review: [
-    { key: "pmt_extended_approve", label: "Approve → MD", variant: "primary", requiresReason: true, requiresPin: true },
-    { key: "pmt_extended_forward_dgm", label: "Forward to G3", variant: "secondary", requiresPin: true },
-    { key: "pmt_extended_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
-  ],
-  dgm_review: [
-    { key: "dgm_accept", label: "Accept → MD", variant: "primary", requiresReason: true, requiresPin: true },
-    { key: "dgm_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
+    { key: "withdraw_submission", label: "Withdraw Submission (edit BA)", variant: "secondary", requiresReason: true, requiresPin: true },
   ],
   md_review: [
     { key: "md_approve", label: "Approve", variant: "primary", requiresPin: true },
     { key: "md_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
     { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
+    { key: "withdraw_submission", label: "Withdraw Submission (edit BA)", variant: "secondary", requiresReason: true, requiresPin: true },
   ],
   pa_action_required: [
     { key: "__edit_resubmit", label: "Resubmit Lead Approval Form", variant: "primary" },
@@ -186,12 +179,13 @@ export default function LeadDetailPage() {
   // Edit call the backend directly from this list (every other action
   // opens the reason/PIN panel via pendingAction instead).
   const [quickActionKey, setQuickActionKey] = useState(null);
+  const [showTransferModal, setShowTransferModal] = useState(false);
 
   const fetchLead = useCallback(async () => {
     const { data } = await supabase
       .from("leads")
       .select(
-        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name, role), reviewer:reviewer_id(full_name), authority:approval_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name)"
+        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name, role), reviewer:reviewer_id(full_name), authority:recommending_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name)"
       )
       .eq("id", id)
       .maybeSingle();
@@ -253,8 +247,8 @@ export default function LeadDetailPage() {
     return candidates.filter((a) => {
       switch (a.key) {
         // Generating/editing the note itself is open to creator or PR (same
-        // as Edit), but only PR can actually Submit for DGM Approval from
-        // the preview page — enforced there and, ultimately, server-side.
+        // as Edit), but only PR can actually Submit for approval from the
+        // preview page — enforced there and, ultimately, server-side.
         case "lead_approval_note":
           return lead.status === "pa_review" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
         // A true drop, no reassignment. At pa_review, only the creator can
@@ -265,9 +259,10 @@ export default function LeadDetailPage() {
         // still open once MD has approved — see ACTIONS_BY_STATUS.md_approved).
         case "drop":
           if (lead.status === "pa_review") return profile?.id === lead.created_by;
-          // DGM sent this back for changes — only they should re-review it,
-          // so there's no Withdraw here, only Edit & Resubmit.
-          if (lead.status === "pa_action_required" && lead.declined_from_status === "dgm_initial_review") return false;
+          // The Recommending Authority sent this back for changes — only
+          // they should re-review it, so there's no Withdraw here, only
+          // Edit & Resubmit.
+          if (lead.status === "pa_action_required" && lead.declined_from_status === "recommending_authority_review") return false;
           return profile?.id === lead.created_by || profile?.id === lead.person_responsible_id;
         // The PR rejecting a lead they didn't create — hands it to a
         // teammate instead of dropping it.
@@ -275,31 +270,29 @@ export default function LeadDetailPage() {
           return lead.status === "pa_review" && profile?.id === lead.person_responsible_id && profile?.id !== lead.created_by;
         case "claim":
           return LEAD_PA_TIER_ROLES.includes(profile?.role) && !!profile?.teams?.includes(lead.team);
-        // This initial DGM gate is the lead's own team's DGM (role + team
-        // membership) — NOT the org-wide G3 committee (that only applies to
-        // the later PMT-Extended-escalated dgm_review stage, see below). A
-        // multi-team DGM is eligible on any of their assigned teams, not
-        // just their primary one.
-        case "dgm_initial_approve":
-        case "dgm_initial_decline":
-          return profile?.role === "dgm" && !!profile?.teams?.includes(lead.team);
-        // PMT / PMT Extended / G3 are all org-wide committees (each spans
-        // all 4 teams) — membership alone qualifies, no team match needed.
+        // The lead's actual first-line gate — the exact named person, not a
+        // role or team match.
+        case "ra_approve":
+        case "ra_decline":
+          return profile?.id === lead.recommending_authority_id;
+        // PMT is org-wide (spans all 4 teams) — membership alone qualifies,
+        // no team match needed.
         case "pmt_approve":
-        case "pmt_escalate":
         case "pmt_decline":
           return profile?.committee === "PMT";
-        case "pmt_extended_approve":
-        case "pmt_extended_forward_dgm":
-        case "pmt_extended_decline":
-          return profile?.committee === "PMT Extended";
-        case "dgm_accept":
-        case "dgm_decline":
-          return profile?.committee === "G3";
         case "md_approve":
         case "md_decline":
           return profile?.role === "md";
         case "__edit_resubmit":
+          // A just-transferred lead (person_responsible_id null) has no PR
+          // yet — anyone on its new team can pick it up (see
+          // _shared/leadTransfer.ts).
+          return (
+            profile?.id === lead.created_by ||
+            profile?.id === lead.person_responsible_id ||
+            (!lead.person_responsible_id && !!profile?.teams?.includes(lead.team))
+          );
+        case "withdraw_submission":
           return profile?.id === lead.created_by || profile?.id === lead.person_responsible_id;
         default:
           return false;
@@ -307,7 +300,7 @@ export default function LeadDetailPage() {
     }).map((a) =>
       // Resubmitting after a decline resumes at whichever stage sent it
       // back, not always PMT — see advance-lead-stage's RESUME_AFTER_DECLINE.
-      a.key === "dgm_initial_approve" ? { ...a, label: dgmInitialApproveLabel(lead.declined_from_status) } : a
+      a.key === "ra_approve" ? { ...a, label: raApproveLabel(lead.declined_from_status) } : a
     );
   }
 
@@ -342,12 +335,12 @@ export default function LeadDetailPage() {
 
   function startAction(action) {
     if (action.key === "__edit_resubmit") {
-      // A decline at any stage (DGM, PMT, PMT Extended, G3, or MD) is a
+      // A decline at any stage (Recommending Authority, PMT, or MD) is a
       // decline of the Lead Approval Note itself — by the time a lead has
       // reached any of them, the note already exists and has been stamped
       // with committee remarks, so resubmitting always means editing that
       // note (not the plain lead-fields form) and sending it back through
-      // DGM again. Only pa_review (before any decline has ever happened)
+      // the Recommending Authority again. Only pa_review (before any decline has ever happened)
       // uses the plain lead-fields edit form.
       if (lead.status === "pa_action_required") {
         navigate(`/leads/${id}/approval-note`);
@@ -557,9 +550,9 @@ export default function LeadDetailPage() {
                   <Row label="Creator" value={fmt(lead.creator?.full_name)} />
                   <Row label="Person Responsible" value={fmt(lead.assignee?.full_name)} />
                   <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
-                  <Row label="Approval Authority" value={fmt(lead.authority?.full_name)} />
-                  <Row label="DGM" value={fmt(lead.dgm?.full_name)} />
-                  <Row label="Business Partner" value={fmt(lead.ba?.full_name)} />
+                  <Row label="Recommending Authority" value={fmt(lead.authority?.full_name)} />
+                  <Row label="Business Partner" value={lead.ba?.full_name || "Yet to be Decided"} />
+                  {lead.transferred_from_team && <Row label="Transferred From" value={lead.transferred_from_team} />}
                 </Card.Body>
               </Card>
 
@@ -583,9 +576,23 @@ export default function LeadDetailPage() {
                 </Card>
               )}
 
+              {profile?.role !== "admin" && (
+                <LeadQueryPanel leadId={lead.id} leadTeam={lead.team} onLeadTransferred={fetchLead} />
+              )}
+
             </div>
 
             <div className="ar-right">
+              {(profile?.committee === "PMT" || ["md", "admin"].includes(profile?.role)) && (
+                <Card>
+                  <Card.Body>
+                    <Button variant="secondary" block onClick={() => setShowTransferModal(true)}>
+                      Transfer Lead to Another Team
+                    </Button>
+                  </Card.Body>
+                </Card>
+              )}
+
               {/* md_approved is "terminal" for the success-banner purposes
                   below, but not for actions — it's the one status where a
                   terminal lead still has something actionable (Drop, for
@@ -700,6 +707,19 @@ export default function LeadDetailPage() {
           </div>
         </div>
       </div>
+
+      {showTransferModal && (
+        <LeadTransferModal
+          leadId={lead.id}
+          currentTeam={lead.team}
+          onClose={() => setShowTransferModal(false)}
+          onSuccess={() => {
+            setShowTransferModal(false);
+            showToast("Lead transferred.", "success");
+            fetchLead();
+          }}
+        />
+      )}
     </div>
   );
 }

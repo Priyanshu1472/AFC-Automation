@@ -17,7 +17,7 @@ import { logLeadActivity } from "../_shared/leadActivity.ts";
 import { notifyUser } from "../_shared/notify.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
-  validateApprovalAuthority, validateBusinessAssociate, clampText,
+  validateRecommendingAuthority, validateBusinessAssociate, clampText,
 } from "../_shared/leadEligibility.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -85,7 +85,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     delivery_type: get("delivery_type") || null,
     person_responsible_id: get("person_responsible_id"),
     reviewer_id: get("reviewer_id"),
-    approval_authority_id: get("approval_authority_id"),
+    recommending_authority_id: get("recommending_authority_id"),
   };
 
   const assignedBaId = get("assigned_ba_id") || null;
@@ -97,7 +97,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // are always what gets written back.
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, status, created_by, person_responsible_id, reviewer_id, approval_authority_id, lead_number, documents, title, portal_name, bid_number")
+      .select("id, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, lead_number, documents, title, portal_name, bid_number")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -105,7 +105,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     const fieldErr = validateRequiredFields({ ...input, title: lead.title });
     if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
 
-    if (caller.id !== lead.created_by && caller.id !== lead.person_responsible_id) {
+    // A just-transferred lead (person_responsible_id null) has no PR yet —
+    // anyone on its new team can pick it up and fill the form, not just the
+    // (old team's) creator (see _shared/leadTransfer.ts).
+    const isUnclaimedOnCallerTeam = !lead.person_responsible_id && caller.teams.includes(lead.team);
+    if (caller.id !== lead.created_by && caller.id !== lead.person_responsible_id && !isUnclaimedOnCallerTeam) {
       return jsonRes(req, 403, { error: "Only the lead's creator or Person Responsible can edit it." });
     }
     if (lead.status !== "pa_action_required" && lead.status !== "pa_review") {
@@ -133,7 +137,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     const reviewerErr = await validateReviewer(adminClient, input.reviewer_id, team);
     if (reviewerErr) return jsonRes(req, 400, { error: reviewerErr });
 
-    const authorityErr = await validateApprovalAuthority(adminClient, input.approval_authority_id, team);
+    const authorityErr = await validateRecommendingAuthority(adminClient, input.recommending_authority_id, team);
     if (authorityErr) return jsonRes(req, 400, { error: authorityErr });
 
     if (assignedBaId) {
@@ -173,7 +177,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         team,
         person_responsible_id: input.person_responsible_id,
         reviewer_id: input.reviewer_id,
-        approval_authority_id: input.approval_authority_id,
+        recommending_authority_id: input.recommending_authority_id,
         assigned_ba_id: assignedBaId,
       })
       .eq("id", lead.id)
@@ -194,7 +198,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     const reassignments: Array<{ roleLabel: string; oldValue: string | null; newValue: string }> = [
       { roleLabel: "Person Responsible", oldValue: lead.person_responsible_id as string | null, newValue: input.person_responsible_id },
       { roleLabel: "Reviewer", oldValue: lead.reviewer_id as string | null, newValue: input.reviewer_id },
-      { roleLabel: "Approval Authority", oldValue: lead.approval_authority_id as string | null, newValue: input.approval_authority_id },
+      { roleLabel: "Recommending Authority", oldValue: lead.recommending_authority_id as string | null, newValue: input.recommending_authority_id },
     ];
     for (const { roleLabel, oldValue, newValue } of reassignments) {
       if (newValue && newValue !== oldValue && newValue !== caller.id) {

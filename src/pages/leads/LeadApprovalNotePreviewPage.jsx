@@ -64,10 +64,16 @@ export default function LeadApprovalNotePreviewPage() {
     fetchLead().then((data) => data && loadPdfUrl(data));
   }, [fetchLead, loadPdfUrl]);
 
-  // A resubmission after a decline at any stage (DGM, PMT, PMT Extended,
-  // G3, or MD) goes through the exact same "accept" action/PIN gate as the
-  // very first submission — see advance-lead-stage's "accept" case.
+  // A resubmission after a decline at any stage (Recommending Authority,
+  // PMT, or MD) goes through the exact same "accept" action/PIN gate as
+  // the very first submission — see advance-lead-stage's "accept" case.
   const isResubmit = lead?.status === "pa_action_required";
+  // The Business Partner is optional here, same as at creation — leaving
+  // it as "Yet to be Decided" is a real, submittable choice (the note
+  // prints that text in the BA field); it's only locked from editing once
+  // the lead actually leaves pa_review/pa_action_required (see
+  // leadEligibility's BA lock and advance-lead-stage's "withdraw_
+  // submission" for changing it after that point).
   const needsBaSelection = (lead?.status === "pa_review" || isResubmit) && !lead?.assigned_ba_id;
 
   async function submitForDgmApproval() {
@@ -75,10 +81,7 @@ export default function LeadApprovalNotePreviewPage() {
       showToast("Enter your 4-digit PIN.", "danger");
       return;
     }
-    if (needsBaSelection && (!selectedBaId || selectedBaId === TBD_BA_VALUE)) {
-      showToast("Select a Business Partner", "danger");
-      return;
-    }
+    const hasRealBaSelection = needsBaSelection && selectedBaId && selectedBaId !== TBD_BA_VALUE;
     setSubmitting(true);
     try {
       const { data, error } = await supabase.functions.invoke("advance-lead-stage", {
@@ -87,18 +90,18 @@ export default function LeadApprovalNotePreviewPage() {
           action: "accept",
           comment: "",
           pin,
-          ...(needsBaSelection ? { assigned_ba_id: selectedBaId } : {}),
+          ...(hasRealBaSelection ? { assigned_ba_id: selectedBaId } : {}),
         },
       });
       if (error) {
-        showToast(await extractFunctionErrorMessage(error, "Failed to submit for DGM approval."), "danger");
+        showToast(await extractFunctionErrorMessage(error, "Failed to submit for approval."), "danger");
         return;
       }
       if (!data?.success) {
-        showToast(data?.error || "Failed to submit for DGM approval.", "danger");
+        showToast(data?.error || "Failed to submit for approval.", "danger");
         return;
       }
-      showToast("Submitted for DGM approval.", "success");
+      showToast("Submitted for approval.", "success");
       navigate(`/leads/${id}`);
     } catch (err) {
       showToast(err.message || "Something went wrong.", "danger");
@@ -163,12 +166,10 @@ export default function LeadApprovalNotePreviewPage() {
                       <>
                         {needsBaSelection && (
                           <div className="ar-field">
-                            <label className="ar-label">
-                              Business Partner <span className="ar-required">*</span>
-                            </label>
+                            <label className="ar-label">Business Partner (optional)</label>
                             <Select
                               options={[
-                                ...(lead.source === "in_house" ? [{ value: TBD_BA_VALUE, label: "To be Decided" }] : []),
+                                ...(lead.source === "in_house" ? [{ value: TBD_BA_VALUE, label: "Yet to be Decided" }] : []),
                                 ...baOptions.map((u) => ({ value: u.id, label: u.org_name })),
                               ]}
                               value={selectedBaId}
@@ -176,6 +177,7 @@ export default function LeadApprovalNotePreviewPage() {
                               placeholder={baOptions.length ? "Select a Business Partner" : "No active BPs found on your team."}
                               disabled={submitting}
                             />
+                            <span className="field-hint">Leave unselected (or pick "Yet to be Decided") to submit without one — the note will print "Yet to be Decided" until you edit the lead again to set it.</span>
                           </div>
                         )}
                         <div className="ar-field">
@@ -189,13 +191,13 @@ export default function LeadApprovalNotePreviewPage() {
                           />
                         </div>
                         <Button variant="primary" block loading={submitting} disabled={submitting} onClick={submitForDgmApproval}>
-                          {isResubmit ? "Resubmit for DGM Approval" : "Submit for DGM Approval"}
+                          {isResubmit ? "Resubmit for Approval" : "Submit for Approval"}
                         </Button>
                       </>
                     )}
                     {!canSubmit && (
                       <p className="ar-empty-text">
-                        Only the assigned Person Responsible can submit this lead for DGM approval.
+                        Only the assigned Person Responsible can submit this lead for approval.
                       </p>
                     )}
                   </Card.Body>

@@ -22,7 +22,7 @@ const FIELD_HELP = {
   role: "Changing a role controls what this person can see and do going forward. Only Admin and MD can change a role.",
   team: "The working group this person belongs to (e.g. BPDD, BIID). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
   office: "The physical office this person is based out of.",
-  committee: "Optional Lead Generation review committee. G3 is the DGM committee — membership grants DGM-level review/approval on leads, org-wide. Only Admin and MD can change this.",
+  committee: "Optional Lead Generation review committee (PMT) — membership grants PMT-stage review/approval on leads, org-wide. Only Admin and MD can change this.",
 };
 
 export default function EditUserPage() {

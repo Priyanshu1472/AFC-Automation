@@ -102,8 +102,8 @@ export default function FeeNoteEditPage() {
     const { data: lead } = await supabase
       .from("leads")
       .select(
-        "id, lead_number, title, client_name, portal_name, bid_number, lead_type, assigned_ba_id, submission_deadline, person_responsible_id, reviewer_id, approval_authority_id, approval_note_data, " +
-        "ba:assigned_ba_id(full_name), pr:person_responsible_id(full_name, role), aa:approval_authority_id(full_name, role)",
+        "id, lead_number, title, client_name, portal_name, bid_number, lead_type, assigned_ba_id, submission_deadline, person_responsible_id, reviewer_id, recommending_authority_id, approval_note_data, " +
+        "ba:assigned_ba_id(full_name), pr:person_responsible_id(full_name, role), aa:recommending_authority_id(full_name, role)",
       )
       .eq("id", leadId)
       .maybeSingle();
@@ -443,7 +443,7 @@ export default function FeeNoteEditPage() {
                     </div>
                     <div className="pp-fnp-sig">
                       <div className="pp-fnp-sig-name">{ctx.lead.aa?.full_name || "—"}</div>
-                      <div className="pp-fnp-sig-role">{ROLE_LABELS[ctx.lead.aa?.role] || "Approval Authority"}</div>
+                      <div className="pp-fnp-sig-role">{ROLE_LABELS[ctx.lead.aa?.role] || "Recommending Authority"}</div>
                     </div>
 
                     {/* "Encl. as above" sits left, level with the MD's

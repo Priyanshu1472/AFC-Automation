@@ -1,5 +1,5 @@
 // supabase/functions/set-proposal-outcome/index.ts
-// JWT must be ON. Person Responsible / Reviewer / Approval Authority
+// JWT must be ON. Person Responsible / Reviewer / Recommending Authority
 // manually records the client's answer (Awarded / Rejected) after the
 // proposal has been locked — there is no automated feed for this, staff
 // enter it once they hear back.
@@ -42,13 +42,13 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const { data: lead } = await adminClient
       .from("leads")
-      .select("person_responsible_id, reviewer_id, approval_authority_id")
+      .select("person_responsible_id, reviewer_id, recommending_authority_id")
       .eq("id", proposal.lead_id)
       .maybeSingle();
 
     const authorized =
       ["md", "admin"].includes(caller.role) ||
-      [lead?.person_responsible_id, lead?.reviewer_id, lead?.approval_authority_id].includes(caller.id);
+      [lead?.person_responsible_id, lead?.reviewer_id, lead?.recommending_authority_id].includes(caller.id);
     if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this proposal." });
 
     const { error: updErr } = await adminClient

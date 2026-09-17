@@ -50,7 +50,7 @@ export default function ProposalPreparationPage() {
     setError("");
     const { data: leadRow, error: leadErr } = await supabase
       .from("leads")
-      .select("*, pr:person_responsible_id(full_name), rev:reviewer_id(full_name), aa:approval_authority_id(full_name), ba:assigned_ba_id(full_name)")
+      .select("*, pr:person_responsible_id(full_name), rev:reviewer_id(full_name), aa:recommending_authority_id(full_name), ba:assigned_ba_id(full_name)")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !leadRow) { setError(leadErr?.message || "Lead not found."); setLoading(false); return; }
@@ -116,7 +116,7 @@ export default function ProposalPreparationPage() {
 
   const canManage = profile && (
     ["md", "admin"].includes(profile.role) ||
-    [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(profile.id)
+    [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id)
   );
   // Strictly "md" (no admin override) — only used by FeeNotesPanel, where
   // md_decided_by prints under "Managing Director" on the note itself, so
@@ -124,9 +124,10 @@ export default function ProposalPreparationPage() {
   const isMd = profile && profile.role === "md";
   // The BP-requests and AFC checklist lists are day-to-day working
   // documents for the lead's own team (Person Responsible, Reviewer,
-  // Approval Authority) — MD/Admin can see them but never add/edit/delete,
-  // unlike the rest of this page where MD/Admin get the usual override.
-  const canManageDocs = profile && [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(profile.id);
+  // Recommending Authority) — MD/Admin can see them but never add/edit/
+  // delete, unlike the rest of this page where MD/Admin get the usual
+  // override.
+  const canManageDocs = profile && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
   const locked = isProposalLocked(proposal, lead);
   const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date() && !proposal.locked;
 
@@ -184,7 +185,7 @@ export default function ProposalPreparationPage() {
 
           {proposal.locked && proposal.client_response === "pending" && !canManage && (
             <Alert variant="warning">
-              This proposal is locked and waiting for its Person Responsible, Reviewer, or Approval Authority to record the client's response.
+              This proposal is locked and waiting for its Person Responsible, Reviewer, or Recommending Authority to record the client's response.
             </Alert>
           )}
 
@@ -214,7 +215,7 @@ export default function ProposalPreparationPage() {
                 <div className="pp-summary">
                   <div className="pp-summary-item"><span>Person Responsible</span><strong>{lead.pr?.full_name || "—"}</strong></div>
                   <div className="pp-summary-item"><span>Reviewer</span><strong>{lead.rev?.full_name || "—"}</strong></div>
-                  <div className="pp-summary-item"><span>Approval Authority</span><strong>{lead.aa?.full_name || "—"}</strong></div>
+                  <div className="pp-summary-item"><span>Recommending Authority</span><strong>{lead.aa?.full_name || "—"}</strong></div>
                   <div className="pp-summary-item"><span>Business Partner</span><strong>{lead.ba?.full_name || "—"}</strong></div>
                 </div>
               </Collapsible>

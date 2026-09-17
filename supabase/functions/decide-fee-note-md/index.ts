@@ -5,7 +5,7 @@
 // the previous email-OTP round trip (request-fee-note-otp/feeNoteOtp.ts,
 // both deleted). Approval stamps md_decided_by/at as the MD's signature on
 // the note. Rejection sends the note all the way back to draft, clearing
-// both the Person Responsible's and Approval Authority's signatures since
+// both the Person Responsible's and Recommending Authority's signatures since
 // a changed note needs fresh sign-off from both before it can reach the MD
 // again (see advance-fee-note-stage for the first two hops).
 
@@ -65,14 +65,14 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .maybeSingle();
     const { data: lead } = await adminClient
       .from("leads")
-      .select("title, person_responsible_id, reviewer_id, approval_authority_id")
+      .select("title, person_responsible_id, reviewer_id, recommending_authority_id")
       .eq("id", proposal?.lead_id)
       .maybeSingle();
 
     const updates: Record<string, unknown> =
       decision === "approved"
         ? { status: "approved", md_decided_by: caller.id, md_decided_at: new Date().toISOString(), md_remark: remark }
-        : { status: "draft", md_decided_by: null, md_decided_at: null, md_remark: null, pr_signed_by: null, pr_signed_at: null, aa_signed_by: null, aa_signed_at: null };
+        : { status: "draft", md_decided_by: null, md_decided_at: null, md_remark: null, pr_signed_by: null, pr_signed_at: null, ra_signed_by: null, ra_signed_at: null };
 
     const { error: updErr } = await adminClient.from("fee_notes").update(updates).eq("id", feeNoteId).eq("status", "pending_md");
     if (updErr) throw new Error(updErr.message);
@@ -83,7 +83,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     });
 
     const noteLabel = NOTE_LABEL;
-    await notifyUsers(adminClient, [lead?.person_responsible_id, lead?.reviewer_id, lead?.approval_authority_id], {
+    await notifyUsers(adminClient, [lead?.person_responsible_id, lead?.reviewer_id, lead?.recommending_authority_id], {
       title: decision === "approved" ? `${noteLabel} approved` : `${noteLabel} sent back`,
       sub_text: decision === "approved"
         ? `The MD approved the ${noteLabel} for "${lead?.title}".`

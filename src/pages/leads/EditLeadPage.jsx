@@ -27,15 +27,20 @@ export default function EditLeadPage() {
 
   if (loading) return <PageLoader text="Loading lead..." />;
 
+  // A just-transferred lead (person_responsible_id null) can be picked up
+  // and edited by anyone on its new team — there is no PR yet until
+  // someone fills the form (see _shared/leadTransfer.ts).
   const canEdit =
     lead &&
     (lead.status === "pa_review" || lead.status === "pa_action_required") &&
-    (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
+    (profile?.id === lead.created_by ||
+      profile?.id === lead.person_responsible_id ||
+      (!lead.person_responsible_id && !!profile?.teams?.includes(lead.team)));
   // A returned (pa_action_required) lead's fields can be edited here same as
   // any other lead — saving does NOT resubmit it into the approval
-  // pipeline. Getting it back to DGM is a separate, deliberate step: the
-  // Lead Approval Note's "Resubmit Lead Approval Form" action from the
-  // lead's detail page.
+  // pipeline. Getting it back to the Recommending Authority is a separate,
+  // deliberate step: the Lead Approval Note's "Resubmit Lead Approval Form"
+  // action from the lead's detail page.
 
   return (
     <div className="app-shell">

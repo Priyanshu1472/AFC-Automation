@@ -9,11 +9,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
-import { notifyUser } from "../_shared/notify.ts";
+import { notifyUser, notifyRole } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
-  validateApprovalAuthority, validateBusinessAssociate, clampText,
+  validateRecommendingAuthority, validateBusinessAssociate, clampText,
 } from "../_shared/leadEligibility.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -82,7 +82,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     delivery_type: get("delivery_type") || null,
     person_responsible_id: get("person_responsible_id"),
     reviewer_id: get("reviewer_id"),
-    approval_authority_id: get("approval_authority_id"),
+    recommending_authority_id: get("recommending_authority_id"),
   };
 
   const fieldErr = validateRequiredFields(input);
@@ -125,7 +125,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     const reviewerErr = await validateReviewer(adminClient, input.reviewer_id, team);
     if (reviewerErr) return jsonRes(req, 400, { error: reviewerErr });
 
-    const authorityErr = await validateApprovalAuthority(adminClient, input.approval_authority_id, team);
+    const authorityErr = await validateRecommendingAuthority(adminClient, input.recommending_authority_id, team);
     if (authorityErr) return jsonRes(req, 400, { error: authorityErr });
 
     if (assignedBaId) {
@@ -181,7 +181,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         created_by: caller.id,
         person_responsible_id: input.person_responsible_id,
         reviewer_id: input.reviewer_id,
-        approval_authority_id: input.approval_authority_id,
+        recommending_authority_id: input.recommending_authority_id,
         assigned_ba_id: assignedBaId,
         status: "pa_review",
       })
@@ -205,8 +205,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       });
     }
 
-    // Reviewer/Approval Authority aren't being asked to act yet (that only
-    // comes once the lead clears PA/DGM review) — but still surfaced as
+    // Reviewer/Recommending Authority aren't being asked to act yet (that
+    // only comes once the lead clears PA review) — but still surfaced as
     // action_required so the appointment itself shows on their Home page,
     // not just the notification bell; it drops off there once they open
     // the lead (see fetchPendingActionNotifications).
@@ -219,14 +219,36 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       });
     }
 
-    if (input.approval_authority_id !== caller.id) {
-      await notifyUser(adminClient, input.approval_authority_id, {
-        title: "You've been assigned as Approval Authority",
-        sub_text: `${lead.lead_number} — "${input.title.trim()}" has named you as Approval Authority.`,
+    if (input.recommending_authority_id !== caller.id) {
+      await notifyUser(adminClient, input.recommending_authority_id, {
+        title: "You've been assigned as Recommending Authority",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" has named you as Recommending Authority.`,
         type: "action_required",
         link: `/leads/${lead.id}`,
       });
     }
+
+    // Every DGM and AGM org-wide gets to know the instant any lead is
+    // created — not just their own team's — so another team can catch a
+    // duplicate early instead of two teams independently chasing the same
+    // bid (see 20260928000200_lead_org_wide_visibility.sql, which gives
+    // them the read access to match). Bell-only (type "info"), not
+    // action_required — nobody in this audience is actually on the hook to
+    // act on someone else's lead just because they were notified about it.
+    await Promise.all([
+      notifyRole(adminClient, "dgm", {
+        title: "New lead added",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" (${team}) was just created.`,
+        type: "info",
+        link: `/leads/${lead.id}`,
+      }),
+      notifyRole(adminClient, "agm", {
+        title: "New lead added",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" (${team}) was just created.`,
+        type: "info",
+        link: `/leads/${lead.id}`,
+      }),
+    ]);
 
     return jsonRes(req, 200, { success: true, id: lead.id, lead_number: lead.lead_number, status: lead.status });
   } catch (err) {

@@ -17,7 +17,7 @@ export const BORNE_BY_LABELS = { afc: "AFC", bp: "Business Partner" };
 
 export const FEE_NOTE_STATUS_LABELS = {
   draft: "Draft",
-  pending_approval_authority: "Pending Approval Authority",
+  pending_recommending_authority: "Pending Recommending Authority",
   pending_md: "Pending MD Approval",
   approved: "Approved",
   rejected: "Rejected",
@@ -25,7 +25,7 @@ export const FEE_NOTE_STATUS_LABELS = {
 
 export const FEE_NOTE_STATUS_VARIANTS = {
   draft: "neutral",
-  pending_approval_authority: "warning",
+  pending_recommending_authority: "warning",
   pending_md: "warning",
   approved: "success",
   rejected: "danger",
@@ -66,14 +66,14 @@ export const CLIENT_RESPONSE_VARIANTS = {
 };
 
 // Who gets "Open Proposal" — md/admin, or the lead's three assignees
-// (Person Responsible, Reviewer, and Approval Authority/authorised
+// (Person Responsible, Reviewer, and Recommending Authority/authorised
 // signatory, who locks the proposal and records the client's outcome).
 // Shared by LeadListPage/LeadDetailPage's row action and ProposalsListPage
 // so the rule can't drift between entry points.
 export function canOpenProposal(lead, profile) {
   if (!profile || !lead) return false;
   if (["md", "admin"].includes(profile.role)) return true;
-  return [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(profile.id);
+  return [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
 }
 
 // A proposal is "effectively" locked either because someone locked it

@@ -5,12 +5,14 @@
 // state. Never trust the client's role/team/committee claims: every
 // assignment target is re-validated against afc_users here.
 //
-// Person Responsible / Reviewer / Approval Authority are informational
-// contacts on the lead, not the actual workflow gate — the real
-// PMT/PMT Extended/G3 authorization is committee membership, checked
-// separately in advance-lead-stage (and org-wide, not team-scoped, since
-// committees span all 4 teams). So these just confirm the target is an
-// active member of the right team (and, for Approval Authority, AGM/SRM/DGM).
+// Person Responsible / Reviewer are informational contacts on the lead;
+// Recommending Authority is the actual first-line workflow gate (see
+// advance-lead-stage's recommending_authority_review case — only this
+// exact named person, not just any AGM/DGM, can act there). PMT
+// authorization is separately committee membership (org-wide, since PMT
+// spans every team), checked in advance-lead-stage. These functions just
+// confirm each target is an active member of the right team (and, for
+// Recommending Authority, AGM/SRM/DGM).
 
 import { createAdminClient } from "./auth.ts";
 import { getTargetUser } from "./leadAuth.ts";
@@ -24,7 +26,7 @@ export type LeadFieldInput = {
   delivery_type?: unknown;
   person_responsible_id?: unknown;
   reviewer_id?: unknown;
-  approval_authority_id?: unknown;
+  recommending_authority_id?: unknown;
 };
 
 const DELIVERY_TYPES = new Set(["online", "offline", "both"]);
@@ -36,7 +38,7 @@ export function validateRequiredFields(input: LeadFieldInput): string | null {
   if (input.title.trim().length > MAX_TITLE_LENGTH) return "Name of Assignment is too long.";
   if (typeof input.person_responsible_id !== "string" || !input.person_responsible_id) return "Person Responsible is required.";
   if (typeof input.reviewer_id !== "string" || !input.reviewer_id) return "Reviewer is required.";
-  if (typeof input.approval_authority_id !== "string" || !input.approval_authority_id) return "Approval Authority is required.";
+  if (typeof input.recommending_authority_id !== "string" || !input.recommending_authority_id) return "Recommending Authority is required.";
   if (input.delivery_type != null && !DELIVERY_TYPES.has(String(input.delivery_type))) return "Invalid delivery type.";
   // lead_type (RFP/EOI) doesn't apply to a Suo Moto lead — the frontend just
   // sends a fixed placeholder value for it in that case, so this stays
@@ -75,12 +77,14 @@ export async function validateReviewer(admin: AdminClient, reviewerId: string, t
   return null;
 }
 
-// Approval Authority must be an active AGM, SRM (same permissions as AGM
-// throughout Lead Generation), or DGM on the lead's team.
-export async function validateApprovalAuthority(admin: AdminClient, approvalAuthorityId: string, team: string): Promise<string | null> {
-  const user = await getTargetUser(admin, approvalAuthorityId);
+// Recommending Authority must be an active AGM, SRM (same permissions as
+// AGM throughout Lead Generation), or DGM on the lead's team — and is the
+// exact person gated on at the recommending_authority_review stage, not
+// just any team member with one of those roles.
+export async function validateRecommendingAuthority(admin: AdminClient, recommendingAuthorityId: string, team: string): Promise<string | null> {
+  const user = await getTargetUser(admin, recommendingAuthorityId);
   if (!user || !user.is_active || user.team !== team || !["agm", "srm", "dgm"].includes(user.role)) {
-    return "Approval Authority must be an active AGM, SRM, or DGM on this team.";
+    return "Recommending Authority must be an active AGM, SRM, or DGM on this team.";
   }
   return null;
 }

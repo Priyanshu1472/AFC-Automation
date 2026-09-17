@@ -24,7 +24,7 @@ import "../../styles/LeadReportsPage.css";
 const ALL_STATUSES = Object.keys(STATUS_MAP);
 // On-track funnel, ending at the terminal approval — mirrors Empanelment's
 // PIPELINE (also ends at its own terminal "accepted").
-const PIPELINE = ["pa_review", "dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review", "md_approved"];
+const PIPELINE = ["pa_review", "recommending_authority_review", "pmt_review", "md_review", "md_approved"];
 const TERMINAL = ["md_approved", "md_declined", "pa_dropped"];
 const SOURCE_LABELS = { in_house: "In House", ba: "BP Source", suo_moto: "Suo Moto" };
 const TYPE_LABELS = { rfp: "RFP", eoi: "EOI" };
@@ -33,7 +33,7 @@ const TYPE_LABELS = { rfp: "RFP", eoi: "EOI" };
 // Dropped lead from lead_activity_log, since the lead row itself only
 // keeps the current state, not why it got there.
 const DECLINE_ACTIONS = new Set([
-  "dgm_initial_decline", "pmt_decline", "pmt_extended_decline", "dgm_decline", "md_decline", "pr_review_reject",
+  "ra_decline", "pmt_decline", "md_decline", "pr_review_reject",
 ]);
 
 const isApproved = (l) => l.status === "md_approved";

@@ -40,17 +40,17 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, title, submission_deadline, assigned_ba_id, person_responsible_id, reviewer_id, approval_authority_id")
+      .select("id, title, submission_deadline, assigned_ba_id, person_responsible_id, reviewer_id, recommending_authority_id")
       .eq("id", proposal.lead_id)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
     // Managing/sending the BP document list is the lead's own team's job
-    // (Person Responsible, Reviewer, Approval Authority) — MD/Admin can
+    // (Person Responsible, Reviewer, Recommending Authority) — MD/Admin can
     // view but not act. Mirrors the client gate in
     // ProposalPreparationPage.jsx (canManageDocs).
-    const authorized = [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(caller.id);
-    if (!authorized) return jsonRes(req, 403, { error: "Only the lead's Person Responsible, Reviewer, or Approval Authority can send this to the BP." });
+    const authorized = [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(caller.id);
+    if (!authorized) return jsonRes(req, 403, { error: "Only the lead's Person Responsible, Reviewer, or Recommending Authority can send this to the BP." });
 
     const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date();
     if (proposal.locked || pastDeadline) {

@@ -516,6 +516,24 @@ verify_jwt = true
 import_map = "./functions/send-lead-chat-message/deno.json"
 entrypoint = "./functions/send-lead-chat-message/index.ts"
 
+[functions.raise-lead-query]
+enabled = true
+verify_jwt = true
+import_map = "./functions/raise-lead-query/deno.json"
+entrypoint = "./functions/raise-lead-query/index.ts"
+
+[functions.respond-lead-query]
+enabled = true
+verify_jwt = true
+import_map = "./functions/respond-lead-query/deno.json"
+entrypoint = "./functions/respond-lead-query/index.ts"
+
+[functions.transfer-lead]
+enabled = true
+verify_jwt = true
+import_map = "./functions/transfer-lead/deno.json"
+entrypoint = "./functions/transfer-lead/index.ts"
+
 [functions.create-proposal-preparation]
 enabled = true
 verify_jwt = true

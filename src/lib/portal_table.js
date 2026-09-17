@@ -100,7 +100,7 @@ export const INDIAN_STATES = [
 export const FIELD_LABELS = {
   person_responsible_id: "Person Responsible",
   reviewer_id: "Reviewer",
-  approval_authority_id: "Approval Authority",
+  recommending_authority_id: "Recommending Authority",
 };
 
 export const LEAD_STOPWORDS = new Set([

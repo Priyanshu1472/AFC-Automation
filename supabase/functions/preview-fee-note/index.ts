@@ -4,7 +4,7 @@
 // FeeNotePinActionModal shows before a forward/approve is confirmed with a
 // PIN. Read-only: no status change, no signature persisted. Access mirrors
 // the existing authorized set for a proposal's fee notes (the lead's Person
-// Responsible / Reviewer / Approval Authority, or md/admin) — the same PDF
+// Responsible / Reviewer / Recommending Authority, or md/admin) — the same PDF
 // is shown at every stage, with signature slots filling in as the workflow
 // progresses.
 
@@ -51,14 +51,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("person_responsible_id, reviewer_id, approval_authority_id")
+      .select("person_responsible_id, reviewer_id, recommending_authority_id")
       .eq("id", proposal.lead_id)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
     const authorized =
       ["md", "admin"].includes(caller.role) ||
-      [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(caller.id);
+      [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(caller.id);
     if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this proposal." });
 
     const built = await buildFeeNotePdfForNote(adminClient, feeNoteId);

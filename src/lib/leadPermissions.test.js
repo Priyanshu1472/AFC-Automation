@@ -55,8 +55,8 @@ describe("leadCan", () => {
     expect(leadCan.drop({ id: "bystander" }, lead)).toBe(false);
   });
 
-  it("drop at pa_action_required is unavailable when DGM sent it back — only Edit & Resubmit", () => {
-    const lead = { status: "pa_action_required", created_by: "user-1", person_responsible_id: "user-1", declined_from_status: "dgm_initial_review" };
+  it("drop at pa_action_required is unavailable when the Recommending Authority sent it back — only Edit & Resubmit", () => {
+    const lead = { status: "pa_action_required", created_by: "user-1", person_responsible_id: "user-1", declined_from_status: "recommending_authority_review" };
     expect(leadCan.drop(user, lead)).toBe(false);
   });
 
@@ -74,6 +74,13 @@ describe("leadCan", () => {
     expect(leadCan.editResubmit({ id: "bystander" }, lead)).toBe(false);
     expect(leadCan.editResubmit(user, { ...lead, status: "pa_action_required" })).toBe(true);
     expect(leadCan.editResubmit(user, { ...lead, status: "pmt_review" })).toBe(false);
+  });
+
+  it("editResubmit also lets any teammate on the new team pick up a just-transferred lead (no PR yet)", () => {
+    const lead = { status: "pa_review", created_by: "creator-1", person_responsible_id: null, team: "BPDD" };
+    const teammate = { id: "bystander", teams: ["BPDD"] };
+    expect(leadCan.editResubmit(teammate, lead)).toBe(true);
+    expect(leadCan.editResubmit({ id: "bystander", teams: ["OtherTeam"] }, lead)).toBe(false);
   });
 
   it("claim requires a PA-tier role on one of the caller's assigned teams", () => {
@@ -95,13 +102,7 @@ describe("leadCan", () => {
     const lead = { status: "pmt_review", team: "BPDD" };
     expect(leadCan.pmtReview({ ...user, committee: "PMT", team: "BPDD" }, lead)).toBe(true);
     expect(leadCan.pmtReview({ ...user, committee: "PMT", team: "OtherTeam" }, lead)).toBe(true);
-    expect(leadCan.pmtReview({ ...user, committee: "PMT Extended" }, lead)).toBe(false);
-  });
-
-  it("pmtExtendedReview requires committee='PMT Extended' — org-wide", () => {
-    const lead = { status: "pmt_extended_review", team: "BPDD" };
-    expect(leadCan.pmtExtendedReview({ ...user, committee: "PMT Extended", team: "OtherTeam" }, lead)).toBe(true);
-    expect(leadCan.pmtExtendedReview({ ...user, committee: "PMT" }, lead)).toBe(false);
+    expect(leadCan.pmtReview({ ...user, committee: null }, lead)).toBe(false);
   });
 
   it("prReviewAccept/prReviewReject apply only while a note is pending PR review, to the assigned Person Responsible", () => {
@@ -113,30 +114,31 @@ describe("leadCan", () => {
     expect(leadCan.prReviewAccept(user, { ...lead, approval_note_pending_pr_review: false })).toBe(false);
   });
 
-  it("dgmInitialReview (first-line gate, ahead of PMT) is team-scoped, NOT the org-wide G3 pool", () => {
-    const profile = { ...user, role: "dgm", committee: "G3", team: "BPDD", teams: ["BPDD"] };
-    const ownTeamLead = { status: "dgm_initial_review", team: "BPDD" };
-    const otherTeamLead = { status: "dgm_initial_review", team: "SomeOtherTeam" };
-    expect(leadCan.dgmInitialReview(profile, ownTeamLead)).toBe(true);
-    // Holding the G3 committee alone is NOT enough — must be this lead's
-    // own team's DGM (mirrors can_view_lead()'s exclusion of this status
-    // from its org-wide committee clause).
-    expect(leadCan.dgmInitialReview(profile, otherTeamLead)).toBe(false);
-    expect(leadCan.dgmInitialReview({ ...profile, role: "project_officer" }, ownTeamLead)).toBe(false);
-    expect(leadCan.dgmInitialReview(profile, { ...ownTeamLead, status: "dgm_review" })).toBe(false);
+  it("recommendingAuthorityReview is gated on the exact named person, not a role or team match", () => {
+    const lead = { status: "recommending_authority_review", team: "BPDD", recommending_authority_id: "user-1" };
+    expect(leadCan.recommendingAuthorityReview(user, lead)).toBe(true);
+    // Being a DGM on the same team isn't enough by itself — must be the
+    // specific person named on this lead (this is what makes the chain
+    // work at offices with no DGM at all, e.g. Head Office).
+    expect(leadCan.recommendingAuthorityReview({ ...user, id: "some-other-dgm", role: "dgm", teams: ["BPDD"] }, lead)).toBe(false);
+    expect(leadCan.recommendingAuthorityReview(user, { ...lead, status: "pmt_review" })).toBe(false);
   });
 
-  it("dgmReview (G3) is org-wide — any team matches", () => {
-    const profile = { ...user, committee: "G3", team: "BPDD" };
-    const lead = { status: "dgm_review", team: "SomeOtherTeam" };
-    expect(leadCan.dgmReview(profile, lead)).toBe(true);
-    expect(leadCan.dgmReview({ ...profile, committee: "PMT" }, lead)).toBe(false);
+  it("withdrawSubmission applies at any in-flight stage short of MD's final decision, for creator or PR", () => {
+    const lead = { status: "pmt_review", created_by: "creator-1", person_responsible_id: "user-1" };
+    expect(leadCan.withdrawSubmission(user, lead)).toBe(true);
+    expect(leadCan.withdrawSubmission({ id: "creator-1" }, lead)).toBe(true);
+    expect(leadCan.withdrawSubmission({ id: "bystander" }, lead)).toBe(false);
+    expect(leadCan.withdrawSubmission(user, { ...lead, status: "recommending_authority_review" })).toBe(true);
+    expect(leadCan.withdrawSubmission(user, { ...lead, status: "md_review" })).toBe(true);
+    expect(leadCan.withdrawSubmission(user, { ...lead, status: "pa_review" })).toBe(false);
+    expect(leadCan.withdrawSubmission(user, { ...lead, status: "md_approved" })).toBe(false);
   });
 
   it("mdReview requires role='md'", () => {
     const lead = { status: "md_review" };
     expect(leadCan.mdReview({ ...user, role: "md" }, lead)).toBe(true);
-    expect(leadCan.mdReview({ ...user, role: "dgm", committee: "G3" }, lead)).toBe(false);
+    expect(leadCan.mdReview({ ...user, role: "dgm" }, lead)).toBe(false);
   });
 });
 
@@ -144,7 +146,7 @@ describe("isActionRequiredForViewer", () => {
   it("matches a PMT member only against pmt_review leads, regardless of team", () => {
     const profile = { id: "user-1", committee: "PMT", team: "BPDD" };
     expect(isActionRequiredForViewer(profile, { status: "pmt_review", team: "OtherTeam" })).toBe(true);
-    expect(isActionRequiredForViewer(profile, { status: "pmt_extended_review", team: "BPDD" })).toBe(false);
+    expect(isActionRequiredForViewer(profile, { status: "md_review", team: "BPDD" })).toBe(false);
   });
 
   it("matches a PA-tier owner against their own pa_review/pa_action_required leads", () => {
@@ -184,14 +186,14 @@ describe("isMyLead", () => {
     expect(isMyLead(profile, { created_by: "someone-else", person_responsible_id: "someone-else-2", reviewer_id: "user-1" })).toBe(true);
   });
 
-  it("matches the Approval Authority", () => {
+  it("matches the Recommending Authority", () => {
     const profile = { id: "user-1" };
-    expect(isMyLead(profile, { created_by: "someone-else", person_responsible_id: "someone-else-2", approval_authority_id: "user-1" })).toBe(true);
+    expect(isMyLead(profile, { created_by: "someone-else", person_responsible_id: "someone-else-2", recommending_authority_id: "user-1" })).toBe(true);
   });
 
   it("does NOT match a creator who isn't otherwise named — that lead belongs on Team Leads", () => {
     const profile = { id: "user-1" };
-    expect(isMyLead(profile, { created_by: "user-1", person_responsible_id: "someone-else", reviewer_id: "someone-else-2", approval_authority_id: "someone-else-3" })).toBe(false);
+    expect(isMyLead(profile, { created_by: "user-1", person_responsible_id: "someone-else", reviewer_id: "someone-else-2", recommending_authority_id: "someone-else-3" })).toBe(false);
   });
 
   it("does NOT match handled-by-DGM or plain team ownership — those belong on Team Leads instead", () => {
@@ -206,8 +208,8 @@ describe("isMyLead", () => {
 });
 
 describe("isTeamLead", () => {
-  it("matches a team-scoped role's own team, not another team", () => {
-    const profile = { id: "user-1", role: "dgm", teams: ["BPDD", "HO"] };
+  it("matches a plain team-scoped role's own team, not another team", () => {
+    const profile = { id: "user-1", role: "project_officer", teams: ["BPDD", "HO"] };
     expect(isTeamLead(profile, { team: "BPDD" })).toBe(true);
     expect(isTeamLead(profile, { team: "HO" })).toBe(true);
     expect(isTeamLead(profile, { team: "OtherTeam" })).toBe(false);
@@ -217,6 +219,16 @@ describe("isTeamLead", () => {
     for (const role of ["md", "cfo", "cs", "admin"]) {
       expect(isTeamLead({ id: "user-1", role, teams: [] }, { team: "AnyTeam" })).toBe(true);
     }
+  });
+
+  it("always matches dgm/agm/srm, any team — org-wide visibility so duplicates get caught across teams", () => {
+    for (const role of ["dgm", "agm", "srm"]) {
+      expect(isTeamLead({ id: "user-1", role, teams: [] }, { team: "AnyTeam" })).toBe(true);
+    }
+  });
+
+  it("always matches a PMT committee member, any team", () => {
+    expect(isTeamLead({ id: "user-1", role: "project_officer", committee: "PMT", teams: [] }, { team: "AnyTeam" })).toBe(true);
   });
 
   it("does not match a Business Partner against an unrelated team", () => {

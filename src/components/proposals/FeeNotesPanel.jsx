@@ -4,9 +4,9 @@
 // edit form and generates its PDF the first time (see save-fee-note's
 // create-or-update branch) — never as an empty stub. From there it's a
 // 3-stage PIN sign-off chain — Person Responsible edits and forwards,
-// Approval Authority forwards to MD or sends it back, MD gives the final
-// approval — mirroring the eye-icon + PDF pattern shipped for Empanelment
-// letters.
+// Recommending Authority forwards to MD or sends it back, MD gives the
+// final approval — mirroring the eye-icon + PDF pattern shipped for
+// Empanelment letters.
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
@@ -30,7 +30,7 @@ function EditIcon() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>;
 }
 
-const RETURN_ACTIONS = new Set(["returned_by_aa", "md_rejected"]);
+const RETURN_ACTIONS = new Set(["returned_by_ra", "md_rejected"]);
 
 export default function FeeNotesPanel({ feeNotes, lead, profile, isMd, locked, onChanged }) {
   const { showToast } = useToast();
@@ -62,13 +62,13 @@ export default function FeeNotesPanel({ feeNotes, lead, profile, isMd, locked, o
   // deliberately excluded here (unlike save-fee-note's own check): the MD's
   // role on this note is to review and decide once it reaches them, not to
   // draft it, so their card only ever shows status + the eye/approve
-  // actions below, never Create/Edit. Forwarding and Approval-Authority
-  // actions are stricter still — they stamp pr_signed_by / aa_signed_by,
-  // which print under "Person Responsible" / "Approval Authority" on the
-  // PDF — so only this lead's actual named PR/Reviewer/AA may do those.
+  // actions below, never Create/Edit. Forwarding and Recommending-Authority
+  // actions are stricter still — they stamp pr_signed_by / ra_signed_by,
+  // which print under "Person Responsible" / "Recommending Authority" on
+  // the PDF — so only this lead's actual named PR/Reviewer/RA may do those.
   const isPR = !!profile && (profile.role === "admin" || [lead.person_responsible_id, lead.reviewer_id].includes(profile.id));
   const canForwardAsPR = !!profile && [lead.person_responsible_id, lead.reviewer_id].includes(profile.id);
-  const isAA = !!profile && profile.id === lead.approval_authority_id;
+  const isRA = !!profile && profile.id === lead.recommending_authority_id;
 
   async function handleView() {
     if (viewing || !note) return;
@@ -153,7 +153,7 @@ export default function FeeNotesPanel({ feeNotes, lead, profile, isMd, locked, o
                 {note.justification && <p className="pp-fee-note-justification">{note.justification}</p>}
                 {showReturnBanner && (
                   <p className="pp-fee-note-remark">
-                    Sent back by {latestEvent.action === "md_rejected" ? "MD" : "Approval Authority"}: {latestEvent.remark}
+                    Sent back by {latestEvent.action === "md_rejected" ? "MD" : "Recommending Authority"}: {latestEvent.remark}
                   </p>
                 )}
               </>
@@ -163,19 +163,19 @@ export default function FeeNotesPanel({ feeNotes, lead, profile, isMd, locked, o
           {note && canForwardAsPR && note.status === "draft" && !locked && (
             <div style={{ marginTop: "var(--space-4)" }}>
               <Button variant="primary" size="sm" onClick={() => setPinAction({ feeNoteId: note.id, action: "pr_forward" })}>
-                Forward to Approval Authority
+                Forward to Recommending Authority
               </Button>
             </div>
           )}
 
-          {note && isAA && note.status === "pending_approval_authority" && !locked && (
+          {note && isRA && note.status === "pending_recommending_authority" && !locked && (
             <div className="pp-note-bar">
               <span className="pp-note-bar-text"><InfoIcon /> This note is pending your review. Forward it to the MD, or send it back.</span>
               <div className="pp-icon-btn-row">
-                <Button variant="secondary" size="sm" onClick={() => setSendBackAction({ feeNoteId: note.id, action: "aa_send_back" })}>
+                <Button variant="secondary" size="sm" onClick={() => setSendBackAction({ feeNoteId: note.id, action: "ra_send_back" })}>
                   Send Back
                 </Button>
-                <Button variant="primary" size="sm" onClick={() => setPinAction({ feeNoteId: note.id, action: "aa_forward" })}>
+                <Button variant="primary" size="sm" onClick={() => setPinAction({ feeNoteId: note.id, action: "ra_forward" })}>
                   Forward to MD
                 </Button>
               </div>

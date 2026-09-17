@@ -1,5 +1,5 @@
 // "Documents Required from BP" card — the lead's Person Responsible,
-// Reviewer, or Approval Authority lists what's needed from the Business
+// Reviewer, or Recommending Authority lists what's needed from the Business
 // Associate with a justification for each, then sends the compiled list +
 // an email in one action. Items are plain direct-RLS writes (see
 // can_edit_proposal() and proposal_document_requests' RLS) while unsent;

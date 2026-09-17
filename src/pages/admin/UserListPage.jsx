@@ -32,7 +32,7 @@ const ROLE_VARIANT = {
 
 const PAGE_SIZE = 25;
 
-const COMMITTEE_OPTIONS = ["PMT", "PMT Extended", "G3"];
+const COMMITTEE_OPTIONS = ["PMT"];
 
 // Restores search/filter/page state after a trip out to a user's Edit page
 // and back — "Back to Users" (EditUserPage.jsx) pushes a bare /users, so

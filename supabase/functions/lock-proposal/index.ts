@@ -1,5 +1,5 @@
 // supabase/functions/lock-proposal/index.ts
-// JWT must be ON. Person Responsible / Reviewer / Approval Authority (the
+// JWT must be ON. Person Responsible / Reviewer / Recommending Authority (the
 // authorised signatory) manually locks a proposal — e.g. once it's been
 // submitted to the client. Locking also happens automatically once the
 // lead's own submission_deadline passes — that path needs no edge function
@@ -40,13 +40,13 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const { data: lead } = await adminClient
       .from("leads")
-      .select("person_responsible_id, reviewer_id, approval_authority_id")
+      .select("person_responsible_id, reviewer_id, recommending_authority_id")
       .eq("id", proposal.lead_id)
       .maybeSingle();
 
     const authorized =
       ["md", "admin"].includes(caller.role) ||
-      [lead?.person_responsible_id, lead?.reviewer_id, lead?.approval_authority_id].includes(caller.id);
+      [lead?.person_responsible_id, lead?.reviewer_id, lead?.recommending_authority_id].includes(caller.id);
     if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this proposal." });
 
     const { error: updErr } = await adminClient

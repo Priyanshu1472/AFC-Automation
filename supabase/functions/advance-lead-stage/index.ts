@@ -12,7 +12,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { notifyUsers } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
-import { Committee, PA_TIER_ROLES, addLeadChatParticipants, getOrgWideHolders, getTargetUser, getTeamDgmHolders } from "../_shared/leadAuth.ts";
+import { PA_TIER_ROLES, addLeadChatParticipants, getOrgWideHolders, getTargetUser } from "../_shared/leadAuth.ts";
 import { validateBusinessAssociate } from "../_shared/leadEligibility.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { LeadDocument, regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
@@ -30,7 +30,7 @@ type LeadRow = {
   created_by: string;
   person_responsible_id: string;
   reviewer_id: string;
-  approval_authority_id: string;
+  recommending_authority_id: string;
   handled_by_dgm_id: string | null;
   assigned_ba_id: string | null;
   declined_from_status: string | null;
@@ -41,82 +41,48 @@ type LeadRow = {
   chat_opened_at: string | null;
 };
 
-// (action name -> the committee it means "sent this lead on to MD") — used
-// on md_decline to figure out which committee to send it back to, since
-// all three routes converge on md_review and the lead row itself doesn't
-// track which one it came through.
-const MD_SOURCE_ACTIONS: Record<string, Committee> = {
-  pmt_approve: "PMT",
-  pmt_extended_approve: "PMT Extended",
-  dgm_accept: "G3",
-};
-
-// Finds whichever committee most recently approved this lead into
-// md_review, by walking the activity log rather than the lead row (which
-// has no "how did this reach MD" column) — that's the committee md_decline
-// sends it back to, alongside the creator/Person Responsible.
-async function resolveCommitteeThatSentToMd(admin: AdminClient, leadId: string): Promise<Committee | null> {
-  const { data, error } = await admin
-    .from("lead_activity_log")
-    .select("action, created_at")
-    .eq("lead_id", leadId)
-    .in("action", Object.keys(MD_SOURCE_ACTIONS))
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) return null;
-  return MD_SOURCE_ACTIONS[data.action as string] ?? null;
-}
-
 // Every action that stamps a fresh signature/remark onto the (still
-// in-progress) Lead Approval Note — every committee approve/escalate/
-// forward, but not declines (those just return to the assignee, nothing
-// new to sign) and not md_approve (handled separately below, in "final"
-// mode). "accept" is here too, but for a different reason: it's the one
-// that flips the stored document from "-- Draft" to its final filename
-// (see leadApprovalPdf.ts's isPreSubmission) the instant the lead actually
-// leaves pa_review/pa_action_required — nothing else about the PDF changes
-// at that step. Regeneration is best-effort and never blocks the actual
-// decision.
+// in-progress) Lead Approval Note — every committee approve, but not
+// declines (those just return to the assignee, nothing new to sign) and
+// not md_approve (handled separately below, in "final" mode). "accept" is
+// here too, but for a different reason: it's the one that flips the stored
+// document from "-- Draft" to its final filename (see leadApprovalPdf.ts's
+// isPreSubmission) the instant the lead actually leaves pa_review/
+// pa_action_required — nothing else about the PDF changes at that step.
+// Regeneration is best-effort and never blocks the actual decision.
 const REGENERATE_DRAFT_NOTE_ON = new Set([
   "accept",
   // The PR taking ownership of a creator-drafted note — regenerates
   // immediately so the PDF picks up their now-eligible signature (see
   // approval_note_pr_reviewed / regenerateApprovalNoteInner).
   "pr_review_accept",
-  "dgm_initial_approve",
-  "pmt_approve", "pmt_escalate",
-  "pmt_extended_approve", "pmt_extended_forward_dgm",
-  "dgm_accept",
+  "ra_approve",
+  "pmt_approve",
+  // Reverts the stored document back to its "-- Draft" filename now that
+  // the lead is back at pa_review and editable again.
+  "withdraw_submission",
 ]);
 
-// Where a resubmitted lead resumes once DGM re-approves it (dgm_initial_
-// approve), keyed by declined_from_status — only when the decline happened
-// AFTER pmt_review's own first look, so committees that already cleared it
-// aren't made to review it again. A first-ever submission (no decline yet),
-// or one declined by DGM/PMT themselves, has nothing to skip and falls
-// through to the normal pmt_review target — see the "dgm_initial_approve"
-// case, which is the only place this is consulted.
+// Where a resubmitted lead resumes once the Recommending Authority
+// re-approves it (ra_approve), keyed by declined_from_status — only when
+// the decline happened AFTER pmt_review's own first look (i.e. only MD),
+// so PMT isn't made to re-review something it already cleared. A
+// first-ever submission (no decline yet), or one declined by the
+// Recommending Authority/PMT themselves, has nothing to skip and falls
+// through to the normal pmt_review target — see the "ra_approve" case,
+// which is the only place this is consulted.
 const RESUME_AFTER_DECLINE: Record<string, string> = {
-  pmt_extended_review: "pmt_extended_review",
-  dgm_review: "dgm_review",
   md_review: "md_review",
 };
 
 // Per resume target, who to notify/chat-add and what to call it — mirrors
-// the equivalent per-stage cases further down (dgm_initial_approve's normal
-// PMT path, pmt_escalate's PMT Extended path, etc.) so a skip-ahead
-// resubmission notifies the same audience that stage's own transition would.
+// the equivalent per-stage cases further down (ra_approve's normal PMT
+// path) so a skip-ahead resubmission notifies the same audience that
+// stage's own transition would.
 async function resumeNotification(
   admin: AdminClient,
   target: string
 ): Promise<{ title: string; holders: string[]; roleAtAdd: string }> {
-  if (target === "pmt_extended_review") {
-    return { title: "Lead awaiting PMT Extended review", holders: await getOrgWideHolders(admin, { committee: "PMT Extended" }), roleAtAdd: "PMT Extended" };
-  }
-  if (target === "dgm_review") {
-    return { title: "Lead awaiting DGM (G3) review", holders: await getOrgWideHolders(admin, { committee: "G3" }), roleAtAdd: "G3" };
-  }
   if (target === "md_review") {
     return { title: "Lead awaiting MD approval", holders: await getOrgWideHolders(admin, { role: "md" }), roleAtAdd: "md" };
   }
@@ -133,9 +99,7 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
   // rejecting a pa_review lead hands it straight to a chosen teammate
   // instead of releasing it into an open pool, so it's a same-status
   // transition (see the "reject_reassign" case).
-  // Accept now routes to DGM (G3) first, ahead of PMT — dgm_initial_review
-  // is a distinct status from dgm_review (the PMT-Extended escalation
-  // target further down), so the two don't collide in this map.
+  // Accept routes to the Recommending Authority first, ahead of PMT.
   // submit_for_pr_review / pr_review_accept / pr_review_reject are all
   // same-status transitions, same idea as reject_reassign above — the PR
   // review of a creator-drafted note is tracked entirely via the
@@ -145,59 +109,67 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
   // time it's cycling through creator-drafts -> PR-reviews -> Accept/Edit/
   // Reject.
   pa_review: {
-    accept: "dgm_initial_review", drop: "pa_dropped", reject_reassign: "pa_review",
+    accept: "recommending_authority_review", drop: "pa_dropped", reject_reassign: "pa_review",
     submit_for_pr_review: "pa_review", pr_review_accept: "pa_review", pr_review_reject: "pa_review",
   },
-  dgm_initial_review: { dgm_initial_approve: "pmt_review", dgm_initial_decline: "pa_action_required", drop: "pa_dropped" },
+  recommending_authority_review: {
+    ra_approve: "pmt_review", ra_decline: "pa_action_required", drop: "pa_dropped",
+    withdraw_submission: "pa_review",
+  },
   pa_dropped: { claim: "pa_review" },
-  pmt_review: { pmt_approve: "md_review", pmt_escalate: "pmt_extended_review", pmt_decline: "pa_action_required", drop: "pa_dropped" },
-  pmt_extended_review: { pmt_extended_approve: "md_review", pmt_extended_forward_dgm: "dgm_review", pmt_extended_decline: "pa_action_required", drop: "pa_dropped" },
-  dgm_review: { dgm_accept: "md_review", dgm_decline: "pa_action_required", drop: "pa_dropped" },
+  pmt_review: {
+    pmt_approve: "md_review", pmt_decline: "pa_action_required", drop: "pa_dropped",
+    withdraw_submission: "pa_review",
+  },
   // md_decline is no longer terminal — it returns the lead to the creator/
   // PR for changes, same shape as every earlier-stage decline (see the
   // "md_decline" case for who gets notified).
-  md_review: { md_approve: "md_approved", md_decline: "pa_action_required", drop: "pa_dropped" },
+  md_review: {
+    md_approve: "md_approved", md_decline: "pa_action_required", drop: "pa_dropped",
+    withdraw_submission: "pa_review",
+  },
   // The one action still available once a lead is fully approved — the
   // creator or Person Responsible withdrawing it after the fact (see the
   // "drop" case for the extra written-justification requirement this one
   // stage adds on top of the usual PIN gate).
   md_approved: { drop: "pa_dropped" },
-  // "accept" also reaches pa_action_required -> dgm_initial_review — every
-  // decline source (DGM, PMT, PMT Extended, G3, MD) resubmits through the
-  // exact same generate-note-then-accept procedure as the very first
-  // submission (see the "accept" case): edit the Lead Approval Note, then
-  // send it back through DGM again, never skipping ahead to whichever
-  // stage declined it. update-lead's own separate pa_action_required
-  // resubmit path (a "straight back to the declining stage" shortcut) is
-  // no longer reachable through the normal UI flow, which always routes
-  // here instead.
+  // "accept" also reaches pa_action_required -> recommending_authority_
+  // review — every decline source (Recommending Authority, PMT, MD)
+  // resubmits through the exact same generate-note-then-accept procedure
+  // as the very first submission (see the "accept" case): edit the Lead
+  // Approval Note, then send it back through the Recommending Authority
+  // again, never skipping ahead to whichever stage declined it (RESUME_
+  // AFTER_DECLINE handles the one case — an MD decline — where PMT
+  // shouldn't be made to re-review). update-lead's own separate
+  // pa_action_required resubmit path (a "straight back to the declining
+  // stage" shortcut) is no longer reachable through the normal UI flow,
+  // which always routes here instead.
   pa_action_required: {
-    drop: "pa_dropped", accept: "dgm_initial_review",
+    drop: "pa_dropped", accept: "recommending_authority_review",
     submit_for_pr_review: "pa_action_required", pr_review_accept: "pa_action_required", pr_review_reject: "pa_action_required",
   },
 };
 
 const REQUIRE_COMMENT = new Set([
-  "dgm_initial_approve", "dgm_initial_decline",
-  "pmt_approve", "pmt_escalate", "pmt_decline",
-  "pmt_extended_approve", "pmt_extended_decline",
-  "dgm_accept", "dgm_decline",
+  "ra_approve", "ra_decline",
+  "pmt_approve", "pmt_decline",
   "md_decline",
   "pr_review_reject",
+  "withdraw_submission",
 ]);
 
 // Every committee/MD decision requires the caller's own 5-digit action
-// PIN — accept, approve, escalate/forward, decline, and drop, but never
-// edit/resubmit, claim, or reject_reassign. dgm_initial_decline is the one
-// explicit exception among the decision actions (product decision: DGM
-// sending a lead back to the assignee doesn't need one).
+// PIN — accept, approve, decline, drop, and withdraw, but never
+// edit/resubmit, claim, or reject_reassign. ra_decline is the one explicit
+// exception among the decision actions (product decision: the
+// Recommending Authority sending a lead back to the assignee doesn't need
+// one — carried over from the old dgm_initial_decline exception).
 const REQUIRE_PIN = new Set([
   "accept", "drop",
-  "dgm_initial_approve",
-  "pmt_approve", "pmt_escalate", "pmt_decline",
-  "pmt_extended_approve", "pmt_extended_forward_dgm", "pmt_extended_decline",
-  "dgm_accept", "dgm_decline",
+  "ra_approve",
+  "pmt_approve", "pmt_decline",
   "md_approve", "md_decline",
+  "withdraw_submission",
 ]);
 
 export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
@@ -222,7 +194,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, approval_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data, approval_note_pr_reviewed, approval_note_pending_pr_review, documents, chat_opened_at")
+    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data, approval_note_pr_reviewed, approval_note_pending_pr_review, documents, chat_opened_at")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -237,10 +209,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (REQUIRE_COMMENT.has(action) && !trimmedComment) {
     return jsonRes(req, 400, { error: "Comment/Description is required" });
   }
-  // DGM sent this back for changes — only they should re-review it; no
-  // Withdraw here so the assignee can't sidestep that by dropping it instead.
-  if (action === "drop" && leadRow.status === "pa_action_required" && leadRow.declined_from_status === "dgm_initial_review") {
-    return forbidden("This lead was returned by DGM and can only be edited and resubmitted — it can't be withdrawn here.");
+  // Recommending Authority sent this back for changes — only they should
+  // re-review it; no Withdraw here so the assignee can't sidestep that by
+  // dropping it instead.
+  if (action === "drop" && leadRow.status === "pa_action_required" && leadRow.declined_from_status === "recommending_authority_review") {
+    return forbidden("This lead was returned by the Recommending Authority and can only be edited and resubmitted — it can't be withdrawn here.");
   }
 
   function forbidden(msg: string) {
@@ -258,25 +231,25 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // whoever acts — see addLeadChatParticipants.
     const chatRosterSyncs: { userIds: string[]; roleAtAdd: string }[] = [];
     // Storage objects to best-effort delete AFTER the status update below
-    // succeeds — currently just the stale draft note removed on DGM decline
-    // (see "dgm_initial_decline").
+    // succeeds — currently just the stale draft note removed on Recommending
+    // Authority decline (see "ra_decline").
     let storageCleanupPaths: string[] = [];
 
     switch (action) {
       case "accept": {
         if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can accept this lead.");
-        // From pa_action_required, "accept" resubmits through DGM again —
-        // regardless of which stage (DGM, PMT, PMT Extended, G3, or MD)
-        // declined it. Every pa_action_required lead already has a Lead
-        // Approval Note that's been stamped with committee remarks, so
-        // resubmission always means editing that note and sending it back
-        // through the full committee chain, not skipping ahead to
-        // whichever stage declined it.
-        // "Accept" is now "Submit for DGM Approval" on the Lead Approval
-        // Note workflow — the note must exist (generated via
-        // generate-lead-approval-note) before the lead can move on.
+        // From pa_action_required, "accept" resubmits through the
+        // Recommending Authority again — regardless of which stage
+        // (Recommending Authority, PMT, or MD) declined it. Every
+        // pa_action_required lead already has a Lead Approval Note that's
+        // been stamped with committee remarks, so resubmission always means
+        // editing that note and sending it back through the full committee
+        // chain, not skipping ahead to whichever stage declined it.
+        // "Accept" is now "Submit for Recommending Authority Approval" on
+        // the Lead Approval Note workflow — the note must exist (generated
+        // via generate-lead-approval-note) before the lead can move on.
         if (!leadRow.approval_note_data) {
-          return jsonRes(req, 400, { error: "Generate the Lead Approval Note before submitting for DGM approval." });
+          return jsonRes(req, 400, { error: "Generate the Lead Approval Note before submitting for approval." });
         }
         // The PR submitting is itself the strongest possible review signal
         // — always true here regardless of whether they got here via the
@@ -285,31 +258,34 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         // technically "pending" their review — see generate-lead-approval-
         // note's pending-review guard for why that's otherwise blocked).
         extraFields = { approval_note_pr_reviewed: true, approval_note_pending_pr_review: false };
-        // A Business Partner is optional at creation, but required before
-        // a lead can move on to PMT review — the Person Responsible picks
-        // one here (or confirms the one already set) as part of accepting.
+        // A Business Partner is optional here too, same as at creation — if
+        // none is picked, the note prints "Yet to be Decided" and it stays
+        // open to a later choice once the PR edits the lead again (only
+        // possible at pa_review/pa_action_required — see leadEligibility's
+        // BA lock). Only actually validate/set it if one was submitted.
         if (!leadRow.assigned_ba_id) {
           const baId = typeof body.assigned_ba_id === "string" ? body.assigned_ba_id : "";
-          if (!baId) return jsonRes(req, 400, { error: "Select a Business Partner" });
-          const baErr = await validateBusinessAssociate(adminClient, baId, leadRow.team);
-          if (baErr) return jsonRes(req, 400, { error: baErr });
-          extraFields.assigned_ba_id = baId;
+          if (baId) {
+            const baErr = await validateBusinessAssociate(adminClient, baId, leadRow.team);
+            if (baErr) return jsonRes(req, 400, { error: baErr });
+            extraFields.assigned_ba_id = baId;
+          }
         }
-        // First-line DGM gate is a team match (see dgm_initial_approve's own
-        // authorization check below), not the org-wide G3 committee pool —
-        // only this lead's own team's DGM(s) should be notified here.
-        notifyTargetIds = await getTeamDgmHolders(adminClient, leadRow.team);
-        notifyTitle = "Lead awaiting DGM review";
-        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was accepted and needs your review.`;
+        // The named Recommending Authority is the sole actor at the next
+        // stage (see "ra_approve" below) — only they need to be notified.
+        notifyTargetIds = [leadRow.recommending_authority_id];
+        notifyTitle = "Lead awaiting your review";
+        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was accepted and needs your review as Recommending Authority.`;
         break;
       }
 
       // The creator (never the PR — they'd just Accept straight through)
       // filled the Lead Approval Note and is sending it to the PR for
-      // review before it can go to DGM. Same-status transition — the lead
-      // stays exactly where it is (pa_review or pa_action_required); only
-      // approval_note_pending_pr_review flips on, which is what drives the
-      // Draft label and the PR's Accept/Edit/Reject prompt on the lead page.
+      // review before it can go to the Recommending Authority. Same-status
+      // transition — the lead stays exactly where it is (pa_review or
+      // pa_action_required); only approval_note_pending_pr_review flips on,
+      // which is what drives the Draft label and the PR's Accept/Edit/
+      // Reject prompt on the lead page.
       case "submit_for_pr_review": {
         if (caller.id === leadRow.person_responsible_id) {
           return forbidden("You're the Person Responsible — submit for DGM approval directly instead.");
@@ -342,13 +318,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         extraFields = { approval_note_pr_reviewed: true, approval_note_pending_pr_review: false };
         notifyTargetIds = [leadRow.created_by];
         notifyTitle = "Lead Approval Note reviewed";
-        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was reviewed by the Person Responsible and is on its way to DGM approval.`;
+        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was reviewed by the Person Responsible and is on its way to the Recommending Authority.`;
         break;
       }
 
       // Bounces the draft back to the creator to rework — same idea as
-      // dgm_initial_decline, just one stage earlier, by the PR instead of
-      // DGM, and without a status change: the creator sees the ordinary
+      // ra_decline, just one stage earlier, by the PR instead of the
+      // Recommending Authority, and without a status change: the creator sees the ordinary
       // Edit/"Send for Person Responsible Review" flow again the moment
       // approval_note_pending_pr_review clears, no separate resubmit path
       // needed.
@@ -422,64 +398,60 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         break;
       }
 
-      // New first-line DGM gate, ahead of PMT — this initial review is done
-      // by the lead's own team's DGM (role + team match), NOT the org-wide
-      // G3 committee pool. G3 only comes in later, if PMT Extended escalates
-      // (see "dgm_accept"/"dgm_decline" further down).
-      case "dgm_initial_approve": {
-        if (caller.role !== "dgm" || !isCallerOnTeam(caller, leadRow.team)) return forbidden("Only this lead's team DGM can act on this lead.");
+      // Recommending Authority review — the lead's actual first-line gate.
+      // Gated on the exact person named on the lead (leadRow.
+      // recommending_authority_id), not a role or team match — this is what
+      // makes the chain work at offices with no DGM (e.g. Head Office),
+      // since the named person can just as well be an AGM/SRM there.
+      case "ra_approve": {
+        if (caller.id !== leadRow.recommending_authority_id) return forbidden("Only this lead's named Recommending Authority can act on this lead.");
         // Resubmitting after a decline resumes at whichever stage originally
-        // sent it back, skipping committees that already cleared it —
-        // e.g. a PMT-Extended decline goes straight back to PMT Extended,
-        // not through PMT again. A first-ever submission, or one declined by
-        // DGM/PMT themselves, has nothing to skip — normal pmt_review path.
+        // sent it back, skipping committees that already cleared it — e.g.
+        // an MD decline goes straight back to MD, not through PMT again. A
+        // first-ever submission, or one declined by the Recommending
+        // Authority/PMT themselves, has nothing to skip — normal pmt_review
+        // path.
         const resumeTarget = leadRow.declined_from_status ? RESUME_AFTER_DECLINE[leadRow.declined_from_status] : undefined;
         if (resumeTarget) expectedTo = resumeTarget;
         // Consumed — a future decline (from wherever it happens next) sets
         // this fresh; it shouldn't keep steering approvals after this point.
         extraFields = { handled_by_dgm_id: caller.id, declined_from_status: null };
-        // Chat opens here — the first time this lead clears DGM and reaches
-        // PMT — and only here; never overwritten on a later pass through
-        // this same case (e.g. a resubmission), so it keeps the timestamp
-        // of when it first opened.
+        // Chat opens here — the first time this lead clears the
+        // Recommending Authority and reaches PMT — and only here; never
+        // overwritten on a later pass through this same case (e.g. a
+        // resubmission), so it keeps the timestamp of when it first opened.
         if (!leadRow.chat_opened_at) extraFields.chat_opened_at = new Date().toISOString();
         const resumeInfo = await resumeNotification(adminClient, expectedTo);
         notifyTargetIds = resumeInfo.holders;
         notifyTitle = resumeInfo.title;
-        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was cleared by DGM. ${trimmedComment}`;
-        // The lead's own team DGM(s) get standing chat access from the
-        // moment the chat opens — not just whichever DGM happened to act
-        // on dgm_initial_approve — so every team DGM can view and take
-        // part in every one of their team's lead chats, matching PMT's
-        // standing access.
-        const teamDgmHolders = await getTeamDgmHolders(adminClient, leadRow.team);
+        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was cleared by the Recommending Authority. ${trimmedComment}`;
         chatRosterSyncs.push(
-          { userIds: [leadRow.person_responsible_id, leadRow.reviewer_id, leadRow.approval_authority_id], roleAtAdd: "named" },
-          { userIds: resumeInfo.holders, roleAtAdd: resumeInfo.roleAtAdd },
-          { userIds: teamDgmHolders, roleAtAdd: "dgm" }
+          { userIds: [leadRow.person_responsible_id, leadRow.reviewer_id, leadRow.recommending_authority_id], roleAtAdd: "named" },
+          { userIds: resumeInfo.holders, roleAtAdd: resumeInfo.roleAtAdd }
         );
         break;
       }
 
-      case "dgm_initial_decline": {
-        if (caller.role !== "dgm" || !isCallerOnTeam(caller, leadRow.team)) return forbidden("Only this lead's team DGM can act on this lead.");
-        // The stale draft note reflected the version DGM just rejected —
-        // pull it off the lead immediately so nothing outdated is shown
-        // while the Person Responsible reworks it; a fresh one is generated
-        // (and reattached) the next time they submit the Lead Approval Note.
+      case "ra_decline": {
+        if (caller.id !== leadRow.recommending_authority_id) return forbidden("Only this lead's named Recommending Authority can act on this lead.");
+        // The stale draft note reflected the version the Recommending
+        // Authority just rejected — pull it off the lead immediately so
+        // nothing outdated is shown while the Person Responsible reworks
+        // it; a fresh one is generated (and reattached) the next time they
+        // submit the Lead Approval Note.
         const staleNote = (leadRow.documents || []).find((d) => d.category === "approval_note");
         const documentsWithoutNote = (leadRow.documents || []).filter((d) => d.category !== "approval_note");
         if (staleNote) storageCleanupPaths = [staleNote.path];
         extraFields = { handled_by_dgm_id: caller.id, declined_from_status: leadRow.status, documents: documentsWithoutNote };
         notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
-        notifyTitle = "Lead returned by DGM";
+        notifyTitle = "Lead returned by Recommending Authority";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
         break;
       }
 
-      // PMT, PMT Extended, and G3 are all org-wide committees — each spans
-      // all 4 teams, not one team apiece — so membership alone authorizes
-      // the action, regardless of the lead's team or the member's own team.
+      // PMT is org-wide — spans every team, not one team apiece — so
+      // membership alone authorizes the action, regardless of the lead's
+      // team or the member's own team.
       case "pmt_approve": {
         if (caller.committee !== "PMT") return forbidden("Only a PMT committee member can act on this lead.");
         const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
@@ -490,73 +462,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         break;
       }
 
-      case "pmt_escalate": {
-        if (caller.committee !== "PMT") return forbidden("Only a PMT committee member can act on this lead.");
-        const pmtExtendedHolders = await getOrgWideHolders(adminClient, { committee: "PMT Extended" });
-        notifyTargetIds = pmtExtendedHolders;
-        notifyTitle = "Lead awaiting PMT Extended review";
-        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was escalated by PMT for further review.`;
-        chatRosterSyncs.push({ userIds: pmtExtendedHolders, roleAtAdd: "PMT Extended" });
-        break;
-      }
-
       case "pmt_decline": {
         if (caller.committee !== "PMT") return forbidden("Only a PMT committee member can act on this lead.");
         extraFields = { declined_from_status: leadRow.status };
         notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
         notifyTitle = "Lead returned by PMT";
-        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
-        break;
-      }
-
-      case "pmt_extended_approve": {
-        if (caller.committee !== "PMT Extended") return forbidden("Only a PMT Extended committee member can act on this lead.");
-        const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
-        notifyTargetIds = mdHolders;
-        notifyTitle = "Lead awaiting MD approval";
-        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was cleared by PMT Extended. ${trimmedComment}`;
-        chatRosterSyncs.push({ userIds: mdHolders, roleAtAdd: "md" });
-        break;
-      }
-
-      case "pmt_extended_forward_dgm": {
-        if (caller.committee !== "PMT Extended") return forbidden("Only a PMT Extended committee member can act on this lead.");
-        const g3Holders = await getOrgWideHolders(adminClient, { committee: "G3" });
-        notifyTargetIds = g3Holders;
-        notifyTitle = "Lead awaiting DGM (G3) review";
-        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was forwarded for DGM review.`;
-        chatRosterSyncs.push({ userIds: g3Holders, roleAtAdd: "G3" });
-        break;
-      }
-
-      case "pmt_extended_decline": {
-        if (caller.committee !== "PMT Extended") return forbidden("Only a PMT Extended committee member can act on this lead.");
-        extraFields = { declined_from_status: leadRow.status };
-        notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
-        notifyTitle = "Lead returned by PMT Extended";
-        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
-        break;
-      }
-
-      // G3 is the DGM committee — pooled org-wide across all 3 DGMs.
-      // Membership grants DGM-equivalent permission regardless of the
-      // member's own afc_users.role.
-      case "dgm_accept": {
-        if (caller.committee !== "G3") return forbidden("Only a G3 (DGM) committee member can act on this lead.");
-        extraFields = { handled_by_dgm_id: caller.id };
-        const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
-        notifyTargetIds = mdHolders;
-        notifyTitle = "Lead awaiting MD approval";
-        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was accepted by DGM. ${trimmedComment}`;
-        chatRosterSyncs.push({ userIds: mdHolders, roleAtAdd: "md" });
-        break;
-      }
-
-      case "dgm_decline": {
-        if (caller.committee !== "G3") return forbidden("Only a G3 (DGM) committee member can act on this lead.");
-        extraFields = { handled_by_dgm_id: caller.id, declined_from_status: leadRow.status };
-        notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
-        notifyTitle = "Lead returned by DGM";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
         break;
       }
@@ -573,11 +483,34 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       case "md_decline": {
         if (caller.role !== "md") return forbidden("Only the MD can act on this lead.");
         extraFields = { declined_from_status: leadRow.status };
-        const sendingCommittee = await resolveCommitteeThatSentToMd(adminClient, leadRow.id);
-        const committeeHolders = sendingCommittee ? await getOrgWideHolders(adminClient, { committee: sendingCommittee }) : [];
-        notifyTargetIds = [...new Set([leadRow.created_by, leadRow.person_responsible_id, ...committeeHolders])];
+        // PMT is the only committee that ever sends a lead to MD now — no
+        // need to walk the activity log to figure out which one did.
+        const pmtHolders = await getOrgWideHolders(adminClient, { committee: "PMT" });
+        notifyTargetIds = [...new Set([leadRow.created_by, leadRow.person_responsible_id, ...pmtHolders])];
         notifyTitle = "Lead returned by MD";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned by the MD. Reason: ${trimmedComment}`;
+        break;
+      }
+
+      // A safety valve for the one thing nothing else lets the PR fix once
+      // a lead has actually been forwarded: the Business Partner. BA is
+      // locked from the moment a lead leaves pa_review/pa_action_required
+      // (see leadEligibility) — if it needs to change after that, the
+      // submission has to come back to pa_review first. Available to the
+      // creator/PR at every "in flight" stage short of MD's final decision;
+      // resubmitting afterward (accept) always restarts at recommending_
+      // authority_review, same as any other decline, so nothing downstream
+      // is treated as still-valid once BA might have changed.
+      case "withdraw_submission": {
+        if (caller.id !== leadRow.created_by && caller.id !== leadRow.person_responsible_id) {
+          return forbidden("Only the lead's creator or Person Responsible can withdraw this submission.");
+        }
+        extraFields = { declined_from_status: null, approval_note_pr_reviewed: false, approval_note_pending_pr_review: false };
+        const pmtHolders = await getOrgWideHolders(adminClient, { committee: "PMT" });
+        const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
+        notifyTargetIds = [...new Set([...pmtHolders, ...mdHolders])];
+        notifyTitle = "Lead submission withdrawn";
+        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was withdrawn by ${caller.id === leadRow.created_by ? "its creator" : "the Person Responsible"} for changes. Reason: ${trimmedComment}`;
         break;
       }
 

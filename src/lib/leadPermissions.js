@@ -4,9 +4,8 @@ import { LEAD_PA_TIER_ROLES, can } from "./roles";
 // in advance-lead-stage/index.ts — UX-only (hide/disable), never trusted.
 // Operate directly on the current user's afc_users profile (role/team/
 // committee) — the same universal fields every other module uses, no
-// separate role-assignment lookup. PMT/PMT Extended/G3 are all org-wide
-// committees (each spans all 4 teams, not one team apiece), so membership
-// alone qualifies — no team match required.
+// separate role-assignment lookup. PMT is org-wide (spans all 4 teams, not
+// one team apiece), so membership alone qualifies — no team match required.
 export const leadCan = {
   // Every role can create a lead except MD and Admin.
   create: (profile) => !!profile?.role && profile.role !== "md" && profile.role !== "admin",
@@ -21,9 +20,10 @@ export const leadCan = {
   drop: (profile, lead) => {
     if (["md_declined", "pa_dropped"].includes(lead.status)) return false;
     if (lead.status === "pa_review") return profile?.id === lead.created_by;
-    // DGM sent this back for changes — only they should re-review it, so
-    // there's no Withdraw here, only Edit & Resubmit.
-    if (lead.status === "pa_action_required" && lead.declined_from_status === "dgm_initial_review") return false;
+    // The Recommending Authority sent this back for changes — only they
+    // should re-review it, so there's no Withdraw here, only Edit &
+    // Resubmit.
+    if (lead.status === "pa_action_required" && lead.declined_from_status === "recommending_authority_review") return false;
     return profile?.id === lead.created_by || profile?.id === lead.person_responsible_id;
   },
   // The PR rejecting a lead they didn't create — hands it to a teammate
@@ -34,53 +34,66 @@ export const leadCan = {
   // A plain field edit — available before the PR has accepted (pa_review)
   // and again once returned for changes (pa_action_required); status never
   // changes as a result (see update-lead's own guarantee). Locked while
-  // actively under DGM/PMT/PMT Extended/G3/MD review. Getting a declined
+  // actively under Recommending Authority/PMT/MD review. Getting a declined
   // lead back into the approval pipeline is a separate, deliberate action —
   // the Lead Approval Note's Accept flow, not this edit.
+  // A just-transferred lead (person_responsible_id null) can be picked up
+  // and edited by anyone on its new team, not just the creator/PR — there
+  // is no PR yet for that lead until someone fills the form (see
+  // _shared/leadTransfer.ts).
   editResubmit: (profile, lead) =>
     (lead.status === "pa_review" || lead.status === "pa_action_required") &&
-    (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id),
+    (profile?.id === lead.created_by ||
+      profile?.id === lead.person_responsible_id ||
+      (!lead.person_responsible_id && !!profile?.teams?.includes(lead.team))),
   // The PR reviewing a creator-drafted Lead Approval Note (Accept/Edit/
-  // Reject) before it can be submitted for DGM approval — tracked via a
-  // flag, not a status, so the lead stays visibly pa_review/
-  // pa_action_required the whole time (see advance-lead-stage's
+  // Reject) before it can be submitted for Recommending Authority approval
+  // — tracked via a flag, not a status, so the lead stays visibly
+  // pa_review/pa_action_required the whole time (see advance-lead-stage's
   // pr_review_accept/pr_review_reject).
   prReviewAccept: (profile, lead) => !!lead.approval_note_pending_pr_review && profile?.id === lead.person_responsible_id,
   prReviewReject: (profile, lead) => !!lead.approval_note_pending_pr_review && profile?.id === lead.person_responsible_id,
-  // First-line DGM gate, ahead of PMT — this is the lead's own team's DGM
-  // specifically (team membership), NOT the org-wide G3 committee pool that
-  // the later PMT-Extended-escalated dgmReview below uses. G3 org-wide
-  // access only starts once a lead actually reaches the committee pipeline
-  // (pmt_review onward) — mirrors can_view_lead()'s own exclusion of this
-  // status from its org-wide committee clause.
-  dgmInitialReview: (profile, lead) => lead.status === "dgm_initial_review" && profile?.role === "dgm" && !!profile?.teams?.includes(lead.team),
+  // The lead's actual first-line gate — gated on the exact named person
+  // (leadRow.recommending_authority_id), not a role or team match. This is
+  // what makes the chain work at offices with no DGM (e.g. Head Office).
+  recommendingAuthorityReview: (profile, lead) => lead.status === "recommending_authority_review" && profile?.id === lead.recommending_authority_id,
   pmtReview: (profile, lead) => lead.status === "pmt_review" && profile?.committee === "PMT",
-  pmtExtendedReview: (profile, lead) => lead.status === "pmt_extended_review" && profile?.committee === "PMT Extended",
-  dgmReview: (profile, lead) => lead.status === "dgm_review" && profile?.committee === "G3",
   mdReview: (profile, lead) => lead.status === "md_review" && profile?.role === "md",
+  // A safety valve for editing the Business Partner after a lead has
+  // already left pa_review — see advance-lead-stage's "withdraw_submission".
+  withdrawSubmission: (profile, lead) =>
+    ["recommending_authority_review", "pmt_review", "md_review"].includes(lead.status) &&
+    (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id),
 };
 
 // "My Leads" on LeadListPage — the leads the viewer is personally on the
 // hook for: the assigned Person Responsible, the named Reviewer, or the
-// named Approval Authority. The creator is deliberately excluded — a lead
-// you only created (and aren't otherwise named on) shows under "Team Leads",
-// not here. handled-by-DGM and plain team ownership also stay on Team Leads.
+// named Recommending Authority. The creator is deliberately excluded — a
+// lead you only created (and aren't otherwise named on) shows under "Team
+// Leads", not here. handled-by-DGM and plain team ownership also stay on
+// Team Leads.
 export function isMyLead(profile, lead) {
   if (!profile) return false;
   return (
     profile.id === lead.person_responsible_id ||
     profile.id === lead.reviewer_id ||
-    profile.id === lead.approval_authority_id
+    profile.id === lead.recommending_authority_id
   );
 }
 
 // "Team Leads" on LeadListPage — every lead going on in the viewer's own
-// team(s). An org-wide role (md/cfo/cs/admin) has no single team of its
-// own, so "their team" is every team — this is where those roles get an
-// org-wide browse view now that "My Leads" is personal-only for everyone.
+// team(s), except for the roles now granted blanket org-wide visibility
+// (md/cfo/cs/admin, and — per product decision — dgm/agm/srm and PMT
+// committee members too, so a duplicate lead gets caught across teams
+// instead of after two teams have both worked it; see
+// 20260928000200_lead_org_wide_visibility.sql). This is where any of those
+// roles get an org-wide browse view now that "My Leads" is personal-only
+// for everyone.
 export function isTeamLead(profile, lead) {
   if (!profile) return false;
   if (can.viewAllTeams(profile.role)) return true;
+  if (["dgm", "agm", "srm"].includes(profile.role)) return true;
+  if (profile.committee === "PMT") return true;
   return !!profile.teams?.includes(lead.team);
 }
 
@@ -94,10 +107,8 @@ export function isActionRequiredForViewer(profile, lead) {
     leadCan.accept(profile, lead) ||
     (lead.status === "pa_action_required" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id)) ||
     leadCan.prReviewAccept(profile, lead) ||
-    leadCan.dgmInitialReview(profile, lead) ||
+    leadCan.recommendingAuthorityReview(profile, lead) ||
     leadCan.pmtReview(profile, lead) ||
-    leadCan.pmtExtendedReview(profile, lead) ||
-    leadCan.dgmReview(profile, lead) ||
     leadCan.mdReview(profile, lead)
   );
 }

@@ -1,6 +1,6 @@
 // Remark modal for sending a fee note back to whoever prepared it —
-// Approval Authority sending back to Person Responsible (no PIN, mirrors
-// the Lead workflow's dgm_initial_decline exception: sending something back
+// Recommending Authority sending back to Person Responsible (no PIN,
+// mirrors the Lead workflow's ra_decline exception: sending something back
 // isn't itself a decision) and the MD's own send-back (PIN required, same
 // as MD approve/reject elsewhere).
 import { useState } from "react";
@@ -11,10 +11,10 @@ import Alert from "../../components/ui/Alert";
 import PinInput from "../../components/ui/PinInput";
 
 const ACTION_META = {
-  aa_send_back: {
+  ra_send_back: {
     title: "Send Back to Person Responsible",
     requirePin: false,
-    run: (feeNoteId, remark) => supabase.functions.invoke("advance-fee-note-stage", { body: { fee_note_id: feeNoteId, action: "aa_send_back", remark } }),
+    run: (feeNoteId, remark) => supabase.functions.invoke("advance-fee-note-stage", { body: { fee_note_id: feeNoteId, action: "ra_send_back", remark } }),
   },
   md_reject: {
     title: "Send Back to Person Responsible",

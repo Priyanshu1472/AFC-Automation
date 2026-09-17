@@ -93,7 +93,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, submission_deadline, person_responsible_id, reviewer_id, approval_authority_id, assigned_ba_id")
+      .select("id, submission_deadline, person_responsible_id, reviewer_id, recommending_authority_id, assigned_ba_id")
       .eq("id", proposal.lead_id)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
