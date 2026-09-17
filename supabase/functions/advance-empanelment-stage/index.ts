@@ -19,7 +19,7 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 // A team with no active Project Officer sends the empanelment invite to a
 // Project Assistant instead (see send-empanelment-invite) — whichever role
 // ends up in project_officer_id is the assigned reviewer for the PO stages.
-const PO_REVIEWER_ROLES = ["project_officer", "project_assistant"];
+const PO_REVIEWER_ROLES = ["project_officer", "area_manager", "regional_manager", "project_assistant"];
 function reviewerLabel(role: string): string {
   return role === "project_assistant" ? "Project Assistant" : "Project Officer";
 }
@@ -27,9 +27,9 @@ function reviewerLabel(role: string): string {
 // The "DGM" review stage belongs to whichever advising authority the sender
 // assigned — a DGM or an AGM (see send-empanelment-invite). dgm_id holds
 // that person regardless of role; only they can act at dgm_review.
-const ADVISOR_ROLES = ["dgm", "agm"];
+const ADVISOR_ROLES = ["dgm", "agm", "general_manager"];
 function advisorLabel(role: string): string {
-  return role === "agm" ? "AGM" : "DGM";
+  return role === "agm" ? "AGM" : role === "general_manager" ? "General Manager" : "DGM";
 }
 
 // CFO/CS previously only got the in-app bell notification when an

@@ -25,7 +25,7 @@ const ACTION_OPTIONS = [
   ...Object.entries(ACTION_META).map(([k, v]) => ({ value: k, label: v.label })),
 ];
 const ROLE_OPTIONS = [
-  { value: "all", label: "All Roles" },
+  { value: "all", label: "All Designations" },
   ...Object.entries(ROLE_LABELS).map(([k, v]) => ({ value: k, label: v })),
 ];
 
@@ -54,7 +54,7 @@ const EMP_ACTION_OPTIONS = [
   ...Object.entries(EMP_ACTION_META).map(([k, v]) => ({ value: k, label: v.label })),
 ];
 const EMP_ROLE_OPTIONS = [
-  { value: "all", label: "All Roles" },
+  { value: "all", label: "All Designations" },
   ...Object.entries(ROLE_LABELS).map(([k, v]) => ({ value: k, label: v })),
   { value: "ba", label: "Business Partner" },
 ];
@@ -120,7 +120,7 @@ function AuditLogDetailModal({ log, onClose }) {
             <span className="al-detail-value">{log.actor?.full_name || "—"}</span>
           </div>
           <div className="al-detail-row">
-            <span className="al-detail-label">Role</span>
+            <span className="al-detail-label">Designation</span>
             <span className="al-detail-value"><Badge variant="info">{ROLE_LABELS[log.action_by_role] || log.action_by_role || "—"}</Badge></span>
           </div>
           <div className="al-detail-row">
@@ -317,7 +317,7 @@ export default function AuditLogsPage() {
                     <tr>
                       <th>Date &amp; Time</th>
                       <th>Actor</th>
-                      <th>Role</th>
+                      <th>Designation</th>
                       {isEmp ? <th>Application</th> : isLead ? <th>Lead</th> : <th>Team</th>}
                       <th>Action</th>
                       <th>Comment</th>
@@ -425,8 +425,8 @@ export default function AuditLogsPage() {
         <FilterField label="Action">
           <Select options={actionOptions} value={filterAction} onChange={setFilterAction} placeholder="All Actions" />
         </FilterField>
-        <FilterField label="Role">
-          <Select options={roleOptions} value={filterRole} onChange={setFilterRole} placeholder="All Roles" />
+        <FilterField label="Designation">
+          <Select options={roleOptions} value={filterRole} onChange={setFilterRole} placeholder="All Designations" />
         </FilterField>
         <FilterField label="Date">
           <input

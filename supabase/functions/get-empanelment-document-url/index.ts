@@ -51,8 +51,8 @@ serve(async (req) => {
     ["md", "cfo", "cs", "admin"].includes(caller.role) ||
     // DGM or AGM — the advising authority stage — anyone on the team, same
     // as can_view_empanelment_application already permits for the row.
-    (["dgm", "agm"].includes(caller.role) && isCallerOnTeam(caller, application.team)) ||
-    (["project_officer", "project_assistant"].includes(caller.role) && caller.id === application.project_officer_id) ||
+    (["dgm", "agm", "general_manager"].includes(caller.role) && isCallerOnTeam(caller, application.team)) ||
+    (["project_officer", "area_manager", "regional_manager", "project_assistant"].includes(caller.role) && caller.id === application.project_officer_id) ||
     (["associate_consultant", "project_assistant"].includes(caller.role) && caller.id === application.sent_by);
 
   if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this application." });

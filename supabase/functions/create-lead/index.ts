@@ -8,8 +8,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
-import { notifyUser, notifyRole } from "../_shared/notify.ts";
+import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
+import { notifyUser, notifyUsers, notifyRole } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
@@ -85,7 +85,15 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     recommending_authority_id: get("recommending_authority_id"),
   };
 
-  const fieldErr = validateRequiredFields(input);
+  // An Associate Consultant/Project Assistant isn't allowed to name Person
+  // Responsible/Reviewer/Recommending Authority themselves — their lead is
+  // routed to the team's Project Officer (or Area Manager/Regional Manager,
+  // same permission tier) to assign those three instead, PIN-confirmed, via
+  // advance-lead-stage's "po_assign" action. Every other creator role is
+  // unaffected.
+  const isPoRouted = caller.role === "associate_consultant" || caller.role === "project_assistant";
+
+  const fieldErr = validateRequiredFields(input, { requireAssignment: !isPoRouted });
   if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
 
   const assignedBaId = get("assigned_ba_id") || null;
@@ -99,18 +107,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   }
 
   try {
-    // Team is derived from Person Responsible's own team — not a field the
-    // creator picks directly, matching the real form (no Team selector).
-    const { data: personResponsible, error: prErr } = await adminClient
-      .from("afc_users")
-      .select("id, team, is_active")
-      .eq("id", input.person_responsible_id)
-      .maybeSingle();
-    if (prErr || !personResponsible || !personResponsible.is_active || !personResponsible.team) {
-      return jsonRes(req, 400, { error: "Person Responsible is not a valid active user with a team." });
-    }
-    const team = personResponsible.team as string;
-
     // Every role can create a lead except MD and Admin, per explicit
     // product decision — Admin can view/manage everything but doesn't
     // originate leads. No separate creator-eligibility list; the caller's
@@ -119,14 +115,38 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       return jsonRes(req, 403, { error: `${caller.role === "md" ? "MD" : "Admin"} does not create leads directly.` });
     }
 
-    const assignErr = await validateAssignment(adminClient, input.person_responsible_id, team);
-    if (assignErr) return jsonRes(req, 400, { error: assignErr });
+    let team: string;
+    if (isPoRouted) {
+      // No Person Responsible to derive a team from — the creator's own
+      // (active) team is used instead, same pattern as send-empanelment-
+      // invite's requestedTeam for a multi-team caller.
+      const requestedTeam = get("team");
+      if (!requestedTeam || !isCallerOnTeam(caller, requestedTeam)) {
+        return jsonRes(req, 400, { error: "You are not assigned to that team." });
+      }
+      team = requestedTeam;
+    } else {
+      // Team is derived from Person Responsible's own team — not a field the
+      // creator picks directly, matching the real form (no Team selector).
+      const { data: personResponsible, error: prErr } = await adminClient
+        .from("afc_users")
+        .select("id, team, is_active")
+        .eq("id", input.person_responsible_id)
+        .maybeSingle();
+      if (prErr || !personResponsible || !personResponsible.is_active || !personResponsible.team) {
+        return jsonRes(req, 400, { error: "Person Responsible is not a valid active user with a team." });
+      }
+      team = personResponsible.team as string;
 
-    const reviewerErr = await validateReviewer(adminClient, input.reviewer_id, team);
-    if (reviewerErr) return jsonRes(req, 400, { error: reviewerErr });
+      const assignErr = await validateAssignment(adminClient, input.person_responsible_id, team);
+      if (assignErr) return jsonRes(req, 400, { error: assignErr });
 
-    const authorityErr = await validateRecommendingAuthority(adminClient, input.recommending_authority_id, team);
-    if (authorityErr) return jsonRes(req, 400, { error: authorityErr });
+      const reviewerErr = await validateReviewer(adminClient, input.reviewer_id, team);
+      if (reviewerErr) return jsonRes(req, 400, { error: reviewerErr });
+
+      const authorityErr = await validateRecommendingAuthority(adminClient, input.recommending_authority_id, team);
+      if (authorityErr) return jsonRes(req, 400, { error: authorityErr });
+    }
 
     if (assignedBaId) {
       const baErr = await validateBusinessAssociate(adminClient, assignedBaId, team);
@@ -179,11 +199,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         documents,
         team,
         created_by: caller.id,
-        person_responsible_id: input.person_responsible_id,
-        reviewer_id: input.reviewer_id,
-        recommending_authority_id: input.recommending_authority_id,
+        person_responsible_id: isPoRouted ? null : input.person_responsible_id,
+        reviewer_id: isPoRouted ? null : input.reviewer_id,
+        recommending_authority_id: isPoRouted ? null : input.recommending_authority_id,
         assigned_ba_id: assignedBaId,
-        status: "pa_review",
+        status: isPoRouted ? "po_assignment" : "pa_review",
       })
       .select("id, lead_number, status")
       .single();
@@ -194,9 +214,27 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       return jsonRes(req, 500, { error: "Failed to create lead. Please try again." });
     }
 
-    await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "created", null, "pa_review", null);
+    await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "created", null, lead.status, null);
 
-    if (input.person_responsible_id !== caller.id) {
+    if (isPoRouted) {
+      // No PR/Reviewer/Recommending Authority to notify yet — instead, the
+      // team's Project Officer (or Area Manager/Regional Manager, same
+      // permission tier) needs to know a lead is waiting on them.
+      const { data: poTier } = await adminClient
+        .from("afc_users")
+        .select("id")
+        .eq("team", team)
+        .eq("is_active", true)
+        .in("role", ["project_officer", "area_manager", "regional_manager"]);
+      await notifyUsers(adminClient, (poTier || []).map((u) => u.id), {
+        title: "Lead awaiting PR/Reviewer/Recommending Authority assignment",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" needs a Person Responsible, Reviewer, and Recommending Authority assigned.`,
+        type: "action_required",
+        link: `/leads/${lead.id}`,
+      });
+    }
+
+    if (!isPoRouted && input.person_responsible_id !== caller.id) {
       await notifyUser(adminClient, input.person_responsible_id, {
         title: "A lead has been assigned to you",
         sub_text: `${lead.lead_number} — "${input.title.trim()}" is awaiting your Accept/Drop decision.`,
@@ -210,7 +248,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // action_required so the appointment itself shows on their Home page,
     // not just the notification bell; it drops off there once they open
     // the lead (see fetchPendingActionNotifications).
-    if (input.reviewer_id !== caller.id) {
+    if (!isPoRouted && input.reviewer_id !== caller.id) {
       await notifyUser(adminClient, input.reviewer_id, {
         title: "You've been assigned as Reviewer",
         sub_text: `${lead.lead_number} — "${input.title.trim()}" has named you as Reviewer.`,
@@ -219,7 +257,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       });
     }
 
-    if (input.recommending_authority_id !== caller.id) {
+    if (!isPoRouted && input.recommending_authority_id !== caller.id) {
       await notifyUser(adminClient, input.recommending_authority_id, {
         title: "You've been assigned as Recommending Authority",
         sub_text: `${lead.lead_number} — "${input.title.trim()}" has named you as Recommending Authority.`,
@@ -243,6 +281,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         link: `/leads/${lead.id}`,
       }),
       notifyRole(adminClient, "agm", {
+        title: "New lead added",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" (${team}) was just created.`,
+        type: "info",
+        link: `/leads/${lead.id}`,
+      }),
+      notifyRole(adminClient, "general_manager", {
         title: "New lead added",
         sub_text: `${lead.lead_number} — "${input.title.trim()}" (${team}) was just created.`,
         type: "info",

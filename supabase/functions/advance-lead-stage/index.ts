@@ -13,7 +13,7 @@ import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/
 import { notifyUsers } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
 import { PA_TIER_ROLES, addLeadChatParticipants, getOrgWideHolders, getTargetUser } from "../_shared/leadAuth.ts";
-import { validateBusinessAssociate } from "../_shared/leadEligibility.ts";
+import { validateBusinessAssociate, validateAssignment, validateReviewer, validateRecommendingAuthority } from "../_shared/leadEligibility.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { LeadDocument, regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
 
@@ -39,7 +39,12 @@ type LeadRow = {
   approval_note_pending_pr_review: boolean;
   documents: LeadDocument[];
   chat_opened_at: string | null;
+  submission_deadline: string | null;
 };
+
+// A finished lead never goes "overdue" — mirrors leadStatus.js's identical
+// TERMINAL_STATUSES on the frontend.
+const TERMINAL_STATUSES = new Set(["md_approved", "md_declined", "pa_dropped"]);
 
 // Every action that stamps a fresh signature/remark onto the (still
 // in-progress) Lead Approval Note — every committee approve, but not
@@ -92,6 +97,14 @@ async function resumeNotification(
 // (from_status -> action -> to_status) — the single source of truth for
 // valid transitions, checked before any authorization logic runs.
 const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
+  // A lead created by an Associate Consultant/Project Assistant — no Person
+  // Responsible/Reviewer/Recommending Authority set yet (see create-lead's
+  // isPoRouted). "po_assign" is the team's Project Officer (or Area
+  // Manager/Regional Manager) naming all three, PIN-confirmed — the lead
+  // then lands in pa_review, exactly where every other creator's lead
+  // already starts. "drop" here is the creator withdrawing it before a PO
+  // ever acts, same as pa_review's creator-only drop (see the "drop" case).
+  po_assignment: { po_assign: "pa_review", drop: "pa_dropped" },
   // "drop" is the creator's own withdrawal — a true drop to pa_dropped,
   // valid at every non-terminal status, not just pa_review (see the "drop"
   // case for exactly who's allowed at each one). "reject_reassign" is
@@ -165,7 +178,7 @@ const REQUIRE_COMMENT = new Set([
 // Recommending Authority sending a lead back to the assignee doesn't need
 // one — carried over from the old dgm_initial_decline exception).
 const REQUIRE_PIN = new Set([
-  "accept", "drop",
+  "accept", "drop", "po_assign",
   "ra_approve",
   "pmt_approve", "pmt_decline",
   "md_approve", "md_decline",
@@ -194,11 +207,22 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data, approval_note_pr_reviewed, approval_note_pending_pr_review, documents, chat_opened_at")
+    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data, approval_note_pr_reviewed, approval_note_pending_pr_review, documents, chat_opened_at, submission_deadline")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
   const leadRow = lead as LeadRow;
+
+  // Every action is blocked once the submission deadline has passed — the
+  // only way forward is the Person Responsible (or the creator, if none is
+  // assigned yet, e.g. a po_assignment lead) editing the lead via
+  // update-lead to push the date into the future, which silently
+  // reactivates whatever status it's frozen at.
+  if (!TERMINAL_STATUSES.has(leadRow.status) && leadRow.submission_deadline && new Date(leadRow.submission_deadline) < new Date()) {
+    return jsonRes(req, 403, {
+      error: "This lead's submission deadline has passed. Only the Person Responsible (or the creator, if none is assigned yet) can edit it to update the date — no other action is available until then.",
+    });
+  }
 
   let expectedTo = LEAD_TRANSITIONS[leadRow.status]?.[action];
   if (!expectedTo) {
@@ -236,6 +260,35 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     let storageCleanupPaths: string[] = [];
 
     switch (action) {
+      // The team's Project Officer (or Area Manager/Regional Manager, same
+      // permission tier) naming Person Responsible/Reviewer/Recommending
+      // Authority on a lead an Associate Consultant/Project Assistant
+      // created without them (see create-lead's isPoRouted) — re-applies
+      // the exact same eligibility checks create-lead itself would have run
+      // had the creator been allowed to set these directly.
+      case "po_assign": {
+        if (!["project_officer", "area_manager", "regional_manager"].includes(caller.role) || !isCallerOnTeam(caller, leadRow.team)) {
+          return forbidden("You must be a Project Officer, Area Manager, or Regional Manager on this team to assign this lead.");
+        }
+        const prId = typeof body.person_responsible_id === "string" ? body.person_responsible_id : "";
+        const reviewerId = typeof body.reviewer_id === "string" ? body.reviewer_id : "";
+        const raId = typeof body.recommending_authority_id === "string" ? body.recommending_authority_id : "";
+        if (!prId || !reviewerId || !raId) {
+          return jsonRes(req, 400, { error: "Person Responsible, Reviewer, and Recommending Authority are all required." });
+        }
+        const assignErr = await validateAssignment(adminClient, prId, leadRow.team);
+        if (assignErr) return jsonRes(req, 400, { error: assignErr });
+        const reviewerErr = await validateReviewer(adminClient, reviewerId, leadRow.team);
+        if (reviewerErr) return jsonRes(req, 400, { error: reviewerErr });
+        const authorityErr = await validateRecommendingAuthority(adminClient, raId, leadRow.team);
+        if (authorityErr) return jsonRes(req, 400, { error: authorityErr });
+        extraFields = { person_responsible_id: prId, reviewer_id: reviewerId, recommending_authority_id: raId };
+        notifyTargetIds = [prId, reviewerId, raId].filter((uid) => uid !== caller.id);
+        notifyTitle = "Lead assigned to you";
+        notifySubText = `${leadRow.lead_number} — "${leadRow.title}" has named you as Person Responsible, Reviewer, or Recommending Authority.`;
+        break;
+      }
+
       case "accept": {
         if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can accept this lead.");
         // From pa_action_required, "accept" resubmits through the
@@ -348,7 +401,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       case "drop": {
         const isCreator = caller.id === leadRow.created_by;
         const isPr = caller.id === leadRow.person_responsible_id;
-        if (leadRow.status === "pa_review") {
+        // No Person Responsible yet at po_assignment — same creator-only
+        // rule as pa_review.
+        if (leadRow.status === "po_assignment" || leadRow.status === "pa_review") {
           if (!isCreator) return forbidden("Only the lead's creator can drop this lead here — the assigned Person Responsible should Reject instead.");
           break;
         }

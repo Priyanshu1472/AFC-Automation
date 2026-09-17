@@ -23,8 +23,8 @@ const ALLOWED_STATUS_BY_ROLE: Record<string, string[]> = {
   agm: ["dgm_review"],
   md: ["md_review"],
 };
-const PO_REVIEWER_ROLES = ["project_officer", "project_assistant"];
-const ADVISOR_ROLES = ["dgm", "agm"];
+const PO_REVIEWER_ROLES = ["project_officer", "area_manager", "regional_manager", "project_assistant"];
+const ADVISOR_ROLES = ["dgm", "agm", "general_manager"];
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });

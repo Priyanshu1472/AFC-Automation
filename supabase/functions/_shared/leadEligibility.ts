@@ -33,12 +33,22 @@ const DELIVERY_TYPES = new Set(["online", "offline", "both"]);
 const MAX_TITLE_LENGTH = 500;
 const MAX_TEXT_LENGTH = 2000;
 
-export function validateRequiredFields(input: LeadFieldInput): string | null {
+// requireAssignment=false skips the Person Responsible/Reviewer/
+// Recommending Authority checks — used when an Associate Consultant/Project
+// Assistant creates a lead: they aren't allowed to name those three
+// themselves, so the lead is created with all three null and routed to the
+// team's Project Officer instead (see create-lead's isPoRouted branch and
+// advance-lead-stage's "po_assign" action, which re-applies these same
+// checks once the PO actually fills them in).
+export function validateRequiredFields(input: LeadFieldInput, opts: { requireAssignment?: boolean } = {}): string | null {
+  const requireAssignment = opts.requireAssignment !== false;
   if (typeof input.title !== "string" || !input.title.trim()) return "Name of Assignment is required.";
   if (input.title.trim().length > MAX_TITLE_LENGTH) return "Name of Assignment is too long.";
-  if (typeof input.person_responsible_id !== "string" || !input.person_responsible_id) return "Person Responsible is required.";
-  if (typeof input.reviewer_id !== "string" || !input.reviewer_id) return "Reviewer is required.";
-  if (typeof input.recommending_authority_id !== "string" || !input.recommending_authority_id) return "Recommending Authority is required.";
+  if (requireAssignment) {
+    if (typeof input.person_responsible_id !== "string" || !input.person_responsible_id) return "Person Responsible is required.";
+    if (typeof input.reviewer_id !== "string" || !input.reviewer_id) return "Reviewer is required.";
+    if (typeof input.recommending_authority_id !== "string" || !input.recommending_authority_id) return "Recommending Authority is required.";
+  }
   if (input.delivery_type != null && !DELIVERY_TYPES.has(String(input.delivery_type))) return "Invalid delivery type.";
   // lead_type (RFP/EOI) doesn't apply to a Suo Moto lead — the frontend just
   // sends a fixed placeholder value for it in that case, so this stays
@@ -83,8 +93,8 @@ export async function validateReviewer(admin: AdminClient, reviewerId: string, t
 // just any team member with one of those roles.
 export async function validateRecommendingAuthority(admin: AdminClient, recommendingAuthorityId: string, team: string): Promise<string | null> {
   const user = await getTargetUser(admin, recommendingAuthorityId);
-  if (!user || !user.is_active || user.team !== team || !["agm", "srm", "dgm"].includes(user.role)) {
-    return "Recommending Authority must be an active AGM, SRM, or DGM on this team.";
+  if (!user || !user.is_active || user.team !== team || !["agm", "srm", "dgm", "general_manager"].includes(user.role)) {
+    return "Recommending Authority must be an active AGM, SRM, DGM, or General Manager on this team.";
   }
   return null;
 }

@@ -53,7 +53,7 @@ function jsonRes(req: Request, status: number, body: unknown) {
 // Admin-only everywhere (an Admin account already exists in every real
 // environment; recovering from zero Admins is an out-of-band ops task, not
 // a normal-flow UI capability).
-const ADMIN_CREATABLE_ROLES = ["cfo", "cs", "dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"];
+const ADMIN_CREATABLE_ROLES = ["executive_director", "cfo", "cs", "general_manager", "dgm", "agm", "srm", "regional_manager", "area_manager", "project_officer", "associate_consultant", "project_assistant"];
 
 // Lead Generation review committees — an optional, independent tag on top
 // of the person's HR role (e.g. a DGM sits on G3; a Project Officer might
@@ -65,12 +65,16 @@ const ROLE_LABELS: Record<string, string> = {
   cfo: "Chief Financial Officer",
   cs: "Company Secretary",
   dgm: "Deputy General Manager",
+  general_manager: "General Manager",
   agm: "Assistant General Manager",
   srm: "Senior Regional Manager",
   project_officer: "Project Officer",
+  area_manager: "Area Manager",
+  regional_manager: "Regional Manager",
   associate_consultant: "Associate Consultant",
   project_assistant: "Project Assistant",
   admin: "Administrator",
+  executive_director: "Executive Director",
 };
 
 // Decode JWT payload without verifying signature — the Supabase gateway

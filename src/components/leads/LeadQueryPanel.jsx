@@ -13,7 +13,7 @@ import Card from "../ui/Card";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 
-const QUERY_RAISER_ROLES = ["dgm", "agm", "srm"];
+const QUERY_RAISER_ROLES = ["dgm", "general_manager", "agm", "srm"];
 
 const STATUS_BADGE = {
   open: { label: "Open", variant: "warning" },

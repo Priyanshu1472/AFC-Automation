@@ -15,9 +15,12 @@ const ROLE_LABELS: Record<string, string> = {
   cfo: "Chief Financial Officer",
   cs: "Company Secretary",
   dgm: "Deputy General Manager",
+  general_manager: "General Manager",
   agm: "Assistant General Manager",
   srm: "Senior Regional Manager",
   project_officer: "Project Officer",
+  area_manager: "Area Manager",
+  regional_manager: "Regional Manager",
   associate_consultant: "Associate Consultant",
   project_assistant: "Project Assistant",
 };
@@ -86,7 +89,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .from("afc_users")
       .select("id, full_name, email, role")
       .eq("id", project_officer_id)
-      .in("role", ["project_officer", "project_assistant"])
+      .in("role", ["project_officer", "area_manager", "regional_manager", "project_assistant"])
       .eq("team", team)
       .eq("is_active", true)
       .maybeSingle();
@@ -96,7 +99,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       const { count: activePoCount } = await adminClient
         .from("afc_users")
         .select("id", { count: "exact", head: true })
-        .eq("role", "project_officer")
+        .in("role", ["project_officer", "area_manager", "regional_manager"])
         .eq("team", team)
         .eq("is_active", true);
       if (activePoCount && activePoCount > 0) {
@@ -114,19 +117,21 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         .from("afc_users")
         .select("id, full_name, role")
         .eq("id", advisor_id)
-        .in("role", ["dgm", "agm"])
+        .in("role", ["dgm", "agm", "general_manager"])
         .eq("team", team)
         .eq("is_active", true)
         .maybeSingle();
-      if (advErr || !picked) return jsonRes(req, 400, { error: "Invalid advising authority for your team — pick an active DGM or AGM." });
+      if (advErr || !picked) return jsonRes(req, 400, { error: "Invalid advising authority for your team — pick an active DGM, AGM, or General Manager." });
       advisor = picked;
     } else {
       const { data: dgm } = await adminClient
         .from("afc_users")
         .select("id, full_name, role")
-        .eq("role", "dgm")
+        .in("role", ["dgm", "general_manager"])
         .eq("team", team)
         .eq("is_active", true)
+        .order("role", { ascending: true })
+        .limit(1)
         .maybeSingle();
       advisor = dgm || null;
     }

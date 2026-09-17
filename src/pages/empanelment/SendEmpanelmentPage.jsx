@@ -164,8 +164,8 @@ export default function SendEmpanelmentPage() {
       return;
     }
     const [{ data: pos }, { data: advs }] = await Promise.all([
-      supabase.from("afc_users").select("id, full_name, email").eq("role", "project_officer").eq("team", team).eq("is_active", true).order("full_name"),
-      supabase.from("afc_users").select("id, full_name, email, role").in("role", ["dgm", "agm"]).eq("team", team).eq("is_active", true).order("role", { ascending: false }).order("full_name"),
+      supabase.from("afc_users").select("id, full_name, email").in("role", ["project_officer", "area_manager", "regional_manager"]).eq("team", team).eq("is_active", true).order("full_name"),
+      supabase.from("afc_users").select("id, full_name, email, role").in("role", ["dgm", "agm", "general_manager"]).eq("team", team).eq("is_active", true).order("role", { ascending: false }).order("full_name"),
     ]);
     if (pos && pos.length > 0) {
       setProjectOfficers(pos);

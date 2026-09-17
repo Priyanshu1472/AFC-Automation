@@ -61,7 +61,6 @@ export default function FindExperiencePanel({ allLocations, allCountries, allKey
   const [filterStatus, setFilterStatus] = useState("");
   const [filterKeywords, setFilterKeywords] = useState(new Set());
   const [kwSearch, setKwSearch] = useState("");
-  const [searchDescription, setSearchDescription] = useState(true);
   const [searchServices, setSearchServices] = useState(true);
   const [searchKeywordDesc, setSearchKeywordDesc] = useState(true);
   const [searchKeywords, setSearchKeywords] = useState(true);
@@ -245,12 +244,10 @@ export default function FindExperiencePanel({ allLocations, allCountries, allKey
       <div className="fre-field">
         <label className="field-label">Search in</label>
         <div className="fre-checkbox-row">
-          <label className="fre-checkbox"><input type="checkbox" checked={searchDescription} onChange={(e) => setSearchDescription(e.target.checked)} disabled /> Project Description</label>
           <label className="fre-checkbox"><input type="checkbox" checked={searchServices} onChange={(e) => setSearchServices(e.target.checked)} /> Actual Services Provided</label>
           <label className="fre-checkbox"><input type="checkbox" checked={searchKeywordDesc} onChange={(e) => setSearchKeywordDesc(e.target.checked)} /> Keyword Descriptions</label>
           <label className="fre-checkbox"><input type="checkbox" checked={searchKeywords} onChange={(e) => setSearchKeywords(e.target.checked)} /> Keywords</label>
         </div>
-        <p className="fre-hint">Project Description always contributes to the overall semantic match, it isn't a separate toggle since one embedding represents the whole project.</p>
       </div>
 
       {error && <div className="field-error" style={{ marginBottom: "var(--space-3)" }}>{error}</div>}

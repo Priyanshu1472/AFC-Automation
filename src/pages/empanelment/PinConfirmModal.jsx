@@ -73,7 +73,7 @@ export default function PinConfirmModal({ applicationId, action, comment, onClos
             onChange={setPin}
             disabled={verifying}
             autoFocus
-            hint="Confirms it's really you — set or change this from My Profile."
+            hint="Confirms it's really you"
           />
         </div>
 

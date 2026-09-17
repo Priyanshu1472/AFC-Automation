@@ -15,7 +15,7 @@ import "../../styles/CreateUserPage.css";
 
 const FIELD_HELP = {
   email: "This becomes their login. They'll receive a temporary password here — make sure it's an address they can actually check.",
-  role: "Controls what this person can see and do. Admin can create any staff role except Admin/MD.",
+  role: "Controls what this person can see and do. Admin can create any staff designation except Admin/MD.",
   team: "The working group this person belongs to (e.g. BPDD, BIID). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
   office: "The physical office this person is based out of.",
   committee: "Optional Lead Generation review committee (PMT) — membership grants PMT-stage review/approval on leads, org-wide.",
@@ -187,13 +187,13 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field">
                   <label className="field-label">
-                    Role <span className="required">*</span> <FieldTooltip text={FIELD_HELP.role} />
+                    Designation <span className="required">*</span> <FieldTooltip text={FIELD_HELP.role} />
                   </label>
                   <Select
                     options={roleOptions}
                     value={form.role}
                     onChange={(v) => set("role", v)}
-                    placeholder="Select role"
+                    placeholder="Select designation"
                     error={errors.role}
                     disabled={saving}
                   />

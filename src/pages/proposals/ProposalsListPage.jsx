@@ -52,7 +52,7 @@ function fmtDate(d) {
 
 export default function ProposalsListPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, activeTeam } = useAuth();
 
   const [leads, setLeads] = useState([]);
   const [proposalByLead, setProposalByLead] = useState({});
@@ -117,9 +117,15 @@ export default function ProposalsListPage() {
     [leads, proposalByLead]
   );
 
+  // Team-scoped roles (dgm/agm/srm/etc.) have no visible team filter — a
+  // multi-team user's rows span every team they're on, so this needs to
+  // actively narrow to whichever team is currently active, same convention
+  // as LeadDashboardPage/EmpanelmentListPage.
+  const effectiveTeamFilter = canFilterTeam ? teamFilter : (activeTeam || "all");
+
   const teamScoped = useMemo(
-    () => (teamFilter === "all" ? merged : merged.filter((l) => l.team === teamFilter)),
-    [merged, teamFilter]
+    () => (effectiveTeamFilter === "all" ? merged : merged.filter((l) => l.team === effectiveTeamFilter)),
+    [merged, effectiveTeamFilter]
   );
 
   const stats = useMemo(() => {
@@ -132,17 +138,19 @@ export default function ProposalsListPage() {
     setQuickFilter((current) => (current === key ? "all" : key));
   }
 
-  const filtered = teamScoped.filter((l) => {
-    if (!QUICK_FILTERS[quickFilter].match(l)) return false;
-    if (prepStatusFilter !== "all" && prepStatusOf(l) !== prepStatusFilter) return false;
-    if (!search) return true;
+  const filtered = useMemo(() => {
     const s = search.toLowerCase();
-    return (
-      (l.lead_number || "").toLowerCase().includes(s) ||
-      (l.client_name || "").toLowerCase().includes(s) ||
-      (l.ba?.full_name || "").toLowerCase().includes(s)
-    );
-  });
+    return teamScoped.filter((l) => {
+      if (!QUICK_FILTERS[quickFilter].match(l)) return false;
+      if (prepStatusFilter !== "all" && prepStatusOf(l) !== prepStatusFilter) return false;
+      if (!search) return true;
+      return (
+        (l.lead_number || "").toLowerCase().includes(s) ||
+        (l.client_name || "").toLowerCase().includes(s) ||
+        (l.ba?.full_name || "").toLowerCase().includes(s)
+      );
+    });
+  }, [teamScoped, quickFilter, prepStatusFilter, search]);
 
   if (loading) return <PageLoader text="Loading proposals…" />;
 

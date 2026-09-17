@@ -187,7 +187,7 @@ export default function LeadApprovalNotePreviewPage() {
                             value={pin}
                             onChange={setPin}
                             disabled={submitting}
-                            hint="Confirms it's really you — set or change this from My Profile."
+                            hint="Confirms it's really you"
                           />
                         </div>
                         <Button variant="primary" block loading={submitting} disabled={submitting} onClick={submitForDgmApproval}>

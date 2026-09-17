@@ -290,3 +290,78 @@ Deno.test("handleRequest - one invalid document among several rejects the whole 
   const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
   assertEquals(log.some((l) => l.table === "leads" && l.calls.some((c) => c[0] === "update")), false);
 });
+
+// ── Submission Overdue ──────────────────────────────────────
+Deno.test("overdue - the Person Responsible can edit an overdue pa_review lead", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: PR_ID }),
+    lead: leadRow({ status: "pa_review", submission_deadline: "2000-01-01", created_by: "creator-1", person_responsible_id: PR_ID }),
+  });
+  const res = await handleRequest(
+    formReq(baseFields({ recommending_authority_id: AUTHORITY_ID }), fakeJwt({ sub: PR_ID })),
+    client as never
+  );
+  assertEquals(res.status, 200);
+});
+
+Deno.test("overdue - the creator (not PR) is rejected from editing an overdue pa_review lead", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: "creator-1" }),
+    lead: leadRow({ status: "pa_review", submission_deadline: "2000-01-01", created_by: "creator-1", person_responsible_id: PR_ID }),
+  });
+  const res = await handleRequest(
+    formReq(baseFields({ recommending_authority_id: AUTHORITY_ID }), fakeJwt({ sub: "creator-1" })),
+    client as never
+  );
+  assertEquals(res.status, 403);
+});
+
+Deno.test("overdue - the creator can edit an overdue po_assignment lead (no Person Responsible yet)", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: "creator-1" }),
+    lead: leadRow({ status: "po_assignment", submission_deadline: "2000-01-01", created_by: "creator-1", person_responsible_id: null }),
+  });
+  const res = await handleRequest(
+    formReq({ lead_id: LEAD_ID, title: "Updated title" }, fakeJwt({ sub: "creator-1" })),
+    client as never
+  );
+  assertEquals(res.status, 200);
+});
+
+Deno.test("overdue - editing past pa_review preserves the existing PR/Reviewer/Recommending Authority even if the client sends different ones", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: PR_ID }),
+    lead: leadRow({
+      status: "recommending_authority_review", submission_deadline: "2000-01-01",
+      created_by: "creator-1", person_responsible_id: PR_ID, reviewer_id: REVIEWER_ID, recommending_authority_id: AUTHORITY_ID,
+    }),
+  });
+  const res = await handleRequest(
+    formReq(
+      { lead_id: LEAD_ID, person_responsible_id: "someone-else", reviewer_id: "someone-else", recommending_authority_id: "someone-else" },
+      fakeJwt({ sub: PR_ID })
+    ),
+    client as never
+  );
+  assertEquals(res.status, 200);
+  const leadsUpdateCall = (client as { __log: { table: string; calls: string[][] }[] }).__log
+    .filter((l) => l.table === "leads")
+    .flatMap((l) => l.calls)
+    .find((c) => c[0] === "update");
+  const payload = JSON.parse(leadsUpdateCall![1]);
+  assertEquals(payload.person_responsible_id, PR_ID);
+  assertEquals(payload.reviewer_id, REVIEWER_ID);
+  assertEquals(payload.recommending_authority_id, AUTHORITY_ID);
+});
+
+Deno.test("overdue - a non-overdue lead outside pa_review/pa_action_required is still rejected as before", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: PR_ID }),
+    lead: leadRow({ status: "recommending_authority_review", submission_deadline: null, created_by: "creator-1", person_responsible_id: PR_ID }),
+  });
+  const res = await handleRequest(
+    formReq({ lead_id: LEAD_ID, title: "Updated title" }, fakeJwt({ sub: PR_ID })),
+    client as never
+  );
+  assertEquals(res.status, 400);
+});

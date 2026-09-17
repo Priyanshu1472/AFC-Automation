@@ -55,3 +55,39 @@ describe("Select (creatable)", () => {
     expect(screen.getByRole("combobox")).toHaveValue("Chennai-South");
   });
 });
+
+describe("Select (searchable)", () => {
+  it("typing filters the option list, unlike a plain (non-searchable) Select's button trigger", () => {
+    render(<Controlled searchable options={TEAM_OPTIONS} placeholder="Select a team" />);
+    const input = screen.getByRole("combobox");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "BI" } });
+    expect(screen.getByText("BIID")).toBeInTheDocument();
+    expect(screen.queryByText("BPDD")).not.toBeInTheDocument();
+  });
+
+  it("picking an existing option shows its label", () => {
+    render(<Controlled searchable options={TEAM_OPTIONS} placeholder="Select a team" />);
+    fireEvent.click(screen.getByRole("combobox"));
+    fireEvent.click(screen.getByText("BPDD"));
+    expect(screen.getByRole("combobox")).toHaveValue("BPDD");
+  });
+
+  it("unlike creatable, typing a name that isn't in options never offers a '+ Add' entry", () => {
+    render(<Controlled searchable options={TEAM_OPTIONS} placeholder="Select a team" />);
+    const input = screen.getByRole("combobox");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Mumbai-West" } });
+    expect(screen.queryByText(/\+ Add/)).not.toBeInTheDocument();
+    expect(screen.getByText("No matches")).toBeInTheDocument();
+  });
+
+  it("closing without picking anything reverts the typed text back to the selected value", () => {
+    render(<Controlled searchable options={TEAM_OPTIONS} initial="BPDD" placeholder="Select a team" />);
+    const input = screen.getByRole("combobox");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "xyz" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(input).toHaveValue("BPDD");
+  });
+});

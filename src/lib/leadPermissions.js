@@ -1,4 +1,5 @@
 import { LEAD_PA_TIER_ROLES, can } from "./roles";
+import { isLeadOverdue, overdueEditorId } from "../components/leads/leadStatus";
 
 // Lead-specific action predicates, mirroring the server-side authorization
 // in advance-lead-stage/index.ts — UX-only (hide/disable), never trusted.
@@ -9,6 +10,15 @@ import { LEAD_PA_TIER_ROLES, can } from "./roles";
 export const leadCan = {
   // Every role can create a lead except MD and Admin.
   create: (profile) => !!profile?.role && profile.role !== "md" && profile.role !== "admin",
+  // A lead an Associate Consultant/Project Assistant created without a
+  // Person Responsible/Reviewer/Recommending Authority (see create-lead's
+  // isPoRouted) — the team's Project Officer (or Area Manager/Regional
+  // Manager, same permission tier) names all three, PIN-confirmed, which
+  // then lands the lead in pa_review exactly like every other creator's.
+  poAssign: (profile, lead) =>
+    lead.status === "po_assignment" &&
+    ["project_officer", "area_manager", "regional_manager"].includes(profile?.role) &&
+    !!profile?.teams?.includes(lead.team),
   accept: (profile, lead) => lead.status === "pa_review" && profile?.id === lead.person_responsible_id,
   // A true drop, no reassignment. At pa_review, only the creator can drop
   // (whether or not they're also PR) — a non-creator PR has no Drop here at
@@ -41,11 +51,17 @@ export const leadCan = {
   // and edited by anyone on its new team, not just the creator/PR — there
   // is no PR yet for that lead until someone fills the form (see
   // _shared/leadTransfer.ts).
+  // Overdue (submission deadline passed): only the Person Responsible (or
+  // the creator, if none is assigned yet — e.g. a po_assignment lead) can
+  // edit, regardless of status — see advance-lead-stage's blanket guard
+  // and update-lead's identical isOverdue branch.
   editResubmit: (profile, lead) =>
-    (lead.status === "pa_review" || lead.status === "pa_action_required") &&
-    (profile?.id === lead.created_by ||
-      profile?.id === lead.person_responsible_id ||
-      (!lead.person_responsible_id && !!profile?.teams?.includes(lead.team))),
+    isLeadOverdue(lead)
+      ? profile?.id === overdueEditorId(lead)
+      : (lead.status === "pa_review" || lead.status === "pa_action_required") &&
+        (profile?.id === lead.created_by ||
+          profile?.id === lead.person_responsible_id ||
+          (!lead.person_responsible_id && !!profile?.teams?.includes(lead.team))),
   // The PR reviewing a creator-drafted Lead Approval Note (Accept/Edit/
   // Reject) before it can be submitted for Recommending Authority approval
   // — tracked via a flag, not a status, so the lead stays visibly
@@ -92,7 +108,7 @@ export function isMyLead(profile, lead) {
 export function isTeamLead(profile, lead) {
   if (!profile) return false;
   if (can.viewAllTeams(profile.role)) return true;
-  if (["dgm", "agm", "srm"].includes(profile.role)) return true;
+  if (["dgm", "general_manager", "agm", "srm"].includes(profile.role)) return true;
   if (profile.committee === "PMT") return true;
   return !!profile.teams?.includes(lead.team);
 }
@@ -104,6 +120,7 @@ export function isTeamLead(profile, lead) {
 // base role and a committee), so this unions every capacity that applies.
 export function isActionRequiredForViewer(profile, lead) {
   return (
+    leadCan.poAssign(profile, lead) ||
     leadCan.accept(profile, lead) ||
     (lead.status === "pa_action_required" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id)) ||
     leadCan.prReviewAccept(profile, lead) ||

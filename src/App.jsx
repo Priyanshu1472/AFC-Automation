@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -5,43 +6,47 @@ import { ToastProvider } from "./context/ToastContext";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
 import PublicOnlyRoute from "./components/routing/PublicOnlyRoute";
-
-import LoginPage from "./pages/auth/LoginPage";
-import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
-import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
-import ChangePasswordPage from "./pages/auth/ChangePasswordPage";
-import MyProfilePage from "./pages/auth/MyProfilePage";
-import HomePage from "./pages/HomePage";
-import CreateUserPage from "./pages/admin/CreateUserPage";
-import EditUserPage from "./pages/admin/EditUserPage";
-import UserListPage from "./pages/admin/UserListPage";
-import AuditLogsPage from "./pages/admin/AuditLogsPage";
-import SendEmpanelmentPage from "./pages/empanelment/SendEmpanelmentPage";
-import BaFormPage from "./pages/empanelment/BaFormPage";
-import EmpanelmentListPage from "./pages/empanelment/EmpanelmentListPage";
-import ApplicationReviewPage from "./pages/empanelment/ApplicationReviewPage";
-import EmpanelmentCorrectionPage from "./pages/empanelment/EmpanelmentCorrectionPage";
-import ApplicationStatusPage from "./pages/empanelment/ApplicationStatusPage";
-import EmpanelmentDashboardPage from "./pages/empanelment/EmpanelmentDashboardPage";
-import EmpanelmentReportsPage from "./pages/empanelment/EmpanelmentReportsPage";
-import KnowledgeSearchPage from "./pages/knowledge/KnowledgeSearchPage";
-import AddProjectPage from "./pages/knowledge/AddProjectPage";
-import EditProjectPage from "./pages/knowledge/EditProjectPage";
-import ProjectDetailsPage from "./pages/knowledge/ProjectDetailsPage";
-import ShortlistsPage from "./pages/knowledge/ShortlistsPage";
-import LeadListPage from "./pages/leads/LeadListPage";
-import CreateLeadPage from "./pages/leads/CreateLeadPage";
-import EditLeadPage from "./pages/leads/EditLeadPage";
-import LeadDetailPage from "./pages/leads/LeadDetailPage";
-import LeadApprovalNoteForm from "./pages/leads/LeadApprovalNoteForm";
-import LeadApprovalNotePreviewPage from "./pages/leads/LeadApprovalNotePreviewPage";
-import LeadDashboardPage from "./pages/leads/LeadDashboardPage";
-import LeadReportsPage from "./pages/leads/LeadReportsPage";
-import ProposalsListPage from "./pages/proposals/ProposalsListPage";
-import ProposalPreparationPage from "./pages/proposals/ProposalPreparationPage";
-import FeeNoteEditPage from "./pages/proposals/FeeNoteEditPage";
-import NotFoundPage from "./pages/NotFoundPage";
+import PageLoader from "./components/ui/PageLoader";
 import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES } from "./lib/roles";
+
+// Lazy-loaded so each page (and anything only it imports, e.g. xlsx/jspdf on
+// the Reports pages) ships as its own chunk instead of all ~30 pages being
+// bundled into one multi-MB chunk loaded even by the login screen.
+const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/auth/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("./pages/auth/ResetPasswordPage"));
+const ChangePasswordPage = lazy(() => import("./pages/auth/ChangePasswordPage"));
+const MyProfilePage = lazy(() => import("./pages/auth/MyProfilePage"));
+const HomePage = lazy(() => import("./pages/HomePage"));
+const CreateUserPage = lazy(() => import("./pages/admin/CreateUserPage"));
+const EditUserPage = lazy(() => import("./pages/admin/EditUserPage"));
+const UserListPage = lazy(() => import("./pages/admin/UserListPage"));
+const AuditLogsPage = lazy(() => import("./pages/admin/AuditLogsPage"));
+const SendEmpanelmentPage = lazy(() => import("./pages/empanelment/SendEmpanelmentPage"));
+const BaFormPage = lazy(() => import("./pages/empanelment/BaFormPage"));
+const EmpanelmentListPage = lazy(() => import("./pages/empanelment/EmpanelmentListPage"));
+const ApplicationReviewPage = lazy(() => import("./pages/empanelment/ApplicationReviewPage"));
+const EmpanelmentCorrectionPage = lazy(() => import("./pages/empanelment/EmpanelmentCorrectionPage"));
+const ApplicationStatusPage = lazy(() => import("./pages/empanelment/ApplicationStatusPage"));
+const EmpanelmentDashboardPage = lazy(() => import("./pages/empanelment/EmpanelmentDashboardPage"));
+const EmpanelmentReportsPage = lazy(() => import("./pages/empanelment/EmpanelmentReportsPage"));
+const KnowledgeSearchPage = lazy(() => import("./pages/knowledge/KnowledgeSearchPage"));
+const AddProjectPage = lazy(() => import("./pages/knowledge/AddProjectPage"));
+const EditProjectPage = lazy(() => import("./pages/knowledge/EditProjectPage"));
+const ProjectDetailsPage = lazy(() => import("./pages/knowledge/ProjectDetailsPage"));
+const ShortlistsPage = lazy(() => import("./pages/knowledge/ShortlistsPage"));
+const LeadListPage = lazy(() => import("./pages/leads/LeadListPage"));
+const CreateLeadPage = lazy(() => import("./pages/leads/CreateLeadPage"));
+const EditLeadPage = lazy(() => import("./pages/leads/EditLeadPage"));
+const LeadDetailPage = lazy(() => import("./pages/leads/LeadDetailPage"));
+const LeadApprovalNoteForm = lazy(() => import("./pages/leads/LeadApprovalNoteForm"));
+const LeadApprovalNotePreviewPage = lazy(() => import("./pages/leads/LeadApprovalNotePreviewPage"));
+const LeadDashboardPage = lazy(() => import("./pages/leads/LeadDashboardPage"));
+const LeadReportsPage = lazy(() => import("./pages/leads/LeadReportsPage"));
+const ProposalsListPage = lazy(() => import("./pages/proposals/ProposalsListPage"));
+const ProposalPreparationPage = lazy(() => import("./pages/proposals/ProposalPreparationPage"));
+const FeeNoteEditPage = lazy(() => import("./pages/proposals/FeeNoteEditPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
 import "./App.css";
 
@@ -52,7 +57,8 @@ export default function App() {
         <ErrorBoundary>
           <ToastProvider>
             <AuthProvider>
-              <Routes>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
                 <Route path="/" element={<Navigate to="/login" replace />} />
 
                 <Route
@@ -308,7 +314,8 @@ export default function App() {
                 />
 
                 <Route path="*" element={<NotFoundPage />} />
-              </Routes>
+                </Routes>
+              </Suspense>
             </AuthProvider>
           </ToastProvider>
         </ErrorBoundary>

@@ -74,6 +74,8 @@ function StatusBadge({ status, reviewerRole, advisorRole }) {
     label = label.replace("PO", "PA");
   } else if (status === "dgm_review" && advisorRole === "agm") {
     label = label.replace("DGM", "AGM");
+  } else if (status === "dgm_review" && advisorRole === "general_manager") {
+    label = label.replace("DGM", "GM");
   }
   return <Badge variant={config.variant} dot className="bl-status-badge">{label}</Badge>;
 }
@@ -291,7 +293,8 @@ export default function EmpanelmentListPage() {
     const { data, error } = await supabase
       .from("empanelment_applications")
       .select("*, ba_reg:ba_registrations(*), po:project_officer_id(role), dgm:dgm_id(role)")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(5000);
     if (!error) {
       setApplications((data || []).map((a) => ({ ...a, ba_reg: Array.isArray(a.ba_reg) ? a.ba_reg[0] || null : a.ba_reg })));
     }
@@ -352,27 +355,32 @@ export default function EmpanelmentListPage() {
   }
 
   const dateCutoff = dateFilterCutoff(dateFilter);
-  const filtered = teamScoped.filter((a) => {
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    if (dateCutoff && (!a.created_at || new Date(a.created_at) < dateCutoff)) return false;
-    const sectorsServed = Array.isArray(a.ba_reg?.sectors_served) ? a.ba_reg.sectors_served.join(" ") : (a.ba_reg?.sectors_served || "");
-    const assignments = a.ba_reg?.assignments ? (typeof a.ba_reg.assignments === "string" ? a.ba_reg.assignments : JSON.stringify(a.ba_reg.assignments)) : "";
-    const matchSearch =
-      (a.ba_email || "").toLowerCase().includes(q) ||
-      (a.ba_reg?.org_name || "").toLowerCase().includes(q) ||
-      (a.ba_reg?.contact_person || "").toLowerCase().includes(q) ||
-      (a.application_code || "").includes(search) ||
-      (a.ba_reg?.core_expertise || "").toLowerCase().includes(q) ||
-      sectorsServed.toLowerCase().includes(q) ||
-      assignments.toLowerCase().includes(q);
-    return matchSearch && QUICK_FILTERS[quickFilter].match(a) && (statusFilter === "all" || a.status === statusFilter);
-  });
+    return teamScoped.filter((a) => {
+      if (dateCutoff && (!a.created_at || new Date(a.created_at) < dateCutoff)) return false;
+      const sectorsServed = Array.isArray(a.ba_reg?.sectors_served) ? a.ba_reg.sectors_served.join(" ") : (a.ba_reg?.sectors_served || "");
+      const assignments = a.ba_reg?.assignments ? (typeof a.ba_reg.assignments === "string" ? a.ba_reg.assignments : JSON.stringify(a.ba_reg.assignments)) : "";
+      const matchSearch =
+        (a.ba_email || "").toLowerCase().includes(q) ||
+        (a.ba_reg?.org_name || "").toLowerCase().includes(q) ||
+        (a.ba_reg?.contact_person || "").toLowerCase().includes(q) ||
+        (a.application_code || "").includes(search) ||
+        (a.ba_reg?.core_expertise || "").toLowerCase().includes(q) ||
+        sectorsServed.toLowerCase().includes(q) ||
+        assignments.toLowerCase().includes(q);
+      return matchSearch && QUICK_FILTERS[quickFilter].match(a) && (statusFilter === "all" || a.status === statusFilter);
+    });
+  }, [teamScoped, search, dateCutoff, quickFilter, statusFilter]);
 
   // Search/filters run over every matching application — the page slice
   // below is purely a display concern that keeps the rendered table light.
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const paged = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage]
+  );
 
   // Any change to what's being filtered snaps back to the first page.
   useEffect(() => { setPage(1); }, [search, quickFilter, statusFilter, dateFilter, effectiveTeamFilter]);
@@ -380,7 +388,7 @@ export default function EmpanelmentListPage() {
   const canSend = ["associate_consultant", "project_assistant"].includes(profile?.role);
   // Admin included so it can open the full read-only review page (timeline,
   // documents, etc.) — it has no action branch there, so it lands view-only.
-  const canReview = ["project_officer", "project_assistant", "cfo", "cs", "dgm", "agm", "md", "admin"].includes(profile?.role);
+  const canReview = ["project_officer", "area_manager", "regional_manager", "project_assistant", "cfo", "cs", "dgm", "general_manager", "agm", "md", "admin"].includes(profile?.role);
 
   if (loading) return <PageLoader text="Loading applications…" />;
 

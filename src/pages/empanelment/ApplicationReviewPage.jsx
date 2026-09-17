@@ -62,7 +62,7 @@ function CommentCard({ label, text, colorClass }) {
 // (and nothing older); on the normal path they see the prior reviewer's note.
 function getContextComments(app, logs) {
   const out = [];
-  const advLabel = app.dgm?.role === "agm" ? "AGM" : "DGM";
+  const advLabel = app.dgm?.role === "agm" ? "AGM" : app.dgm?.role === "general_manager" ? "General Manager" : "DGM";
   const poLabel = app.po?.role === "project_assistant" ? "Project Assistant" : "Project Officer";
   // Newest activity entry that carries a comment — tells us whether the app
   // arrived here via a send-back or moved forward normally.
@@ -246,7 +246,7 @@ export default function ApplicationReviewPage() {
   }
   async function handlePOFinalForward() {
     const data = await runAction("po_final_forward");
-    if (data) { showBanner(`Forwarded to ${app?.dgm?.role === "agm" ? "AGM" : "DGM"}.`); setComment(""); fetchApp(); }
+    if (data) { showBanner(`Forwarded to ${app?.dgm?.role === "agm" ? "AGM" : app?.dgm?.role === "general_manager" ? "General Manager" : "DGM"}.`); setComment(""); fetchApp(); }
   }
   async function handlePOResendCfoCs() {
     const data = await runAction("po_resend_cfo_cs");
@@ -275,7 +275,7 @@ export default function ApplicationReviewPage() {
   async function handleMDSendBack() {
     if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
     const data = await runAction("md_send_back");
-    if (data) { showBanner(`Sent back to ${app?.dgm?.role === "agm" ? "AGM" : "DGM"}.`); setComment(""); fetchApp(); }
+    if (data) { showBanner(`Sent back to ${app?.dgm?.role === "agm" ? "AGM" : app?.dgm?.role === "general_manager" ? "General Manager" : "DGM"}.`); setComment(""); fetchApp(); }
   }
   function handleAcceptPinSuccess() {
     setShowAcceptPin(false);
@@ -297,12 +297,12 @@ export default function ApplicationReviewPage() {
   function canAct() {
     if (!app) return false;
     const s = app.status;
-    if (["project_officer", "project_assistant"].includes(role) && app.project_officer_id === profile.id && (s === "po_review" || s === "po_final_review")) return true;
+    if (["project_officer", "area_manager", "regional_manager", "project_assistant"].includes(role) && app.project_officer_id === profile.id && (s === "po_review" || s === "po_final_review")) return true;
     if (role === "cfo" && s === "cfo_cs_review" && !app.cfo_reviewed) return true;
     if (role === "cs" && s === "cfo_cs_review" && !app.cs_reviewed) return true;
     // The dgm_review stage belongs to the assigned advising authority
     // (dgm_id) — a DGM or an AGM — not just any DGM on the team.
-    if (["dgm", "agm"].includes(role) && app.dgm_id === profile.id && s === "dgm_review") return true;
+    if (["dgm", "agm", "general_manager"].includes(role) && app.dgm_id === profile.id && s === "dgm_review") return true;
     if (role === "md" && s === "md_review") return true;
     return false;
   }
@@ -321,8 +321,8 @@ export default function ApplicationReviewPage() {
   // The advising authority stage carries the assigned person's real role —
   // "AGM" when an AGM was assigned instead of a DGM (see SendEmpanelmentPage).
   const advisorRole = app.dgm?.role;
-  const advisorLabel = advisorRole === "agm" ? "AGM" : "DGM";
-  const isAssignedAdvisor = ["dgm", "agm"].includes(role) && app.dgm_id === profile.id;
+  const advisorLabel = advisorRole === "agm" ? "AGM" : advisorRole === "general_manager" ? "General Manager" : "DGM";
+  const isAssignedAdvisor = ["dgm", "agm", "general_manager"].includes(role) && app.dgm_id === profile.id;
   const contextComments = getContextComments(app, auditLogs);
 
   return (
@@ -449,7 +449,7 @@ export default function ApplicationReviewPage() {
                       </div>
                     )}
 
-                    {["project_officer", "project_assistant"].includes(role) && (<>
+                    {["project_officer", "area_manager", "regional_manager", "project_assistant"].includes(role) && (<>
                       <div className="ar-field">
                         <label className="ar-label">{app.status === "po_final_review" ? "Your Final Comment (optional)" : "Technical Review Comment"}{app.status !== "po_final_review" && <span className="ar-required"> *</span>}</label>
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={app.status === "po_final_review" ? `Add any additional comments before forwarding to ${advisorLabel}...` : "Review the BP's technical details and write your comments..."} rows={4} />
@@ -480,7 +480,7 @@ export default function ApplicationReviewPage() {
                       <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleCSForward}>{actionLoading ? "Saving..." : "Submit Review"}</Button>
                     </>)}
 
-                    {["dgm", "agm"].includes(role) && (<>
+                    {["dgm", "agm", "general_manager"].includes(role) && (<>
                       <div className="ar-field">
                         <label className="ar-label">Recommendation Comment <span className="ar-required">*</span></label>
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your recommendation..." rows={4} />
@@ -499,7 +499,7 @@ export default function ApplicationReviewPage() {
                       <Button variant="danger" block disabled={actionLoading} icon={<XIcon />} onClick={() => setShowReject(true)}>Reject</Button>
                     </>)}
 
-                    {["project_officer", "project_assistant", "dgm", "agm", "md"].includes(role) && (
+                    {["project_officer", "area_manager", "regional_manager", "project_assistant", "dgm", "agm", "general_manager", "md"].includes(role) && (
                       <>
                         <hr className="divider" />
                         <Button variant="secondary" block disabled={actionLoading} onClick={() => setShowHoldModal(true)}>Raise Compliance Hold</Button>

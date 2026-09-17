@@ -1,10 +1,12 @@
 // supabase/functions/transfer-lead/index.ts
-// JWT must be ON. PMT-initiated: moves a lead to a different team and
-// resets it to a fresh pa_review for that team to pick up (see
-// _shared/leadTransfer.ts for exactly what gets cleared/kept). Callable
-// standalone (a "Transfer Lead" button on the lead detail page) as well as
-// via respond-lead-query's "transfer" action when it's the resolution to a
-// cross-team query.
+// JWT must be ON. PMT-committee-only, and only while the lead is at its
+// pmt_review stage (the "Transfer Lead to Another Team" button on the lead
+// detail page) — moves the lead to a different team and resets it to a
+// fresh pa_review for that team to pick up (see _shared/leadTransfer.ts for
+// exactly what gets cleared/kept). respond-lead-query's own "transfer"
+// action — PMT resolving a cross-team lead query, which can legitimately
+// happen at any status — is a separate entry point that shares
+// performLeadTransfer() but not this function's committee/status gate.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -22,7 +24,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
 
-  if (caller.committee !== "PMT" && !["md", "admin"].includes(caller.role)) {
+  // This standalone "Transfer Lead" button/action is PMT-committee-only —
+  // not even md/admin — and only while the lead is actually at its
+  // pmt_review stage. This is deliberately narrower than
+  // respond-lead-query's own "transfer" action (a different, separate
+  // workflow — PMT resolving a cross-team lead query, which can legitimately
+  // happen at any status) — don't add this restriction to the shared
+  // performLeadTransfer(), only here.
+  if (caller.committee !== "PMT") {
     return jsonRes(req, 403, { error: "Only a PMT committee member can transfer a lead." });
   }
 
@@ -39,6 +48,16 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!leadId) return jsonRes(req, 400, { error: "lead_id is required." });
   if (!targetTeam) return jsonRes(req, 400, { error: "target_team is required." });
   if (!justification) return jsonRes(req, 400, { error: "A justification is required." });
+
+  const { data: leadStatusRow, error: leadStatusErr } = await adminClient
+    .from("leads")
+    .select("status")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (leadStatusErr || !leadStatusRow) return jsonRes(req, 404, { error: "Lead not found." });
+  if (leadStatusRow.status !== "pmt_review") {
+    return jsonRes(req, 403, { error: "A lead can only be transferred to another team while it's at the PMT review stage." });
+  }
 
   const pinErr = await verifyActionPin(adminClient, caller.id, caller.pin_hash, body.pin);
   if (pinErr) return jsonRes(req, 400, { error: pinErr });

@@ -1107,3 +1107,38 @@ Deno.test("concurrent action - a second write that matches 0 rows returns a clea
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
   assertEquals(res.status, 400);
 });
+
+// ── Submission Overdue ──────────────────────────────────────
+Deno.test("overdue - accept is blocked once the submission deadline has passed", async () => {
+  const client = buildClient({ lead: leadRow({ submission_deadline: "2000-01-01" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 403);
+  assertEquals((await res.json()).error.includes("submission deadline has passed"), true);
+});
+
+Deno.test("overdue - a future submission deadline is not overdue, action proceeds normally", async () => {
+  const client = buildClient({ lead: leadRow({ submission_deadline: "2099-01-01", assigned_ba_id: "existing-ba" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("overdue - a terminal lead (md_approved) is never treated as overdue", async () => {
+  const client = buildClient({
+    caller: callerRow({ role: "md" }),
+    lead: leadRow({ status: "md_approved", submission_deadline: "2000-01-01", created_by: CALLER_ID }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop", comment: "no longer pursuing" }), client as never);
+  assertEquals(res.status, 200);
+});
+
+Deno.test("overdue - po_assign on an overdue po_assignment lead is blocked too (no PR yet, creator must fix the date via update-lead)", async () => {
+  const client = buildClient({
+    caller: callerRow({ role: "project_officer" }),
+    lead: leadRow({ status: "po_assignment", person_responsible_id: null, submission_deadline: "2000-01-01" }),
+  });
+  const res = await handleRequest(
+    req({ lead_id: LEAD_ID, action: "po_assign", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "authority-1" }),
+    client as never
+  );
+  assertEquals(res.status, 403);
+});

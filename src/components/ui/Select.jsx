@@ -15,7 +15,12 @@ export default function Select({
   // and if nothing matches, a "+ Add “…”" option lets the typed text itself
   // become the value (e.g. team names, which aren't a fixed enum).
   creatable   = false,
+  // Same text-input filtering as creatable, minus the "+ Add" option — for
+  // long fixed-option lists (portals, states, user pickers) where the value
+  // must always be one of `options`, never freeform. creatable implies this.
+  searchable  = false,
 }) {
+  const isFilterable = creatable || searchable;
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
   const [query, setQuery] = useState("");
@@ -34,11 +39,11 @@ export default function Select({
   // right after commitCreate below sets a brand-new value that `options`
   // doesn't know about yet, so this must not blank the input back out.
   useEffect(() => {
-    if (creatable && !open) setQuery(selected ? selected.label : value || "");
-  }, [creatable, open, value]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (isFilterable && !open) setQuery(selected ? selected.label : value || "");
+  }, [isFilterable, open, value]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const trimmedQuery = query.trim();
-  const filtered = creatable && trimmedQuery
+  const filtered = isFilterable && trimmedQuery
     ? normalised.filter(o => o.label.toLowerCase().includes(trimmedQuery.toLowerCase()))
     : normalised;
   const exactMatch = normalised.find(o => o.label.toLowerCase() === trimmedQuery.toLowerCase());
@@ -99,7 +104,7 @@ export default function Select({
 
   function handleSelect(val, label) {
     onChange(val);
-    if (creatable) setQuery(label);
+    if (isFilterable) setQuery(label);
     setOpen(false);
   }
 
@@ -140,7 +145,7 @@ export default function Select({
   return (
     <>
       <div className={`csl-wrapper${className ? ` ${className}` : ""}`} style={{ position: "relative" }}>
-        {creatable ? (
+        {isFilterable ? (
           <div className="csl-trigger-input-wrap">
             <input
               ref={triggerRef}
@@ -207,7 +212,7 @@ export default function Select({
 
       {open && rect && createPortal(
         <ul ref={dropdownRef} role="listbox" id="csl-listbox" className="csl-dropdown" style={dropdownStyle}>
-          {(creatable ? filtered : normalised).map(option => (
+          {(isFilterable ? filtered : normalised).map(option => (
             <li
               key={option.value}
               role="option"
@@ -216,7 +221,19 @@ export default function Select({
               onMouseDown={e => e.preventDefault()}
               onClick={() => handleSelect(option.value, option.label)}
             >
-              {option.label}
+              {/* option.hint: extra detail shown only in the dropdown list
+                  (e.g. "Active leads: 2" under a name) — option.label stays
+                  the plain string used for the closed trigger/search input,
+                  so a searchable Select's input text never has to hold this
+                  richer content. */}
+              {option.hint ? (
+                <span className="csl-option-text">
+                  <span className="csl-option-label">{option.label}</span>
+                  <span className="csl-option-hint">{option.hint}</span>
+                </span>
+              ) : (
+                option.label
+              )}
               {option.value === value && (
                 <span className="csl-option-check" aria-hidden="true">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -238,7 +255,7 @@ export default function Select({
               + Add &ldquo;{trimmedQuery}&rdquo;
             </li>
           )}
-          {creatable && filtered.length === 0 && !showCreateOption && (
+          {isFilterable && filtered.length === 0 && !showCreateOption && (
             <li className="csl-option csl-option-empty" aria-disabled="true">No matches</li>
           )}
         </ul>,

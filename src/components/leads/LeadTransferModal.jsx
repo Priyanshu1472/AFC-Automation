@@ -68,7 +68,7 @@ export default function LeadTransferModal({ leadId, currentTeam, onClose, onSucc
             value={pin}
             onChange={setPin}
             disabled={saving}
-            hint="Confirms it's really you — set or change this from My Profile."
+            hint="Confirms it's really you"
           />
         </div>
       </Modal.Body>

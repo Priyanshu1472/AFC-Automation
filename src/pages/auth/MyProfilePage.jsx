@@ -108,7 +108,7 @@ export default function MyProfilePage() {
                   </p>
                 </div>
                 <div className="field">
-                  <label className="field-label">Role</label>
+                  <label className="field-label">Designation</label>
                   <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{roleLabel}</p>
                 </div>
                 {profile.team && (

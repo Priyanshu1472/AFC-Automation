@@ -2,6 +2,7 @@
 // LeadDetailPage so the label/color for a given status never drifts
 // between the two.
 export const STATUS_MAP = {
+  po_assignment: { label: "Awaiting PO Assignment", variant: "warning" },
   pa_review: { label: "PR Review", variant: "warning" },
   recommending_authority_review: { label: "Recommending Authority", variant: "warning" },
   pmt_review: { label: "PMT", variant: "info" },
@@ -49,3 +50,27 @@ export const DELIVERY_TYPE_LABELS = {
   offline: "Hardcopy",
   both: "Both (Online & Hardcopy)",
 };
+
+// A finished lead never goes "overdue" — matches advance-lead-stage's own
+// TERMINAL_STATUSES and update-lead's identical constant.
+export const TERMINAL_STATUSES = ["md_approved", "md_declined", "pa_dropped"];
+
+// A lead whose submission deadline has passed and isn't already finished —
+// every normal pipeline action gets blocked once this is true (see
+// advance-lead-stage's blanket guard), and only overdueEditorId() below can
+// still edit it (to fix the date, among other fields), regardless of the
+// lead's current status. Purely computed per-request, same idiom as every
+// other "deadline passed" check in this codebase (proposals/fee-notes
+// module) — no stored flag, no background job. Editing and pushing the
+// deadline into the future reactivates the lead exactly at whatever status
+// it was frozen at — nothing here ever changes `status` itself.
+export function isLeadOverdue(lead) {
+  if (!lead || TERMINAL_STATUSES.includes(lead.status)) return false;
+  return !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date();
+}
+
+// Who's allowed to edit an overdue lead: the named Person Responsible, or —
+// for a po_assignment lead, which has none yet — the creator instead.
+export function overdueEditorId(lead) {
+  return lead?.person_responsible_id || lead?.created_by || null;
+}

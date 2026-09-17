@@ -17,7 +17,8 @@ import LeadTimeline from "../../components/leads/LeadTimeline";
 import LeadChatPanel from "../../components/leads/LeadChatPanel";
 import LeadQueryPanel from "../../components/leads/LeadQueryPanel";
 import LeadTransferModal from "../../components/leads/LeadTransferModal";
-import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel } from "../../components/leads/leadStatus";
+import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId } from "../../components/leads/leadStatus";
+import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 // Reuses the ar-* detail/action/timeline/document styles already defined
 // for Empanelment's review page — generic patterns (label/value rows,
 // stepper, action panel, doc list), no Lead-Gen-specific CSS needed yet.
@@ -54,6 +55,15 @@ function Row({ label, value }) {
 // Authority sending a lead back to the assignee doesn't need one), and
 // never edit/resubmit/claim/reject_reassign.
 const ACTIONS_BY_STATUS = {
+  // No Person Responsible yet — an Associate Consultant/Project Assistant
+  // created this lead without one (see create-lead's isPoRouted). The
+  // team's Project Officer (or Area Manager/Regional Manager) names all
+  // three assignments at once, PIN-confirmed, which lands the lead in
+  // pa_review exactly like every other creator's.
+  po_assignment: [
+    { key: "po_assign", label: "Assign PR / Reviewer / Recommending Authority", variant: "primary", requiresPin: true },
+    { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
+  ],
   pa_review: [
     // Replaces the old one-click "Accept" — navigates to the Lead Approval
     // Note form/preview flow, which itself invokes the same "accept" action
@@ -174,6 +184,21 @@ export default function LeadDetailPage() {
   const [pin, setPin] = useState("");
   const [selectedReassignId, setSelectedReassignId] = useState("");
   const [reassignOptions, setReassignOptions] = useState([]);
+  // The Project Officer (or Area Manager/Regional Manager) naming Person
+  // Responsible/Reviewer/Recommending Authority on a po_assignment lead —
+  // three pickers at once, same idea as reassignOptions/selectedReassignId
+  // above but tripled.
+  // Person Responsible lists any active, non-BP team member; Reviewer
+  // additionally excludes Associate Consultant/Project Assistant (that
+  // tier creates leads and needs a Project Officer to review them, not the
+  // other way around) — mirrors LeadForm.jsx's personResponsibleOptions/
+  // reviewerOptions split.
+  const [poAssignPrOptions, setPoAssignPrOptions] = useState([]);
+  const [poAssignReviewerOptions, setPoAssignReviewerOptions] = useState([]);
+  const [poAssignRaOptions, setPoAssignRaOptions] = useState([]);
+  const [poAssignPrId, setPoAssignPrId] = useState("");
+  const [poAssignReviewerId, setPoAssignReviewerId] = useState("");
+  const [poAssignRaId, setPoAssignRaId] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   // Which top-level action button is mid-flight — only PR-review Accept/
   // Edit call the backend directly from this list (every other action
@@ -235,6 +260,15 @@ export default function LeadDetailPage() {
     // Logs "Lead Activity" tab) — never an actor on any lead, regardless
     // of any coincidental id/role/committee match below.
     if (profile?.role === "admin") return [];
+    // This lead's submission deadline has passed — every normal action is
+    // blocked (see advance-lead-stage's blanket guard), and only the
+    // Person Responsible (or the creator, if none is assigned yet — e.g. a
+    // po_assignment lead) can still Edit it, regardless of status, to push
+    // the date into the future. Takes priority over the pending-PR-review
+    // branch below — the date must be fixed before anything else continues.
+    if (isLeadOverdue(lead)) {
+      return profile?.id === overdueEditorId(lead) ? [{ key: "__edit_resubmit", label: "Edit", variant: "primary" }] : [];
+    }
     // A creator-drafted note is sitting with the PR for Accept/Edit/Reject
     // — swap in that trio (PR only; everyone else, including the creator,
     // sees "Viewing only" until the PR acts) instead of the normal
@@ -246,6 +280,8 @@ export default function LeadDetailPage() {
     const candidates = ACTIONS_BY_STATUS[lead.status] || [];
     return candidates.filter((a) => {
       switch (a.key) {
+        case "po_assign":
+          return ["project_officer", "area_manager", "regional_manager"].includes(profile?.role) && !!profile?.teams?.includes(lead.team);
         // Generating/editing the note itself is open to creator or PR (same
         // as Edit), but only PR can actually Submit for approval from the
         // preview page — enforced there and, ultimately, server-side.
@@ -258,7 +294,7 @@ export default function LeadDetailPage() {
         // PR at every other stage, md_approved included (the one action
         // still open once MD has approved — see ACTIONS_BY_STATUS.md_approved).
         case "drop":
-          if (lead.status === "pa_review") return profile?.id === lead.created_by;
+          if (lead.status === "po_assignment" || lead.status === "pa_review") return profile?.id === lead.created_by;
           // The Recommending Authority sent this back for changes — only
           // they should re-review it, so there's no Withdraw here, only
           // Edit & Resubmit.
@@ -307,6 +343,10 @@ export default function LeadDetailPage() {
   // Rejecting before PMT review (as PR, not the creator) hands the lead
   // straight to a chosen teammate instead of releasing it into an open pool.
   const needsReassignSelection = pendingAction?.key === "reject_reassign";
+  // The Project Officer/Area Manager/Regional Manager naming Person
+  // Responsible/Reviewer/Recommending Authority on a po_assignment lead —
+  // three required pickers instead of the usual single reason/PIN panel.
+  const needsPoAssignSelection = pendingAction?.key === "po_assign";
 
   // The PR taking ownership of a creator-drafted note — Accept and Edit
   // both call the exact same backend transition (they're now the reviewer
@@ -364,6 +404,9 @@ export default function LeadDetailPage() {
     setReason("");
     setPin("");
     setSelectedReassignId("");
+    setPoAssignPrId("");
+    setPoAssignReviewerId("");
+    setPoAssignRaId("");
     setPendingAction(action);
     if (action.key === "reject_reassign" && lead?.team) {
       supabase
@@ -374,6 +417,32 @@ export default function LeadDetailPage() {
         .eq("is_active", true)
         .order("full_name")
         .then(({ data }) => setReassignOptions((data || []).filter((u) => u.id !== profile?.id)));
+    }
+    if (action.key === "po_assign" && lead?.team) {
+      supabase
+        .from("afc_users")
+        .select("id, full_name")
+        .eq("team", lead.team)
+        .eq("is_active", true)
+        .neq("role", "business_associate")
+        .order("full_name")
+        .then(async ({ data }) => setPoAssignPrOptions(await withActiveCounts(data || [])));
+      supabase
+        .from("afc_users")
+        .select("id, full_name")
+        .eq("team", lead.team)
+        .eq("is_active", true)
+        .not("role", "in", "(business_associate,associate_consultant,project_assistant)")
+        .order("full_name")
+        .then(({ data }) => setPoAssignReviewerOptions(data || []));
+      supabase
+        .from("afc_users")
+        .select("id, full_name")
+        .eq("team", lead.team)
+        .eq("is_active", true)
+        .in("role", ["agm", "srm", "dgm", "general_manager"])
+        .order("full_name")
+        .then(({ data }) => setPoAssignRaOptions(data || []));
     }
   }
 
@@ -391,6 +460,10 @@ export default function LeadDetailPage() {
       showToast("Select a team member to assign this lead to.", "danger");
       return;
     }
+    if (needsPoAssignSelection && (!poAssignPrId || !poAssignReviewerId || !poAssignRaId)) {
+      showToast("Select a Person Responsible, Reviewer, and Recommending Authority.", "danger");
+      return;
+    }
     setActionLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("advance-lead-stage", {
@@ -400,6 +473,9 @@ export default function LeadDetailPage() {
           comment: reason.trim(),
           ...(pendingAction.requiresPin ? { pin } : {}),
           ...(needsReassignSelection ? { reassign_to_id: selectedReassignId } : {}),
+          ...(needsPoAssignSelection
+            ? { person_responsible_id: poAssignPrId, reviewer_id: poAssignReviewerId, recommending_authority_id: poAssignRaId }
+            : {}),
         },
       });
       if (error) {
@@ -422,6 +498,9 @@ export default function LeadDetailPage() {
       setReason("");
       setPin("");
       setSelectedReassignId("");
+      setPoAssignPrId("");
+      setPoAssignReviewerId("");
+      setPoAssignRaId("");
       fetchLead();
     } catch (err) {
       showToast(err.message || "Something went wrong.", "danger");
@@ -443,6 +522,7 @@ export default function LeadDetailPage() {
 
   const statusCfg = STATUS_MAP[lead.status] || { label: lead.status, variant: "neutral" };
   const isTerminal = ["md_approved", "md_declined", "pa_dropped"].includes(lead.status);
+  const overdue = isLeadOverdue(lead);
   const actions = availableActions();
   const currentFlowIdx = STATUS_FLOW.findIndex((s) => s.key === lead.status);
   // Every uploaded/generated document lives under Lead Records now — the
@@ -463,6 +543,7 @@ export default function LeadDetailPage() {
                 <div className="ar-header-badges">
                   <Badge variant="brand">Lead</Badge>
                   <Badge variant={statusCfg.variant} dot>{statusCfg.label}</Badge>
+                  {overdue && <Badge variant="danger" dot>Submission Overdue</Badge>}
                 </div>
                 <h1 className="ar-header-email">{lead.title}</h1>
                 <p className="ar-header-meta">
@@ -583,7 +664,13 @@ export default function LeadDetailPage() {
             </div>
 
             <div className="ar-right">
-              {(profile?.committee === "PMT" || ["md", "admin"].includes(profile?.role)) && (
+              {/* PMT-committee-only, and only while the lead is actually at
+                  its pmt_review stage — mirrors transfer-lead's server-side
+                  check exactly. Deliberately narrower than (and unrelated
+                  to) respond-lead-query's own "transfer" action, which
+                  resolves a cross-team lead query and can happen at any
+                  status. */}
+              {profile?.committee === "PMT" && lead.status === "pmt_review" && (
                 <Card>
                   <Card.Body>
                     <Button variant="secondary" block onClick={() => setShowTransferModal(true)}>
@@ -620,6 +707,49 @@ export default function LeadDetailPage() {
                             />
                           </div>
                         )}
+                        {needsPoAssignSelection && (
+                          <>
+                            <div className="ar-field">
+                              <label className="ar-label">
+                                Person Responsible <span className="ar-required">*</span>
+                              </label>
+                              <Select
+                                options={poAssignPrOptions.map(personOption)}
+                                value={poAssignPrId}
+                                onChange={setPoAssignPrId}
+                                placeholder="Select a team member"
+                                disabled={actionLoading}
+                                searchable
+                              />
+                            </div>
+                            <div className="ar-field">
+                              <label className="ar-label">
+                                Reviewer <span className="ar-required">*</span>
+                              </label>
+                              <Select
+                                options={poAssignReviewerOptions.map((u) => ({ value: u.id, label: u.full_name }))}
+                                value={poAssignReviewerId}
+                                onChange={setPoAssignReviewerId}
+                                placeholder="Select a team member"
+                                disabled={actionLoading}
+                                searchable
+                              />
+                            </div>
+                            <div className="ar-field">
+                              <label className="ar-label">
+                                Recommending Authority <span className="ar-required">*</span>
+                              </label>
+                              <Select
+                                options={poAssignRaOptions.map((u) => ({ value: u.id, label: u.full_name }))}
+                                value={poAssignRaId}
+                                onChange={setPoAssignRaId}
+                                placeholder={poAssignRaOptions.length ? "Select an AGM, SRM, DGM, or General Manager" : "No AGM, SRM, DGM, or General Manager found on your team."}
+                                disabled={actionLoading}
+                                searchable
+                              />
+                            </div>
+                          </>
+                        )}
                         <div className="ar-field">
                           <label className="ar-label">
                             Remarks / Comment {pendingAction.requiresReason && <span className="ar-required">*</span>}
@@ -640,12 +770,12 @@ export default function LeadDetailPage() {
                               value={pin}
                               onChange={setPin}
                               disabled={actionLoading}
-                              hint="Confirms it's really you — set or change this from My Profile."
+                              hint="Confirms it's really you"
                             />
                           </div>
                         )}
                         <Button variant={pendingAction.variant} block loading={actionLoading} onClick={confirmAction}>
-                          Confirm: {pendingAction.label}
+                          {needsPoAssignSelection ? "Confirm" : `Confirm: ${pendingAction.label}`}
                         </Button>
                         <Button variant="secondary" block disabled={actionLoading} onClick={() => setPendingAction(null)}>
                           Cancel
@@ -670,7 +800,13 @@ export default function LeadDetailPage() {
               )}
 
               {actions.length === 0 && !isTerminal && (
-                <Card><Card.Body className="ar-view-only"><span>Viewing only. Action pending from <strong>{statusCfg.label}</strong>.</span></Card.Body></Card>
+                <Card><Card.Body className="ar-view-only">
+                  {overdue ? (
+                    <span>Submission deadline passed. Only the Person Responsible (or the creator, if none is assigned yet) can edit this lead to update the date.</span>
+                  ) : (
+                    <span>Viewing only. Action pending from <strong>{statusCfg.label}</strong>.</span>
+                  )}
+                </Card.Body></Card>
               )}
 
               {isTerminal && (

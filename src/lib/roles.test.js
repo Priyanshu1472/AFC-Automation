@@ -74,10 +74,11 @@ describe("Company Documents write access is Admin-only", () => {
     }
   });
 
-  it("every non-business_associate role can still reach Knowledge Repository (view/download Company Documents)", () => {
+  it("every role except business_associate and executive_director can still reach Knowledge Repository (view/download Company Documents)", () => {
     expect(KNOWLEDGE_REPOSITORY_ROLES).not.toContain("business_associate");
+    expect(KNOWLEDGE_REPOSITORY_ROLES).not.toContain("executive_director");
     expect(KNOWLEDGE_REPOSITORY_ROLES).toContain("admin");
-    for (const r of Object.keys(ROLES).filter((r) => r !== "business_associate")) {
+    for (const r of Object.keys(ROLES).filter((r) => r !== "business_associate" && r !== "executive_director")) {
       expect(KNOWLEDGE_REPOSITORY_ROLES).toContain(r);
     }
   });
@@ -115,6 +116,39 @@ describe("isTeamUser / isAdminLevel", () => {
   });
 });
 
+describe("area_manager / regional_manager / general_manager / executive_director", () => {
+  it("are all Admin-creatable", () => {
+    for (const r of ["area_manager", "regional_manager", "general_manager", "executive_director"]) {
+      expect(ADMIN_CREATABLE_ROLES).toContain(r);
+    }
+  });
+
+  it("area_manager and regional_manager have project_officer-tier permissions", () => {
+    for (const r of ["area_manager", "regional_manager"]) {
+      expect(isTeamUser(r)).toBe(true);
+      expect(LEAD_GENERATION_NAV_ROLES).toContain(r);
+      expect(LEAD_PA_TIER_ROLES).toContain(r);
+      expect(EMPANELMENT_ROLES).toContain(r);
+      expect(KNOWLEDGE_REPOSITORY_ROLES).toContain(r);
+    }
+  });
+
+  it("general_manager has dgm-tier permissions", () => {
+    expect(isTeamUser("general_manager")).toBe(true);
+    expect(LEAD_GENERATION_NAV_ROLES).toContain("general_manager");
+    expect(EMPANELMENT_ROLES).toContain("general_manager");
+    expect(KNOWLEDGE_REPOSITORY_ROLES).toContain("general_manager");
+  });
+
+  it("executive_director has no elevated nav/permission access yet", () => {
+    expect(isTeamUser("executive_director")).toBe(false);
+    expect(LEAD_GENERATION_NAV_ROLES).not.toContain("executive_director");
+    expect(LEAD_PA_TIER_ROLES).not.toContain("executive_director");
+    expect(EMPANELMENT_ROLES).not.toContain("executive_director");
+    expect(KNOWLEDGE_REPOSITORY_ROLES).not.toContain("executive_director");
+  });
+});
+
 describe("nav-visibility role lists", () => {
   it("USERS_PAGE_ROLES is admin-only", () => {
     expect(USERS_PAGE_ROLES).toEqual(["admin"]);
@@ -124,10 +158,12 @@ describe("nav-visibility role lists", () => {
     expect(AUDIT_LOG_ROLES).toEqual(["admin"]);
   });
 
-  it("EMPANELMENT_ROLES and KNOWLEDGE_REPOSITORY_ROLES exclude business_associate but include every staff role", () => {
+  it("EMPANELMENT_ROLES and KNOWLEDGE_REPOSITORY_ROLES exclude business_associate and executive_director but include every other staff role", () => {
     expect(EMPANELMENT_ROLES).not.toContain("business_associate");
+    expect(EMPANELMENT_ROLES).not.toContain("executive_director");
     expect(KNOWLEDGE_REPOSITORY_ROLES).not.toContain("business_associate");
+    expect(KNOWLEDGE_REPOSITORY_ROLES).not.toContain("executive_director");
     expect(EMPANELMENT_ROLES).toContain("admin");
-    expect(EMPANELMENT_ROLES.length).toBe(Object.keys(ROLES).length - 1);
+    expect(EMPANELMENT_ROLES.length).toBe(Object.keys(ROLES).length - 2);
   });
 });

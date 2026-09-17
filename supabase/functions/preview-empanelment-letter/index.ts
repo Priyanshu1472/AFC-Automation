@@ -64,8 +64,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   // auth.uid() is null for the service-role client used here.
   const canViewApplication =
     ["md", "cfo", "cs", "admin"].includes(caller.role) ||
-    (["dgm", "agm"].includes(caller.role) && isCallerOnTeam(caller, app.team)) ||
-    (["project_officer", "project_assistant"].includes(caller.role) && caller.id === app.project_officer_id) ||
+    (["dgm", "agm", "general_manager"].includes(caller.role) && isCallerOnTeam(caller, app.team)) ||
+    (["project_officer", "area_manager", "regional_manager", "project_assistant"].includes(caller.role) && caller.id === app.project_officer_id) ||
     (["associate_consultant", "project_assistant"].includes(caller.role) && caller.id === app.sent_by);
 
   try {
@@ -130,7 +130,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       if (!canViewApplication) return jsonRes(req, 403, { error: "You do not have access to this application." });
     } else {
       // Pre-issue preview — mirrors send-provisional-letter's authorization, minus the PIN.
-      if (!["dgm", "agm"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM or AGM can preview the provisional letter." });
+      if (!["dgm", "agm", "general_manager"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM, AGM, or General Manager can preview the provisional letter." });
       if (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id) return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can preview its provisional letter." });
       if (!PROVISIONAL_ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet, so there's nothing to preview." });
     }

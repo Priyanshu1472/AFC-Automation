@@ -27,7 +27,7 @@ const QUICK_FILTERS = {
   all: { label: "Total", match: () => true },
   in_review: {
     label: "In Review",
-    match: (l) => ["pa_review", "recommending_authority_review", "pmt_review", "md_review"].includes(l.status),
+    match: (l) => ["po_assignment", "pa_review", "recommending_authority_review", "pmt_review", "md_review"].includes(l.status),
   },
   action_required: { label: "Action Required", match: (l, profile) => isActionRequiredForViewer(profile, l) },
   approved: { label: "Approved", match: (l) => l.status === "md_approved" },
@@ -90,11 +90,23 @@ export default function LeadListPage() {
     }
   }, [view, search, quickFilter, statusFilter, teamFilter, page]);
 
-  // Team Leads and any committee tab are both org-wide-flavored (a team, or
-  // a whole committee's queue), so the Team filter/column is worth showing
-  // there to everyone, not just the md/cfo/cs/admin roles that see it on
-  // "My Leads".
-  const canFilterTeam = can.viewAllTeams(profile?.role) || view !== "mine";
+  // A committee tab (e.g. "PMT Leads") is inherently cross-team — that
+  // committee reviews every team's leads at its stage — so the Team filter/
+  // column is worth showing there to everyone, not just the md/cfo/cs/admin
+  // roles that see it on "My Leads". "Team Leads" is different: it's meant
+  // to be exactly "my active team's leads" for a team-scoped role, so it
+  // does NOT get the exception — a multi-team dgm/agm/srm is hard-locked to
+  // whichever team is currently active there, same as the Leads Dashboard
+  // and Empanelment. "All Leads" (DGM/General Manager only — see
+  // hasAllLeadsTab) is the deliberate exception to that: an explicit
+  // org-wide browse view with its own Team filter, alongside (not instead
+  // of) their existing Team Leads tab.
+  const canFilterTeam = can.viewAllTeams(profile?.role) || (view !== "mine" && view !== "team");
+  // DGM and General Manager already have org-wide RLS read access to every
+  // team's leads (see can_view_lead()) — this just gives them an explicit
+  // tab to browse it, with a Team filter, instead of only ever seeing their
+  // own active team under "Team Leads".
+  const hasAllLeadsTab = ["dgm", "general_manager"].includes(profile?.role);
   // A viewer only ever holds one committee (afc_users.committee), so this is
   // at most a single extra tab, only for a member of that committee.
   const committeeTab = profile?.committee ? { key: profile.committee, label: `${profile.committee} Leads` } : null;
@@ -126,7 +138,8 @@ export default function LeadListPage() {
     const { data } = await supabase
       .from("leads")
       .select("*, creator:created_by(full_name), assignee:person_responsible_id(full_name)")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(5000);
     setLeads(data || []);
     setLoading(false);
   }, []);
@@ -166,6 +179,10 @@ export default function LeadListPage() {
   const baseLeads = useMemo(() => {
     if (view === "mine") return leads.filter((l) => isMyLead(profile, l));
     if (view === "team") return leads.filter((l) => isTeamLead(profile, l));
+    // Every RLS-permitted lead, org-wide — `leads` is already scoped to
+    // whatever can_view_lead() grants this caller, which for DGM/General
+    // Manager is every team's leads already, so no extra filtering needed.
+    if (view === "all") return leads;
     return leads.filter((l) => l.status === COMMITTEE_STAGE_STATUS[view]);
   }, [leads, profile, view]);
 
@@ -202,24 +219,29 @@ export default function LeadListPage() {
 
   // Search runs over every matching lead, not just the current page — the
   // page slice below is purely a display concern.
-  const filtered = baseLeads.filter((l) => {
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const matchSearch =
-      (l.lead_number || "").toLowerCase().includes(q) ||
-      (l.title || "").toLowerCase().includes(q) ||
-      (l.client_name || "").toLowerCase().includes(q) ||
-      (l.creator?.full_name || "").toLowerCase().includes(q);
-    return (
-      matchSearch &&
-      QUICK_FILTERS[quickFilter].match(l, profile) &&
-      (statusFilter === "all" || l.status === statusFilter) &&
-      (effectiveTeamFilter === "all" || l.team === effectiveTeamFilter)
-    );
-  });
+    return baseLeads.filter((l) => {
+      const matchSearch =
+        (l.lead_number || "").toLowerCase().includes(q) ||
+        (l.title || "").toLowerCase().includes(q) ||
+        (l.client_name || "").toLowerCase().includes(q) ||
+        (l.creator?.full_name || "").toLowerCase().includes(q);
+      return (
+        matchSearch &&
+        QUICK_FILTERS[quickFilter].match(l, profile) &&
+        (statusFilter === "all" || l.status === statusFilter) &&
+        (effectiveTeamFilter === "all" || l.team === effectiveTeamFilter)
+      );
+    });
+  }, [baseLeads, search, quickFilter, profile, statusFilter, effectiveTeamFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const paged = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage]
+  );
 
   const canCreate = leadCan.create(profile);
 
@@ -250,6 +272,17 @@ export default function LeadListPage() {
               >
                 Team Leads
               </button>
+              {hasAllLeadsTab && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === "all"}
+                  className={`ll-view-tab${view === "all" ? " ll-view-tab-active" : ""}`}
+                  onClick={() => selectView("all")}
+                >
+                  All Leads
+                </button>
+              )}
               {committeeTab && (
                 <button
                   type="button"

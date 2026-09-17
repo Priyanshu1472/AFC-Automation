@@ -1498,6 +1498,23 @@ select.input {
   flex-shrink: 0;
 }
 
+/* Option with a hint (e.g. "Active leads: 2" under a name) — stacked,
+   label at normal size, hint lines smaller/muted underneath. */
+.csl-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.csl-option-hint {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
 /* ============================================================
    25. TOOLTIP
    ============================================================ */

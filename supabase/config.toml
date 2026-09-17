@@ -611,3 +611,12 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/get-user-signature-url/deno.json"
 entrypoint = "./functions/get-user-signature-url/index.ts"
+
+[functions.experience-import]
+enabled = true
+# Not a Supabase user JWT — Experience Intelligence signs its own
+# short-lived service token, verified inside the function itself
+# (_shared/serviceAuth.ts). GET (health check) is unauthenticated by design.
+verify_jwt = false
+import_map = "./functions/experience-import/deno.json"
+entrypoint = "./functions/experience-import/index.ts"

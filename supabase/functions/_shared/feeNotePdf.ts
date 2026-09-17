@@ -64,13 +64,17 @@ const ROLE_DESIGNATIONS: Record<string, string> = {
   cfo: "Chief Financial Officer",
   cs: "Company Secretary",
   dgm: "Deputy General Manager",
+  general_manager: "General Manager",
   agm: "Assistant General Manager",
   srm: "Senior Regional Manager",
   project_officer: "Project Officer",
+  area_manager: "Area Manager",
+  regional_manager: "Regional Manager",
   associate_consultant: "Associate Consultant",
   project_assistant: "Project Assistant",
   business_associate: "Business Partner",
   admin: "Administrator",
+  executive_director: "Executive Director",
 };
 
 function designationFor(role: string | null | undefined): string {

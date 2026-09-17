@@ -1,48 +1,98 @@
 // ─── Role Hierarchy ───────────────────────────────────────────
+// Insertion order here is the display order used everywhere roles/
+// designations are listed (dropdowns, filters, badges) — high tier to low:
+// Managing Director -> Executive Director -> Administrator -> Chief
+// Financial Officer -> Company Secretary -> General Manager -> Deputy
+// General Manager -> Assistant General Manager -> Senior Regional Manager
+// -> Regional Manager -> Area Manager -> Project Officer -> Associate
+// Consultant/Project Assistant, with Business Partner (a separate portal
+// role, not part of this hierarchy) always listed last.
 export const ROLES = {
   md: 0,
-  cfo: 1,
-  cs: 2,
-  dgm: 3,
-  agm: 4,
-  srm: 5,
-  project_officer: 6,
-  associate_consultant: 7,
-  // Same permissions/visibility as associate_consultant (can send
-  // empanelment invitations, sees their own team's applications) — kept as
-  // its own role rather than aliased so titles stay accurate on the roster.
-  project_assistant: 8,
-  business_associate: 9,
-  // Not part of the review hierarchy above — a separate, IT/ops-style role
+  executive_director: 1,
+  // Not part of the review hierarchy below — a separate, IT/ops-style role
   // scoped to Home + Users (full manage rights) and read-only visibility
   // into empanelment/dashboards/reports. Given its own bucket rather than a
   // hierarchy rank.
-  admin: 10,
+  admin: 2,
+  cfo: 3,
+  cs: 4,
+  // Same permissions/visibility as dgm everywhere (empanelment advisor
+  // slot, knowledge-repo edit rights, DGM-tier lead visibility/
+  // notifications) — kept as its own role rather than aliased so titles
+  // stay accurate on the roster.
+  general_manager: 4.9,
+  dgm: 5,
+  agm: 6,
+  srm: 7,
+  regional_manager: 7.9,
+  // Same permissions/visibility as project_officer everywhere (empanelment
+  // reviewing-PO slot included) — kept as its own role so titles stay
+  // accurate on the roster.
+  area_manager: 7.95,
+  project_officer: 8,
+  associate_consultant: 9,
+  // Same permissions/visibility as associate_consultant (can send
+  // empanelment invitations, sees their own team's applications) — kept as
+  // its own role rather than aliased so titles stay accurate on the roster.
+  project_assistant: 9.9,
+  // Placeholder role — exists so Admin can assign it today, but is
+  // deliberately excluded from every permission/nav list below. No
+  // elevated permissions until a future change defines them.
+  business_associate: 10,
 };
 
 export const ROLE_LABELS = {
   md: "Managing Director",
+  executive_director: "Executive Director",
+  admin: "Administrator",
   cfo: "Chief Financial Officer",
   cs: "Company Secretary",
+  general_manager: "General Manager",
   dgm: "Deputy General Manager",
   agm: "Assistant General Manager",
   srm: "Senior Regional Manager",
+  regional_manager: "Regional Manager",
+  area_manager: "Area Manager",
   project_officer: "Project Officer",
   associate_consultant: "Associate Consultant",
   project_assistant: "Project Assistant",
   business_associate: "Business Partner",
-  admin: "Administrator",
+};
+
+// ─── Short form of ROLE_LABELS for space-constrained UI (e.g. the Users
+// list table) — full name is still available via a tooltip/title.
+export const ROLE_ABBR = {
+  md: "MD",
+  executive_director: "ED",
+  admin: "Admin",
+  cfo: "CFO",
+  cs: "CS",
+  general_manager: "GM",
+  dgm: "DGM",
+  agm: "AGM",
+  srm: "SRM",
+  regional_manager: "RM",
+  area_manager: "AM",
+  project_officer: "PO",
+  associate_consultant: "AC",
+  project_assistant: "PA",
+  business_associate: "BP",
 };
 
 // ─── Admin can create any staff role except admin (avoid Admins silently
 // minting more Admins) and md (MD accounts aren't created through this
 // flow). ─────────────────────────────────────────────────────
 export const ADMIN_CREATABLE_ROLES = [
+  "executive_director",
   "cfo",
   "cs",
+  "general_manager",
   "dgm",
   "agm",
   "srm",
+  "regional_manager",
+  "area_manager",
   "project_officer",
   "associate_consultant",
   "project_assistant",
@@ -59,19 +109,21 @@ export const USERS_PAGE_ROLES = ["admin"];
 export const AUDIT_LOG_ROLES = ["admin"];
 
 // ─── Empanelment — visible to every staff role (not the business_associate
-// portal role, which has its own separate area). Only associate_consultant
-// can actually send a new one; who can act at each review stage is enforced
+// portal role, which has its own separate area, and not executive_director,
+// which has no permissions defined yet). Only associate_consultant can
+// actually send a new one; who can act at each review stage is enforced
 // by the empanelment RLS policies, not by this nav-level list. Admin is
 // included here for read-only visibility — it has no branch in any
 // review-stage action UI, so it naturally lands as view-only.
-export const EMPANELMENT_ROLES = Object.keys(ROLES).filter((r) => r !== "business_associate");
+export const EMPANELMENT_ROLES = Object.keys(ROLES).filter((r) => r !== "business_associate" && r !== "executive_director");
 
 // ─── Knowledge Repository — visible to every staff role (not the
-// business_associate portal role). Org-wide, not team-scoped: any staff
-// member can search/view every project so past experience can be cited in
-// proposals company-wide. Adding/editing/deleting is enforced by RLS
+// business_associate portal role, and not executive_director, which has no
+// permissions defined yet). Org-wide, not team-scoped: any staff member can
+// search/view every project so past experience can be cited in proposals
+// company-wide. Adding/editing/deleting is enforced by RLS
 // (can_edit_project), not by this nav-level list.
-export const KNOWLEDGE_REPOSITORY_ROLES = Object.keys(ROLES).filter((r) => r !== "business_associate");
+export const KNOWLEDGE_REPOSITORY_ROLES = Object.keys(ROLES).filter((r) => r !== "business_associate" && r !== "executive_director");
 
 // ─── Permissions ──────────────────────────────────────────────
 export const can = {
@@ -89,7 +141,7 @@ export const can = {
   // disabled rather than a no-op.
   filterReportsByTeamOffice: (role) => ["md", "admin"].includes(role),
   viewOwnTeam: (role) =>
-    ["dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"].includes(role),
+    ["dgm", "general_manager", "agm", "srm", "project_officer", "area_manager", "regional_manager", "associate_consultant", "project_assistant"].includes(role),
 
   viewUsersPage: (role) => USERS_PAGE_ROLES.includes(role),
   viewAuditLog: (role) => AUDIT_LOG_ROLES.includes(role),
@@ -111,7 +163,7 @@ export const can = {
 };
 
 export function isTeamUser(role) {
-  return ["dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant"].includes(role);
+  return ["dgm", "general_manager", "agm", "srm", "project_officer", "area_manager", "regional_manager", "associate_consultant", "project_assistant"].includes(role);
 }
 
 export function isAdminLevel(role) {
@@ -142,7 +194,7 @@ export const COMMITTEES = ["PMT"];
 // PA_REVIEW accept/drop step) and to claim a dropped one. SRM has the same
 // access/permissions as AGM throughout Lead Generation, per product
 // decision — kept alongside it everywhere AGM appears in this module.
-export const LEAD_PA_TIER_ROLES = ["project_assistant", "project_officer", "associate_consultant", "agm", "srm"];
+export const LEAD_PA_TIER_ROLES = ["project_assistant", "project_officer", "area_manager", "regional_manager", "associate_consultant", "agm", "srm"];
 
 // Route-level gating only (who can even reach /leads*) — every actual
 // create/accept/review permission is re-derived from afc_users.role/
@@ -150,4 +202,4 @@ export const LEAD_PA_TIER_ROLES = ["project_assistant", "project_officer", "asso
 // already have org-wide row visibility via can_view_lead(), but have no
 // action branch anywhere in advance-lead-stage — included so they can
 // actually reach the pages, not because they can act on anything yet.
-export const LEAD_GENERATION_NAV_ROLES = ["project_assistant", "project_officer", "associate_consultant", "agm", "srm", "dgm", "md", "admin", "cfo", "cs"];
+export const LEAD_GENERATION_NAV_ROLES = ["project_assistant", "project_officer", "area_manager", "regional_manager", "associate_consultant", "agm", "srm", "dgm", "general_manager", "md", "admin", "cfo", "cs"];

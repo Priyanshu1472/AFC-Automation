@@ -18,7 +18,7 @@ export type Committee = "PMT";
 // PA_REVIEW accept/drop step) and to claim a dropped one. SRM has the same
 // access/permissions as AGM throughout Lead Generation, per product
 // decision — kept alongside it everywhere AGM appears in this module.
-export const PA_TIER_ROLES = ["project_assistant", "project_officer", "associate_consultant", "agm", "srm"];
+export const PA_TIER_ROLES = ["project_assistant", "project_officer", "area_manager", "regional_manager", "associate_consultant", "agm", "srm"];
 
 export type TargetUser = { id: string; role: string; team: string | null; committee: string | null; is_active: boolean };
 
@@ -96,7 +96,7 @@ type ViewableLead = {
 //     its whole new team, not just DGM/AGM, so anyone there can open it to
 //     assign a Person Responsible.
 export function canViewLead(caller: ViewerCaller, lead: ViewableLead): boolean {
-  if (["md", "admin", "cfo", "cs", "dgm", "agm", "srm"].includes(caller.role)) return true;
+  if (["md", "admin", "cfo", "cs", "dgm", "general_manager", "agm", "srm"].includes(caller.role)) return true;
   if (caller.committee === "PMT") return true;
   if ([lead.created_by, lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id, lead.handled_by_dgm_id].includes(caller.id)) return true;
   if (!lead.person_responsible_id) {

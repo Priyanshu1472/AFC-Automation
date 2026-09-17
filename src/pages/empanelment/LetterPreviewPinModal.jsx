@@ -141,7 +141,7 @@ export default function LetterPreviewPinModal({ applicationId, action, comment, 
                       onChange={setPin}
                       disabled={verifying || loadingPreview}
                       autoFocus
-                      hint="Confirms it's really you — set or change this from My Profile."
+                      hint="Confirms it's really you"
                     />
                   </div>
                 )}

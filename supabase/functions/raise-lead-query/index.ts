@@ -16,7 +16,7 @@ import { notifyUsers } from "../_shared/notify.ts";
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 // Same tier as everywhere else in this module that treats SRM like AGM.
-const QUERY_RAISER_ROLES = ["dgm", "agm", "srm"];
+const QUERY_RAISER_ROLES = ["dgm", "general_manager", "agm", "srm"];
 
 export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });

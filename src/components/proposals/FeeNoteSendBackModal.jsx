@@ -66,7 +66,7 @@ export default function FeeNoteSendBackModal({ feeNoteId, action, onClose, onSuc
               value={pin}
               onChange={setPin}
               disabled={saving}
-              hint="Confirms it's really you — set or change this from My Profile."
+              hint="Confirms it's really you"
             />
           </div>
         )}

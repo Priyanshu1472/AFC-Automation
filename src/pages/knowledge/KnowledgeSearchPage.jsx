@@ -91,10 +91,15 @@ export default function KnowledgeSearchPage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
+      // Safety caps, not real pagination — this page's search/filtering is
+      // entirely client-side over the full working set, so these just stop
+      // an unbounded table from eventually trying to pull itself whole into
+      // the browser. project_keyword_details is sized higher since it's a
+      // join table (projects × keywords per project).
       const [{ data: proj }, { data: kwd }, { data: kw }] = await Promise.all([
-        supabase.from("projects").select("*"),
-        supabase.from("project_keyword_details").select("*"),
-        supabase.from("keywords").select("*"),
+        supabase.from("projects").select("*").limit(5000),
+        supabase.from("project_keyword_details").select("*").limit(20000),
+        supabase.from("keywords").select("*").limit(5000),
       ]);
       setProjects(proj || []);
       setKwDetails(kwd || []);

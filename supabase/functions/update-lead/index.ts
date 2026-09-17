@@ -22,6 +22,10 @@ import {
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
+// A finished lead never goes "overdue" — mirrors leadStatus.js's identical
+// TERMINAL_STATUSES on the frontend and advance-lead-stage's copy.
+const TERMINAL_STATUSES = new Set(["md_approved", "md_declined", "pa_dropped"]);
+
 const BUCKET = "lead-documents";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_FILES = 10;
@@ -97,52 +101,89 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // are always what gets written back.
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, lead_number, documents, title, portal_name, bid_number")
+      .select("id, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, lead_number, documents, title, portal_name, bid_number, submission_deadline, assigned_ba_id")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
-    const fieldErr = validateRequiredFields({ ...input, title: lead.title });
+    // Overdue: this lead's submission deadline has already passed and it
+    // isn't finished — every normal pipeline action is blocked (see
+    // advance-lead-stage's blanket guard) except this edit, which the
+    // Person Responsible (or the creator, if none is assigned yet — e.g. a
+    // po_assignment lead) can still use to push the date into the future
+    // and silently reactivate whatever status the lead is frozen at.
+    const isOverdue = !TERMINAL_STATUSES.has(lead.status as string) &&
+      !!lead.submission_deadline && new Date(lead.submission_deadline as string) < new Date();
+    // The normal pre-commitment edit window — full-form editing (including
+    // reassigning PR/Reviewer/Recommending Authority/BP) only ever applies
+    // here. An overdue edit at a later stage may only touch logistics
+    // fields, never retroactively change who a committee already acted on
+    // behalf of.
+    const inNormalEditWindow = lead.status === "pa_action_required" || lead.status === "pa_review";
+    const allowReassignment = inNormalEditWindow;
+
+    const fieldErr = validateRequiredFields({ ...input, title: lead.title }, { requireAssignment: allowReassignment });
     if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
 
-    // A just-transferred lead (person_responsible_id null) has no PR yet —
-    // anyone on its new team can pick it up and fill the form, not just the
-    // (old team's) creator (see _shared/leadTransfer.ts).
-    const isUnclaimedOnCallerTeam = !lead.person_responsible_id && caller.teams.includes(lead.team);
-    if (caller.id !== lead.created_by && caller.id !== lead.person_responsible_id && !isUnclaimedOnCallerTeam) {
-      return jsonRes(req, 403, { error: "Only the lead's creator or Person Responsible can edit it." });
-    }
-    if (lead.status !== "pa_action_required" && lead.status !== "pa_review") {
-      return jsonRes(req, 400, {
-        error: `This lead is in "${lead.status}" status and cannot be edited right now. It may have just been updated — refresh and try again.`,
-      });
+    if (isOverdue) {
+      const editorId = lead.person_responsible_id || lead.created_by;
+      if (caller.id !== editorId) {
+        return jsonRes(req, 403, { error: "This lead's submission deadline has passed — only the Person Responsible (or the creator, if none is assigned yet) can edit it." });
+      }
+    } else {
+      // A just-transferred lead (person_responsible_id null) has no PR yet —
+      // anyone on its new team can pick it up and fill the form, not just the
+      // (old team's) creator (see _shared/leadTransfer.ts).
+      const isUnclaimedOnCallerTeam = !lead.person_responsible_id && caller.teams.includes(lead.team);
+      if (caller.id !== lead.created_by && caller.id !== lead.person_responsible_id && !isUnclaimedOnCallerTeam) {
+        return jsonRes(req, 403, { error: "Only the lead's creator or Person Responsible can edit it." });
+      }
+      if (!inNormalEditWindow) {
+        return jsonRes(req, 400, {
+          error: `This lead is in "${lead.status}" status and cannot be edited right now. It may have just been updated — refresh and try again.`,
+        });
+      }
     }
     // A plain field edit — status is never touched here, whether the lead
-    // is still at pa_review or has been returned as pa_action_required.
+    // is still at pa_review, has been returned as pa_action_required, or
+    // (while overdue) is sitting somewhere further down the pipeline.
     const fromStatus = lead.status as string;
 
-    const { data: personResponsible, error: prErr } = await adminClient
-      .from("afc_users")
-      .select("id, team, is_active")
-      .eq("id", input.person_responsible_id)
-      .maybeSingle();
-    if (prErr || !personResponsible || !personResponsible.is_active || !personResponsible.team) {
-      return jsonRes(req, 400, { error: "Person Responsible is not a valid active user with a team." });
-    }
-    const team = personResponsible.team as string;
+    let team = lead.team as string;
+    let finalPersonResponsibleId = lead.person_responsible_id as string;
+    let finalReviewerId = lead.reviewer_id as string;
+    let finalRecommendingAuthorityId = lead.recommending_authority_id as string;
+    let finalAssignedBaId = lead.assigned_ba_id as string | null;
 
-    const assignErr = await validateAssignment(adminClient, input.person_responsible_id, team);
-    if (assignErr) return jsonRes(req, 400, { error: assignErr });
+    if (allowReassignment) {
+      const { data: personResponsible, error: prErr } = await adminClient
+        .from("afc_users")
+        .select("id, team, is_active")
+        .eq("id", input.person_responsible_id)
+        .maybeSingle();
+      if (prErr || !personResponsible || !personResponsible.is_active || !personResponsible.team) {
+        return jsonRes(req, 400, { error: "Person Responsible is not a valid active user with a team." });
+      }
+      team = personResponsible.team as string;
 
-    const reviewerErr = await validateReviewer(adminClient, input.reviewer_id, team);
-    if (reviewerErr) return jsonRes(req, 400, { error: reviewerErr });
+      const assignErr = await validateAssignment(adminClient, input.person_responsible_id, team);
+      if (assignErr) return jsonRes(req, 400, { error: assignErr });
 
-    const authorityErr = await validateRecommendingAuthority(adminClient, input.recommending_authority_id, team);
-    if (authorityErr) return jsonRes(req, 400, { error: authorityErr });
+      const reviewerErr = await validateReviewer(adminClient, input.reviewer_id, team);
+      if (reviewerErr) return jsonRes(req, 400, { error: reviewerErr });
 
-    if (assignedBaId) {
-      const baErr = await validateBusinessAssociate(adminClient, assignedBaId, team);
-      if (baErr) return jsonRes(req, 400, { error: baErr });
+      const authorityErr = await validateRecommendingAuthority(adminClient, input.recommending_authority_id, team);
+      if (authorityErr) return jsonRes(req, 400, { error: authorityErr });
+
+      if (assignedBaId) {
+        const baErr = await validateBusinessAssociate(adminClient, assignedBaId, team);
+        if (baErr) return jsonRes(req, 400, { error: baErr });
+      }
+
+      finalPersonResponsibleId = input.person_responsible_id;
+      finalReviewerId = input.reviewer_id;
+      finalRecommendingAuthorityId = input.recommending_authority_id;
+      finalAssignedBaId = assignedBaId;
     }
 
     const files = formData.getAll("document").filter((f): f is File => f instanceof File && f.size > 0);
@@ -175,10 +216,10 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         remark: clampText(get("remark")),
         documents,
         team,
-        person_responsible_id: input.person_responsible_id,
-        reviewer_id: input.reviewer_id,
-        recommending_authority_id: input.recommending_authority_id,
-        assigned_ba_id: assignedBaId,
+        person_responsible_id: finalPersonResponsibleId,
+        reviewer_id: finalReviewerId,
+        recommending_authority_id: finalRecommendingAuthorityId,
+        assigned_ba_id: finalAssignedBaId,
       })
       .eq("id", lead.id)
       .eq("status", fromStatus);
@@ -194,20 +235,24 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // Only notify a role's newly-assigned person — not every save, and not
     // someone who was already in that role before this edit. action_required
     // (not "info") so the appointment shows on their Home page too, not just
-    // the notification bell — see fetchPendingActionNotifications.
-    const reassignments: Array<{ roleLabel: string; oldValue: string | null; newValue: string }> = [
-      { roleLabel: "Person Responsible", oldValue: lead.person_responsible_id as string | null, newValue: input.person_responsible_id },
-      { roleLabel: "Reviewer", oldValue: lead.reviewer_id as string | null, newValue: input.reviewer_id },
-      { roleLabel: "Recommending Authority", oldValue: lead.recommending_authority_id as string | null, newValue: input.recommending_authority_id },
-    ];
-    for (const { roleLabel, oldValue, newValue } of reassignments) {
-      if (newValue && newValue !== oldValue && newValue !== caller.id) {
-        await notifyUser(adminClient, newValue, {
-          title: `You've been assigned as ${roleLabel}`,
-          sub_text: `${lead.lead_number} — "${lead.title}" has named you as ${roleLabel}.`,
-          type: "action_required",
-          link: `/leads/${lead.id}`,
-        });
+    // the notification bell — see fetchPendingActionNotifications. Nothing
+    // to check when reassignment wasn't even allowed this edit (overdue,
+    // past the normal edit window) — those three fields are untouched.
+    if (allowReassignment) {
+      const reassignments: Array<{ roleLabel: string; oldValue: string | null; newValue: string }> = [
+        { roleLabel: "Person Responsible", oldValue: lead.person_responsible_id as string | null, newValue: finalPersonResponsibleId },
+        { roleLabel: "Reviewer", oldValue: lead.reviewer_id as string | null, newValue: finalReviewerId },
+        { roleLabel: "Recommending Authority", oldValue: lead.recommending_authority_id as string | null, newValue: finalRecommendingAuthorityId },
+      ];
+      for (const { roleLabel, oldValue, newValue } of reassignments) {
+        if (newValue && newValue !== oldValue && newValue !== caller.id) {
+          await notifyUser(adminClient, newValue, {
+            title: `You've been assigned as ${roleLabel}`,
+            sub_text: `${lead.lead_number} — "${lead.title}" has named you as ${roleLabel}.`,
+            type: "action_required",
+            link: `/leads/${lead.id}`,
+          });
+        }
       }
     }
 

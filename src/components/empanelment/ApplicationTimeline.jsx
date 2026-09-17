@@ -27,6 +27,7 @@ export function stepLabel(stepKey, label, reviewerRole, advisorRole) {
     return stepKey === "po_final_review" ? "PA Final" : "PA";
   }
   if (stepKey === "dgm_review" && advisorRole === "agm") return "AGM";
+  if (stepKey === "dgm_review" && advisorRole === "general_manager") return "GM";
   return label;
 }
 
@@ -47,6 +48,7 @@ const STATUS_FLOW_FULL_LABELS_PA = {
   po_final_review: "Project Assistant (Final Review)",
 };
 const STATUS_FLOW_FULL_LABEL_AGM = "Assistant General Manager";
+const STATUS_FLOW_FULL_LABEL_GM = "General Manager";
 
 export const STATUS_BADGE = {
   sent: "info", filled: "warning", po_review: "warning",
@@ -67,6 +69,7 @@ export function ProgressStepper({ currentStatus, publicView = false, reviewerRol
   const fullLabels = {
     ...(isPA ? STATUS_FLOW_FULL_LABELS_PA : STATUS_FLOW_FULL_LABELS),
     ...(advisorRole === "agm" ? { dgm_review: STATUS_FLOW_FULL_LABEL_AGM } : {}),
+    ...(advisorRole === "general_manager" ? { dgm_review: STATUS_FLOW_FULL_LABEL_GM } : {}),
   };
 
   return (

@@ -77,7 +77,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
 
-  if (!["dgm", "agm"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM or AGM can send the provisional empanelment letter." });
+  if (!["dgm", "agm", "general_manager"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM, AGM, or General Manager can send the provisional empanelment letter." });
 
   let body: Record<string, unknown>;
   try {

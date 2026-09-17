@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { ROLE_LABELS, can } from "../../lib/roles";
+import { ROLE_LABELS, ROLE_ABBR, can } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
@@ -22,12 +22,16 @@ const ROLE_VARIANT = {
   cfo: "info",
   cs: "success",
   dgm: "brand",
+  general_manager: "brand",
   agm: "neutral",
   srm: "neutral",
   project_officer: "warning",
+  area_manager: "warning",
+  regional_manager: "warning",
   associate_consultant: "info",
   project_assistant: "info",
   admin: "danger",
+  executive_director: "neutral",
 };
 
 const PAGE_SIZE = 25;
@@ -121,7 +125,7 @@ export default function UserListPage() {
   const groupedByTeam = profile?.role === "md" && teamFilter === "all";
 
   const roleFilterOptions = useMemo(
-    () => [{ value: "all", label: "All Roles" }, ...Object.entries(ROLE_LABELS).filter(([k]) => k !== "business_associate").map(([value, label]) => ({ value, label }))],
+    () => [{ value: "all", label: "All Designations" }, ...Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))],
     []
   );
   const teams = useTeamOptions();
@@ -318,7 +322,7 @@ export default function UserListPage() {
                     <tr>
                       <th>Name</th>
                       <th>Email</th>
-                      <th>Role</th>
+                      <th>Designation</th>
                       <th>Office</th>
                       <th>Committee</th>
                       <th>Status</th>
@@ -337,13 +341,17 @@ export default function UserListPage() {
                         <tr key={u.id} className={isRowClickable(u) ? "ul-row-clickable" : undefined} onClick={() => handleRowClick(u)}>
                           <td>{u.full_name}</td>
                           <td>{u.email}</td>
-                          <td><Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge></td>
+                          <td>
+                            <Tooltip text={ROLE_LABELS[u.role] || u.role}>
+                              <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_ABBR[u.role] || u.role}</Badge>
+                            </Tooltip>
+                          </td>
                           <td>{u.office ? u.office.charAt(0).toUpperCase() + u.office.slice(1) : "—"}</td>
                           <td>{u.committee ? <Badge variant="neutral">{u.committee}</Badge> : "—"}</td>
                           <td><Badge variant={u.is_active ? "success" : "danger"} dot>{u.is_active ? "Active" : "Inactive"}</Badge></td>
                           {canManage && (
                             <td onClick={(e) => e.stopPropagation()}>
-                              <div style={{ display: "flex", gap: 8 }}>
+                              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                                 <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                                 <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
                               </div>
@@ -377,7 +385,9 @@ export default function UserListPage() {
                           <Badge variant={u.is_active ? "success" : "danger"} dot>{u.is_active ? "Active" : "Inactive"}</Badge>
                         </div>
                         <div className="ul-mobile-card-meta">
-                          <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
+                          <Tooltip text={ROLE_LABELS[u.role] || u.role}>
+                            <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_ABBR[u.role] || u.role}</Badge>
+                          </Tooltip>
                           {u.office && <span className="text-xs text-tertiary">{u.office.charAt(0).toUpperCase() + u.office.slice(1)}</span>}
                           {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
                         </div>
@@ -404,7 +414,7 @@ export default function UserListPage() {
                       <th>Email</th>
                       <th>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                          Role <FieldTooltip text="A staff member's role determines what they can see and do — see the Role field on the Create User page for the full hierarchy." />
+                          Designation <FieldTooltip text="A staff member's designation determines what they can see and do — see the Designation field on the Create User page for the full hierarchy." />
                         </span>
                       </th>
                       <th>Office</th>
@@ -424,7 +434,9 @@ export default function UserListPage() {
                         <td>{u.full_name}</td>
                         <td>{u.email}</td>
                         <td>
-                          <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
+                          <Tooltip text={ROLE_LABELS[u.role] || u.role}>
+                            <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_ABBR[u.role] || u.role}</Badge>
+                          </Tooltip>
                         </td>
                         <td>{u.office ? u.office.charAt(0).toUpperCase() + u.office.slice(1) : "—"}</td>
                         <td>{u.team || "—"}</td>
@@ -436,7 +448,7 @@ export default function UserListPage() {
                         </td>
                         {canManage && (
                           <td onClick={(e) => e.stopPropagation()}>
-                            <div style={{ display: "flex", gap: 8 }}>
+                            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                               <EditButton user={u} isSelf={u.id === profile.id} onEdit={handleEdit} />
                               <ToggleButton user={u} isSelf={u.id === profile.id} togglingId={togglingId} onToggle={handleToggle} />
                             </div>
@@ -466,7 +478,9 @@ export default function UserListPage() {
                       </Badge>
                     </div>
                     <div className="ul-mobile-card-meta">
-                      <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_LABELS[u.role] || u.role}</Badge>
+                      <Tooltip text={ROLE_LABELS[u.role] || u.role}>
+                        <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_ABBR[u.role] || u.role}</Badge>
+                      </Tooltip>
                       {u.office && <span className="text-xs text-tertiary">{u.office.charAt(0).toUpperCase() + u.office.slice(1)}</span>}
                       {u.team && <span className="text-xs text-tertiary">{u.team}</span>}
                       {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
@@ -512,8 +526,8 @@ export default function UserListPage() {
             <Select options={teamFilterOptions} value={teamFilter} onChange={handleTeamFilterChange} placeholder="All Teams" />
           </FilterField>
         )}
-        <FilterField label="Role">
-          <Select options={roleFilterOptions} value={roleFilter} onChange={handleRoleFilterChange} placeholder="All Roles" />
+        <FilterField label="Designation">
+          <Select options={roleFilterOptions} value={roleFilter} onChange={handleRoleFilterChange} placeholder="All Designations" />
         </FilterField>
         <FilterField label="Committee">
           <Select options={committeeFilterOptions} value={committeeFilter} onChange={handleCommitteeFilterChange} placeholder="All Committees" />

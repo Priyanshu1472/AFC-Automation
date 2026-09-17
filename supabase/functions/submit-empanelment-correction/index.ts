@@ -193,7 +193,10 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       await notifyUser(adminClient, application.project_officer_id, correctionPayload);
     } else if (resumeStatus === "dgm_review") {
       if (application.dgm_id) await notifyUser(adminClient, application.dgm_id, correctionPayload);
-      else await notifyRole(adminClient, "dgm", correctionPayload, application.team);
+      else await Promise.all([
+        notifyRole(adminClient, "dgm", correctionPayload, application.team),
+        notifyRole(adminClient, "general_manager", correctionPayload, application.team),
+      ]);
     } else if (resumeStatus === "md_review") {
       await notifyRole(adminClient, "md", correctionPayload);
     }

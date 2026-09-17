@@ -12,6 +12,16 @@ describe("leadCan", () => {
     expect(leadCan.create({})).toBe(false);
   });
 
+  it("poAssign only applies to po_assignment and a PO/AM/RM on the lead's team", () => {
+    const lead = { status: "po_assignment", team: "BPDD" };
+    expect(leadCan.poAssign({ role: "project_officer", teams: ["BPDD"] }, lead)).toBe(true);
+    expect(leadCan.poAssign({ role: "area_manager", teams: ["BPDD"] }, lead)).toBe(true);
+    expect(leadCan.poAssign({ role: "regional_manager", teams: ["BPDD"] }, lead)).toBe(true);
+    expect(leadCan.poAssign({ role: "project_officer", teams: ["BIID"] }, lead)).toBe(false); // off-team
+    expect(leadCan.poAssign({ role: "dgm", teams: ["BPDD"] }, lead)).toBe(false); // wrong role
+    expect(leadCan.poAssign({ role: "project_officer", teams: ["BPDD"] }, { ...lead, status: "pa_review" })).toBe(false); // wrong status
+  });
+
   it("accept only applies to pa_review and the assigned Person Responsible", () => {
     const lead = { status: "pa_review", person_responsible_id: "user-1" };
     expect(leadCan.accept(user, lead)).toBe(true);
@@ -81,6 +91,29 @@ describe("leadCan", () => {
     const teammate = { id: "bystander", teams: ["BPDD"] };
     expect(leadCan.editResubmit(teammate, lead)).toBe(true);
     expect(leadCan.editResubmit({ id: "bystander", teams: ["OtherTeam"] }, lead)).toBe(false);
+  });
+
+  it("editResubmit is Person-Responsible-only (not the creator) once a lead is overdue, regardless of status", () => {
+    const overdueLead = {
+      status: "recommending_authority_review",
+      created_by: "creator-1",
+      person_responsible_id: "user-1",
+      submission_deadline: "2000-01-01",
+    };
+    expect(leadCan.editResubmit(user, overdueLead)).toBe(true); // PR
+    expect(leadCan.editResubmit({ id: "creator-1" }, overdueLead)).toBe(false); // creator loses access once overdue
+    expect(leadCan.editResubmit({ id: "bystander" }, overdueLead)).toBe(false);
+  });
+
+  it("editResubmit falls back to the creator on an overdue lead with no Person Responsible yet (po_assignment)", () => {
+    const overdueUnassigned = {
+      status: "po_assignment",
+      created_by: "creator-1",
+      person_responsible_id: null,
+      submission_deadline: "2000-01-01",
+    };
+    expect(leadCan.editResubmit({ id: "creator-1" }, overdueUnassigned)).toBe(true);
+    expect(leadCan.editResubmit({ id: "bystander" }, overdueUnassigned)).toBe(false);
   });
 
   it("claim requires a PA-tier role on one of the caller's assigned teams", () => {

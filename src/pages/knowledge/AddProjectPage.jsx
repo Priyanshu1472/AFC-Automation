@@ -24,7 +24,7 @@ export default function AddProjectPage() {
   const { reindexProject } = useProjectIndexing();
 
   const [form, setForm] = useState({
-    projectName: "", shortform: "", servicesDescription: "",
+    projectName: "", servicesDescription: "",
     clientNameAddress: "", capitalCost: "",
     clientType: "", status: "",
     country: "India", location: "",
@@ -77,7 +77,6 @@ export default function AddProjectPage() {
 
   const REQUIRED_FIELDS = [
     ["projectName", "Name of the Project"],
-    ["shortform", "Short Form / Abbreviation"],
     ["capitalCost", "Approx. Value of the Contract"],
     ["country", "Country"],
     ["location", "Location within Country (State / UT)"],
@@ -130,7 +129,6 @@ export default function AddProjectPage() {
         client: form.clientNameAddress,
         summary: summaryData,
         location: form.location || null,
-        shortform: form.shortform || null,
         client_type: form.clientType || null,
         status: form.status || null,
         team: activeTeam ?? profile?.team ?? null,
@@ -212,11 +210,6 @@ export default function AddProjectPage() {
                 <div className="ap-field full-width">
                   <label>Name of the Project (Assignment name) *</label>
                   <input type="text" placeholder="e.g. Smart City Master Plan, Kolkata" value={form.projectName} onChange={(e) => handleFormChange("projectName", e.target.value)} />
-                </div>
-
-                <div className="ap-field">
-                  <label>Short Form / Abbreviation *</label>
-                  <input required type="text" placeholder="e.g. SCMP-KOL" value={form.shortform} onChange={(e) => handleFormChange("shortform", e.target.value)} />
                 </div>
 
                 <div className="ap-field">

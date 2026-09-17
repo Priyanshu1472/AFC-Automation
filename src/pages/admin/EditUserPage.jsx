@@ -193,14 +193,14 @@ export default function EditUserPage() {
                 {canEditRole ? (
                   <div className="field">
                     <label className="field-label">
-                      Role <span className="required">*</span> <FieldTooltip text={FIELD_HELP.role} />
+                      Designation <span className="required">*</span> <FieldTooltip text={FIELD_HELP.role} />
                     </label>
-                    <Select options={roleOptions} value={form.role} onChange={(v) => set("role", v)} placeholder="Select role" error={errors.role} disabled={saving} />
+                    <Select options={roleOptions} value={form.role} onChange={(v) => set("role", v)} placeholder="Select designation" error={errors.role} disabled={saving} />
                     {errors.role && <span className="field-error">{errors.role}</span>}
                   </div>
                 ) : (
                   <div className="field">
-                    <label className="field-label">Role</label>
+                    <label className="field-label">Designation</label>
                     <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{ROLE_LABELS[target.role] || target.role}</p>
                   </div>
                 )}
