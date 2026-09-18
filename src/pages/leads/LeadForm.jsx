@@ -225,6 +225,12 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     const isBaUnset = !form.assigned_ba_id || form.assigned_ba_id === YET_TO_BE_DECIDED;
     if (form.source === "ba" && isBaUnset) errs.assigned_ba_id = "Business Partner is required for a BP Source lead.";
     if (isSuoMoto && isBaUnset) errs.assigned_ba_id = "Business Partner is required for a Suo Moto lead.";
+    // Only on create — an edit appends to the lead's existing documents
+    // rather than replacing them, so an empty picker there just means "no
+    // new files this time", not "no documents at all".
+    if (mode === "create" && !isSuoMoto && files.length === 0) {
+      errs.documents = "At least one document is required.";
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -607,7 +613,13 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
         <Card.Header title="Documents" />
         <Card.Body>
           <div className="field">
-            <label className="field-label">{isSuoMoto ? "Supporting Document(s) (optional)" : "RFP / Tender Document(s)"}</label>
+            <label className="field-label">
+              {isSuoMoto ? (
+                "Supporting Document(s) (optional)"
+              ) : (
+                <>RFP / Tender Document(s) {mode === "create" && <span className="required">*</span>}</>
+              )}
+            </label>
             <label className="lf-file-drop">
               <input
                 type="file"
@@ -646,6 +658,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
                 ))}
               </ul>
             )}
+            {errors.documents && <span className="field-error">{errors.documents}</span>}
             <span className="field-hint">Used for duplicate detection (first file's name + size) — any match shows up under Name of Assignment above.</span>
           </div>
         </Card.Body>

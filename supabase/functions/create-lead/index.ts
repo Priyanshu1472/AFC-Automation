@@ -164,6 +164,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
     const files = formData.getAll("document").filter((f): f is File => f instanceof File && f.size > 0);
     if (files.length > MAX_FILES) return jsonRes(req, 400, { error: `You can attach at most ${MAX_FILES} documents.` });
+    // A Suo Moto lead has no RFP/Tender document to attach in the first
+    // place — every other source (In-House/BP Source, RFP or EOI) requires
+    // at least one.
+    if (input.source !== "suo_moto" && files.length === 0) {
+      return jsonRes(req, 400, { error: "At least one document is required." });
+    }
     const documents: Array<{ name: string; path: string; size: number; uploaded_at: string }> = [];
     const uploadedPaths: string[] = [];
     const leadId = crypto.randomUUID();
