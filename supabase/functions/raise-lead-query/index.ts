@@ -3,15 +3,20 @@
 // org-wide visible — see 20260928000200_lead_org_wide_visibility.sql) and
 // believes their own team could run it better raises a query here, with a
 // justification. PMT triages it (see respond-lead-query): add the raiser
-// to the lead's chat, decline it, or transfer the lead outright (see
-// transfer-lead). This never changes the lead itself — just opens a
-// lead_queries row PMT can act on.
+// to the lead's chat, decline it, or transfer the lead outright — this is
+// the only way a lead ever gets transferred, there's no standalone/free
+// transfer button. The raiser can edit/withdraw/remind on their own open
+// query (see update-lead-query) — only one open query per raiser per lead,
+// enforced by the existingOpen check below, is why "Raise a Query" only
+// shows again once theirs is resolved or withdrawn. This never changes the
+// lead itself — just opens a lead_queries row PMT can act on.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { getOrgWideHolders } from "../_shared/leadAuth.ts";
 import { notifyUsers } from "../_shared/notify.ts";
+import { logLeadActivity } from "../_shared/leadActivity.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -73,6 +78,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       console.error("lead_queries insert failed:", insertErr.message);
       return jsonRes(req, 500, { error: "Failed to raise query. Please try again." });
     }
+
+    await logLeadActivity(adminClient, leadId, caller.id, caller.role, "cross_team_query_raised", null, null, `${caller.team}: ${justification}`);
 
     const pmtHolders = await getOrgWideHolders(adminClient, { committee: "PMT" });
     await notifyUsers(adminClient, pmtHolders, {

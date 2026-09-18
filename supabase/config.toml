@@ -531,11 +531,11 @@ verify_jwt = true
 import_map = "./functions/respond-lead-query/deno.json"
 entrypoint = "./functions/respond-lead-query/index.ts"
 
-[functions.transfer-lead]
+[functions.update-lead-query]
 enabled = true
 verify_jwt = true
-import_map = "./functions/transfer-lead/deno.json"
-entrypoint = "./functions/transfer-lead/index.ts"
+import_map = "./functions/update-lead-query/deno.json"
+entrypoint = "./functions/update-lead-query/index.ts"
 
 [functions.create-proposal-preparation]
 enabled = true

@@ -1,7 +1,9 @@
 // supabase/functions/_shared/leadTransfer.ts
-// Moves a lead to a different team, PMT-initiated — shared between
-// transfer-lead (standalone) and respond-lead-query's "transfer" action so
-// the two entry points can't drift. Works at any lead status, including
+// Moves a lead to a different team, PMT-initiated — used by
+// respond-lead-query's "transfer" action, the only way a lead gets
+// transferred (there is no standalone/free-transfer entry point; PMT can
+// only act once another team has raised a cross-team query on the lead).
+// Works at any lead status, including
 // terminal ones (md_approved/md_declined/pa_dropped) — a lead can be
 // transferred even after MD approval, per product decision; any downstream
 // Proposal Preparation/Fee Note already created stays tied to the old

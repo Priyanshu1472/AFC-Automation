@@ -15,6 +15,7 @@ import { addLeadChatParticipants } from "../_shared/leadAuth.ts";
 import { notifyUser } from "../_shared/notify.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { performLeadTransfer } from "../_shared/leadTransfer.ts";
+import { logLeadActivity } from "../_shared/leadActivity.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -71,6 +72,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         .eq("id", queryId)
         .eq("status", "open");
       if (updateErr) return jsonRes(req, 400, { error: "This query was already updated by someone else — refresh and try again." });
+      await logLeadActivity(adminClient, query.lead_id, caller.id, "pmt", "cross_team_query_added_to_chat", null, null, `${query.raised_by_team}${response ? ` — ${response}` : ""}`);
       await notifyUser(adminClient, query.raised_by_id, {
         title: "Added to lead discussion",
         sub_text: `PMT added you to the discussion for ${lead.lead_number} — "${lead.title}".`,
@@ -87,6 +89,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         .eq("id", queryId)
         .eq("status", "open");
       if (updateErr) return jsonRes(req, 400, { error: "This query was already updated by someone else — refresh and try again." });
+      await logLeadActivity(adminClient, query.lead_id, caller.id, "pmt", "cross_team_query_declined", null, null, `${query.raised_by_team}${response ? ` — ${response}` : ""}`);
       await notifyUser(adminClient, query.raised_by_id, {
         title: "Your lead query was declined",
         sub_text: `PMT declined your query on ${lead.lead_number} — "${lead.title}". ${response}`,

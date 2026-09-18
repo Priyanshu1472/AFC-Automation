@@ -16,7 +16,6 @@ import PageLoader from "../../components/ui/PageLoader";
 import LeadTimeline from "../../components/leads/LeadTimeline";
 import LeadChatPanel from "../../components/leads/LeadChatPanel";
 import LeadQueryPanel from "../../components/leads/LeadQueryPanel";
-import LeadTransferModal from "../../components/leads/LeadTransferModal";
 import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 // Reuses the ar-* detail/action/timeline/document styles already defined
@@ -204,7 +203,6 @@ export default function LeadDetailPage() {
   // Edit call the backend directly from this list (every other action
   // opens the reason/PIN panel via pendingAction instead).
   const [quickActionKey, setQuickActionKey] = useState(null);
-  const [showTransferModal, setShowTransferModal] = useState(false);
 
   const fetchLead = useCallback(async () => {
     const { data } = await supabase
@@ -657,27 +655,11 @@ export default function LeadDetailPage() {
                 </Card>
               )}
 
-              {profile?.role !== "admin" && (
-                <LeadQueryPanel leadId={lead.id} leadTeam={lead.team} onLeadTransferred={fetchLead} />
-              )}
-
             </div>
 
             <div className="ar-right">
-              {/* PMT-committee-only, and only while the lead is actually at
-                  its pmt_review stage — mirrors transfer-lead's server-side
-                  check exactly. Deliberately narrower than (and unrelated
-                  to) respond-lead-query's own "transfer" action, which
-                  resolves a cross-team lead query and can happen at any
-                  status. */}
-              {profile?.committee === "PMT" && lead.status === "pmt_review" && (
-                <Card>
-                  <Card.Body>
-                    <Button variant="secondary" block onClick={() => setShowTransferModal(true)}>
-                      Transfer Lead to Another Team
-                    </Button>
-                  </Card.Body>
-                </Card>
+              {profile?.role !== "admin" && (
+                <LeadQueryPanel leadId={lead.id} leadTeam={lead.team} onLeadTransferred={fetchLead} />
               )}
 
               {/* md_approved is "terminal" for the success-banner purposes
@@ -844,18 +826,6 @@ export default function LeadDetailPage() {
         </div>
       </div>
 
-      {showTransferModal && (
-        <LeadTransferModal
-          leadId={lead.id}
-          currentTeam={lead.team}
-          onClose={() => setShowTransferModal(false)}
-          onSuccess={() => {
-            setShowTransferModal(false);
-            showToast("Lead transferred.", "success");
-            fetchLead();
-          }}
-        />
-      )}
     </div>
   );
 }
