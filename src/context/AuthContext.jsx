@@ -132,9 +132,29 @@ export function AuthProvider({ children }) {
       setLoading(false);
     });
 
+    // Backgrounded/inactive tabs get their JS timers throttled or fully
+    // suspended by the browser, so the SDK's own scheduled silent-refresh
+    // (due before the 1-hour access token expires) can simply never fire
+    // while the tab is hidden — the session then looks expired the moment
+    // you come back, even though autoRefreshToken is on and would have
+    // renewed it fine had the tab stayed foregrounded. Explicitly
+    // re-checking (and, if needed, refreshing) on visibilitychange is the
+    // standard workaround: getSession() returns the cached session
+    // instantly if it's still fresh, or transparently refreshes it first
+    // if it's stale — either way this fires onAuthStateChange with the
+    // correct up-to-date session instead of leaving a stale one in place
+    // until some unrelated API call happens to 401.
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        supabase.auth.getSession();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
       mountedRef.current = false;
       subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [loadProfile]);
 
