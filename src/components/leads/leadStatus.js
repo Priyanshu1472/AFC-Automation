@@ -2,7 +2,7 @@
 // LeadDetailPage so the label/color for a given status never drifts
 // between the two.
 export const STATUS_MAP = {
-  po_assignment: { label: "Awaiting PO Assignment", variant: "warning" },
+  po_assignment: { label: "Awaiting Assignment", variant: "warning" },
   pa_review: { label: "PR Review", variant: "warning" },
   recommending_authority_review: { label: "Recommending Authority", variant: "warning" },
   pmt_review: { label: "PMT", variant: "info" },

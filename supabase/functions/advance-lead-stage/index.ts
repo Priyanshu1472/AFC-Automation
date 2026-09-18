@@ -33,6 +33,7 @@ type LeadRow = {
   recommending_authority_id: string;
   handled_by_dgm_id: string | null;
   assigned_ba_id: string | null;
+  forwarded_to_id: string | null;
   declined_from_status: string | null;
   approval_note_data: unknown;
   approval_note_pr_reviewed: boolean;
@@ -209,7 +210,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data, approval_note_pr_reviewed, approval_note_pending_pr_review, documents, chat_opened_at, submission_deadline")
+    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, handled_by_dgm_id, assigned_ba_id, forwarded_to_id, declined_from_status, approval_note_data, approval_note_pr_reviewed, approval_note_pending_pr_review, documents, chat_opened_at, submission_deadline")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -262,15 +263,15 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     let storageCleanupPaths: string[] = [];
 
     switch (action) {
-      // The team's Project Officer (or Area Manager/Regional Manager, same
-      // permission tier) naming Person Responsible/Reviewer/Recommending
-      // Authority on a lead an Associate Consultant/Project Assistant
-      // created without them (see create-lead's isPoRouted) — re-applies
-      // the exact same eligibility checks create-lead itself would have run
-      // had the creator been allowed to set these directly.
+      // The specific person this lead was forwarded to (at creation by an
+      // Associate Consultant/Project Assistant — see create-lead's
+      // isPoRouted — or via a PMT transfer, see _shared/leadTransfer.ts)
+      // naming Person Responsible/Reviewer/Recommending Authority —
+      // re-applies the exact same eligibility checks create-lead itself
+      // would have run had the creator been allowed to set these directly.
       case "po_assign": {
-        if (!["project_officer", "area_manager", "regional_manager"].includes(caller.role) || !isCallerOnTeam(caller, leadRow.team)) {
-          return forbidden("You must be a Project Officer, Area Manager, or Regional Manager on this team to assign this lead.");
+        if (caller.id !== leadRow.forwarded_to_id) {
+          return forbidden("This lead hasn't been forwarded to you.");
         }
         const prId = typeof body.person_responsible_id === "string" ? body.person_responsible_id : "";
         const reviewerId = typeof body.reviewer_id === "string" ? body.reviewer_id : "";

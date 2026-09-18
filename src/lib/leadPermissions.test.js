@@ -12,14 +12,11 @@ describe("leadCan", () => {
     expect(leadCan.create({})).toBe(false);
   });
 
-  it("poAssign only applies to po_assignment and a PO/AM/RM on the lead's team", () => {
-    const lead = { status: "po_assignment", team: "BPDD" };
-    expect(leadCan.poAssign({ role: "project_officer", teams: ["BPDD"] }, lead)).toBe(true);
-    expect(leadCan.poAssign({ role: "area_manager", teams: ["BPDD"] }, lead)).toBe(true);
-    expect(leadCan.poAssign({ role: "regional_manager", teams: ["BPDD"] }, lead)).toBe(true);
-    expect(leadCan.poAssign({ role: "project_officer", teams: ["BIID"] }, lead)).toBe(false); // off-team
-    expect(leadCan.poAssign({ role: "dgm", teams: ["BPDD"] }, lead)).toBe(false); // wrong role
-    expect(leadCan.poAssign({ role: "project_officer", teams: ["BPDD"] }, { ...lead, status: "pa_review" })).toBe(false); // wrong status
+  it("poAssign only applies to po_assignment and the exact person the lead was forwarded to", () => {
+    const lead = { status: "po_assignment", team: "BPDD", forwarded_to_id: "user-1" };
+    expect(leadCan.poAssign({ id: "user-1" }, lead)).toBe(true);
+    expect(leadCan.poAssign({ id: "user-2" }, lead)).toBe(false); // not the forwarded person
+    expect(leadCan.poAssign({ id: "user-1" }, { ...lead, status: "pa_review" })).toBe(false); // wrong status
   });
 
   it("accept only applies to pa_review and the assigned Person Responsible", () => {

@@ -12,13 +12,11 @@ export const leadCan = {
   create: (profile) => !!profile?.role && profile.role !== "md" && profile.role !== "admin",
   // A lead an Associate Consultant/Project Assistant created without a
   // Person Responsible/Reviewer/Recommending Authority (see create-lead's
-  // isPoRouted) — the team's Project Officer (or Area Manager/Regional
-  // Manager, same permission tier) names all three, PIN-confirmed, which
-  // then lands the lead in pa_review exactly like every other creator's.
-  poAssign: (profile, lead) =>
-    lead.status === "po_assignment" &&
-    ["project_officer", "area_manager", "regional_manager"].includes(profile?.role) &&
-    !!profile?.teams?.includes(lead.team),
+  // isPoRouted), or one PMT just transferred — either way, forwarded to one
+  // specific named person (forwarded_to_id), who names all three,
+  // PIN-confirmed, which then lands the lead in pa_review exactly like
+  // every other creator's.
+  poAssign: (profile, lead) => lead.status === "po_assignment" && !!profile?.id && profile.id === lead.forwarded_to_id,
   accept: (profile, lead) => lead.status === "pa_review" && profile?.id === lead.person_responsible_id,
   // A true drop, no reassignment. At pa_review, only the creator can drop
   // (whether or not they're also PR) — a non-creator PR has no Drop here at

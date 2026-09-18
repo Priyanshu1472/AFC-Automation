@@ -13,6 +13,11 @@
 // still transfer or decline afterward once the discussion settles
 // somewhere. Only "transferred"/"declined"/"withdrawn" are actually
 // terminal.
+//
+// transfer requires target_team and forwarded_to_id in the body — PMT picks
+// both explicitly (target_team defaults to the raiser's team in the UI, but
+// isn't forced to it), rather than the lead auto-routing to the whole new
+// team's PO tier.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -109,13 +114,19 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     }
 
     // action === "transfer"
+    const targetTeam = typeof body.target_team === "string" ? body.target_team : "";
+    const forwardedToId = typeof body.forwarded_to_id === "string" ? body.forwarded_to_id : "";
+    if (!targetTeam) return jsonRes(req, 400, { error: "Select a team to transfer to." });
+    if (!forwardedToId) return jsonRes(req, 400, { error: "Select who to forward the lead to." });
+
     const pinErr = await verifyActionPin(adminClient, caller.id, caller.pin_hash, body.pin);
     if (pinErr) return jsonRes(req, 400, { error: pinErr });
 
     const transferResult = await performLeadTransfer(
       adminClient,
       query.lead_id,
-      query.raised_by_team,
+      targetTeam,
+      forwardedToId,
       response || "Transferred in response to a cross-team query.",
       caller.id
     );

@@ -1134,7 +1134,7 @@ Deno.test("overdue - a terminal lead (md_approved) is never treated as overdue",
 Deno.test("overdue - po_assign on an overdue po_assignment lead is blocked too (no PR yet, creator must fix the date via update-lead)", async () => {
   const client = buildClient({
     caller: callerRow({ role: "project_officer" }),
-    lead: leadRow({ status: "po_assignment", person_responsible_id: null, submission_deadline: "2000-01-01" }),
+    lead: leadRow({ status: "po_assignment", person_responsible_id: null, forwarded_to_id: CALLER_ID, submission_deadline: "2000-01-01" }),
   });
   const res = await handleRequest(
     req({ lead_id: LEAD_ID, action: "po_assign", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "authority-1" }),

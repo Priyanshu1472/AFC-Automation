@@ -99,6 +99,25 @@ export async function validateRecommendingAuthority(admin: AdminClient, recommen
   return null;
 }
 
+// "Forward to:" target (create-lead's isPoRouted branch, and PMT transfer)
+// — unlike Person Responsible/Reviewer/Recommending Authority, any team
+// member can be forwarded a lead regardless of role, so this only checks
+// active + team membership. Checked against afc_user_teams (not just the
+// afc_users.team scalar), so a multi-team secondary member is a valid
+// target too.
+export async function validateForwardedTo(admin: AdminClient, userId: string, team: string): Promise<string | null> {
+  const { data: user, error: userErr } = await admin.from("afc_users").select("id, is_active").eq("id", userId).maybeSingle();
+  if (userErr || !user || !user.is_active) return "Selected person not found.";
+  const { data: membership, error: teamErr } = await admin
+    .from("afc_user_teams")
+    .select("user_id")
+    .eq("user_id", userId)
+    .eq("team", team)
+    .maybeSingle();
+  if (teamErr || !membership) return "Selected person is not a member of that team.";
+  return null;
+}
+
 // Each team empanels its own Business Partners (via the Empanelment
 // module) — a BP's afc_users.team is set from the empanelment application's
 // team when their portal login is provisioned, so this mirrors the other

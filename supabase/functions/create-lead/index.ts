@@ -9,12 +9,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
-import { notifyUser, notifyUsers, notifyRole } from "../_shared/notify.ts";
+import { notifyUser, notifyRole } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
 import { addLeadChatParticipants } from "../_shared/leadAuth.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
-  validateRecommendingAuthority, validateBusinessAssociate, clampText,
+  validateRecommendingAuthority, validateBusinessAssociate, validateForwardedTo, clampText,
 } from "../_shared/leadEligibility.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -93,9 +93,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   // advance-lead-stage's "po_assign" action. Every other creator role is
   // unaffected.
   const isPoRouted = caller.role === "associate_consultant" || caller.role === "project_assistant";
+  const forwardedToId = get("forwarded_to_id");
 
   const fieldErr = validateRequiredFields(input, { requireAssignment: !isPoRouted });
   if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
+
+  if (isPoRouted && !forwardedToId) {
+    return jsonRes(req, 400, { error: "Forward to is required." });
+  }
 
   const assignedBaId = get("assigned_ba_id") || null;
   if (input.source === "ba" && !assignedBaId) {
@@ -126,6 +131,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         return jsonRes(req, 400, { error: "You are not assigned to that team." });
       }
       team = requestedTeam;
+
+      const forwardErr = await validateForwardedTo(adminClient, forwardedToId, team);
+      if (forwardErr) return jsonRes(req, 400, { error: forwardErr });
     } else {
       // Team is derived from Person Responsible's own team — not a field the
       // creator picks directly, matching the real form (no Team selector).
@@ -204,6 +212,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         reviewer_id: isPoRouted ? null : input.reviewer_id,
         recommending_authority_id: isPoRouted ? null : input.recommending_authority_id,
         assigned_ba_id: assignedBaId,
+        forwarded_to_id: isPoRouted ? forwardedToId : null,
         status: isPoRouted ? "po_assignment" : "pa_review",
         // Chat opens the moment Person Responsible/Reviewer/Recommending
         // Authority are all named — immediately here for a direct creation,
@@ -233,17 +242,10 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "created", null, lead.status, null);
 
     if (isPoRouted) {
-      // No PR/Reviewer/Recommending Authority to notify yet — instead, the
-      // team's Project Officer (or Area Manager/Regional Manager, same
-      // permission tier) needs to know a lead is waiting on them.
-      const { data: poTier } = await adminClient
-        .from("afc_users")
-        .select("id")
-        .eq("team", team)
-        .eq("is_active", true)
-        .in("role", ["project_officer", "area_manager", "regional_manager"]);
-      await notifyUsers(adminClient, (poTier || []).map((u) => u.id), {
-        title: "Lead awaiting PR/Reviewer/Recommending Authority assignment",
+      // No PR/Reviewer/Recommending Authority to notify yet — instead, only
+      // the person this lead was explicitly forwarded to needs to know.
+      await notifyUser(adminClient, forwardedToId, {
+        title: "A lead was forwarded to you",
         sub_text: `${lead.lead_number} — "${input.title.trim()}" needs a Person Responsible, Reviewer, and Recommending Authority assigned.`,
         type: "action_required",
         link: `/leads/${lead.id}`,

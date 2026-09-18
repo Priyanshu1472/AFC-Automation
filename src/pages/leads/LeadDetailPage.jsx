@@ -208,7 +208,7 @@ export default function LeadDetailPage() {
     const { data } = await supabase
       .from("leads")
       .select(
-        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name, role), reviewer:reviewer_id(full_name), authority:recommending_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name)"
+        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name, role), reviewer:reviewer_id(full_name), authority:recommending_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name), forwarded:forwarded_to_id(full_name)"
       )
       .eq("id", id)
       .maybeSingle();
@@ -627,6 +627,9 @@ export default function LeadDetailPage() {
                 <Card.Header title="Assignment" />
                 <Card.Body className="ar-detail-body">
                   <Row label="Creator" value={fmt(lead.creator?.full_name)} />
+                  {lead.status === "po_assignment" && (
+                    <Row label="Forwarded To" value={fmt(lead.forwarded?.full_name)} />
+                  )}
                   <Row label="Person Responsible" value={fmt(lead.assignee?.full_name)} />
                   <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
                   <Row label="Recommending Authority" value={fmt(lead.authority?.full_name)} />
