@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLogin } from "../../hooks/useLogin";
 import ThemeToggle from "../../components/shared/ThemeToggle";
+import Turnstile from "../../components/shared/Turnstile";
 import { MailIcon, LockIcon, ArrowRightIcon, ShowHideButton } from "../../components/icons";
 import logo from "../../images/Logo.png";
 import "../../styles/LoginGlass.css";
@@ -122,6 +123,9 @@ export default function LoginPage() {
     setShowPassword,
     error,
     loading,
+    captchaToken,
+    setCaptchaToken,
+    captchaResetKey,
     handleLogin,
   } = useLogin();
 
@@ -230,10 +234,18 @@ export default function LoginPage() {
               <Link to="/forgot-password">Forgot password?</Link>
             </div>
 
+            <div className="afc-field afc-captcha-field">
+              <Turnstile
+                key={captchaResetKey}
+                onVerify={setCaptchaToken}
+                onExpire={() => setCaptchaToken("")}
+              />
+            </div>
+
             <button
               type="submit"
               className="afc-btn-primary"
-              disabled={loading || !email || !password}
+              disabled={loading || !email || !password || !captchaToken}
             >
               {loading ? "Signing in…" : "Sign in"}
               {!loading && <ArrowRightIcon />}

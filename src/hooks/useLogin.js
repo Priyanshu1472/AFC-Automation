@@ -22,6 +22,16 @@ export function useLogin() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [attempts, setAttempts] = useState(() => 5 - getRemainingAttempts("afc"));
+  const [captchaToken, setCaptchaToken] = useState("");
+  // Bumped after every submit attempt (success or failure) to force the
+  // <Turnstile key={captchaResetKey}> widget to remount — a token is
+  // single-use and expires quickly, so the next attempt always needs a
+  // freshly-solved challenge regardless of why the previous one ended.
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
+  const resetCaptcha = useCallback(() => {
+    setCaptchaToken("");
+    setCaptchaResetKey((k) => k + 1);
+  }, []);
 
   const handleLogin = useCallback(
     async (e) => {
@@ -32,6 +42,7 @@ export function useLogin() {
       if (!trimmedEmail) return setError("Please enter your email address.");
       if (!isValidEmail(trimmedEmail)) return setError("Please enter a valid email address.");
       if (!password) return setError("Please enter your password.");
+      if (!captchaToken) return setError("Please complete the verification challenge.");
 
       const rateCheck = checkRateLimit("afc");
       if (!rateCheck.allowed) {
@@ -46,7 +57,9 @@ export function useLogin() {
         const { error: authError } = await supabase.auth.signInWithPassword({
           email: trimmedEmail,
           password,
+          options: { captchaToken },
         });
+        resetCaptcha();
 
         if (authError) {
           const count = recordFailedAttempt("afc");
@@ -98,7 +111,7 @@ export function useLogin() {
         setLoading(false);
       }
     },
-    [email, password, refreshProfile]
+    [email, password, captchaToken, refreshProfile, resetCaptcha]
   );
 
   return {
@@ -111,6 +124,9 @@ export function useLogin() {
     error,
     loading,
     attempts,
+    captchaToken,
+    setCaptchaToken,
+    captchaResetKey,
     handleLogin,
   };
 }

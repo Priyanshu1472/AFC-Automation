@@ -394,6 +394,7 @@
 /* ---- form ---- */
 .afc-login-form { display: flex; flex-direction: column; }
 .afc-field { margin-bottom: 15px; }
+.afc-captcha-field { display: flex; justify-content: center; }
 .afc-field label {
   display: block;
   font-size: 11px;
