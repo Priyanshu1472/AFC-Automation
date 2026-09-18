@@ -628,54 +628,63 @@ Deno.test("accept - regenerating the note on submission drops the '-- Draft' suf
   }
 });
 
-// "drop" (true, no-reassignment withdrawal) is creator-only at pa_review —
-// a non-creator PR must use "reject_reassign" instead.
-Deno.test("drop - a non-creator (even the PR) can't drop at pa_review", async () => {
-  const client = buildClient({}); // default leadRow: caller is PR, "creator-1" is the creator
-  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
-  assertEquals(res.status, 403);
-});
-
-Deno.test("drop - a self-assigned creator (creator === PR) drops directly to pa_dropped", async () => {
-  const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: CALLER_ID }) });
-  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
-  assertEquals(res.status, 200);
-  assertEquals(await res.json(), { success: true, status: "pa_dropped" });
-});
-
-Deno.test("drop - the creator can drop at pa_review even when PR is someone else", async () => {
-  const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: "someone-else" }) });
-  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
-  assertEquals(res.status, 200);
-  assertEquals(await res.json(), { success: true, status: "pa_dropped" });
-});
-
-Deno.test("drop - the creator can withdraw a lead already at pmt_review", async () => {
-  const client = buildClient({ lead: leadRow({ status: "pmt_review", created_by: CALLER_ID }) });
-  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
-  assertEquals(res.status, 200);
-  assertEquals(await res.json(), { success: true, status: "pa_dropped" });
-});
-
-Deno.test("drop - the current Person Responsible (not creator) can also withdraw a lead at pmt_review", async () => {
-  // default leadRow: person_responsible_id === CALLER_ID, created_by is someone else
-  const client = buildClient({ lead: leadRow({ status: "pmt_review", created_by: "someone-else" }) });
-  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
-  assertEquals(res.status, 200);
-  assertEquals(await res.json(), { success: true, status: "pa_dropped" });
-});
-
-Deno.test("drop - a bystander (neither creator nor PR) can't withdraw a lead at pmt_review", async () => {
+// "drop" (true, no-reassignment withdrawal) is available only to the
+// named PR, Reviewer, or Recommending Authority — never the creator alone.
+Deno.test("drop - the creator alone (not PR/Reviewer/RA) can't drop at pa_review", async () => {
   const client = buildClient({
-    lead: leadRow({ status: "pmt_review", created_by: "someone-else", person_responsible_id: "someone-else-2" }),
+    lead: leadRow({ created_by: CALLER_ID, person_responsible_id: "someone-else", reviewer_id: "someone-else", recommending_authority_id: "someone-else" }),
   });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
   assertEquals(res.status, 403);
 });
 
-Deno.test("drop - creator (not Person Responsible) can drop a pa_action_required lead", async () => {
+Deno.test("drop - the assigned Person Responsible can drop at pa_review, whether or not they're also the creator", async () => {
+  const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: CALLER_ID, recommending_authority_id: "authority-1" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), { success: true, status: "pa_dropped" });
+});
+
+Deno.test("drop - the Reviewer (not PR, not creator) can drop at pa_review", async () => {
   const client = buildClient({
-    lead: leadRow({ status: "pa_action_required", created_by: CALLER_ID, person_responsible_id: "someone-else" }),
+    lead: leadRow({ created_by: "creator-1", person_responsible_id: "someone-else", reviewer_id: CALLER_ID, recommending_authority_id: "authority-1" }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), { success: true, status: "pa_dropped" });
+});
+
+Deno.test("drop - the Recommending Authority (not PR, not Reviewer, not creator) can drop at pa_review", async () => {
+  const client = buildClient({
+    lead: leadRow({ created_by: "creator-1", person_responsible_id: "someone-else", reviewer_id: "someone-else", recommending_authority_id: CALLER_ID }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), { success: true, status: "pa_dropped" });
+});
+
+Deno.test("drop - the current Person Responsible can withdraw a lead already at pmt_review", async () => {
+  // default leadRow: person_responsible_id === CALLER_ID, created_by is someone else
+  const client = buildClient({ lead: leadRow({ status: "pmt_review", created_by: "someone-else", recommending_authority_id: "authority-1" }) });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), { success: true, status: "pa_dropped" });
+});
+
+Deno.test("drop - a bystander (not PR/Reviewer/RA, even if the creator) can't withdraw a lead at pmt_review", async () => {
+  const client = buildClient({
+    lead: leadRow({
+      status: "pmt_review", created_by: "someone-else", person_responsible_id: "someone-else-2",
+      reviewer_id: "someone-else-2", recommending_authority_id: "someone-else-2",
+    }),
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("drop - the assigned Person Responsible (not creator) can drop a pa_action_required lead", async () => {
+  const client = buildClient({
+    lead: leadRow({ status: "pa_action_required", created_by: "someone-else", person_responsible_id: CALLER_ID, recommending_authority_id: "authority-1" }),
   });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
   assertEquals(res.status, 200);
@@ -683,53 +692,66 @@ Deno.test("drop - creator (not Person Responsible) can drop a pa_action_required
 
 // ── drop once MD has approved — the one action still open, and the one
 // stage where drop requires a written justification on top of the PIN ──
-Deno.test("drop - the creator can withdraw an already MD-approved lead, given a justification", async () => {
-  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: CALLER_ID }) });
+Deno.test("drop - the assigned Person Responsible can withdraw an already MD-approved lead, given a justification", async () => {
+  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: CALLER_ID, person_responsible_id: CALLER_ID, recommending_authority_id: "authority-1" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop", comment: "Client cancelled the tender." }), client as never);
   assertEquals(res.status, 200);
   assertEquals(await res.json(), { success: true, status: "pa_dropped" });
 });
 
-Deno.test("drop - the current Person Responsible can also withdraw an MD-approved lead, given a justification", async () => {
+Deno.test("drop - the current Person Responsible (not creator) can also withdraw an MD-approved lead, given a justification", async () => {
   // default leadRow: person_responsible_id === CALLER_ID, created_by is someone else
-  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: "someone-else" }) });
+  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: "someone-else", recommending_authority_id: "authority-1" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop", comment: "Budget withdrawn by client." }), client as never);
   assertEquals(res.status, 200);
 });
 
-Deno.test("drop - a bystander cannot withdraw an MD-approved lead", async () => {
+Deno.test("drop - the creator alone (not PR/Reviewer/RA) cannot withdraw an MD-approved lead", async () => {
   const client = buildClient({
-    lead: leadRow({ status: "md_approved", created_by: "someone-else", person_responsible_id: "someone-else-2" }),
+    lead: leadRow({
+      status: "md_approved", created_by: CALLER_ID, person_responsible_id: "someone-else-2",
+      reviewer_id: "someone-else-2", recommending_authority_id: "someone-else-2",
+    }),
   });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop", comment: "Not my call." }), client as never);
   assertEquals(res.status, 403);
 });
 
 Deno.test("drop - requires a justification once MD has approved the lead, unlike every earlier stage", async () => {
-  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: CALLER_ID }) });
+  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: CALLER_ID, person_responsible_id: CALLER_ID, recommending_authority_id: "authority-1" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop" }), client as never);
   assertEquals(res.status, 400);
   assertEquals((await res.json()).error, "A justification is required to drop an approved lead.");
 });
 
 Deno.test("drop - a whitespace-only comment does not satisfy the MD-approved justification requirement", async () => {
-  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: CALLER_ID }) });
+  const client = buildClient({ lead: leadRow({ status: "md_approved", created_by: CALLER_ID, person_responsible_id: CALLER_ID, recommending_authority_id: "authority-1" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "drop", comment: "   " }), client as never);
   assertEquals(res.status, 400);
   assertEquals((await res.json()).error, "A justification is required to drop an approved lead.");
 });
 
-// ── reject_reassign (PR rejecting a lead they didn't create) ──
+// ── reject_reassign (PR handing a lead to a teammate instead of dropping) ──
 Deno.test("reject_reassign - rejects a caller who isn't Person Responsible", async () => {
   const client = buildClient({ lead: leadRow({ person_responsible_id: "someone-else" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "reject_reassign" }), client as never);
   assertEquals(res.status, 403);
 });
 
-Deno.test("reject_reassign - the creator can't use this action (must use drop)", async () => {
-  const client = buildClient({ lead: leadRow({ created_by: CALLER_ID, person_responsible_id: CALLER_ID }) });
+Deno.test("reject_reassign - a self-assigned PR (also the creator) can still use this action", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [
+      { data: callerRow(), error: null },
+      { data: { id: "teammate-1", role: "project_officer", team: TEAM, is_active: true }, error: null },
+      { data: [], error: null },
+    ],
+    leads: [
+      { data: leadRow({ created_by: CALLER_ID, person_responsible_id: CALLER_ID }), error: null },
+      { data: { id: LEAD_ID }, error: null },
+    ],
+  });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "reject_reassign", reassign_to_id: "teammate-1" }), client as never);
-  assertEquals(res.status, 403);
+  assertEquals(res.status, 200);
 });
 
 Deno.test("reject_reassign - requires a reassignment target", async () => {

@@ -18,26 +18,25 @@ export const leadCan = {
   // every other creator's.
   poAssign: (profile, lead) => lead.status === "po_assignment" && !!profile?.id && profile.id === lead.forwarded_to_id,
   accept: (profile, lead) => lead.status === "pa_review" && profile?.id === lead.person_responsible_id,
-  // A true drop, no reassignment. At pa_review, only the creator can drop
-  // (whether or not they're also PR) — a non-creator PR has no Drop here at
-  // all, only Accept/Reject; PR gains Drop once they've actually accepted
-  // (pmt_review onward), never before. Creator or PR at every other status,
-  // md_approved included — the one action still open on an approved lead
-  // (server-side requires a written justification there, see
-  // advance-lead-stage's "drop" case).
+  // A true drop, no reassignment. The creator has no Drop of their own —
+  // only the Person Responsible, Reviewer, or Recommending Authority
+  // actually named on the lead can drop it, at any non-terminal status,
+  // md_approved included (server-side requires a written justification
+  // there, see advance-lead-stage's "drop" case). Before any of those three
+  // are named (po_assignment — a lead an AC/PA just created and forwarded,
+  // not yet assigned), the person it was forwarded to stands in instead.
   drop: (profile, lead) => {
     if (["md_declined", "pa_dropped"].includes(lead.status)) return false;
-    if (lead.status === "pa_review") return profile?.id === lead.created_by;
+    if (lead.status === "po_assignment") return !!profile?.id && profile.id === lead.forwarded_to_id;
     // The Recommending Authority sent this back for changes — only they
     // should re-review it, so there's no Withdraw here, only Edit &
     // Resubmit.
     if (lead.status === "pa_action_required" && lead.declined_from_status === "recommending_authority_review") return false;
-    return profile?.id === lead.created_by || profile?.id === lead.person_responsible_id;
+    return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
   },
-  // The PR rejecting a lead they didn't create — hands it to a teammate
-  // instead of dropping it.
-  rejectReassign: (profile, lead) =>
-    lead.status === "pa_review" && profile?.id === lead.person_responsible_id && profile?.id !== lead.created_by,
+  // The PR handing the lead to a teammate instead of dropping it — an
+  // alternative to Drop, not exclusive with it.
+  rejectReassign: (profile, lead) => lead.status === "pa_review" && profile?.id === lead.person_responsible_id,
   claim: (profile, lead) => lead.status === "pa_dropped" && LEAD_PA_TIER_ROLES.includes(profile?.role) && !!profile?.teams?.includes(lead.team),
   // A plain field edit — available before the PR has accepted (pa_review)
   // and again once returned for changes (pa_action_required); status never
