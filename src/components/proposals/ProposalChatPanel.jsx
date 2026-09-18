@@ -29,6 +29,7 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
 
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [participantNames, setParticipantNames] = useState({});
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [draft, setDraft] = useState("");
@@ -48,12 +49,21 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
 
   const fetchMessages = useCallback(async () => {
     if (!chatOpenedAt) return;
-    const { data } = await supabase
-      .from("proposal_chat_messages")
-      .select("*, sender:sender_id(full_name)")
-      .eq("proposal_id", proposalId)
-      .order("created_at", { ascending: true });
+    // Sender names via a dedicated RPC, not an embedded join — see
+    // LeadChatPanel.jsx / get_proposal_chat_participant_names for why an
+    // embedded `sender:sender_id(full_name)` join silently comes back null
+    // for a cross-team chat participant the viewer's own afc_users RLS
+    // doesn't otherwise let them read.
+    const [{ data }, { data: participants }] = await Promise.all([
+      supabase
+        .from("proposal_chat_messages")
+        .select("*")
+        .eq("proposal_id", proposalId)
+        .order("created_at", { ascending: true }),
+      supabase.rpc("get_proposal_chat_participant_names", { p_proposal_id: proposalId }),
+    ]);
     setMessages(data || []);
+    setParticipantNames(Object.fromEntries((participants || []).map((p) => [p.user_id, p.full_name])));
     setLoading(false);
     setUnreadCount(0);
     supabase.rpc("mark_proposal_chat_read", { p_proposal_id: proposalId }).then(() => {}, () => {});
@@ -158,7 +168,7 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
                 return (
                   <div key={m.id} className={`ar-chat-msg${isOwn ? " ar-chat-msg-own" : ""}`}>
                     <div className="ar-chat-bubble">
-                      <span className="ar-chat-sender">{m.sender?.full_name || "Unknown"}</span>
+                      <span className="ar-chat-sender">{participantNames[m.sender_id] || "Unknown"}</span>
                       <p className="ar-chat-text">{m.message}</p>
                       <span className="ar-chat-time">{fmtTime(m.created_at)}</span>
                     </div>

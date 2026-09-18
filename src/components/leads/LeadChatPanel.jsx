@@ -28,6 +28,7 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
 
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [participantNames, setParticipantNames] = useState({});
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [draft, setDraft] = useState("");
@@ -51,12 +52,22 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
 
   const fetchMessages = useCallback(async () => {
     if (!chatOpenedAt) return;
-    const { data } = await supabase
-      .from("lead_chat_messages")
-      .select("*, sender:sender_id(full_name)")
-      .eq("lead_id", leadId)
-      .order("created_at", { ascending: true });
+    // Sender names are resolved via a dedicated RPC rather than an
+    // embedded PostgREST join (`sender:sender_id(full_name)`) — the join
+    // is subject to afc_users' own RLS, which doesn't grant a plain
+    // team-scoped viewer visibility into a cross-team chat participant's
+    // row, so it silently came back null for anyone outside the viewer's
+    // team (see get_lead_chat_participant_names in the migrations).
+    const [{ data }, { data: participants }] = await Promise.all([
+      supabase
+        .from("lead_chat_messages")
+        .select("*")
+        .eq("lead_id", leadId)
+        .order("created_at", { ascending: true }),
+      supabase.rpc("get_lead_chat_participant_names", { p_lead_id: leadId }),
+    ]);
     setMessages(data || []);
+    setParticipantNames(Object.fromEntries((participants || []).map((p) => [p.user_id, p.full_name])));
     setLoading(false);
     setUnreadCount(0);
     // Best-effort — opening the popup counts as "read", clearing the
@@ -171,7 +182,7 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
                 return (
                   <div key={m.id} className={`ar-chat-msg${isOwn ? " ar-chat-msg-own" : ""}`}>
                     <div className="ar-chat-bubble">
-                      <span className="ar-chat-sender">{m.sender?.full_name || "Unknown"}</span>
+                      <span className="ar-chat-sender">{participantNames[m.sender_id] || "Unknown"}</span>
                       <p className="ar-chat-text">{m.message}</p>
                       <span className="ar-chat-time">{fmtTime(m.created_at)}</span>
                     </div>

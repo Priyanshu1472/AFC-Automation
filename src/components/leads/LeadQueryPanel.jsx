@@ -56,13 +56,23 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
   const [withdrawingId, setWithdrawingId] = useState(null); // queryId pending withdraw confirmation
   const [managingId, setManagingId] = useState(null); // queryId with an edit/withdraw/remind call in flight
 
+  const [queryNames, setQueryNames] = useState({});
+
   const fetchQueries = useCallback(async () => {
-    const { data } = await supabase
-      .from("lead_queries")
-      .select("*, raiser:raised_by_id(full_name), resolver:resolved_by_id(full_name)")
-      .eq("lead_id", leadId)
-      .order("created_at", { ascending: false });
+    // Raiser/resolver names via a dedicated RPC, not an embedded join —
+    // raising a query is inherently cross-team, exactly the case where the
+    // viewer's own afc_users RLS won't otherwise let them read that
+    // profile (see get_lead_query_names in the migrations).
+    const [{ data }, { data: names }] = await Promise.all([
+      supabase
+        .from("lead_queries")
+        .select("*")
+        .eq("lead_id", leadId)
+        .order("created_at", { ascending: false }),
+      supabase.rpc("get_lead_query_names", { p_lead_id: leadId }),
+    ]);
     setQueries(data || []);
+    setQueryNames(Object.fromEntries((names || []).map((n) => [n.user_id, n.full_name])));
     setLoading(false);
   }, [leadId]);
 
@@ -234,7 +244,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                 <div key={q.id} className="lq-item">
                   <div className="lq-item-top">
                     <div className="lq-item-who">
-                      <span className="lq-item-name">{q.raiser?.full_name || "Unknown"} — {q.raised_by_team}</span>
+                      <span className="lq-item-name">{queryNames[q.raised_by_id] || "Unknown"} — {q.raised_by_team}</span>
                       <span className="lq-item-meta">
                         {fmtTime(q.created_at)}
                         {q.edited_at && ` · edited ${fmtTime(q.edited_at)}`}
