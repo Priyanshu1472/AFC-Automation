@@ -18,6 +18,9 @@ import Card from "../ui/Card";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import PinInput from "../ui/PinInput";
+import Select from "../ui/Select";
+import { ROLE_LABELS } from "../../lib/roles";
+import { useTeamOptions } from "../../hooks/useTeamOptions";
 import "../../styles/LeadQueryPanel.css";
 
 const QUERY_RAISER_ROLES = ["dgm", "general_manager", "agm", "srm"];
@@ -43,6 +46,7 @@ function fmtTime(v) {
 export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) {
   const { profile } = useAuth();
   const { showToast } = useToast();
+  const teamOptions = useTeamOptions();
 
   const [queries, setQueries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +56,9 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
   const [respondingId, setRespondingId] = useState(null); // { queryId, action } — PMT's own triage actions
   const [responseText, setResponseText] = useState("");
   const [transferPin, setTransferPin] = useState("");
+  const [transferTeam, setTransferTeam] = useState("");
+  const [transferForwardToId, setTransferForwardToId] = useState("");
+  const [transferForwardOptions, setTransferForwardOptions] = useState([]);
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState(null); // queryId currently being edited by its raiser
   const [editText, setEditText] = useState("");
@@ -81,6 +88,21 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
   useEffect(() => {
     fetchQueries();
   }, [fetchQueries]);
+
+  // Forward-to options reload whenever the target team changes — a person
+  // valid for one team isn't necessarily on another.
+  useEffect(() => {
+    if (!transferTeam) {
+      setTransferForwardOptions([]);
+      return;
+    }
+    setTransferForwardToId("");
+    supabase
+      .rpc("get_team_members", { p_team: transferTeam })
+      .then(({ data }) =>
+        setTransferForwardOptions((data || []).map((u) => ({ value: u.user_id, label: u.full_name, hint: ROLE_LABELS[u.role] || u.role })))
+      );
+  }, [transferTeam]);
 
   useEffect(() => {
     const channel = supabase
@@ -131,14 +153,29 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
       showToast("A response is required.", "danger");
       return;
     }
-    if (action === "transfer" && !/^\d{4}$/.test(transferPin)) {
-      showToast("Enter your 4-digit PIN.", "danger");
-      return;
+    if (action === "transfer") {
+      if (!transferTeam) {
+        showToast("Select a team to transfer to.", "danger");
+        return;
+      }
+      if (!transferForwardToId) {
+        showToast("Select who to forward the lead to.", "danger");
+        return;
+      }
+      if (!/^\d{4}$/.test(transferPin)) {
+        showToast("Enter your 4-digit PIN.", "danger");
+        return;
+      }
     }
     setBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke("respond-lead-query", {
-        body: { query_id: queryId, action, response: responseText.trim(), ...(action === "transfer" ? { pin: transferPin } : {}) },
+        body: {
+          query_id: queryId,
+          action,
+          response: responseText.trim(),
+          ...(action === "transfer" ? { pin: transferPin, target_team: transferTeam, forwarded_to_id: transferForwardToId } : {}),
+        },
       });
       if (error) {
         showToast(await extractFunctionErrorMessage(error, "Action failed."), "danger");
@@ -155,6 +192,8 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
       setRespondingId(null);
       setResponseText("");
       setTransferPin("");
+      setTransferTeam("");
+      setTransferForwardToId("");
       fetchQueries();
       if (action === "transfer" && onLeadTransferred) onLeadTransferred();
     } catch (err) {
@@ -336,20 +375,50 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                           </>
                         )}
                         {respondingId.action === "transfer" && (
-                          <PinInput
-                            label="Your Action PIN"
-                            required
-                            value={transferPin}
-                            onChange={setTransferPin}
-                            disabled={busy}
-                            hint="Confirms it's really you"
-                          />
+                          <>
+                            <label className="ar-label">Team <span className="ar-required">*</span></label>
+                            <Select
+                              options={teamOptions.map((t) => ({ value: t, label: t }))}
+                              value={transferTeam}
+                              onChange={setTransferTeam}
+                              placeholder="— Select team —"
+                              disabled={busy}
+                            />
+                            <label className="ar-label">Forward to: <span className="ar-required">*</span></label>
+                            <Select
+                              options={transferForwardOptions}
+                              value={transferForwardToId}
+                              onChange={setTransferForwardToId}
+                              placeholder="— Select a person on that team —"
+                              disabled={busy || !transferTeam}
+                              searchable
+                            />
+                            <PinInput
+                              label="Your Action PIN"
+                              required
+                              value={transferPin}
+                              onChange={setTransferPin}
+                              disabled={busy}
+                              hint="Confirms it's really you"
+                            />
+                          </>
                         )}
                         <div className="lq-form-actions">
                           <Button variant="primary" size="sm" loading={busy} disabled={busy} onClick={() => respond(q.id, respondingId.action)}>
                             Confirm: {RESPOND_LABEL[respondingId.action]}
                           </Button>
-                          <Button variant="secondary" size="sm" disabled={busy} onClick={() => { setRespondingId(null); setResponseText(""); setTransferPin(""); }}>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => {
+                              setRespondingId(null);
+                              setResponseText("");
+                              setTransferPin("");
+                              setTransferTeam("");
+                              setTransferForwardToId("");
+                            }}
+                          >
                             Cancel
                           </Button>
                         </div>
@@ -361,7 +430,14 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                             Add to Chat
                           </Button>
                         )}
-                        <Button variant="primary" size="sm" onClick={() => setRespondingId({ queryId: q.id, action: "transfer" })}>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => {
+                            setRespondingId({ queryId: q.id, action: "transfer" });
+                            setTransferTeam(q.raised_by_team);
+                          }}
+                        >
                           Transfer Lead
                         </Button>
                         <Button variant="danger" size="sm" onClick={() => setRespondingId({ queryId: q.id, action: "decline" })}>

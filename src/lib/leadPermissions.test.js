@@ -12,14 +12,11 @@ describe("leadCan", () => {
     expect(leadCan.create({})).toBe(false);
   });
 
-  it("poAssign only applies to po_assignment and a PO/AM/RM on the lead's team", () => {
-    const lead = { status: "po_assignment", team: "BPDD" };
-    expect(leadCan.poAssign({ role: "project_officer", teams: ["BPDD"] }, lead)).toBe(true);
-    expect(leadCan.poAssign({ role: "area_manager", teams: ["BPDD"] }, lead)).toBe(true);
-    expect(leadCan.poAssign({ role: "regional_manager", teams: ["BPDD"] }, lead)).toBe(true);
-    expect(leadCan.poAssign({ role: "project_officer", teams: ["BIID"] }, lead)).toBe(false); // off-team
-    expect(leadCan.poAssign({ role: "dgm", teams: ["BPDD"] }, lead)).toBe(false); // wrong role
-    expect(leadCan.poAssign({ role: "project_officer", teams: ["BPDD"] }, { ...lead, status: "pa_review" })).toBe(false); // wrong status
+  it("poAssign only applies to po_assignment and the exact person the lead was forwarded to", () => {
+    const lead = { status: "po_assignment", team: "BPDD", forwarded_to_id: "user-1" };
+    expect(leadCan.poAssign({ id: "user-1" }, lead)).toBe(true);
+    expect(leadCan.poAssign({ id: "user-2" }, lead)).toBe(false); // not the forwarded person
+    expect(leadCan.poAssign({ id: "user-1" }, { ...lead, status: "pa_review" })).toBe(false); // wrong status
   });
 
   it("accept only applies to pa_review and the assigned Person Responsible", () => {
@@ -29,25 +26,33 @@ describe("leadCan", () => {
     expect(leadCan.accept(user, { ...lead, status: "pmt_review" })).toBe(false);
   });
 
-  it("drop at pa_review is creator-only — a non-creator PR must Reject, not Drop, until they've accepted", () => {
-    const selfAssigned = { status: "pa_review", created_by: "user-1", person_responsible_id: "user-1" };
-    expect(leadCan.drop(user, selfAssigned)).toBe(true);
-    const assignedToSomeoneElse = { status: "pa_review", created_by: "user-1", person_responsible_id: "someone-else" };
-    expect(leadCan.drop(user, assignedToSomeoneElse)).toBe(true); // creator can still drop even when PR differs
-    expect(leadCan.drop({ id: "someone-else" }, assignedToSomeoneElse)).toBe(false); // PR (not creator) has no Drop before accepting — only Reject
+  it("drop at pa_review is available to the named PR, Reviewer, or Recommending Authority, never the creator alone", () => {
+    const lead = { status: "pa_review", created_by: "user-1", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "ra-1" };
+    expect(leadCan.drop(user, lead)).toBe(false); // creator, but not PR/Reviewer/RA
+    expect(leadCan.drop({ id: "pr-1" }, lead)).toBe(true);
+    expect(leadCan.drop({ id: "reviewer-1" }, lead)).toBe(true);
+    expect(leadCan.drop({ id: "ra-1" }, lead)).toBe(true);
+    expect(leadCan.drop({ id: "bystander" }, lead)).toBe(false);
   });
 
-  it("drop past pa_review allows the creator or the current PR — PR gains it only after accepting", () => {
-    const inPmtReview = { status: "pmt_review", created_by: "user-1", person_responsible_id: "someone-else" };
-    expect(leadCan.drop(user, inPmtReview)).toBe(true); // creator can still withdraw
-    expect(leadCan.drop({ id: "someone-else" }, inPmtReview)).toBe(true); // PR, now that they've accepted, can too
+  it("drop at po_assignment is available only to the person the lead was forwarded to", () => {
+    const lead = { status: "po_assignment", created_by: "user-1", forwarded_to_id: "forwarded-1" };
+    expect(leadCan.drop(user, lead)).toBe(false); // creator has no Drop here either
+    expect(leadCan.drop({ id: "forwarded-1" }, lead)).toBe(true);
+    expect(leadCan.drop({ id: "bystander" }, lead)).toBe(false);
+  });
+
+  it("drop past pa_review allows the named PR, Reviewer, or Recommending Authority", () => {
+    const inPmtReview = { status: "pmt_review", created_by: "user-1", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "ra-1" };
+    expect(leadCan.drop(user, inPmtReview)).toBe(false); // creator alone
+    expect(leadCan.drop({ id: "pr-1" }, inPmtReview)).toBe(true);
     expect(leadCan.drop({ id: "bystander" }, inPmtReview)).toBe(false);
   });
 
-  it("drop is still available once MD has approved the lead — the one action left, for the creator or PR", () => {
-    const approved = { status: "md_approved", created_by: "user-1", person_responsible_id: "someone-else" };
-    expect(leadCan.drop(user, approved)).toBe(true); // creator
-    expect(leadCan.drop({ id: "someone-else" }, approved)).toBe(true); // PR
+  it("drop is still available once MD has approved the lead — the one action left, for PR/Reviewer/RA", () => {
+    const approved = { status: "md_approved", created_by: "user-1", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "ra-1" };
+    expect(leadCan.drop(user, approved)).toBe(false); // creator alone
+    expect(leadCan.drop({ id: "pr-1" }, approved)).toBe(true);
     expect(leadCan.drop({ id: "bystander" }, approved)).toBe(false);
   });
 
@@ -58,10 +63,10 @@ describe("leadCan", () => {
     expect(leadCan.drop(user, dropped)).toBe(false);
   });
 
-  it("drop at pa_action_required allows creator or Person Responsible", () => {
-    const lead = { status: "pa_action_required", created_by: "user-1", person_responsible_id: "someone-else" };
-    expect(leadCan.drop(user, lead)).toBe(true);
-    expect(leadCan.drop({ id: "someone-else" }, lead)).toBe(true);
+  it("drop at pa_action_required allows the named PR, Reviewer, or Recommending Authority", () => {
+    const lead = { status: "pa_action_required", created_by: "user-1", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "ra-1" };
+    expect(leadCan.drop(user, lead)).toBe(false); // creator alone
+    expect(leadCan.drop({ id: "pr-1" }, lead)).toBe(true);
     expect(leadCan.drop({ id: "bystander" }, lead)).toBe(false);
   });
 
@@ -70,10 +75,10 @@ describe("leadCan", () => {
     expect(leadCan.drop(user, lead)).toBe(false);
   });
 
-  it("rejectReassign applies only to the PR at pa_review when they aren't the creator", () => {
+  it("rejectReassign applies to the assigned PR at pa_review, whether or not they're also the creator", () => {
     const lead = { status: "pa_review", created_by: "creator-1", person_responsible_id: "user-1" };
     expect(leadCan.rejectReassign(user, lead)).toBe(true);
-    expect(leadCan.rejectReassign(user, { ...lead, created_by: "user-1" })).toBe(false); // self-assigned uses Drop
+    expect(leadCan.rejectReassign(user, { ...lead, created_by: "user-1" })).toBe(true); // self-assigned can also reassign now
     expect(leadCan.rejectReassign({ id: "bystander" }, lead)).toBe(false);
   });
 
@@ -105,14 +110,16 @@ describe("leadCan", () => {
     expect(leadCan.editResubmit({ id: "bystander" }, overdueLead)).toBe(false);
   });
 
-  it("editResubmit falls back to the creator on an overdue lead with no Person Responsible yet (po_assignment)", () => {
+  it("editResubmit falls back to the forwarded-to person on an overdue lead with no Person Responsible yet (po_assignment)", () => {
     const overdueUnassigned = {
       status: "po_assignment",
       created_by: "creator-1",
       person_responsible_id: null,
+      forwarded_to_id: "forwarded-1",
       submission_deadline: "2000-01-01",
     };
-    expect(leadCan.editResubmit({ id: "creator-1" }, overdueUnassigned)).toBe(true);
+    expect(leadCan.editResubmit({ id: "forwarded-1" }, overdueUnassigned)).toBe(true);
+    expect(leadCan.editResubmit({ id: "creator-1" }, overdueUnassigned)).toBe(false);
     expect(leadCan.editResubmit({ id: "bystander" }, overdueUnassigned)).toBe(false);
   });
 

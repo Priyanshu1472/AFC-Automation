@@ -33,6 +33,7 @@ type LeadRow = {
   recommending_authority_id: string;
   handled_by_dgm_id: string | null;
   assigned_ba_id: string | null;
+  forwarded_to_id: string | null;
   declined_from_status: string | null;
   approval_note_data: unknown;
   approval_note_pr_reviewed: boolean;
@@ -209,7 +210,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, handled_by_dgm_id, assigned_ba_id, declined_from_status, approval_note_data, approval_note_pr_reviewed, approval_note_pending_pr_review, documents, chat_opened_at, submission_deadline")
+    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, handled_by_dgm_id, assigned_ba_id, forwarded_to_id, declined_from_status, approval_note_data, approval_note_pr_reviewed, approval_note_pending_pr_review, documents, chat_opened_at, submission_deadline")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -262,15 +263,15 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     let storageCleanupPaths: string[] = [];
 
     switch (action) {
-      // The team's Project Officer (or Area Manager/Regional Manager, same
-      // permission tier) naming Person Responsible/Reviewer/Recommending
-      // Authority on a lead an Associate Consultant/Project Assistant
-      // created without them (see create-lead's isPoRouted) — re-applies
-      // the exact same eligibility checks create-lead itself would have run
-      // had the creator been allowed to set these directly.
+      // The specific person this lead was forwarded to (at creation by an
+      // Associate Consultant/Project Assistant — see create-lead's
+      // isPoRouted — or via a PMT transfer, see _shared/leadTransfer.ts)
+      // naming Person Responsible/Reviewer/Recommending Authority —
+      // re-applies the exact same eligibility checks create-lead itself
+      // would have run had the creator been allowed to set these directly.
       case "po_assign": {
-        if (!["project_officer", "area_manager", "regional_manager"].includes(caller.role) || !isCallerOnTeam(caller, leadRow.team)) {
-          return forbidden("You must be a Project Officer, Area Manager, or Regional Manager on this team to assign this lead.");
+        if (caller.id !== leadRow.forwarded_to_id) {
+          return forbidden("This lead hasn't been forwarded to you.");
         }
         const prId = typeof body.person_responsible_id === "string" ? body.person_responsible_id : "";
         const reviewerId = typeof body.reviewer_id === "string" ? body.reviewer_id : "";
@@ -399,30 +400,24 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         break;
       }
 
-      // A true drop, no reassignment involved. At pa_review, only the
-      // creator can drop (whether or not they're also PR) — a non-creator
-      // PR has no Drop here at all, only Accept/Reject; PR gains Drop once
-      // they've actually accepted (pmt_review onward), never before. A
-      // creator who assigned someone else keeps the right to withdraw at
-      // every later, non-terminal stage regardless (per product decision:
-      // the creator can always pull their own lead).
+      // A true drop, no reassignment involved. The creator has no Drop of
+      // their own — only the Person Responsible, Reviewer, or Recommending
+      // Authority actually named on the lead can drop it, at any
+      // non-terminal status, md_approved included. Before any of those
+      // three are named (po_assignment), the person the lead was forwarded
+      // to stands in instead — they're the only one who can act on it at
+      // all right now.
       case "drop": {
-        const isCreator = caller.id === leadRow.created_by;
         const isPr = caller.id === leadRow.person_responsible_id;
-        // No Person Responsible yet at po_assignment — same creator-only
-        // rule as pa_review.
-        if (leadRow.status === "po_assignment" || leadRow.status === "pa_review") {
-          if (!isCreator) return forbidden("Only the lead's creator can drop this lead here — the assigned Person Responsible should Reject instead.");
+        const isReviewer = caller.id === leadRow.reviewer_id;
+        const isRa = caller.id === leadRow.recommending_authority_id;
+        if (leadRow.status === "po_assignment") {
+          if (caller.id !== leadRow.forwarded_to_id) return forbidden("This lead hasn't been forwarded to you.");
           break;
         }
-        if (leadRow.status === "pa_action_required") {
-          if (!isCreator && !isPr) return forbidden("Only the lead's creator or Person Responsible can drop it.");
-          break;
+        if (!isPr && !isReviewer && !isRa) {
+          return forbidden("Only the Person Responsible, Reviewer, or Recommending Authority can drop this lead.");
         }
-        // Any later, already-escalated stage (pmt_review and beyond) — the
-        // creator or the current Person Responsible (who has, by this
-        // point, accepted the lead) can withdraw it.
-        if (!isCreator && !isPr) return forbidden("Only the lead's creator or Person Responsible can withdraw this lead.");
         // Withdrawing a lead the MD has already approved is a bigger deal
         // than dropping it at any earlier stage — require a written
         // justification here specifically; every other stage's drop keeps
@@ -434,11 +429,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       // Rejecting before PMT review hands the lead straight to a chosen
-      // teammate (not an open pool) — only reachable when the Person
-      // Responsible isn't the creator (see "drop" above for that case).
+      // teammate (not an open pool) — an alternative to Drop (see "drop"
+      // above) available to the Person Responsible regardless of whether
+      // they're also the creator, now that Drop itself no longer turns on
+      // that distinction.
       case "reject_reassign": {
         if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can reject this lead.");
-        if (caller.id === leadRow.created_by) return forbidden("Use Drop instead — you created this lead.");
         const reassignToId = typeof body.reassign_to_id === "string" ? body.reassign_to_id : "";
         if (!reassignToId) return jsonRes(req, 400, { error: "Select a team member to assign this lead to." });
         if (reassignToId === caller.id) return jsonRes(req, 400, { error: "Choose a different team member to reassign this lead to." });

@@ -208,7 +208,7 @@ export default function LeadDetailPage() {
     const { data } = await supabase
       .from("leads")
       .select(
-        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name, role), reviewer:reviewer_id(full_name), authority:recommending_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name)"
+        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name, role), reviewer:reviewer_id(full_name), authority:recommending_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name), forwarded:forwarded_to_id(full_name)"
       )
       .eq("id", id)
       .maybeSingle();
@@ -278,30 +278,31 @@ export default function LeadDetailPage() {
     const candidates = ACTIONS_BY_STATUS[lead.status] || [];
     return candidates.filter((a) => {
       switch (a.key) {
+        // Only the exact person this lead was forwarded to — not just any
+        // PO/AM/RM on the team.
         case "po_assign":
-          return ["project_officer", "area_manager", "regional_manager"].includes(profile?.role) && !!profile?.teams?.includes(lead.team);
+          return !!profile?.id && profile.id === lead.forwarded_to_id;
         // Generating/editing the note itself is open to creator or PR (same
         // as Edit), but only PR can actually Submit for approval from the
         // preview page — enforced there and, ultimately, server-side.
         case "lead_approval_note":
           return lead.status === "pa_review" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
-        // A true drop, no reassignment. At pa_review, only the creator can
-        // drop (whether or not they're also PR) — a non-creator PR has no
-        // Drop here at all, only Accept/Reject; PR gains Drop once they've
-        // actually accepted (pmt_review onward), never before. Creator or
-        // PR at every other stage, md_approved included (the one action
-        // still open once MD has approved — see ACTIONS_BY_STATUS.md_approved).
+        // A true drop, no reassignment. The creator has no Drop of their
+        // own — only the Person Responsible, Reviewer, or Recommending
+        // Authority actually named on the lead, at any non-terminal status,
+        // md_approved included. Before any of those three are named
+        // (po_assignment), the person it was forwarded to stands in.
         case "drop":
-          if (lead.status === "po_assignment" || lead.status === "pa_review") return profile?.id === lead.created_by;
+          if (lead.status === "po_assignment") return !!profile?.id && profile.id === lead.forwarded_to_id;
           // The Recommending Authority sent this back for changes — only
           // they should re-review it, so there's no Withdraw here, only
           // Edit & Resubmit.
           if (lead.status === "pa_action_required" && lead.declined_from_status === "recommending_authority_review") return false;
-          return profile?.id === lead.created_by || profile?.id === lead.person_responsible_id;
-        // The PR rejecting a lead they didn't create — hands it to a
-        // teammate instead of dropping it.
+          return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
+        // The PR handing the lead to a teammate instead of dropping it — an
+        // alternative to Drop, not exclusive with it.
         case "reject_reassign":
-          return lead.status === "pa_review" && profile?.id === lead.person_responsible_id && profile?.id !== lead.created_by;
+          return lead.status === "pa_review" && profile?.id === lead.person_responsible_id;
         case "claim":
           return LEAD_PA_TIER_ROLES.includes(profile?.role) && !!profile?.teams?.includes(lead.team);
         // The lead's actual first-line gate — the exact named person, not a
@@ -627,6 +628,9 @@ export default function LeadDetailPage() {
                 <Card.Header title="Assignment" />
                 <Card.Body className="ar-detail-body">
                   <Row label="Creator" value={fmt(lead.creator?.full_name)} />
+                  {lead.status === "po_assignment" && (
+                    <Row label="Forwarded To" value={fmt(lead.forwarded?.full_name)} />
+                  )}
                   <Row label="Person Responsible" value={fmt(lead.assignee?.full_name)} />
                   <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
                   <Row label="Recommending Authority" value={fmt(lead.authority?.full_name)} />

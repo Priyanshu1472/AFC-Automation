@@ -12,6 +12,7 @@ import Alert from "../../components/ui/Alert";
 import DatePickerCalendar from "../../components/ui/DatePickerCalendar";
 import { DELIVERY_TYPE_LABELS } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
+import { ROLE_LABELS } from "../../lib/roles";
 import "../../styles/LeadForm.css";
 
 const DELIVERY_TYPE_OPTIONS = Object.entries(DELIVERY_TYPE_LABELS).map(([value, label]) => ({ value, label }));
@@ -80,6 +81,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
     followup_date: lead?.followup_date || "",
     remark: lead?.remark || "",
     assigned_ba_id: lead?.assigned_ba_id || "",
+    forwarded_to_id: "",
     // Not defaulted to the creator's own id — left blank so they have to
     // deliberately pick someone, same as Reviewer/Recommending Authority.
     person_responsible_id: isPoRouted ? "" : (lead?.person_responsible_id || ""),
@@ -92,6 +94,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   const [reviewerOptions, setReviewerOptions] = useState([]);
   const [recommendingAuthorityOptions, setRecommendingAuthorityOptions] = useState([]);
   const [baOptions, setBaOptions] = useState([]);
+  const [forwardToOptions, setForwardToOptions] = useState([]);
   const [duplicates, setDuplicates] = useState([]);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -161,6 +164,19 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       .then(({ data }) => setBaOptions((data || []).map((u) => ({ value: u.id, label: u.org_name }))));
   }, [team, isLogisticsOnlyEdit]);
 
+  // "Forward to:" — every user on the team, any role (see create-lead's
+  // isPoRouted), searchable, with their role shown under their name so an
+  // Associate Consultant/Project Assistant can tell people with the same
+  // name apart.
+  useEffect(() => {
+    if (!team || !isPoRouted) return;
+    supabase
+      .rpc("get_team_members", { p_team: team })
+      .then(({ data }) =>
+        setForwardToOptions((data || []).map((u) => ({ value: u.user_id, label: u.full_name, hint: ROLE_LABELS[u.role] || u.role })))
+      );
+  }, [team, isPoRouted]);
+
   const selectedPortal = PORTALS.find((p) => p.name === form.portal_name);
   const bidNumberLabel = selectedPortal ? selectedPortal.identifier : "Bid / Reference No.";
 
@@ -203,11 +219,18 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       if (!form.reviewer_id) errs.reviewer_id = "Reviewer is required.";
       if (!form.recommending_authority_id) errs.recommending_authority_id = "Recommending Authority is required.";
     }
+    if (isPoRouted && !form.forwarded_to_id) errs.forwarded_to_id = "Forward to is required.";
     // "Yet to be Decided" doesn't count as a real answer for a source that
     // requires an actually-named BP.
     const isBaUnset = !form.assigned_ba_id || form.assigned_ba_id === YET_TO_BE_DECIDED;
     if (form.source === "ba" && isBaUnset) errs.assigned_ba_id = "Business Partner is required for a BP Source lead.";
     if (isSuoMoto && isBaUnset) errs.assigned_ba_id = "Business Partner is required for a Suo Moto lead.";
+    // Only on create — an edit appends to the lead's existing documents
+    // rather than replacing them, so an empty picker there just means "no
+    // new files this time", not "no documents at all".
+    if (mode === "create" && !isSuoMoto && files.length === 0) {
+      errs.documents = "At least one document is required.";
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -236,6 +259,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       fd.set("person_responsible_id", form.person_responsible_id);
       fd.set("reviewer_id", form.reviewer_id);
       fd.set("recommending_authority_id", form.recommending_authority_id);
+      fd.set("forwarded_to_id", form.forwarded_to_id);
       // Only consulted server-side for an isPoRouted creator, who has no
       // Person Responsible to derive a team from otherwise.
       if (mode === "create") fd.set("team", team || "");
@@ -503,10 +527,28 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
               </div>
 
               {isPoRouted ? (
-                <Alert variant="info">
-                  As an Associate Consultant/Project Assistant, you can't assign Person Responsible, Reviewer, or Recommending
-                  Authority directly. Once saved, this lead will go to your team's Project Officer to make these assignments.
-                </Alert>
+                <>
+                  <div className="field">
+                    <label className="field-label">
+                      Forward to: <span className="required">*</span>
+                    </label>
+                    <Select
+                      options={forwardToOptions}
+                      value={form.forwarded_to_id}
+                      onChange={(v) => set("forwarded_to_id", v)}
+                      placeholder="— Select a person on your team —"
+                      error={errors.forwarded_to_id}
+                      disabled={submitting}
+                      searchable
+                    />
+                    {errors.forwarded_to_id && <span className="field-error">{errors.forwarded_to_id}</span>}
+                  </div>
+                  <Alert variant="info">
+                    As an Associate Consultant/Project Assistant, you can't assign Person Responsible, Reviewer, or Recommending
+                    Authority directly. Once saved, this lead will be forwarded to the person you select above to make these
+                    assignments.
+                  </Alert>
+                </>
               ) : (
                 <>
                   <div className="grid-2">
@@ -571,7 +613,13 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
         <Card.Header title="Documents" />
         <Card.Body>
           <div className="field">
-            <label className="field-label">{isSuoMoto ? "Supporting Document(s) (optional)" : "RFP / Tender Document(s)"}</label>
+            <label className="field-label">
+              {isSuoMoto ? (
+                "Supporting Document(s) (optional)"
+              ) : (
+                <>RFP / Tender Document(s) {mode === "create" && <span className="required">*</span>}</>
+              )}
+            </label>
             <label className="lf-file-drop">
               <input
                 type="file"
@@ -610,6 +658,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
                 ))}
               </ul>
             )}
+            {errors.documents && <span className="field-error">{errors.documents}</span>}
             <span className="field-hint">Used for duplicate detection (first file's name + size) — any match shows up under Name of Assignment above.</span>
           </div>
         </Card.Body>

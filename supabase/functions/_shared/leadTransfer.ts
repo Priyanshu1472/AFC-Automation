@@ -11,9 +11,11 @@
 //
 // Resets the lead to po_assignment, as if it were being created again by an
 // Associate Consultant/Project Assistant for the new team (see create-lead's
-// isPoRouted): Person Responsible/Reviewer/Recommending Authority/Business
-// Partner all cleared (the new team names its own — that's why those three
-// columns had their NOT NULL constraint dropped, see 20260928000100), every
+// isPoRouted), forwarded to whichever specific person PMT named rather than
+// left open to the whole team's PO tier: Person Responsible/Reviewer/
+// Recommending Authority/Business Partner all cleared (the new team names
+// its own — that's why those three columns had their NOT NULL constraint
+// dropped, see 20260928000100), every
 // Lead Approval Note / PR-review flag cleared so the note process restarts
 // from scratch, the chat roster wiped so the old team's participants don't
 // linger once the new team's chat reopens, a fresh lead_number issued under
@@ -24,8 +26,9 @@
 
 import { createAdminClient } from "./auth.ts";
 import { logLeadActivity } from "./leadActivity.ts";
-import { notifyUsers, notifyTeam } from "./notify.ts";
+import { notifyUser, notifyUsers, notifyTeam } from "./notify.ts";
 import { getOrgWideHolders } from "./leadAuth.ts";
+import { validateForwardedTo } from "./leadEligibility.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -35,9 +38,13 @@ export async function performLeadTransfer(
   admin: AdminClient,
   leadId: string,
   targetTeam: string,
+  forwardedToId: string,
   justification: string,
   actorId: string
 ): Promise<TransferResult> {
+  const forwardErr = await validateForwardedTo(admin, forwardedToId, targetTeam);
+  if (forwardErr) return { ok: false, error: forwardErr };
+
   const { data: lead, error: leadErr } = await admin
     .from("leads")
     .select("id, lead_number, title, team, status, transfer_count")
@@ -75,6 +82,7 @@ export async function performLeadTransfer(
       reviewer_id: null,
       recommending_authority_id: null,
       assigned_ba_id: null,
+      forwarded_to_id: forwardedToId,
       handled_by_dgm_id: null,
       declined_from_status: null,
       approval_note_data: null,
@@ -107,20 +115,13 @@ export async function performLeadTransfer(
 
   await logLeadActivity(admin, leadId, actorId, "pmt", "team_transfer", lead.status as string, "po_assignment", `${fromTeam} → ${targetTeam}. New number: ${newLeadNumber}. ${justification}`);
 
-  // The new team's PO tier (actionable — same audience/wording as
-  // create-lead's isPoRouted notification, since this is now the exact
-  // same po_assignment state), the old team (informational), and MD
+  // The specific person PMT forwarded this lead to (actionable — same
+  // wording as create-lead's isPoRouted notification, since this is now the
+  // exact same po_assignment state), the old team (informational), and MD
   // (informational — MD/PMT effectively see everything anyway now).
-  const { data: poTier } = await admin
-    .from("afc_users")
-    .select("id")
-    .eq("team", targetTeam)
-    .eq("is_active", true)
-    .in("role", ["project_officer", "area_manager", "regional_manager"]);
-
   await Promise.all([
-    notifyUsers(admin, (poTier || []).map((u: { id: string }) => u.id), {
-      title: "A lead was transferred to your team",
+    notifyUser(admin, forwardedToId, {
+      title: "A lead was forwarded to you",
       sub_text: `${newLeadNumber} — "${lead.title}" was transferred from ${fromTeam} (was ${lead.lead_number}) and needs a Person Responsible, Reviewer, and Recommending Authority assigned.`,
       type: "action_required",
       link: `/leads/${leadId}`,

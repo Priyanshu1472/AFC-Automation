@@ -2,7 +2,7 @@
 // LeadDetailPage so the label/color for a given status never drifts
 // between the two.
 export const STATUS_MAP = {
-  po_assignment: { label: "Awaiting PO Assignment", variant: "warning" },
+  po_assignment: { label: "Awaiting Assignment", variant: "warning" },
   pa_review: { label: "PR Review", variant: "warning" },
   recommending_authority_review: { label: "Recommending Authority", variant: "warning" },
   pmt_review: { label: "PMT", variant: "info" },
@@ -70,7 +70,10 @@ export function isLeadOverdue(lead) {
 }
 
 // Who's allowed to edit an overdue lead: the named Person Responsible, or —
-// for a po_assignment lead, which has none yet — the creator instead.
+// for a po_assignment lead, which has none yet — the person it was
+// forwarded to (the only one who can act on it at all at that stage,
+// same principle as poAssign/drop in leadPermissions.js), falling back to
+// the creator only if even that's somehow missing.
 export function overdueEditorId(lead) {
-  return lead?.person_responsible_id || lead?.created_by || null;
+  return lead?.person_responsible_id || lead?.forwarded_to_id || lead?.created_by || null;
 }
