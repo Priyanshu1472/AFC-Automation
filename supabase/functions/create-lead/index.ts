@@ -11,6 +11,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { notifyUser, notifyUsers, notifyRole } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
+import { addLeadChatParticipants } from "../_shared/leadAuth.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
   validateRecommendingAuthority, validateBusinessAssociate, clampText,
@@ -204,6 +205,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         recommending_authority_id: isPoRouted ? null : input.recommending_authority_id,
         assigned_ba_id: assignedBaId,
         status: isPoRouted ? "po_assignment" : "pa_review",
+        // Chat opens the moment Person Responsible/Reviewer/Recommending
+        // Authority are all named — immediately here for a direct creation,
+        // or later via advance-lead-stage's "po_assign" case for an
+        // isPoRouted lead (see that case for why). Never at po_assignment,
+        // where there's no one to chat with yet.
+        chat_opened_at: isPoRouted ? null : new Date().toISOString(),
       })
       .select("id, lead_number, status")
       .single();
@@ -212,6 +219,15 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       if (uploadedPaths.length) await adminClient.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
       console.error("Lead insert failed:", insertErr?.message);
       return jsonRes(req, 500, { error: "Failed to create lead. Please try again." });
+    }
+
+    if (!isPoRouted) {
+      await addLeadChatParticipants(
+        adminClient,
+        lead.id,
+        [caller.id, input.person_responsible_id, input.reviewer_id, input.recommending_authority_id],
+        "named"
+      );
     }
 
     await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "created", null, lead.status, null);

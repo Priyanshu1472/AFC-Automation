@@ -90,8 +90,11 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
     return () => supabase.removeChannel(channel);
   }, [leadId, fetchQueries]);
 
-  const myOpenQuery = queries.find((q) => q.raised_by_id === profile?.id && q.status === "open");
-  const canRaise = QUERY_RAISER_ROLES.includes(profile?.role) && !profile?.teams?.includes(leadTeam) && !myOpenQuery;
+  // Only one open query per lead at a time, from anyone — matches
+  // raise-lead-query's own existingOpen check, which is lead-wide, not
+  // scoped to just this viewer.
+  const anyOpenQuery = queries.find((q) => q.status === "open");
+  const canRaise = QUERY_RAISER_ROLES.includes(profile?.role) && !profile?.teams?.includes(leadTeam) && !anyOpenQuery;
   const isPmt = profile?.committee === "PMT" || ["md", "admin"].includes(profile?.role);
 
   async function submitQuery() {

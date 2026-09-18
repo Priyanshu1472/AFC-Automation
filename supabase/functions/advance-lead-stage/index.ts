@@ -285,9 +285,15 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         const authorityErr = await validateRecommendingAuthority(adminClient, raId, leadRow.team);
         if (authorityErr) return jsonRes(req, 400, { error: authorityErr });
         extraFields = { person_responsible_id: prId, reviewer_id: reviewerId, recommending_authority_id: raId };
+        // Chat opens here — this is the first moment a po_assignment lead
+        // (freshly created via create-lead's isPoRouted, or landed here by
+        // a transfer — see _shared/leadTransfer.ts) actually has a Person
+        // Responsible/Reviewer/Recommending Authority to chat with.
+        if (!leadRow.chat_opened_at) extraFields.chat_opened_at = new Date().toISOString();
         notifyTargetIds = [prId, reviewerId, raId].filter((uid) => uid !== caller.id);
         notifyTitle = "Lead assigned to you";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" has named you as Person Responsible, Reviewer, or Recommending Authority.`;
+        chatRosterSyncs.push({ userIds: [leadRow.created_by, prId, reviewerId, raId], roleAtAdd: "named" });
         break;
       }
 
@@ -473,10 +479,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         // Consumed — a future decline (from wherever it happens next) sets
         // this fresh; it shouldn't keep steering approvals after this point.
         extraFields = { handled_by_dgm_id: caller.id, declined_from_status: null };
-        // Chat opens here — the first time this lead clears the
-        // Recommending Authority and reaches PMT — and only here; never
-        // overwritten on a later pass through this same case (e.g. a
-        // resubmission), so it keeps the timestamp of when it first opened.
+        // Chat has normally already opened by now — at create-lead (a
+        // direct, non-isPoRouted creation) or at "po_assign" above — but
+        // this guard is the fallback for any lead that somehow reached here
+        // without it (legacy data, edge cases). Never overwritten on a
+        // later pass through this same case (e.g. a resubmission), so it
+        // keeps the timestamp of when it first opened.
         if (!leadRow.chat_opened_at) extraFields.chat_opened_at = new Date().toISOString();
         const resumeInfo = await resumeNotification(adminClient, expectedTo);
         notifyTargetIds = resumeInfo.holders;

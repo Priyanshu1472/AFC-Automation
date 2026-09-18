@@ -6,10 +6,11 @@
 // to the lead's chat, decline it, or transfer the lead outright — this is
 // the only way a lead ever gets transferred, there's no standalone/free
 // transfer button. The raiser can edit/withdraw/remind on their own open
-// query (see update-lead-query) — only one open query per raiser per lead,
-// enforced by the existingOpen check below, is why "Raise a Query" only
-// shows again once theirs is resolved or withdrawn. This never changes the
-// lead itself — just opens a lead_queries row PMT can act on.
+// query (see update-lead-query) — only one open query per lead at a time
+// (from anyone, not just this caller — see the existingOpen check below),
+// is why "Raise a Query" only shows again once it's resolved or withdrawn.
+// This never changes the lead itself — just opens a lead_queries row PMT
+// can act on.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -61,12 +62,18 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
     const { data: existingOpen } = await adminClient
       .from("lead_queries")
-      .select("id")
+      .select("id, raised_by_id, raised_by_team")
       .eq("lead_id", leadId)
-      .eq("raised_by_id", caller.id)
       .eq("status", "open")
       .maybeSingle();
-    if (existingOpen) return jsonRes(req, 400, { error: "You already have an open query on this lead — wait for PMT to respond." });
+    if (existingOpen) {
+      return jsonRes(req, 400, {
+        error:
+          existingOpen.raised_by_id === caller.id
+            ? "You already have an open query on this lead — wait for PMT to respond, or edit/withdraw it."
+            : `${existingOpen.raised_by_team} already has an open query on this lead — wait for PMT to respond, or ask them to withdraw/edit it.`,
+      });
+    }
 
     const { error: insertErr } = await adminClient.from("lead_queries").insert({
       lead_id: leadId,
