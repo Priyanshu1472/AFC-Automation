@@ -122,6 +122,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     }
 
     let team: string;
+    let forwardedToName = "";
     if (isPoRouted) {
       // No Person Responsible to derive a team from — the creator's own
       // (active) team is used instead, same pattern as send-empanelment-
@@ -134,6 +135,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
       const forwardErr = await validateForwardedTo(adminClient, forwardedToId, team);
       if (forwardErr) return jsonRes(req, 400, { error: forwardErr });
+      const { data: forwardedToUser } = await adminClient.from("afc_users").select("full_name").eq("id", forwardedToId).maybeSingle();
+      forwardedToName = (forwardedToUser?.full_name as string) || "the selected person";
     } else {
       // Team is derived from Person Responsible's own team — not a field the
       // creator picks directly, matching the real form (no Team selector).
@@ -245,7 +248,16 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       );
     }
 
-    await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "created", null, lead.status, null);
+    await logLeadActivity(
+      adminClient,
+      lead.id,
+      caller.id,
+      caller.role,
+      "created",
+      null,
+      lead.status,
+      isPoRouted ? `Lead forwarded to ${forwardedToName}` : null
+    );
 
     if (isPoRouted) {
       // No PR/Reviewer/Recommending Authority to notify yet — instead, only
