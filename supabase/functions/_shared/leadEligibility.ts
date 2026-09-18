@@ -66,13 +66,17 @@ export function clampText(val: unknown, max = MAX_TEXT_LENGTH): string | null {
   return trimmed.slice(0, max);
 }
 
-// Person Responsible must be an active staff member on the lead's team —
-// any role except business_associate (BAs have a team too, for the BP-org
-// lookup, but aren't staff and can't own a lead's workflow).
+// Person Responsible must be an active staff member on the lead's team,
+// excluding Business Partners (have a team too, for the BP-org lookup, but
+// aren't staff and can't own a lead's workflow) and the AGM/SRM/DGM/General
+// Manager tier — they're the Recommending Authority/oversight roles, not
+// hands-on PR work.
+const PERSON_RESPONSIBLE_EXCLUDED_ROLES = ["business_associate", "agm", "srm", "dgm", "general_manager"];
+
 export async function validateAssignment(admin: AdminClient, personResponsibleId: string, team: string): Promise<string | null> {
   const user = await getTargetUser(admin, personResponsibleId);
-  if (!user || !user.is_active || user.team !== team || user.role === "business_associate") {
-    return "Person Responsible must be an active staff member on this team.";
+  if (!user || !user.is_active || user.team !== team || PERSON_RESPONSIBLE_EXCLUDED_ROLES.includes(user.role as string)) {
+    return "Person Responsible must be an active staff member on this team (not a Business Partner or AGM/SRM/DGM/General Manager).";
   }
   return null;
 }

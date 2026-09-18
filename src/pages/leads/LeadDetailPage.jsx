@@ -187,10 +187,12 @@ export default function LeadDetailPage() {
   // Responsible/Reviewer/Recommending Authority on a po_assignment lead —
   // three pickers at once, same idea as reassignOptions/selectedReassignId
   // above but tripled.
-  // Person Responsible lists any active, non-BP team member; Reviewer
-  // additionally excludes Associate Consultant/Project Assistant (that
-  // tier creates leads and needs a Project Officer to review them, not the
-  // other way around) — mirrors LeadForm.jsx's personResponsibleOptions/
+  // Person Responsible lists any active team member except Business
+  // Partners and the AGM/SRM/DGM/General Manager tier (Recommending
+  // Authority/oversight, not hands-on PR work); Reviewer additionally
+  // excludes Associate Consultant/Project Assistant (that tier creates
+  // leads and needs a Project Officer to review them, not the other way
+  // around) — mirrors LeadForm.jsx's personResponsibleOptions/
   // reviewerOptions split.
   const [poAssignPrOptions, setPoAssignPrOptions] = useState([]);
   const [poAssignReviewerOptions, setPoAssignReviewerOptions] = useState([]);
@@ -408,10 +410,14 @@ export default function LeadDetailPage() {
     setPoAssignRaId("");
     setPendingAction(action);
     if (action.key === "reject_reassign" && lead?.team) {
+      // Rejecting hands the lead to a new Person Responsible — same
+      // AGM/SRM exclusion as po_assign's own PR picker just below (they're
+      // Recommending Authority/oversight, not hands-on PR work); DGM/
+      // General Manager were never in LEAD_PA_TIER_ROLES to begin with.
       supabase
         .from("afc_users")
         .select("id, full_name")
-        .in("role", LEAD_PA_TIER_ROLES)
+        .in("role", LEAD_PA_TIER_ROLES.filter((r) => r !== "agm" && r !== "srm"))
         .eq("team", lead.team)
         .eq("is_active", true)
         .order("full_name")
@@ -423,7 +429,7 @@ export default function LeadDetailPage() {
         .select("id, full_name")
         .eq("team", lead.team)
         .eq("is_active", true)
-        .neq("role", "business_associate")
+        .not("role", "in", "(business_associate,agm,srm,dgm,general_manager)")
         .order("full_name")
         .then(async ({ data }) => setPoAssignPrOptions(await withActiveCounts(data || [])));
       supabase

@@ -109,7 +109,9 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   // membership (checked server-side), not tied to this team, so Person
   // Responsible just lists this team's active members — excluding Business
   // Partners, who have a team (for the BP-org-name lookup below) but
-  // aren't staff and can't be assigned either role. Reviewer additionally
+  // aren't staff and can't be assigned either role, and excluding
+  // AGM/SRM/DGM/General Manager, who are the Recommending
+  // Authority/oversight tier, not hands-on PR work. Reviewer additionally
   // excludes Associate Consultant/Project Assistant — that tier is the one
   // that creates leads and needs a Project Officer to review them, not the
   // other way around, so they shouldn't be pickable as Reviewer themselves.
@@ -128,7 +130,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
       .select("id, full_name")
       .eq("team", team)
       .eq("is_active", true)
-      .neq("role", "business_associate")
+      .not("role", "in", "(business_associate,agm,srm,dgm,general_manager)")
       .order("full_name")
       .then(async ({ data }) => setPersonResponsibleOptions(toPrOptions(await withActiveCounts(data || []))));
     supabase
