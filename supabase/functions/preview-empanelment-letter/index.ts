@@ -59,14 +59,17 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
 
-  // Whether the caller may view this application at all — mirrors
-  // can_view_empanelment_application() / get-empanelment-document-url, since
+  // Whether the caller may view this application at all — team-wide,
+  // matching can_view_empanelment_application() / get-empanelment-document-url
+  // exactly (not just the one person recorded as project_officer_id — see
+  // get-empanelment-document-url for why that was too narrow), since
   // auth.uid() is null for the service-role client used here.
   const canViewApplication =
     ["md", "cfo", "cs", "admin"].includes(caller.role) ||
-    (["dgm", "agm", "general_manager"].includes(caller.role) && isCallerOnTeam(caller, app.team)) ||
-    (["project_officer", "area_manager", "regional_manager", "project_assistant"].includes(caller.role) && caller.id === app.project_officer_id) ||
-    (["associate_consultant", "project_assistant"].includes(caller.role) && caller.id === app.sent_by);
+    (
+      ["dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant", "area_manager", "regional_manager", "general_manager"].includes(caller.role) &&
+      isCallerOnTeam(caller, app.team)
+    );
 
   try {
     if (type === "final") {
