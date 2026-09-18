@@ -9,12 +9,14 @@
 // Proposal Preparation/Fee Note already created stays tied to the old
 // lead_id/team as-is (deliberately not touched or migrated).
 //
-// Resets the lead to a fresh pa_review, as if it were being created again
-// for the new team: Person Responsible/Reviewer/Recommending Authority/
-// Business Partner all cleared (the new team names its own — that's why
-// those three columns had their NOT NULL constraint dropped, see
-// 20260928000100), and every Lead Approval Note / PR-review flag cleared
-// so the note process restarts from scratch under the new team.
+// Resets the lead to po_assignment, as if it were being created again by an
+// Associate Consultant/Project Assistant for the new team (see create-lead's
+// isPoRouted): Person Responsible/Reviewer/Recommending Authority/Business
+// Partner all cleared (the new team names its own — that's why those three
+// columns had their NOT NULL constraint dropped, see 20260928000100), every
+// Lead Approval Note / PR-review flag cleared so the note process restarts
+// from scratch, and the chat roster wiped so the old team's participants
+// don't linger once the new team's chat reopens.
 
 import { createAdminClient } from "./auth.ts";
 import { logLeadActivity } from "./leadActivity.ts";
@@ -56,7 +58,7 @@ export async function performLeadTransfer(
     .from("leads")
     .update({
       team: targetTeam,
-      status: "pa_review",
+      status: "po_assignment",
       person_responsible_id: null,
       reviewer_id: null,
       recommending_authority_id: null,
@@ -76,15 +78,30 @@ export async function performLeadTransfer(
     return { ok: false, error: "Failed to transfer lead. Please try again." };
   }
 
-  await logLeadActivity(admin, leadId, actorId, "pmt", "team_transfer", lead.status as string, "pa_review", `${fromTeam} → ${targetTeam}. ${justification}`);
+  // The old team's chat roster has no business being on the new team's
+  // thread — chat_opened_at is already cleared above, but the participant
+  // rows themselves need wiping too, or the old team would silently regain
+  // visibility the moment the new team's chat reopens.
+  const { error: chatClearErr } = await admin.from("lead_chat_participants").delete().eq("lead_id", leadId);
+  if (chatClearErr) console.error("Clearing lead_chat_participants after transfer failed:", chatClearErr.message);
 
-  // Team 2 (actionable — they now own a lead with no PR/Reviewer/
-  // Recommending Authority named yet), Team 1 (informational), and MD
+  await logLeadActivity(admin, leadId, actorId, "pmt", "team_transfer", lead.status as string, "po_assignment", `${fromTeam} → ${targetTeam}. ${justification}`);
+
+  // The new team's PO tier (actionable — same audience/wording as
+  // create-lead's isPoRouted notification, since this is now the exact
+  // same po_assignment state), the old team (informational), and MD
   // (informational — MD/PMT effectively see everything anyway now).
+  const { data: poTier } = await admin
+    .from("afc_users")
+    .select("id")
+    .eq("team", targetTeam)
+    .eq("is_active", true)
+    .in("role", ["project_officer", "area_manager", "regional_manager"]);
+
   await Promise.all([
-    notifyTeam(admin, targetTeam, {
+    notifyUsers(admin, (poTier || []).map((u: { id: string }) => u.id), {
       title: "A lead was transferred to your team",
-      sub_text: `${lead.lead_number} — "${lead.title}" was transferred from ${fromTeam}. Assign a Person Responsible, Reviewer, and Recommending Authority to continue it.`,
+      sub_text: `${lead.lead_number} — "${lead.title}" was transferred from ${fromTeam} and needs a Person Responsible, Reviewer, and Recommending Authority assigned.`,
       type: "action_required",
       link: `/leads/${leadId}`,
     }),

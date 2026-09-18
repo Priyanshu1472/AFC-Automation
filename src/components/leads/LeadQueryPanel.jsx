@@ -17,6 +17,7 @@ import { useToast } from "../../hooks/useToast";
 import Card from "../ui/Card";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
+import PinInput from "../ui/PinInput";
 import "../../styles/LeadQueryPanel.css";
 
 const QUERY_RAISER_ROLES = ["dgm", "general_manager", "agm", "srm"];
@@ -50,6 +51,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
   const [raising, setRaising] = useState(false);
   const [respondingId, setRespondingId] = useState(null); // { queryId, action } — PMT's own triage actions
   const [responseText, setResponseText] = useState("");
+  const [transferPin, setTransferPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState(null); // queryId currently being edited by its raiser
   const [editText, setEditText] = useState("");
@@ -126,10 +128,14 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
       showToast("A response is required.", "danger");
       return;
     }
+    if (action === "transfer" && !/^\d{4}$/.test(transferPin)) {
+      showToast("Enter your 4-digit PIN.", "danger");
+      return;
+    }
     setBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke("respond-lead-query", {
-        body: { query_id: queryId, action, response: responseText.trim() },
+        body: { query_id: queryId, action, response: responseText.trim(), ...(action === "transfer" ? { pin: transferPin } : {}) },
       });
       if (error) {
         showToast(await extractFunctionErrorMessage(error, "Action failed."), "danger");
@@ -145,6 +151,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
       );
       setRespondingId(null);
       setResponseText("");
+      setTransferPin("");
       fetchQueries();
       if (action === "transfer" && onLeadTransferred) onLeadTransferred();
     } catch (err) {
@@ -309,33 +316,48 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                     )
                   )}
 
-                  {isPmt && q.status === "open" && (
+                  {isPmt && (q.status === "open" || q.status === "added_to_chat") && (
                     respondingId?.queryId === q.id ? (
                       <div className="lq-respond-form">
                         {respondingId.action !== "add_to_chat" && (
-                          <textarea
-                            className="input"
-                            rows={2}
-                            value={responseText}
-                            onChange={(e) => setResponseText(e.target.value)}
-                            placeholder="Response / reason…"
+                          <>
+                            <label className="ar-label">Remarks <span className="ar-required">*</span></label>
+                            <textarea
+                              className="input"
+                              rows={2}
+                              value={responseText}
+                              onChange={(e) => setResponseText(e.target.value)}
+                              placeholder="Response / reason…"
+                              disabled={busy}
+                            />
+                          </>
+                        )}
+                        {respondingId.action === "transfer" && (
+                          <PinInput
+                            label="Your Action PIN"
+                            required
+                            value={transferPin}
+                            onChange={setTransferPin}
                             disabled={busy}
+                            hint="Confirms it's really you"
                           />
                         )}
                         <div className="lq-form-actions">
                           <Button variant="primary" size="sm" loading={busy} disabled={busy} onClick={() => respond(q.id, respondingId.action)}>
                             Confirm: {RESPOND_LABEL[respondingId.action]}
                           </Button>
-                          <Button variant="secondary" size="sm" disabled={busy} onClick={() => { setRespondingId(null); setResponseText(""); }}>
+                          <Button variant="secondary" size="sm" disabled={busy} onClick={() => { setRespondingId(null); setResponseText(""); setTransferPin(""); }}>
                             Cancel
                           </Button>
                         </div>
                       </div>
                     ) : (
                       <div className="lq-item-actions">
-                        <Button variant="secondary" size="sm" onClick={() => setRespondingId({ queryId: q.id, action: "add_to_chat" })}>
-                          Add to Chat
-                        </Button>
+                        {q.status === "open" && (
+                          <Button variant="secondary" size="sm" onClick={() => setRespondingId({ queryId: q.id, action: "add_to_chat" })}>
+                            Add to Chat
+                          </Button>
+                        )}
                         <Button variant="primary" size="sm" onClick={() => setRespondingId({ queryId: q.id, action: "transfer" })}>
                           Transfer Lead
                         </Button>

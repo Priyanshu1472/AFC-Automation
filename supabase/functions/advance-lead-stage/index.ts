@@ -97,13 +97,15 @@ async function resumeNotification(
 // (from_status -> action -> to_status) — the single source of truth for
 // valid transitions, checked before any authorization logic runs.
 const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
-  // A lead created by an Associate Consultant/Project Assistant — no Person
-  // Responsible/Reviewer/Recommending Authority set yet (see create-lead's
-  // isPoRouted). "po_assign" is the team's Project Officer (or Area
-  // Manager/Regional Manager) naming all three, PIN-confirmed — the lead
-  // then lands in pa_review, exactly where every other creator's lead
-  // already starts. "drop" here is the creator withdrawing it before a PO
-  // ever acts, same as pa_review's creator-only drop (see the "drop" case).
+  // No Person Responsible/Reviewer/Recommending Authority set yet — either a
+  // lead created by an Associate Consultant/Project Assistant (see
+  // create-lead's isPoRouted) or one just transferred to this team (see
+  // _shared/leadTransfer.ts, which lands a lead here too). "po_assign" is
+  // the team's Project Officer (or Area Manager/Regional Manager) naming
+  // all three, PIN-confirmed — the lead then lands in pa_review, exactly
+  // where every other creator's lead already starts. "drop" here is the
+  // creator withdrawing it before a PO ever acts, same as pa_review's
+  // creator-only drop (see the "drop" case).
   po_assignment: { po_assign: "pa_review", drop: "pa_dropped" },
   // "drop" is the creator's own withdrawal — a true drop to pa_dropped,
   // valid at every non-terminal status, not just pa_review (see the "drop"
