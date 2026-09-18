@@ -87,22 +87,29 @@ type ViewableLead = {
 // in the migrations — the two drifting apart is exactly the kind of gap
 // that let get-lead-document-url stay on the old team-wide rule after
 // can_view_lead() itself had already been narrowed.
-//   - md/admin/cfo/cs/dgm/agm/srm: every lead, org-wide (see
-//     20260928000200_lead_org_wide_visibility.sql).
+//   - md/admin/cfo/cs/dgm/agm/srm/general_manager: every lead, org-wide
+//     (see 20260928000200_lead_org_wide_visibility.sql).
 //   - PMT committee membership: org-wide, every lead.
-//   - Always: creator/Person Responsible/Reviewer/Recommending Authority/
-//     handling DGM, or the assigned Business Partner.
-//   - A just-transferred lead (person_responsible_id null) is visible to
-//     its whole new team, not just DGM/AGM, so anyone there can open it to
-//     assign a Person Responsible.
+//   - Always: Person Responsible/Reviewer/Recommending Authority/handling
+//     DGM, or the assigned Business Partner.
+//   - The creator, but only while still on the lead's current team — once
+//     a lead transfers away, the old creator loses it (see
+//     20261001020000_lead_creator_visibility_after_transfer.sql).
+//   - project_officer/area_manager/regional_manager/associate_consultant/
+//     project_assistant: every lead on their own team, at any status — not
+//     just while it's unclaimed (person_responsible_id null); otherwise a
+//     PO loses access to a lead on their own team the moment they assign
+//     it away via po_assign (see 20261001030000_lead_pa_tier_team_wide_
+//     visibility.sql).
+const PA_TIER_TEAM_WIDE_ROLES = ["project_officer", "area_manager", "regional_manager", "associate_consultant", "project_assistant"];
+
 export function canViewLead(caller: ViewerCaller, lead: ViewableLead): boolean {
   if (["md", "admin", "cfo", "cs", "dgm", "general_manager", "agm", "srm"].includes(caller.role)) return true;
   if (caller.committee === "PMT") return true;
-  if ([lead.created_by, lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id, lead.handled_by_dgm_id].includes(caller.id)) return true;
-  if (!lead.person_responsible_id) {
-    const callerTeams = caller.teams ?? (caller.team ? [caller.team] : []);
-    if (callerTeams.includes(lead.team)) return true;
-  }
+  if ([lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id, lead.handled_by_dgm_id].includes(caller.id)) return true;
+  const callerTeams = caller.teams ?? (caller.team ? [caller.team] : []);
+  if (caller.id === lead.created_by && callerTeams.includes(lead.team)) return true;
+  if (PA_TIER_TEAM_WIDE_ROLES.includes(caller.role) && callerTeams.includes(lead.team)) return true;
   if (caller.role === "business_associate" && lead.assigned_ba_id === caller.id) return true;
   return false;
 }
