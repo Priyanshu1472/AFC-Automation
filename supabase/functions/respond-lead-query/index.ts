@@ -1,12 +1,18 @@
 // supabase/functions/respond-lead-query/index.ts
-// JWT must be ON. PMT triages an open lead_queries row (see
-// raise-lead-query) with one of three actions:
+// JWT must be ON. PMT triages a lead_queries row (see raise-lead-query)
+// with one of three actions:
 //   add_to_chat — adds the querying DGM/AGM/SRM to the lead's chat roster,
-//                 no PIN (not a workflow decision, just visibility).
+//                 no PIN (not a workflow decision, just visibility). Only
+//                 valid from "open" — can't add-to-chat twice.
 //   decline     — closes the query with PMT's own note, no PIN.
 //   transfer    — moves the lead to the raiser's own team (see
 //                 _shared/leadTransfer.ts) — PIN required, same as any
 //                 other lead-workflow decision.
+// decline/transfer are both valid from "open" OR "added_to_chat" — adding
+// the raiser to the chat is a visibility step, not a resolution, so PMT can
+// still transfer or decline afterward once the discussion settles
+// somewhere. Only "transferred"/"declined"/"withdrawn" are actually
+// terminal.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -53,8 +59,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .eq("id", queryId)
       .maybeSingle();
     if (queryErr || !query) return jsonRes(req, 404, { error: "Query not found." });
-    if (query.status !== "open") {
+    if (query.status !== "open" && query.status !== "added_to_chat") {
       return jsonRes(req, 400, { error: `This query is already "${query.status}".` });
+    }
+    if (action === "add_to_chat" && query.status !== "open") {
+      return jsonRes(req, 400, { error: "The raiser has already been added to the chat." });
     }
 
     const { data: lead, error: leadErr } = await adminClient
@@ -87,7 +96,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         .from("lead_queries")
         .update({ status: "declined", pmt_response: response || null, resolved_by_id: caller.id, resolved_at: new Date().toISOString() })
         .eq("id", queryId)
-        .eq("status", "open");
+        .in("status", ["open", "added_to_chat"]);
       if (updateErr) return jsonRes(req, 400, { error: "This query was already updated by someone else — refresh and try again." });
       await logLeadActivity(adminClient, query.lead_id, caller.id, "pmt", "cross_team_query_declined", null, null, `${query.raised_by_team}${response ? ` — ${response}` : ""}`);
       await notifyUser(adminClient, query.raised_by_id, {
@@ -116,7 +125,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .from("lead_queries")
       .update({ status: "transferred", pmt_response: response || null, resolved_by_id: caller.id, resolved_at: new Date().toISOString() })
       .eq("id", queryId)
-      .eq("status", "open");
+      .in("status", ["open", "added_to_chat"]);
     if (updateErr) console.error("lead_queries status update after transfer failed:", updateErr.message);
 
     return jsonRes(req, 200, { success: true });
