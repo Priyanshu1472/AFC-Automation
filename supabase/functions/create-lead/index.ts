@@ -113,12 +113,16 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   }
 
   try {
-    // Every role can create a lead except MD and Admin, per explicit
-    // product decision — Admin can view/manage everything but doesn't
-    // originate leads. No separate creator-eligibility list; the caller's
+    // Every role can create a lead except MD, Admin, CFO, and CS, per
+    // explicit product decision — Admin can view/manage everything but
+    // doesn't originate leads, and CFO/CS are view-only throughout Lead
+    // Generation (org-wide read access via can_view_lead(), no action
+    // branch anywhere in advance-lead-stage — see LEAD_GENERATION_NAV_ROLES'
+    // own comment). No separate creator-eligibility list; the caller's
     // existing afc_users.role (set on the Users page) is authoritative.
-    if (caller.role === "md" || caller.role === "admin") {
-      return jsonRes(req, 403, { error: `${caller.role === "md" ? "MD" : "Admin"} does not create leads directly.` });
+    const NON_CREATOR_ROLES: Record<string, string> = { md: "MD", admin: "Admin", cfo: "CFO", cs: "CS" };
+    if (caller.role in NON_CREATOR_ROLES) {
+      return jsonRes(req, 403, { error: `${NON_CREATOR_ROLES[caller.role]} does not create leads directly.` });
     }
 
     let team: string;

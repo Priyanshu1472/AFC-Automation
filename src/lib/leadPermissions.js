@@ -8,8 +8,10 @@ import { isLeadOverdue, overdueEditorId } from "../components/leads/leadStatus";
 // separate role-assignment lookup. PMT is org-wide (spans all 4 teams, not
 // one team apiece), so membership alone qualifies — no team match required.
 export const leadCan = {
-  // Every role can create a lead except MD and Admin.
-  create: (profile) => !!profile?.role && profile.role !== "md" && profile.role !== "admin",
+  // Every role can create a lead except MD, Admin, CFO, and CS — CFO/CS
+  // are view-only throughout Lead Generation (org-wide read access, no
+  // action branch anywhere in advance-lead-stage).
+  create: (profile) => !!profile?.role && !["md", "admin", "cfo", "cs"].includes(profile.role),
   // A lead an Associate Consultant/Project Assistant created without a
   // Person Responsible/Reviewer/Recommending Authority (see create-lead's
   // isPoRouted), or one PMT just transferred — either way, forwarded to one

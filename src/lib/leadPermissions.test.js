@@ -4,11 +4,13 @@ import { leadCan, isActionRequiredForViewer, isMyLead, isTeamLead } from "./lead
 describe("leadCan", () => {
   const user = { id: "user-1" };
 
-  it("create allows any role except MD and Admin", () => {
+  it("create allows any role except MD, Admin, CFO, and CS", () => {
     expect(leadCan.create({ role: "project_officer" })).toBe(true);
     expect(leadCan.create({ role: "dgm" })).toBe(true);
     expect(leadCan.create({ role: "md" })).toBe(false);
     expect(leadCan.create({ role: "admin" })).toBe(false);
+    expect(leadCan.create({ role: "cfo" })).toBe(false);
+    expect(leadCan.create({ role: "cs" })).toBe(false);
     expect(leadCan.create({})).toBe(false);
   });
 

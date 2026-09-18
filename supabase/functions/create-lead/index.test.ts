@@ -17,7 +17,7 @@ function baseFields(overrides: Record<string, string> = {}) {
     title: "Preparation of DPR for Smart City Project",
     person_responsible_id: PR_ID,
     reviewer_id: REVIEWER_ID,
-    approval_authority_id: AUTHORITY_ID,
+    recommending_authority_id: AUTHORITY_ID,
     ...overrides,
   };
 }
@@ -160,8 +160,24 @@ Deno.test("handleRequest - Admin cannot create a lead directly", async () => {
   assertEquals(res.status, 403);
 });
 
-Deno.test("handleRequest - every non-md/non-admin role can create a lead", async () => {
-  for (const role of ["project_assistant", "project_officer", "associate_consultant", "agm", "dgm", "cfo"]) {
+Deno.test("handleRequest - CFO cannot create a lead directly", async () => {
+  const client = buildClient({ caller: callerRow({ role: "cfo" }) });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("handleRequest - CS cannot create a lead directly", async () => {
+  const client = buildClient({ caller: callerRow({ role: "cs" }) });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("handleRequest - every other role can create a lead directly", async () => {
+  // project_assistant/associate_consultant are isPoRouted instead — they
+  // need forwarded_to_id/team, not baseFields()'s direct-creation shape
+  // (person_responsible_id/reviewer_id/recommending_authority_id); covered
+  // separately below.
+  for (const role of ["project_officer", "area_manager", "regional_manager", "agm", "srm", "dgm", "general_manager"]) {
     const client = buildClient({ caller: callerRow({ role }) });
     const res = await handleRequest(formReq(baseFields()), client as never);
     assertEquals(res.status, 200, `expected role "${role}" to be allowed to create a lead`);
