@@ -316,16 +316,28 @@ Deno.test("overdue - the creator (not PR) is rejected from editing an overdue pa
   assertEquals(res.status, 403);
 });
 
-Deno.test("overdue - the creator can edit an overdue po_assignment lead (no Person Responsible yet)", async () => {
+Deno.test("overdue - the person it was forwarded to can edit an overdue po_assignment lead (no Person Responsible yet)", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: "forwarded-1" }),
+    lead: leadRow({ status: "po_assignment", submission_deadline: "2000-01-01", created_by: "creator-1", person_responsible_id: null, forwarded_to_id: "forwarded-1" }),
+  });
+  const res = await handleRequest(
+    formReq({ lead_id: LEAD_ID, title: "Updated title" }, fakeJwt({ sub: "forwarded-1" })),
+    client as never
+  );
+  assertEquals(res.status, 200);
+});
+
+Deno.test("overdue - the creator (not the forwarded person) is rejected from editing an overdue po_assignment lead", async () => {
   const client = buildClient({
     caller: callerRow({ id: "creator-1" }),
-    lead: leadRow({ status: "po_assignment", submission_deadline: "2000-01-01", created_by: "creator-1", person_responsible_id: null }),
+    lead: leadRow({ status: "po_assignment", submission_deadline: "2000-01-01", created_by: "creator-1", person_responsible_id: null, forwarded_to_id: "forwarded-1" }),
   });
   const res = await handleRequest(
     formReq({ lead_id: LEAD_ID, title: "Updated title" }, fakeJwt({ sub: "creator-1" })),
     client as never
   );
-  assertEquals(res.status, 200);
+  assertEquals(res.status, 403);
 });
 
 Deno.test("overdue - editing past pa_review preserves the existing PR/Reviewer/Recommending Authority even if the client sends different ones", async () => {

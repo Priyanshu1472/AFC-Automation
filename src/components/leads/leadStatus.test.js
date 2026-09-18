@@ -40,8 +40,12 @@ describe("overdueEditorId", () => {
     expect(overdueEditorId({ person_responsible_id: "pr-1", created_by: "creator-1" })).toBe("pr-1");
   });
 
-  it("falls back to the creator when there's no Person Responsible yet (po_assignment)", () => {
-    expect(overdueEditorId({ person_responsible_id: null, created_by: "creator-1" })).toBe("creator-1");
+  it("falls back to the forwarded-to person when there's no Person Responsible yet (po_assignment)", () => {
+    expect(overdueEditorId({ person_responsible_id: null, forwarded_to_id: "forwarded-1", created_by: "creator-1" })).toBe("forwarded-1");
+  });
+
+  it("falls back to the creator only if even the forwarded-to person is missing", () => {
+    expect(overdueEditorId({ person_responsible_id: null, forwarded_to_id: null, created_by: "creator-1" })).toBe("creator-1");
   });
 
   it("is null for a null lead", () => {

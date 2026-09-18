@@ -110,14 +110,16 @@ describe("leadCan", () => {
     expect(leadCan.editResubmit({ id: "bystander" }, overdueLead)).toBe(false);
   });
 
-  it("editResubmit falls back to the creator on an overdue lead with no Person Responsible yet (po_assignment)", () => {
+  it("editResubmit falls back to the forwarded-to person on an overdue lead with no Person Responsible yet (po_assignment)", () => {
     const overdueUnassigned = {
       status: "po_assignment",
       created_by: "creator-1",
       person_responsible_id: null,
+      forwarded_to_id: "forwarded-1",
       submission_deadline: "2000-01-01",
     };
-    expect(leadCan.editResubmit({ id: "creator-1" }, overdueUnassigned)).toBe(true);
+    expect(leadCan.editResubmit({ id: "forwarded-1" }, overdueUnassigned)).toBe(true);
+    expect(leadCan.editResubmit({ id: "creator-1" }, overdueUnassigned)).toBe(false);
     expect(leadCan.editResubmit({ id: "bystander" }, overdueUnassigned)).toBe(false);
   });
 

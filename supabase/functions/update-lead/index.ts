@@ -101,7 +101,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // are always what gets written back.
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, lead_number, documents, title, portal_name, bid_number, submission_deadline, assigned_ba_id")
+      .select("id, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, forwarded_to_id, lead_number, documents, title, portal_name, bid_number, submission_deadline, assigned_ba_id")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -109,9 +109,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // Overdue: this lead's submission deadline has already passed and it
     // isn't finished — every normal pipeline action is blocked (see
     // advance-lead-stage's blanket guard) except this edit, which the
-    // Person Responsible (or the creator, if none is assigned yet — e.g. a
-    // po_assignment lead) can still use to push the date into the future
-    // and silently reactivate whatever status the lead is frozen at.
+    // Person Responsible (or, for a po_assignment lead with none yet, the
+    // person it was forwarded to) can still use to push the date into the
+    // future and silently reactivate whatever status the lead is frozen at.
     const isOverdue = !TERMINAL_STATUSES.has(lead.status as string) &&
       !!lead.submission_deadline && new Date(lead.submission_deadline as string) < new Date();
     // The normal pre-commitment edit window — full-form editing (including
@@ -126,9 +126,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
 
     if (isOverdue) {
-      const editorId = lead.person_responsible_id || lead.created_by;
+      const editorId = lead.person_responsible_id || lead.forwarded_to_id || lead.created_by;
       if (caller.id !== editorId) {
-        return jsonRes(req, 403, { error: "This lead's submission deadline has passed — only the Person Responsible (or the creator, if none is assigned yet) can edit it." });
+        return jsonRes(req, 403, { error: "This lead's submission deadline has passed — only the Person Responsible (or the person it was forwarded to, if none is assigned yet) can edit it." });
       }
     } else {
       // A just-transferred lead (person_responsible_id null) has no PR yet —
