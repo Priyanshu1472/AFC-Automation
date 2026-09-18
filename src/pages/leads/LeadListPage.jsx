@@ -138,7 +138,7 @@ export default function LeadListPage() {
     // Empanelment.
     const { data } = await supabase
       .from("leads")
-      .select("*, creator:created_by(full_name), assignee:person_responsible_id(full_name)")
+      .select("*, assignee:person_responsible_id(full_name)")
       .order("created_at", { ascending: false })
       .limit(5000);
     setLeads(data || []);
@@ -361,8 +361,8 @@ export default function LeadListPage() {
               <table className="table ll-table">
                 <thead>
                   <tr>
-                    <th>Lead Number</th><th>Title</th><th>Creator</th>{canFilterTeam && <th>Team</th>}
-                    <th>Person Responsible</th><th>Status</th><th>Created</th><th>Actions</th>
+                    <th>Lead Number</th><th>Title</th>{canFilterTeam && <th>Team</th>}
+                    <th>Person Responsible</th><th>Status</th><th>Last Date</th><th className="ll-col-actions">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -370,12 +370,11 @@ export default function LeadListPage() {
                     <tr key={l.id} className="ll-row-clickable" onClick={() => navigate(`/leads/${l.id}`)}>
                       <td><span className="ll-lead-number">{l.lead_number}</span></td>
                       <td className="ll-title" title={l.title}>{fmt(l.title)}</td>
-                      <td className="ll-name-cell" title={l.creator?.full_name || ""}>{fmt(l.creator?.full_name)}</td>
                       {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>}
                       <td className="ll-name-cell" title={l.assignee?.full_name || ""}>{fmt(l.assignee?.full_name)}</td>
                       <td><StatusBadge status={l.status} /></td>
-                      <td className="ll-date">{fmtDate(l.created_at)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
+                      <td className="ll-date">{fmtDate(l.submission_deadline)}</td>
+                      <td className="ll-col-actions" onClick={(e) => e.stopPropagation()}>
                         <div className="ll-action-icons">
                           {l.chat_opened_at && (
                             <button

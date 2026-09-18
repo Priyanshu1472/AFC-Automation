@@ -90,17 +90,33 @@
 .ll-table { min-width: 800px; }
 .ll-row-clickable { cursor: pointer; }
 
+/* Actions stays pinned to the right edge of the scroll area — on a narrow
+   viewport the rest of the row still scrolls under it, but you never have
+   to scroll to reach the buttons themselves. Needs its own background
+   (rows/header are otherwise transparent over the card) so cells scrolling
+   underneath don't show through, and a hover override since a plain CSS
+   hover on the row can't otherwise reach a sticky child's own background. */
+.ll-col-actions {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--card-bg);
+  box-shadow: -6px 0 6px -6px rgba(0, 0, 0, 0.15);
+}
+.ll-table thead .ll-col-actions { background: var(--table-header-bg); box-shadow: none; }
+.ll-table tbody tr:hover .ll-col-actions { background: var(--table-row-hover); }
+
 /* Fixed-width status pills so the Status column reads as a clean aligned
    block instead of every row's badge being a different width — same idea
    as Empanelment's .bl-status-badge and Proposals' .pp-status-badge. Sized
    for the longest label, "Action Required". */
 .ll-status-badge { min-width: 140px; justify-content: center; }
 
-/* Creator / Person Responsible — without this, a long full name wraps
-   onto a second line while every other row stays single-line, making that
-   one row taller and throwing off the otherwise-even row-divider rhythm
-   down the table. Truncates instead (full name still available via the
-   title tooltip), matching how every other variable-length column here
+/* Person Responsible — without this, a long full name wraps onto a second
+   line while every other row stays single-line, making that one row
+   taller and throwing off the otherwise-even row-divider rhythm down the
+   table. Truncates instead (full name still available via the title
+   tooltip), matching how every other variable-length column here
    (.ll-title, and Empanelment's .bl-email/.bl-org/.bl-contact) already
    behaves. */
 .ll-name-cell {
