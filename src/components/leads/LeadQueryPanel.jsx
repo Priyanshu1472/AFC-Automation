@@ -19,7 +19,8 @@ import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import PinInput from "../ui/PinInput";
 import Select from "../ui/Select";
-import { TEAMS, ROLE_LABELS } from "../../lib/roles";
+import { ROLE_LABELS } from "../../lib/roles";
+import { useTeamOptions } from "../../hooks/useTeamOptions";
 import "../../styles/LeadQueryPanel.css";
 
 const QUERY_RAISER_ROLES = ["dgm", "general_manager", "agm", "srm"];
@@ -45,6 +46,7 @@ function fmtTime(v) {
 export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) {
   const { profile } = useAuth();
   const { showToast } = useToast();
+  const teamOptions = useTeamOptions();
 
   const [queries, setQueries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -376,7 +378,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                           <>
                             <label className="ar-label">Team <span className="ar-required">*</span></label>
                             <Select
-                              options={TEAMS.map((t) => ({ value: t, label: t }))}
+                              options={teamOptions.map((t) => ({ value: t, label: t }))}
                               value={transferTeam}
                               onChange={setTransferTeam}
                               placeholder="— Select team —"
