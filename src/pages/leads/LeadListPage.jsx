@@ -102,11 +102,12 @@ export default function LeadListPage() {
   // org-wide browse view with its own Team filter, alongside (not instead
   // of) their existing Team Leads tab.
   const canFilterTeam = can.viewAllTeams(profile?.role) || (view !== "mine" && view !== "team");
-  // DGM and General Manager already have org-wide RLS read access to every
-  // team's leads (see can_view_lead()) — this just gives them an explicit
-  // tab to browse it, with a Team filter, instead of only ever seeing their
-  // own active team under "Team Leads".
-  const hasAllLeadsTab = ["dgm", "general_manager"].includes(profile?.role);
+  // DGM, General Manager, and PMT committee members already have org-wide
+  // RLS read access to every team's leads (see can_view_lead()) — this just
+  // gives them an explicit tab to browse it, with a Team filter, instead of
+  // only ever seeing their own active team under "Team Leads" (and, for
+  // PMT, only pmt_review-stage leads under their own committee tab).
+  const hasAllLeadsTab = ["dgm", "general_manager"].includes(profile?.role) || profile?.committee === "PMT";
   // A viewer only ever holds one committee (afc_users.committee), so this is
   // at most a single extra tab, only for a member of that committee.
   const committeeTab = profile?.committee ? { key: profile.committee, label: `${profile.committee} Leads` } : null;
