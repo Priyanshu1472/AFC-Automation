@@ -21,26 +21,34 @@ export const leadCan = {
   poAssign: (profile, lead) => lead.status === "po_assignment" && !!profile?.id && profile.id === lead.forwarded_to_id,
   accept: (profile, lead) => lead.status === "pa_review" && profile?.id === lead.person_responsible_id,
   // A true drop, no reassignment. The creator has no Drop of their own.
-  // Up to and including Recommending Authority review, only the named
-  // Person Responsible, Reviewer, or Recommending Authority can drop it
-  // (before any of those three are named — po_assignment — the person the
-  // lead was forwarded to stands in instead). Once a lead has PASSED
-  // Recommending Authority review (PMT review, MD review, or Approved),
-  // Drop is reserved for MD or a PMT committee member — the named PR/
-  // Reviewer/Recommending Authority's own stage of involvement is behind it
-  // by then.
+  // - po_assignment: the person the lead was forwarded to (no PR/Reviewer/
+  //   Recommending Authority named yet).
+  // - pa_review: the named Person Responsible, Reviewer, or Recommending
+  //   Authority.
+  // - recommending_authority_review: only the Recommending Authority or the
+  //   Person Responsible — Reviewer no longer has Drop at this stage.
+  // - pmt_review, md_review, md_approved: Drop is removed entirely, for
+  //   every role, once a lead reaches PMT review — there is no Withdraw
+  //   path forward from here anymore.
+  // - pa_action_required: none, EXCEPT the Person Responsible regains Drop
+  //   specifically when PMT or MD sent the lead back (declined_from_status
+  //   is "pmt_review"/"md_review") — an escape hatch for a lead that
+  //   already passed PMT and is now back for rework. A lead sent back by
+  //   the Recommending Authority has no Drop at all — only Edit & Resubmit.
   drop: (profile, lead) => {
     if (["md_declined", "pa_dropped"].includes(lead.status)) return false;
     if (lead.status === "po_assignment") return !!profile?.id && profile.id === lead.forwarded_to_id;
-    // The Recommending Authority sent this back for changes — only they
-    // should re-review it, so there's no Withdraw here, only Edit &
-    // Resubmit.
-    if (lead.status === "pa_action_required" && lead.declined_from_status === "recommending_authority_review") return false;
-    const passedRecommendingAuthority =
-      ["pmt_review", "md_review", "md_approved"].includes(lead.status) ||
-      (lead.status === "pa_action_required" && ["pmt_review", "md_review"].includes(lead.declined_from_status));
-    if (passedRecommendingAuthority) return profile?.role === "md" || profile?.committee === "PMT";
-    return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
+    if (lead.status === "pa_review") {
+      return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
+    }
+    if (lead.status === "recommending_authority_review") {
+      return !!profile?.id && [lead.person_responsible_id, lead.recommending_authority_id].includes(profile.id);
+    }
+    if (lead.status === "pa_action_required") {
+      return ["pmt_review", "md_review"].includes(lead.declined_from_status) && profile?.id === lead.person_responsible_id;
+    }
+    // pmt_review, md_review, md_approved — no Drop for anyone.
+    return false;
   },
   // The PR handing the lead to a teammate instead of dropping it — an
   // alternative to Drop, not exclusive with it.

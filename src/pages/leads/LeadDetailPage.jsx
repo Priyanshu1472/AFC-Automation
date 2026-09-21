@@ -82,31 +82,29 @@ const ACTIONS_BY_STATUS = {
     { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
     { key: "withdraw_submission", label: "Withdraw Submission (edit BA)", variant: "secondary", requiresReason: true, requiresPin: true },
   ],
-  // Past Recommending Authority review, Withdraw Submission is no longer
-  // available at all (see leadCan.withdrawSubmission) — only Drop, and only
-  // for MD/PMT from here on (see leadCan.drop).
+  // Past Recommending Authority review, neither Withdraw Submission (see
+  // leadCan.withdrawSubmission) nor Drop is available to anyone anymore —
+  // there's no way back once PMT is reviewing it, only forward (approve) or
+  // back to the creator/PR for rework (decline).
   pmt_review: [
     { key: "pmt_approve", label: "Approve → MD", variant: "primary", requiresReason: true, requiresPin: true },
     { key: "pmt_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
-    { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
   ],
   md_review: [
     { key: "md_approve", label: "Approve", variant: "primary", requiresPin: true },
     { key: "md_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
-    { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
   ],
+  // Drop only reappears here as an escape hatch for the Person Responsible
+  // when PMT or MD sent the lead back (declined_from_status) — a lead the
+  // Recommending Authority sent back has no Drop at all, only Edit &
+  // Resubmit (see leadCan.drop).
   pa_action_required: [
     { key: "__edit_resubmit", label: "Resubmit Lead Approval Form", variant: "primary" },
     { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
   ],
-  // The one action still available once MD has approved the lead —
-  // withdrawing it after the fact. Unlike every earlier stage's drop, this
-  // one requires a written justification (requiresReason), not just the
-  // PIN — see advance-lead-stage's "drop" case for the matching
-  // server-side requirement.
-  md_approved: [
-    { key: "drop", label: "Drop Lead", variant: "danger", requiresReason: true, requiresPin: true },
-  ],
+  // md_approved is fully terminal now — Drop was the one action still open
+  // here, and it's gone along with every other stage past PMT review.
+  md_approved: [],
 };
 
 // The creator filled the Lead Approval Note themselves — it's a Draft
@@ -291,23 +289,30 @@ export default function LeadDetailPage() {
         case "lead_approval_note":
           return lead.status === "pa_review" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
         // A true drop, no reassignment. The creator has no Drop of their
-        // own. Up to and including Recommending Authority review, only the
-        // named Person Responsible, Reviewer, or Recommending Authority can
-        // drop it (before any of those three are named — po_assignment —
-        // the person it was forwarded to stands in). Once a lead has PASSED
-        // Recommending Authority review (PMT/MD review, or Approved), Drop
-        // is reserved for MD or a PMT committee member.
+        // own.
+        // - po_assignment: the person it was forwarded to.
+        // - pa_review: the named Person Responsible, Reviewer, or
+        //   Recommending Authority.
+        // - recommending_authority_review: only the Recommending Authority
+        //   or the Person Responsible — Reviewer no longer has Drop here.
+        // - pmt_review, md_review, md_approved: nobody — Drop is removed
+        //   entirely once a lead reaches PMT review.
+        // - pa_action_required: nobody, EXCEPT the Person Responsible when
+        //   PMT or MD sent it back (an escape hatch for a lead that already
+        //   passed PMT and is now back for rework); a lead the Recommending
+        //   Authority sent back has no Drop at all, only Edit & Resubmit.
         case "drop": {
           if (lead.status === "po_assignment") return !!profile?.id && profile.id === lead.forwarded_to_id;
-          // The Recommending Authority sent this back for changes — only
-          // they should re-review it, so there's no Withdraw here, only
-          // Edit & Resubmit.
-          if (lead.status === "pa_action_required" && lead.declined_from_status === "recommending_authority_review") return false;
-          const passedRecommendingAuthority =
-            ["pmt_review", "md_review", "md_approved"].includes(lead.status) ||
-            (lead.status === "pa_action_required" && ["pmt_review", "md_review"].includes(lead.declined_from_status));
-          if (passedRecommendingAuthority) return profile?.role === "md" || profile?.committee === "PMT";
-          return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
+          if (lead.status === "pa_review") {
+            return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
+          }
+          if (lead.status === "recommending_authority_review") {
+            return !!profile?.id && [lead.person_responsible_id, lead.recommending_authority_id].includes(profile.id);
+          }
+          if (lead.status === "pa_action_required") {
+            return ["pmt_review", "md_review"].includes(lead.declined_from_status) && profile?.id === lead.person_responsible_id;
+          }
+          return false;
         }
         // The PR handing the lead to a teammate instead of dropping it — an
         // alternative to Drop, not exclusive with it.
@@ -683,14 +688,13 @@ export default function LeadDetailPage() {
                 <LeadQueryPanel leadId={lead.id} leadTeam={lead.team} onLeadTransferred={fetchLead} />
               )}
 
-              {/* md_approved is "terminal" for the success-banner purposes
-                  below, but not for actions — it's the one status where a
-                  terminal lead still has something actionable (Drop, for
-                  the creator/PR). md_declined has no ACTIONS_BY_STATUS entry
-                  at all (actions.length is already 0 there); pa_dropped's
-                  own "Claim Lead" action deliberately keeps its existing
-                  isTerminal-suppressed behavior, unchanged by this. */}
-              {actions.length > 0 && (!isTerminal || lead.status === "md_approved") && (
+              {/* md_approved has no ACTIONS_BY_STATUS entry anymore — Drop
+                  was the one action still open there, and it's gone now
+                  that Drop is removed entirely past PMT review. md_declined
+                  has no entry either (actions.length is already 0 there).
+                  pa_dropped's own "Claim Lead" action deliberately keeps
+                  its existing isTerminal-suppressed behavior. */}
+              {actions.length > 0 && !isTerminal && (
                 <Card className="ar-action-card">
                   <Card.Header title="Your Action" />
                   <Card.Body className="ar-action-body">
