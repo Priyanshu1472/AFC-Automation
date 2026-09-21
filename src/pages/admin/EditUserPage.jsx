@@ -186,7 +186,7 @@ export default function EditUserPage() {
                 <div className="field full">
                   <label className="field-label">Email</label>
                   <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>
-                    {target.email} <span className="text-tertiary">(login identity — cannot be changed here)</span>
+                    {target.email} <span className="text-tertiary">(login identity cannot be changed here)</span>
                   </p>
                 </div>
 

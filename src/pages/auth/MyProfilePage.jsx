@@ -106,7 +106,7 @@ export default function MyProfilePage() {
                 <div className="field">
                   <label className="field-label">Email</label>
                   <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>
-                    {profile.email} <span className="text-tertiary">(login identity — cannot be changed here)</span>
+                    {profile.email} <span className="text-tertiary">(login identity cannot be changed here)</span>
                   </p>
                 </div>
                 <div className="field">
@@ -150,7 +150,7 @@ export default function MyProfilePage() {
             </Card.Body>
             <Card.Footer>
               <Button type="submit" variant="primary" loading={saving} disabled={saving || name.trim() === profile.full_name}>
-                {saving ? "Saving…" : "Save Name"}
+                {saving ? "Saving…" : "Save"}
               </Button>
             </Card.Footer>
           </form>
