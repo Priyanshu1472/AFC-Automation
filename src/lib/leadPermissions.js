@@ -20,13 +20,15 @@ export const leadCan = {
   // every other creator's.
   poAssign: (profile, lead) => lead.status === "po_assignment" && !!profile?.id && profile.id === lead.forwarded_to_id,
   accept: (profile, lead) => lead.status === "pa_review" && profile?.id === lead.person_responsible_id,
-  // A true drop, no reassignment. The creator has no Drop of their own —
-  // only the Person Responsible, Reviewer, or Recommending Authority
-  // actually named on the lead can drop it, at any non-terminal status,
-  // md_approved included (server-side requires a written justification
-  // there, see advance-lead-stage's "drop" case). Before any of those three
-  // are named (po_assignment — a lead an AC/PA just created and forwarded,
-  // not yet assigned), the person it was forwarded to stands in instead.
+  // A true drop, no reassignment. The creator has no Drop of their own.
+  // Up to and including Recommending Authority review, only the named
+  // Person Responsible, Reviewer, or Recommending Authority can drop it
+  // (before any of those three are named — po_assignment — the person the
+  // lead was forwarded to stands in instead). Once a lead has PASSED
+  // Recommending Authority review (PMT review, MD review, or Approved),
+  // Drop is reserved for MD or a PMT committee member — the named PR/
+  // Reviewer/Recommending Authority's own stage of involvement is behind it
+  // by then.
   drop: (profile, lead) => {
     if (["md_declined", "pa_dropped"].includes(lead.status)) return false;
     if (lead.status === "po_assignment") return !!profile?.id && profile.id === lead.forwarded_to_id;
@@ -34,6 +36,10 @@ export const leadCan = {
     // should re-review it, so there's no Withdraw here, only Edit &
     // Resubmit.
     if (lead.status === "pa_action_required" && lead.declined_from_status === "recommending_authority_review") return false;
+    const passedRecommendingAuthority =
+      ["pmt_review", "md_review", "md_approved"].includes(lead.status) ||
+      (lead.status === "pa_action_required" && ["pmt_review", "md_review"].includes(lead.declined_from_status));
+    if (passedRecommendingAuthority) return profile?.role === "md" || profile?.committee === "PMT";
     return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
   },
   // The PR handing the lead to a teammate instead of dropping it — an
@@ -74,10 +80,13 @@ export const leadCan = {
   recommendingAuthorityReview: (profile, lead) => lead.status === "recommending_authority_review" && profile?.id === lead.recommending_authority_id,
   pmtReview: (profile, lead) => lead.status === "pmt_review" && profile?.committee === "PMT",
   mdReview: (profile, lead) => lead.status === "md_review" && profile?.role === "md",
-  // A safety valve for editing the Business Partner after a lead has
-  // already left pa_review — see advance-lead-stage's "withdraw_submission".
+  // A safety valve for editing the Business Partner right after a lead has
+  // left pa_review — returns it to pa_review, it is NOT a drop. Only
+  // available at Recommending Authority review — once a lead has passed
+  // that stage (PMT/MD review), it can no longer be withdrawn, only
+  // dropped (see the `drop` predicate above).
   withdrawSubmission: (profile, lead) =>
-    ["recommending_authority_review", "pmt_review", "md_review"].includes(lead.status) &&
+    lead.status === "recommending_authority_review" &&
     (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id),
 };
 

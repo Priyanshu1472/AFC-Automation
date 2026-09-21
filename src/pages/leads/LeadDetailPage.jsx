@@ -79,20 +79,21 @@ const ACTIONS_BY_STATUS = {
   recommending_authority_review: [
     { key: "ra_approve", label: "Approve → PMT", variant: "primary", requiresReason: true, requiresPin: true },
     { key: "ra_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
+    { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
     { key: "withdraw_submission", label: "Withdraw Submission (edit BA)", variant: "secondary", requiresReason: true, requiresPin: true },
   ],
+  // Past Recommending Authority review, Withdraw Submission is no longer
+  // available at all (see leadCan.withdrawSubmission) — only Drop, and only
+  // for MD/PMT from here on (see leadCan.drop).
   pmt_review: [
     { key: "pmt_approve", label: "Approve → MD", variant: "primary", requiresReason: true, requiresPin: true },
     { key: "pmt_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
-    { key: "withdraw_submission", label: "Withdraw Submission (edit BA)", variant: "secondary", requiresReason: true, requiresPin: true },
+    { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
   ],
   md_review: [
     { key: "md_approve", label: "Approve", variant: "primary", requiresPin: true },
     { key: "md_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
-    { key: "withdraw_submission", label: "Withdraw Submission (edit BA)", variant: "secondary", requiresReason: true, requiresPin: true },
+    { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
   ],
   pa_action_required: [
     { key: "__edit_resubmit", label: "Resubmit Lead Approval Form", variant: "primary" },
@@ -290,17 +291,24 @@ export default function LeadDetailPage() {
         case "lead_approval_note":
           return lead.status === "pa_review" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
         // A true drop, no reassignment. The creator has no Drop of their
-        // own — only the Person Responsible, Reviewer, or Recommending
-        // Authority actually named on the lead, at any non-terminal status,
-        // md_approved included. Before any of those three are named
-        // (po_assignment), the person it was forwarded to stands in.
-        case "drop":
+        // own. Up to and including Recommending Authority review, only the
+        // named Person Responsible, Reviewer, or Recommending Authority can
+        // drop it (before any of those three are named — po_assignment —
+        // the person it was forwarded to stands in). Once a lead has PASSED
+        // Recommending Authority review (PMT/MD review, or Approved), Drop
+        // is reserved for MD or a PMT committee member.
+        case "drop": {
           if (lead.status === "po_assignment") return !!profile?.id && profile.id === lead.forwarded_to_id;
           // The Recommending Authority sent this back for changes — only
           // they should re-review it, so there's no Withdraw here, only
           // Edit & Resubmit.
           if (lead.status === "pa_action_required" && lead.declined_from_status === "recommending_authority_review") return false;
+          const passedRecommendingAuthority =
+            ["pmt_review", "md_review", "md_approved"].includes(lead.status) ||
+            (lead.status === "pa_action_required" && ["pmt_review", "md_review"].includes(lead.declined_from_status));
+          if (passedRecommendingAuthority) return profile?.role === "md" || profile?.committee === "PMT";
           return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
+        }
         // The PR handing the lead to a teammate instead of dropping it — an
         // alternative to Drop, not exclusive with it.
         case "reject_reassign":
@@ -329,8 +337,11 @@ export default function LeadDetailPage() {
             profile?.id === lead.person_responsible_id ||
             (!lead.person_responsible_id && !!profile?.teams?.includes(lead.team))
           );
+        // Returns the lead to PR Review — it is NOT a drop. Only available
+        // at Recommending Authority review; once a lead has passed that
+        // stage it can no longer be withdrawn, only dropped (see "drop").
         case "withdraw_submission":
-          return profile?.id === lead.created_by || profile?.id === lead.person_responsible_id;
+          return lead.status === "recommending_authority_review" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
         default:
           return false;
       }
