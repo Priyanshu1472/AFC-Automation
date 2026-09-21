@@ -15,6 +15,15 @@ import "../../styles/CreateUserPage.css";
 const EMPTY_FORM = { full_name: "", email: "", role: "", teams: [], office: "", committee: "" };
 const SIGNATURE_TYPES = ["image/png", "image/jpeg"];
 
+// Each team has one "home" office — picking a team auto-fills Office with
+// it (still editable afterward, if the actual assignment differs).
+const TEAM_OFFICE_MAP = {
+  BPDD: "delhi",
+  BIID: "delhi",
+  LKN: "lucknow",
+  HO: "mumbai",
+};
+
 function isValidEmail(val) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
 }
@@ -197,7 +206,10 @@ export default function CreateUserPage() {
                   <TeamMultiSelect
                     options={teams}
                     value={form.teams}
-                    onChange={(v) => set("teams", v)}
+                    onChange={(v) => {
+                      const office = TEAM_OFFICE_MAP[v[0]];
+                      setForm((p) => ({ ...p, teams: v, office: office || p.office }));
+                    }}
                     disabled={saving}
                     error={errors.team}
                   />
@@ -222,7 +234,7 @@ export default function CreateUserPage() {
                     Committee
                   </label>
                   <Select
-                    options={committeeOptions}
+                    options={[{ value: "", label: "— None —" }, ...committeeOptions]}
                     value={form.committee}
                     onChange={(v) => set("committee", v)}
                     placeholder="— None —"
