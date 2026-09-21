@@ -320,7 +320,7 @@ export async function buildLeadApprovalNotePdf(opts: {
       ].join("\n"),
     },
     { label: "Last date for submission of Proposal*", value: fmtDate(opts.lead.submission_deadline) },
-    { label: "Revenue sharing", value: data.revenue_sharing || "NA" },
+    { label: "Revenue sharing", value: data.revenue_sharing || "Yet to be decided" },
   ];
   await drawKeyValueTable(e, rows, { labelWidth: 165 });
 
