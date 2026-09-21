@@ -9,6 +9,7 @@ import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import SetPasswordForm from "./SetPasswordForm";
 import SetPinForm from "./SetPinForm";
+import SignatureUploadModal from "../admin/SignatureUploadModal";
 import "../../styles/CreateUserPage.css";
 
 // Self-service page for both AFC staff and Business Partner portal
@@ -22,6 +23,7 @@ export default function MyProfilePage() {
   const [banner, setBanner] = useState("");
   const [bannerVariant, setBannerVariant] = useState("success");
   const [signatureUrl, setSignatureUrl] = useState(null);
+  const [showSignatureUpload, setShowSignatureUpload] = useState(false);
 
   useEffect(() => {
     if (!profile?.signature_path) {
@@ -135,9 +137,14 @@ export default function MyProfilePage() {
                     <img src={signatureUrl} alt="Your signature" className="cup-signature-preview" />
                   ) : (
                     <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>
-                      Not set <span className="text-tertiary">(ask Admin to upload one — it's used to sign your generated PDFs)</span>
+                      Not set <span className="text-tertiary">(it's used to sign your generated PDFs)</span>
                     </p>
                   )}
+                  <div style={{ marginTop: "var(--space-2)" }}>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => setShowSignatureUpload(true)}>
+                      {signatureUrl ? "Replace Signature" : "Upload Signature"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </Card.Body>
@@ -163,6 +170,18 @@ export default function MyProfilePage() {
           <SetPinForm hasPin={!!profile.pin_updated_at} />
         </div>
       </div>
+
+      {showSignatureUpload && (
+        <SignatureUploadModal
+          targetUserId={profile.id}
+          targetName="you"
+          onClose={() => setShowSignatureUpload(false)}
+          onSuccess={async () => {
+            setShowSignatureUpload(false);
+            await refreshProfile();
+          }}
+        />
+      )}
     </div>
   );
 }

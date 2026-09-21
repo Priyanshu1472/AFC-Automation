@@ -49,10 +49,19 @@ Deno.test("handleRequest - OPTIONS returns ok without auth", async () => {
   assertEquals(res.status, 200);
 });
 
-Deno.test("handleRequest - non-admin caller -> 403", async () => {
+Deno.test("handleRequest - non-admin caller uploading someone else's signature -> 403", async () => {
   const client = buildClient({ caller: callerRow({ role: "dgm" }) });
   const res = await handleRequest(formReq({ user_id: TARGET_ID, file: pngFile() }), client as never);
   assertEquals(res.status, 403);
+});
+
+Deno.test("handleRequest - a non-admin caller can upload their own signature", async () => {
+  const client = buildClient({
+    caller: callerRow({ role: "dgm" }),
+    target: targetRow({ id: CALLER_ID }),
+  });
+  const res = await handleRequest(formReq({ user_id: CALLER_ID, file: pngFile() }, fakeJwt({ sub: CALLER_ID })), client as never);
+  assertEquals(res.status, 200);
 });
 
 Deno.test("handleRequest - missing user_id -> 400", async () => {
