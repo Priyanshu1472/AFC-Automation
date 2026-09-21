@@ -80,10 +80,10 @@ export const ROLE_ABBR = {
   business_associate: "BP",
 };
 
-// ─── Admin can create any staff role except admin (avoid Admins silently
-// minting more Admins) — md included, per explicit product decision.
-// ─────────────────────────────────────────────────────
+// ─── Admin can create any staff role, including more admin or md
+// accounts — per explicit product decision. ────────────────────
 export const ADMIN_CREATABLE_ROLES = [
+  "admin",
   "md",
   "executive_director",
   "cfo",

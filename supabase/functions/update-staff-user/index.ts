@@ -3,14 +3,13 @@
 // from create-staff-user (which mints a new account). Admin-only — no other
 // role, including MD and DGM, can edit any user account. Role/committee
 // changes are restricted to ADMIN_CREATABLE_ROLES, the same whitelist
-// create-staff-user enforces — this stops a role edit from being used to
-// promote someone to admin.
+// create-staff-user enforces.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 
-const ADMIN_CREATABLE_ROLES = ["md", "executive_director", "cfo", "cs", "general_manager", "dgm", "agm", "srm", "regional_manager", "area_manager", "project_officer", "associate_consultant", "project_assistant"];
+const ADMIN_CREATABLE_ROLES = ["admin", "md", "executive_director", "cfo", "cs", "general_manager", "dgm", "agm", "srm", "regional_manager", "area_manager", "project_officer", "associate_consultant", "project_assistant"];
 
 // Lead Generation review committees — same admin-only gate as `role`
 // itself, since committee membership grants review/approval permission

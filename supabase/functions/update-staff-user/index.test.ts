@@ -65,9 +65,17 @@ Deno.test("update-staff-user - MD can no longer edit any user", async () => {
   assertEquals(res.status, 403);
 });
 
-Deno.test("update-staff-user - Admin can't set a target's role outside ADMIN_CREATABLE_ROLES (e.g. promote to admin)", async () => {
+Deno.test("update-staff-user - Admin can promote a target's role to admin", async () => {
   const res = await handleRequest(
     req({ user_id: TARGET_ID, full_name: "Name", role: "admin" }),
+    client({ id: CALLER_ID, role: "admin", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD" }) as never,
+  );
+  assertEquals(res.status, 200);
+});
+
+Deno.test("update-staff-user - rejects a role outside ADMIN_CREATABLE_ROLES entirely (e.g. a made-up role)", async () => {
+  const res = await handleRequest(
+    req({ user_id: TARGET_ID, full_name: "Name", role: "superuser" }),
     client({ id: CALLER_ID, role: "admin", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD" }) as never,
   );
   assertEquals(res.status, 403);
