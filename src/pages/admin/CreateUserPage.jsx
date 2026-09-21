@@ -10,17 +10,7 @@ import Select from "../../components/ui/Select";
 import TeamMultiSelect from "../../components/ui/TeamMultiSelect";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
-import FieldTooltip from "../../components/FieldTooltip";
 import "../../styles/CreateUserPage.css";
-
-const FIELD_HELP = {
-  email: "This becomes their login. They'll receive a temporary password here — make sure it's an address they can actually check.",
-  role: "Controls what this person can see and do. Admin can create any staff designation except Admin/MD.",
-  team: "The working group this person belongs to (e.g. BPDD, BIID). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
-  office: "The physical office this person is based out of.",
-  committee: "Optional Lead Generation review committee (PMT) — membership grants PMT-stage review/approval on leads, org-wide.",
-  signature: "Optional. If provided, this image is embedded as this person's signature on generated PDFs (e.g. the Lead Approval Note) instead of a blank signature line.",
-};
 
 const EMPTY_FORM = { full_name: "", email: "", role: "", teams: [], office: "", committee: "" };
 const SIGNATURE_TYPES = ["image/png", "image/jpeg"];
@@ -173,7 +163,7 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field full">
                   <label className="field-label" htmlFor="email">
-                    Email <span className="required">*</span> <FieldTooltip text={FIELD_HELP.email} />
+                    Email <span className="required">*</span>
                   </label>
                   <Input
                     id="email"
@@ -187,7 +177,7 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field">
                   <label className="field-label">
-                    Designation <span className="required">*</span> <FieldTooltip text={FIELD_HELP.role} />
+                    Designation <span className="required">*</span>
                   </label>
                   <Select
                     options={roleOptions}
@@ -202,7 +192,7 @@ export default function CreateUserPage() {
 
                 <div className="field">
                   <label className="field-label">
-                    Team <FieldTooltip text={FIELD_HELP.team} />
+                    Team
                   </label>
                   <TeamMultiSelect
                     options={teams}
@@ -215,7 +205,7 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field">
                   <label className="field-label">
-                    Office <span className="required">*</span> <FieldTooltip text={FIELD_HELP.office} />
+                    Office <span className="required">*</span>
                   </label>
                   <Select
                     options={officeOptions}
@@ -229,7 +219,7 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field">
                   <label className="field-label">
-                    Committee <FieldTooltip text={FIELD_HELP.committee} />
+                    Committee
                   </label>
                   <Select
                     options={committeeOptions}
@@ -241,7 +231,7 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field full">
                   <label className="field-label">
-                    Signature <FieldTooltip text={FIELD_HELP.signature} />
+                    Signature
                   </label>
                   <label className="cup-file-drop">
                     <input type="file" accept="image/png,image/jpeg" onChange={handleSignatureChange} disabled={saving} />
