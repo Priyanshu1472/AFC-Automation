@@ -106,6 +106,12 @@ function fmtDate(iso: string | null): string {
   return formatDateDDMMYYYY(new Date(iso));
 }
 
+// Breathing room inserted between a section and whatever precedes it when
+// they end up sharing a page (see the conditional page-break checks below)
+// — without it, a heading's baseline lands right on the previous element's
+// bottom border/line.
+const SECTION_GAP = 14;
+
 async function drawTitle(e: PageEngine, text: string) {
   const size = 13;
   const w = e.fonts.bold.widthOfTextAtSize(text, size);
@@ -324,8 +330,16 @@ export async function buildLeadApprovalNotePdf(opts: {
   ];
   await drawKeyValueTable(e, rows, { labelWidth: 165 });
 
-  // ── Page 2: Preliminary Scrutiny by Office ───────────────────────
-  await e.newPage();
+  // ── Preliminary Scrutiny by Office ────────────────────────────────
+  // Only starts a fresh page if there isn't room left for the title plus
+  // at least the table's header row — e.g. a short last row on page 1
+  // (Revenue Sharing) otherwise left almost the whole next page blank.
+  // drawGridTable below still paginates its own rows if the table itself
+  // runs past the bottom of whichever page this starts on. A small gap is
+  // inserted when continuing on the same page — without it the title's
+  // text baseline lands right on the previous table's bottom border.
+  if (e.y - SECTION_GAP < e.FOOTER_SAFE + 70) await e.newPage();
+  else e.gap(SECTION_GAP);
   await drawTitle(e, "Preliminary Scrutiny by Office");
   e.y -= 4;
 
@@ -374,8 +388,11 @@ export async function buildLeadApprovalNotePdf(opts: {
   ]);
   e.y -= 20;
 
-  // ── Page 3: Remarks/Recommendation (PMT) ─────────────────────────
-  await e.newPage();
+  // ── Remarks/Recommendation (PMT) ──────────────────────────────────
+  // Conditional, same reasoning as Preliminary Scrutiny above — starts
+  // fresh only if the title plus at least the first stage's heading and a
+  // line of remarks won't fit where the signature table left off.
+  if (e.y < e.FOOTER_SAFE + 110) await e.newPage();
   await drawTitle(e, "Remarks/ Recommendation");
 
   const committeeStages = STAGE_GROUPS.slice(1, 2); // pmt
@@ -405,10 +422,13 @@ export async function buildLeadApprovalNotePdf(opts: {
     e.y -= 30;
   }
 
-  // ── Page 4: MD remarks & approval (final mode only) ──────────────
+  // ── MD remarks & approval (final mode only) ───────────────────────
+  // With a single committee (PMT) now, MD's remarks/signature go directly
+  // below PMT's on the same page whenever there's room, rather than always
+  // starting a new one — same conditional-break reasoning as above.
   if (opts.mode === "final") {
     const mdRow = latestByAction(opts.activityRows, STAGE_GROUPS[2].actions);
-    await e.newPage();
+    if (e.y < e.FOOTER_SAFE + 150) await e.newPage();
     e.currentPage.drawText("Deputy General Manager", { x: e.RIGHT_EDGE - 140, y: e.y, size: 9.5, font: e.fonts.bold, color: BLACK });
     e.y -= 12;
     e.currentPage.drawText(opts.team, { x: e.RIGHT_EDGE - 140, y: e.y, size: 9, font: e.fonts.reg, color: BLACK });
