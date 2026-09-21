@@ -11,6 +11,7 @@ import SetPasswordForm from "./SetPasswordForm";
 import SetPinForm from "./SetPinForm";
 import SignatureUploadModal from "../admin/SignatureUploadModal";
 import "../../styles/CreateUserPage.css";
+import "../../styles/Login.css";
 
 // Self-service page for both AFC staff and Business Partner portal
 // accounts — name can be corrected here (email/role/team/office stay
