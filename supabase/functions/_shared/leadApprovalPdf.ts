@@ -388,11 +388,11 @@ export async function buildLeadApprovalNotePdf(opts: {
   ]);
   e.y -= 20;
 
-  // ── Remarks/Recommendation (PMT) ──────────────────────────────────
-  // Conditional, same reasoning as Preliminary Scrutiny above — starts
-  // fresh only if the title plus at least the first stage's heading and a
-  // line of remarks won't fit where the signature table left off.
-  if (e.y < e.FOOTER_SAFE + 110) await e.newPage();
+  // ── Page: Remarks/Recommendation (PMT) ────────────────────────────
+  // Always starts on a fresh page, per product decision — unlike
+  // Preliminary Scrutiny/MD below, this one doesn't try to continue on
+  // whatever page the signature table above happened to end on.
+  await e.newPage();
   await drawTitle(e, "Remarks/ Recommendation");
 
   const committeeStages = STAGE_GROUPS.slice(1, 2); // pmt
