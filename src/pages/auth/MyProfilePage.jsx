@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
-import { ROLE_LABELS } from "../../lib/roles";
+import { ROLE_LABELS, OFFICE_LABELS } from "../../lib/roles";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
@@ -124,7 +124,7 @@ export default function MyProfilePage() {
                 {profile.office && (
                   <div className="field">
                     <label className="field-label">Office</label>
-                    <p className="text-sm text-secondary" style={{ paddingTop: 9, textTransform: "capitalize" }}>{profile.office}</p>
+                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{OFFICE_LABELS[profile.office] || profile.office}</p>
                   </div>
                 )}
                 <div className="field">

@@ -10,7 +10,7 @@ import jsPDF from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
-import { can } from "../../lib/roles";
+import { can, OFFICE_LABELS } from "../../lib/roles";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
@@ -116,7 +116,7 @@ const REPORTS = [
       ],
       rows: apps.map((a) => ({
         org_name: dash(a.reg_org_name), code: codeOf(a), ba_email: dash(a.ba_email), team: dash(a.team),
-        office: dash(a.office), po: dash(a.po_name), status_label: STATUS_LABELS[a.status] || a.status,
+        office: a.office ? OFFICE_LABELS[a.office] || a.office : dash(a.office), po: dash(a.po_name), status_label: STATUS_LABELS[a.status] || a.status,
         sent_f: fmt(a.created_at), days: daysFrom(a.created_at) ?? "—", provisional: a.provisional_letter_sent ? "Yes" : "No",
       })),
     }),
@@ -281,7 +281,7 @@ const REPORTS = [
       ],
       rows: [...groupBy(apps, (a) => a.office)].map(([office, arr]) => {
         const acc = arr.filter(isAccepted).length, rej = arr.filter(isRejected).length;
-        return { office, total: arr.length, accepted: acc, rejected: rej, open: arr.filter((a) => !TERMINAL.includes(a.status)).length, rate: pct(acc, acc + rej) };
+        return { office: OFFICE_LABELS[office] || office, total: arr.length, accepted: acc, rejected: rej, open: arr.filter((a) => !TERMINAL.includes(a.status)).length, rate: pct(acc, acc + rej) };
       }).sort((x, y) => y.total - x.total),
     }),
   },
@@ -333,7 +333,7 @@ function groupReports(reports) {
 
 function buildFilterLine(filters) {
   const bits = [`Team: ${filters.team === "all" ? "All" : filters.team}`];
-  if (filters.office !== "all") bits.push(`Office: ${filters.office}`);
+  if (filters.office !== "all") bits.push(`Office: ${OFFICE_LABELS[filters.office] || filters.office}`);
   if (filters.status !== "all") bits.push(`Status: ${STATUS_LABELS[filters.status] || filters.status}`);
   if (filters.sector !== "all") bits.push(`Sector: ${filters.sector}`);
   if (filters.from || filters.to) bits.push(`Date: ${filters.from ? fmt(filters.from) : "…"} – ${filters.to ? fmt(filters.to) : "…"}`);
@@ -568,7 +568,7 @@ function ReportFilterDrawer({ open, onClose, filters, set, onReset, officeOption
         <Select disabled={!canFilterTeamOffice} value={filters.team} onChange={(v) => set("team", v)} placeholder="All Teams" options={[{ value: "all", label: "All Teams" }, ...teamOptions.map((t) => ({ value: t, label: t }))]} />
       </FilterField>
       <FilterField label="Office">
-        <Select disabled={!canFilterTeamOffice} value={filters.office} onChange={(v) => set("office", v)} placeholder="All Offices" options={[{ value: "all", label: "All Offices" }, ...officeOptions.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }))]} />
+        <Select disabled={!canFilterTeamOffice} value={filters.office} onChange={(v) => set("office", v)} placeholder="All Offices" options={[{ value: "all", label: "All Offices" }, ...officeOptions.map((o) => ({ value: o, label: OFFICE_LABELS[o] || o }))]} />
       </FilterField>
       <FilterField label="Status">
         <Select value={filters.status} onChange={(v) => set("status", v)} placeholder="All Statuses" options={[{ value: "all", label: "All Statuses" }, ...PIPELINE.map((s) => ({ value: s, label: STATUS_LABELS[s] }))]} />

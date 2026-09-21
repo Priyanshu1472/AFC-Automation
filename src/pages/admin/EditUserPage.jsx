@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, COMMITTEES, can } from "../../lib/roles";
+import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, OFFICE_LABELS, COMMITTEES, can } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
@@ -32,7 +32,7 @@ export default function EditUserPage() {
   const { showToast } = useToast();
   const canEditRole = can.editUserRole(profile?.role);
 
-  const officeOptions = OFFICES.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }));
+  const officeOptions = OFFICES.map((o) => ({ value: o, label: OFFICE_LABELS[o] || o }));
   const teams = useTeamOptions();
   const committeeOptions = COMMITTEES.map((c) => ({ value: c, label: c }));
 

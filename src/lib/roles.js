@@ -172,7 +172,14 @@ export function isAdminLevel(role) {
 }
 
 // ─── Org structure ─────────────────────────────────────────────
+// Stored values stay the plain city names (existing afc_users.office data,
+// filters, etc. all key off these) — only the display label changed.
 export const OFFICES = ["delhi", "mumbai", "lucknow"];
+export const OFFICE_LABELS = {
+  delhi: "CO - New Delhi",
+  mumbai: "HO - Mumbai",
+  lucknow: "RO - Lucknow",
+};
 export const TEAMS = ["BPDD", "BIID"];
 
 // ─── Whitelist of valid roles — validate any role value from the DB before trusting it ──

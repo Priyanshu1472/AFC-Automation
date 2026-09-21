@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { ROLE_LABELS, ROLE_ABBR, can } from "../../lib/roles";
+import { ROLE_LABELS, ROLE_ABBR, OFFICE_LABELS, can } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
@@ -346,7 +346,7 @@ export default function UserListPage() {
                               <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_ABBR[u.role] || u.role}</Badge>
                             </Tooltip>
                           </td>
-                          <td>{u.office ? u.office.charAt(0).toUpperCase() + u.office.slice(1) : "—"}</td>
+                          <td>{u.office ? OFFICE_LABELS[u.office] || u.office : "—"}</td>
                           <td>{u.committee ? <Badge variant="neutral">{u.committee}</Badge> : "—"}</td>
                           <td><Badge variant={u.is_active ? "success" : "danger"} dot>{u.is_active ? "Active" : "Inactive"}</Badge></td>
                           {canManage && (
@@ -388,7 +388,7 @@ export default function UserListPage() {
                           <Tooltip text={ROLE_LABELS[u.role] || u.role}>
                             <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_ABBR[u.role] || u.role}</Badge>
                           </Tooltip>
-                          {u.office && <span className="text-xs text-tertiary">{u.office.charAt(0).toUpperCase() + u.office.slice(1)}</span>}
+                          {u.office && <span className="text-xs text-tertiary">{OFFICE_LABELS[u.office] || u.office}</span>}
                           {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
                         </div>
                         {canManage && (
@@ -438,7 +438,7 @@ export default function UserListPage() {
                             <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_ABBR[u.role] || u.role}</Badge>
                           </Tooltip>
                         </td>
-                        <td>{u.office ? u.office.charAt(0).toUpperCase() + u.office.slice(1) : "—"}</td>
+                        <td>{u.office ? OFFICE_LABELS[u.office] || u.office : "—"}</td>
                         <td>{u.team || "—"}</td>
                         <td>{u.committee ? <Badge variant="neutral">{u.committee}</Badge> : "—"}</td>
                         <td>
@@ -481,7 +481,7 @@ export default function UserListPage() {
                       <Tooltip text={ROLE_LABELS[u.role] || u.role}>
                         <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_ABBR[u.role] || u.role}</Badge>
                       </Tooltip>
-                      {u.office && <span className="text-xs text-tertiary">{u.office.charAt(0).toUpperCase() + u.office.slice(1)}</span>}
+                      {u.office && <span className="text-xs text-tertiary">{OFFICE_LABELS[u.office] || u.office}</span>}
                       {u.team && <span className="text-xs text-tertiary">{u.team}</span>}
                       {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
                     </div>
