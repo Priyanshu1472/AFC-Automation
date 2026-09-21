@@ -89,6 +89,14 @@ Deno.test("update-staff-user - Admin changing a target's role to a valid one suc
   assertEquals(res.status, 200);
 });
 
+Deno.test("update-staff-user - Admin can promote a target's role to md", async () => {
+  const res = await handleRequest(
+    req({ user_id: TARGET_ID, full_name: "Name", role: "md" }),
+    client({ id: CALLER_ID, role: "admin", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD" }) as never,
+  );
+  assertEquals(res.status, 200);
+});
+
 Deno.test("update-staff-user - a multi-team `teams` array replaces afc_user_teams, and teams[0] becomes the primary afc_users.team", async () => {
   const c = client({ id: CALLER_ID, role: "admin", is_active: true }, { id: TARGET_ID, role: "dgm", team: "BPDD" });
   const res = await handleRequest(

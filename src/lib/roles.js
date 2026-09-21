@@ -81,9 +81,10 @@ export const ROLE_ABBR = {
 };
 
 // ─── Admin can create any staff role except admin (avoid Admins silently
-// minting more Admins) and md (MD accounts aren't created through this
-// flow). ─────────────────────────────────────────────────────
+// minting more Admins) — md included, per explicit product decision.
+// ─────────────────────────────────────────────────────
 export const ADMIN_CREATABLE_ROLES = [
+  "md",
   "executive_director",
   "cfo",
   "cs",

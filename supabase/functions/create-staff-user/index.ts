@@ -53,7 +53,7 @@ function jsonRes(req: Request, status: number, body: unknown) {
 // Admin-only everywhere (an Admin account already exists in every real
 // environment; recovering from zero Admins is an out-of-band ops task, not
 // a normal-flow UI capability).
-const ADMIN_CREATABLE_ROLES = ["executive_director", "cfo", "cs", "general_manager", "dgm", "agm", "srm", "regional_manager", "area_manager", "project_officer", "associate_consultant", "project_assistant"];
+const ADMIN_CREATABLE_ROLES = ["md", "executive_director", "cfo", "cs", "general_manager", "dgm", "agm", "srm", "regional_manager", "area_manager", "project_officer", "associate_consultant", "project_assistant"];
 
 // Lead Generation review committees — an optional, independent tag on top
 // of the person's HR role (e.g. a DGM sits on G3; a Project Officer might

@@ -33,9 +33,12 @@ describe("ROLES / VALID_ROLES", () => {
 });
 
 describe("Admin's creatable roles", () => {
-  it("never include admin or md (no self-replication, no MD minting)", () => {
+  it("never includes admin (no self-replication)", () => {
     expect(ADMIN_CREATABLE_ROLES).not.toContain("admin");
-    expect(ADMIN_CREATABLE_ROLES).not.toContain("md");
+  });
+
+  it("includes md, per explicit product decision", () => {
+    expect(ADMIN_CREATABLE_ROLES).toContain("md");
   });
 });
 
