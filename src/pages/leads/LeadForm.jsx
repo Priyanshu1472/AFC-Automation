@@ -354,8 +354,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
             onChange={(e) => set("title", e.target.value)}
             placeholder={isSuoMoto ? "e.g. Suo Moto proposal for Smart City Project, Nagpur" : "e.g. Preparation of DPR for Smart City Project, Nagpur"}
             error={errors.title}
-            disabled={submitting || isEdit}
-            hint={isEdit ? "Locked once a lead is created — cannot be changed." : undefined}
+            disabled={submitting}
           />
 
           {duplicates.length > 0 && (
@@ -378,10 +377,9 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
                   value={form.portal_name}
                   onChange={(v) => set("portal_name", v)}
                   placeholder="Select a portal"
-                  disabled={submitting || isEdit}
+                  disabled={submitting}
                   searchable
                 />
-                {isEdit && <span className="field-hint">Locked once a lead is created — cannot be changed.</span>}
               </div>
 
               <Input
@@ -389,8 +387,8 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
                 value={form.bid_number}
                 onChange={(e) => set("bid_number", e.target.value)}
                 placeholder={`Enter ${bidNumberLabel}`}
-                hint={isEdit ? "Locked once a lead is created — cannot be changed." : "Used for duplicate detection."}
-                disabled={submitting || isEdit}
+                hint="Used for duplicate detection."
+                disabled={submitting}
               />
             </>
           )}
