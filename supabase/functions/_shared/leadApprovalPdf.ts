@@ -396,7 +396,7 @@ export async function buildLeadApprovalNotePdf(opts: {
   await drawTitle(e, "Remarks/ Recommendation");
 
   const committeeStages = STAGE_GROUPS.slice(1, 2); // pmt
-  const stageNumerals = ["Stage-I"];
+  const stageNumerals = ["Stage - PMT"];
   for (let i = 0; i < committeeStages.length; i++) {
     const stage = committeeStages[i];
     const row = latestByAction(opts.activityRows, stage.actions);
