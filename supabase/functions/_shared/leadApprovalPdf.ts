@@ -109,8 +109,40 @@ function fmtDate(iso: string | null): string {
 // Breathing room inserted between a section and whatever precedes it when
 // they end up sharing a page (see the conditional page-break checks below)
 // — without it, a heading's baseline lands right on the previous element's
-// bottom border/line.
-const SECTION_GAP = 14;
+// bottom border/line. One full blank line's worth of space (PageEngine's
+// own LINE_H is 13.5), rounded up a little for clearer visual separation.
+const SECTION_GAP = 20;
+
+// Height a drawGridTable call with these exact columns/rows/opts would
+// take, WITHOUT drawing anything — mirrors drawGridTable's own row-height
+// math in letterPdf.ts exactly (header row + every data row). Used to
+// decide up front whether the whole table fits on the current page, so a
+// table is either kept together or moved to a fresh page entirely, never
+// split partway through just because it happened to start mid-page.
+function measureGridTableHeight(
+  e: PageEngine,
+  columns: { header: string; width: number }[],
+  rows: string[][],
+  opts: { fontSize?: number; lineH?: number; padX?: number; padY?: number } = {}
+): number {
+  const fontSize = opts.fontSize ?? 8.5;
+  const lineH = opts.lineH ?? 11;
+  const padX = opts.padX ?? 5;
+  const padY = opts.padY ?? 4;
+  const totalW = columns.reduce((s, c) => s + c.width, 0);
+  const scale = e.MAX_W / totalW;
+  const widths = columns.map((c) => c.width * scale);
+
+  function rowHeight(cells: string[], bold: boolean): number {
+    const cellLines = cells.map((text, i) => wrapMultiline(bold ? e.fonts.bold : e.fonts.reg, text, fontSize, widths[i] - 2 * padX));
+    const nLines = Math.max(...cellLines.map((l) => l.length));
+    return nLines * lineH + 2 * padY;
+  }
+
+  let total = rowHeight(columns.map((c) => c.header), true);
+  for (const row of rows) total += rowHeight(row, false);
+  return total;
+}
 
 async function drawTitle(e: PageEngine, text: string) {
   const size = 13;
@@ -331,18 +363,14 @@ export async function buildLeadApprovalNotePdf(opts: {
   await drawKeyValueTable(e, rows, { labelWidth: 165 });
 
   // ── Preliminary Scrutiny by Office ────────────────────────────────
-  // Only starts a fresh page if there isn't room left for the title plus
-  // at least the table's header row — e.g. a short last row on page 1
-  // (Revenue Sharing) otherwise left almost the whole next page blank.
-  // drawGridTable below still paginates its own rows if the table itself
-  // runs past the bottom of whichever page this starts on. A small gap is
-  // inserted when continuing on the same page — without it the title's
-  // text baseline lands right on the previous table's bottom border.
-  if (e.y - SECTION_GAP < e.FOOTER_SAFE + 70) await e.newPage();
-  else e.gap(SECTION_GAP);
-  await drawTitle(e, "Preliminary Scrutiny by Office");
-  e.y -= 4;
-
+  // Kept together as a whole — moves to a fresh page entirely if the full
+  // table (title + every row) doesn't fit in whatever room is left, rather
+  // than starting here and letting drawGridTable split it mid-table onto
+  // the next page. Only continues on the current page (e.g. below a short
+  // last row on page 1, like Revenue Sharing) when the ENTIRE table fits.
+  // A one-line gap is inserted when it does continue on the same page —
+  // without it the title's text baseline lands right on the previous
+  // element's bottom border.
   const scrutinyEntries = data.scrutiny || [];
   const scrutinyRows: string[][] = SCRUTINY_PARAMETERS.map((param, i) => {
     const entry = scrutinyEntries[i];
@@ -350,9 +378,21 @@ export async function buildLeadApprovalNotePdf(opts: {
     const remarks = entry?.remarks?.trim() || param.defaultRemark;
     return [String(i + 1), param.label, yesNo, remarks];
   });
+  const scrutinyColumns = [
+    { header: "S.No.", width: 30 }, { header: "Evaluation Parameter", width: 130 },
+    { header: "Yes/No", width: 35 }, { header: "Justification / Remarks", width: 200 },
+  ];
+  const TITLE_H = 20; // matches drawTitle's own e.y -= 20
+  const scrutinyBlockH = TITLE_H + 4 + measureGridTableHeight(e, scrutinyColumns, scrutinyRows);
+
+  if (e.y - SECTION_GAP - scrutinyBlockH < e.FOOTER_SAFE) await e.newPage();
+  else e.gap(SECTION_GAP);
+  await drawTitle(e, "Preliminary Scrutiny by Office");
+  e.y -= 4;
+
   await drawGridTable(
     e,
-    [{ header: "S.No.", width: 30 }, { header: "Evaluation Parameter", width: 130 }, { header: "Yes/No", width: 35 }, { header: "Justification / Remarks", width: 200 }],
+    scrutinyColumns,
     scrutinyRows
   );
 
