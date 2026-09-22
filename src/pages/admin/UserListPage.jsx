@@ -117,6 +117,7 @@ export default function UserListPage() {
 
   const canManage = can.manageAllUsers(profile?.role);
   const canCreate = can.createUsers(profile?.role);
+  const canViewDetail = can.viewUserDetail(profile?.role);
 
   // MD looking at "All Teams" (the default) sees the whole roster grouped
   // into a section per team instead of one flat paginated list — everyone
@@ -257,11 +258,11 @@ export default function UserListPage() {
     navigate(`/users/${user.id}/edit`);
   }
 
-  // Whole rows are clickable to open Edit — but only where the Edit button
-  // itself would actually show (same as EditButton's own isSelf/canManage
-  // gate), so this never offers a click target that leads nowhere.
+  // Whole rows are clickable to open the user's detail page — for Admin
+  // that's Edit (gated the same as EditButton's own isSelf/canManage check),
+  // for MD it's the same page in read-only mode (canViewDetail).
   function isRowClickable(user) {
-    return canManage && user.id !== profile.id;
+    return (canManage || canViewDetail) && user.id !== profile.id;
   }
   function handleRowClick(user) {
     if (isRowClickable(user)) handleEdit(user);

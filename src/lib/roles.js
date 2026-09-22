@@ -101,10 +101,17 @@ export const ADMIN_CREATABLE_ROLES = [
 
 // ─── Users page — nav visibility and every /users*/create-user route's
 // allowedRoles must stay in sync, so all of them read from this single
-// list. User management (view, create, edit, activate/deactivate) is
-// Admin-only — no other role, including MD and DGM, can see or reach it.
+// list. User management (create, edit, activate/deactivate) is
+// Admin-only — no other role, including MD and DGM, can create or manage
+// accounts. Guards /create-user.
 // ──────────────────────────────────────────────
 export const USERS_PAGE_ROLES = ["admin"];
+
+// ─── MD gets read-only access to the Users list and a user's detail page
+// (view-only — see can.manageAllUsers/editUserRole below, which stay
+// Admin-only) — everyone else besides Admin still can't see or reach it.
+// Guards /users and /users/:id/edit.
+export const USERS_VIEW_ROLES = ["admin", "md"];
 
 // ─── Audit log — Admin only. ──────────────────────────────────────────
 export const AUDIT_LOG_ROLES = ["admin"];
@@ -134,6 +141,9 @@ export const can = {
   createUsers: (role) => role === "admin",
   editUsers: (role) => role === "admin",
   editUserRole: (role) => role === "admin",
+  // MD can open a user's detail page, but strictly to view it — every edit
+  // affordance on that page stays gated behind editUsers/editUserRole above.
+  viewUserDetail: (role) => USERS_VIEW_ROLES.includes(role),
 
   viewAllTeams: (role) => ["md", "cfo", "cs", "admin"].includes(role),
   // Reports page's Team/Office filters — narrower than viewAllTeams: only MD

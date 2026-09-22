@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ADMIN_CREATABLE_ROLES, AUDIT_LOG_ROLES, can, EMPANELMENT_ROLES, isAdminLevel, isTeamUser,
   isValidRole, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, LEAD_PA_TIER_ROLES,
-  ROLES, USERS_PAGE_ROLES, VALID_ROLES,
+  ROLES, USERS_PAGE_ROLES, USERS_VIEW_ROLES, VALID_ROLES,
 } from "./roles";
 
 describe("Lead Generation — SRM has the same access as AGM", () => {
@@ -63,6 +63,18 @@ describe("user management is Admin-only", () => {
     expect(can.editUserRole("md")).toBe(false);
     expect(can.editUserRole("dgm")).toBe(false);
     expect(can.editUserRole("srm")).toBe(false);
+  });
+
+  it("can.viewUserDetail is true for admin and md only — read-only for md, since editUsers/editUserRole stay admin-only", () => {
+    expect(can.viewUserDetail("admin")).toBe(true);
+    expect(can.viewUserDetail("md")).toBe(true);
+    expect(can.viewUserDetail("dgm")).toBe(false);
+    expect(can.viewUserDetail("cfo")).toBe(false);
+  });
+
+  it("USERS_VIEW_ROLES is admin + md, wider than the admin-only USERS_PAGE_ROLES", () => {
+    expect(USERS_VIEW_ROLES).toEqual(["admin", "md"]);
+    expect(USERS_PAGE_ROLES).toEqual(["admin"]);
   });
 });
 
