@@ -20,21 +20,35 @@ export const leadCan = {
   // every other creator's.
   poAssign: (profile, lead) => lead.status === "po_assignment" && !!profile?.id && profile.id === lead.forwarded_to_id,
   accept: (profile, lead) => lead.status === "pa_review" && profile?.id === lead.person_responsible_id,
-  // A true drop, no reassignment. The creator has no Drop of their own —
-  // only the Person Responsible, Reviewer, or Recommending Authority
-  // actually named on the lead can drop it, at any non-terminal status,
-  // md_approved included (server-side requires a written justification
-  // there, see advance-lead-stage's "drop" case). Before any of those three
-  // are named (po_assignment — a lead an AC/PA just created and forwarded,
-  // not yet assigned), the person it was forwarded to stands in instead.
+  // A true drop, no reassignment. The creator has no Drop of their own.
+  // - po_assignment: the person the lead was forwarded to (no PR/Reviewer/
+  //   Recommending Authority named yet).
+  // - pa_review: the named Person Responsible, Reviewer, or Recommending
+  //   Authority.
+  // - recommending_authority_review: only the Recommending Authority or the
+  //   Person Responsible — Reviewer no longer has Drop at this stage.
+  // - pmt_review, md_review, md_approved: Drop is removed entirely, for
+  //   every role, once a lead reaches PMT review — there is no Withdraw
+  //   path forward from here anymore.
+  // - pa_action_required: none, EXCEPT the Person Responsible regains Drop
+  //   specifically when PMT or MD sent the lead back (declined_from_status
+  //   is "pmt_review"/"md_review") — an escape hatch for a lead that
+  //   already passed PMT and is now back for rework. A lead sent back by
+  //   the Recommending Authority has no Drop at all — only Edit & Resubmit.
   drop: (profile, lead) => {
     if (["md_declined", "pa_dropped"].includes(lead.status)) return false;
     if (lead.status === "po_assignment") return !!profile?.id && profile.id === lead.forwarded_to_id;
-    // The Recommending Authority sent this back for changes — only they
-    // should re-review it, so there's no Withdraw here, only Edit &
-    // Resubmit.
-    if (lead.status === "pa_action_required" && lead.declined_from_status === "recommending_authority_review") return false;
-    return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
+    if (lead.status === "pa_review") {
+      return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
+    }
+    if (lead.status === "recommending_authority_review") {
+      return !!profile?.id && [lead.person_responsible_id, lead.recommending_authority_id].includes(profile.id);
+    }
+    if (lead.status === "pa_action_required") {
+      return ["pmt_review", "md_review"].includes(lead.declined_from_status) && profile?.id === lead.person_responsible_id;
+    }
+    // pmt_review, md_review, md_approved — no Drop for anyone.
+    return false;
   },
   // The PR handing the lead to a teammate instead of dropping it — an
   // alternative to Drop, not exclusive with it.
@@ -74,10 +88,13 @@ export const leadCan = {
   recommendingAuthorityReview: (profile, lead) => lead.status === "recommending_authority_review" && profile?.id === lead.recommending_authority_id,
   pmtReview: (profile, lead) => lead.status === "pmt_review" && profile?.committee === "PMT",
   mdReview: (profile, lead) => lead.status === "md_review" && profile?.role === "md",
-  // A safety valve for editing the Business Partner after a lead has
-  // already left pa_review — see advance-lead-stage's "withdraw_submission".
+  // A safety valve for editing the Business Partner right after a lead has
+  // left pa_review — returns it to pa_review, it is NOT a drop. Only
+  // available at Recommending Authority review — once a lead has passed
+  // that stage (PMT/MD review), it can no longer be withdrawn, only
+  // dropped (see the `drop` predicate above).
   withdrawSubmission: (profile, lead) =>
-    ["recommending_authority_review", "pmt_review", "md_review"].includes(lead.status) &&
+    lead.status === "recommending_authority_review" &&
     (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id),
 };
 

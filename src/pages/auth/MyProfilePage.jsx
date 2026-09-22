@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
-import { ROLE_LABELS } from "../../lib/roles";
+import { ROLE_LABELS, OFFICE_LABELS } from "../../lib/roles";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
@@ -9,7 +9,9 @@ import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import SetPasswordForm from "./SetPasswordForm";
 import SetPinForm from "./SetPinForm";
+import SignatureUploadModal from "../admin/SignatureUploadModal";
 import "../../styles/CreateUserPage.css";
+import "../../styles/Login.css";
 
 // Self-service page for both AFC staff and Business Partner portal
 // accounts — name can be corrected here (email/role/team/office stay
@@ -22,6 +24,7 @@ export default function MyProfilePage() {
   const [banner, setBanner] = useState("");
   const [bannerVariant, setBannerVariant] = useState("success");
   const [signatureUrl, setSignatureUrl] = useState(null);
+  const [showSignatureUpload, setShowSignatureUpload] = useState(false);
 
   useEffect(() => {
     if (!profile?.signature_path) {
@@ -104,7 +107,7 @@ export default function MyProfilePage() {
                 <div className="field">
                   <label className="field-label">Email</label>
                   <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>
-                    {profile.email} <span className="text-tertiary">(login identity — cannot be changed here)</span>
+                    {profile.email} <span className="text-tertiary">(login identity cannot be changed here)</span>
                   </p>
                 </div>
                 <div className="field">
@@ -122,7 +125,7 @@ export default function MyProfilePage() {
                 {profile.office && (
                   <div className="field">
                     <label className="field-label">Office</label>
-                    <p className="text-sm text-secondary" style={{ paddingTop: 9, textTransform: "capitalize" }}>{profile.office}</p>
+                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{OFFICE_LABELS[profile.office] || profile.office}</p>
                   </div>
                 )}
                 <div className="field">
@@ -135,15 +138,20 @@ export default function MyProfilePage() {
                     <img src={signatureUrl} alt="Your signature" className="cup-signature-preview" />
                   ) : (
                     <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>
-                      Not set <span className="text-tertiary">(ask Admin to upload one — it's used to sign your generated PDFs)</span>
+                      Not set <span className="text-tertiary">(it's used to sign your generated PDFs)</span>
                     </p>
                   )}
+                  <div style={{ marginTop: "var(--space-2)" }}>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => setShowSignatureUpload(true)}>
+                      {signatureUrl ? "Replace Signature" : "Upload Signature"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </Card.Body>
             <Card.Footer>
               <Button type="submit" variant="primary" loading={saving} disabled={saving || name.trim() === profile.full_name}>
-                {saving ? "Saving…" : "Save Name"}
+                {saving ? "Saving…" : "Save"}
               </Button>
             </Card.Footer>
           </form>
@@ -163,6 +171,18 @@ export default function MyProfilePage() {
           <SetPinForm hasPin={!!profile.pin_updated_at} />
         </div>
       </div>
+
+      {showSignatureUpload && (
+        <SignatureUploadModal
+          targetUserId={profile.id}
+          targetName="you"
+          onClose={() => setShowSignatureUpload(false)}
+          onSuccess={async () => {
+            setShowSignatureUpload(false);
+            await refreshProfile();
+          }}
+        />
+      )}
     </div>
   );
 }

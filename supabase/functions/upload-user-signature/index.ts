@@ -1,9 +1,10 @@
 // supabase/functions/upload-user-signature/index.ts
-// JWT must be ON. Admin-only: uploads/replaces the signature image used to
-// sign a staff member's PDFs (currently the Lead Approval Note). Mirrors
-// create-lead's uploadDocument/validateDocument pattern — magic-byte
-// validation, sanitized filename, private bucket. One signature per user:
-// any prior object is removed before the new one is stored, and
+// JWT must be ON. Uploads/replaces the signature image used to sign a staff
+// member's PDFs (currently the Lead Approval Note) — Admin can do this for
+// anyone (from Edit User), and a user can do it for themselves (from My
+// Profile). Mirrors create-lead's uploadDocument/validateDocument pattern —
+// magic-byte validation, sanitized filename, private bucket. One signature
+// per user: any prior object is removed before the new one is stored, and
 // afc_users.signature_path is overwritten rather than appended to.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -38,7 +39,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   const callerResult = await getCallerProfile(req, adminClient);
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
-  if (caller.role !== "admin") return jsonRes(req, 403, { error: "Only Admin can upload a user's signature." });
 
   let formData: FormData;
   try {
@@ -49,6 +49,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const userId = formData.get("user_id");
   if (typeof userId !== "string" || !userId) return jsonRes(req, 400, { error: "user_id is required." });
+
+  const isSelf = userId === caller.id;
+  if (caller.role !== "admin" && !isSelf) {
+    return jsonRes(req, 403, { error: "You can only upload your own signature." });
+  }
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return jsonRes(req, 400, { error: "A signature image is required." });
@@ -88,7 +93,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       action_by: caller.id,
       action_by_role: caller.role,
       action: "user_signature_uploaded",
-      comment: `Uploaded signature for ${target.full_name} (${target.email}).`,
+      comment: isSelf
+        ? `${target.full_name} (${target.email}) uploaded their own signature.`
+        : `Uploaded signature for ${target.full_name} (${target.email}).`,
     });
 
     return jsonRes(req, 200, { success: true });

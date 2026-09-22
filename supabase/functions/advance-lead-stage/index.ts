@@ -102,19 +102,17 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
   // lead created by an Associate Consultant/Project Assistant (see
   // create-lead's isPoRouted) or one just transferred to this team (see
   // _shared/leadTransfer.ts, which lands a lead here too). "po_assign" is
-  // the team's Project Officer (or Area Manager/Regional Manager) naming
-  // all three, PIN-confirmed — the lead then lands in pa_review, exactly
-  // where every other creator's lead already starts. "drop" here is the
-  // creator withdrawing it before a PO ever acts, same as pa_review's
-  // creator-only drop (see the "drop" case).
+  // the person the lead was forwarded to naming all three, PIN-confirmed —
+  // the lead then lands in pa_review, exactly where every other creator's
+  // lead already starts. "drop" here is that same forwarded-to person
+  // withdrawing it before ever acting (see the "drop" case for exactly
+  // who's allowed to drop at each status).
   po_assignment: { po_assign: "pa_review", drop: "pa_dropped" },
-  // "drop" is the creator's own withdrawal — a true drop to pa_dropped,
-  // valid at every non-terminal status, not just pa_review (see the "drop"
-  // case for exactly who's allowed at each one). "reject_reassign" is
-  // separate: the Person Responsible (when they aren't also the creator)
-  // rejecting a pa_review lead hands it straight to a chosen teammate
-  // instead of releasing it into an open pool, so it's a same-status
-  // transition (see the "reject_reassign" case).
+  // "reject_reassign" is separate from "drop": the Person Responsible
+  // (when they aren't also the creator) rejecting a pa_review lead hands it
+  // straight to a chosen teammate instead of releasing it into an open
+  // pool, so it's a same-status transition (see the "reject_reassign"
+  // case).
   // Accept routes to the Recommending Authority first, ahead of PMT.
   // submit_for_pr_review / pr_review_accept / pr_review_reject are all
   // same-status transitions, same idea as reject_reassign above — the PR
@@ -128,27 +126,29 @@ const LEAD_TRANSITIONS: Record<string, Record<string, string>> = {
     accept: "recommending_authority_review", drop: "pa_dropped", reject_reassign: "pa_review",
     submit_for_pr_review: "pa_review", pr_review_accept: "pa_review", pr_review_reject: "pa_review",
   },
+  // withdraw_submission only exists here — once a lead passes Recommending
+  // Authority review it can no longer be withdrawn (returned to pa_review),
+  // only dropped (see the "drop" case).
   recommending_authority_review: {
     ra_approve: "pmt_review", ra_decline: "pa_action_required", drop: "pa_dropped",
     withdraw_submission: "pa_review",
   },
   pa_dropped: { claim: "pa_review" },
+  // Drop is removed entirely once a lead reaches PMT review — no role can
+  // drop it here or at any stage after (see the "drop" case). The only way
+  // back from here is a decline, which returns it to pa_action_required.
   pmt_review: {
-    pmt_approve: "md_review", pmt_decline: "pa_action_required", drop: "pa_dropped",
-    withdraw_submission: "pa_review",
+    pmt_approve: "md_review", pmt_decline: "pa_action_required",
   },
   // md_decline is no longer terminal — it returns the lead to the creator/
   // PR for changes, same shape as every earlier-stage decline (see the
   // "md_decline" case for who gets notified).
   md_review: {
-    md_approve: "md_approved", md_decline: "pa_action_required", drop: "pa_dropped",
-    withdraw_submission: "pa_review",
+    md_approve: "md_approved", md_decline: "pa_action_required",
   },
-  // The one action still available once a lead is fully approved — the
-  // creator or Person Responsible withdrawing it after the fact (see the
-  // "drop" case for the extra written-justification requirement this one
-  // stage adds on top of the usual PIN gate).
-  md_approved: { drop: "pa_dropped" },
+  // Fully terminal now — Drop was the one action still open here, and it's
+  // gone along with every other stage past PMT review.
+  md_approved: {},
   // "accept" also reaches pa_action_required -> recommending_authority_
   // review — every decline source (Recommending Authority, PMT, MD)
   // resubmits through the exact same generate-note-then-accept procedure
@@ -401,29 +401,47 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       // A true drop, no reassignment involved. The creator has no Drop of
-      // their own — only the Person Responsible, Reviewer, or Recommending
-      // Authority actually named on the lead can drop it, at any
-      // non-terminal status, md_approved included. Before any of those
-      // three are named (po_assignment), the person the lead was forwarded
-      // to stands in instead — they're the only one who can act on it at
-      // all right now.
+      // their own.
+      // - po_assignment: the person the lead was forwarded to.
+      // - pa_review: the named Person Responsible, Reviewer, or
+      //   Recommending Authority.
+      // - recommending_authority_review: only the Recommending Authority or
+      //   the Person Responsible — Reviewer no longer has Drop at this
+      //   stage.
+      // - pmt_review, md_review, md_approved: not reachable at all — "drop"
+      //   isn't in LEAD_TRANSITIONS for these statuses anymore, so the
+      //   generic invalid-action check above already rejects it before
+      //   this case ever runs.
+      // - pa_action_required: only the Person Responsible, and only when
+      //   PMT or MD sent the lead back (declined_from_status) — an escape
+      //   hatch for a lead that already passed PMT and is now back for
+      //   rework. A lead the Recommending Authority sent back has no Drop
+      //   at all, only Edit & Resubmit.
       case "drop": {
-        const isPr = caller.id === leadRow.person_responsible_id;
-        const isReviewer = caller.id === leadRow.reviewer_id;
-        const isRa = caller.id === leadRow.recommending_authority_id;
         if (leadRow.status === "po_assignment") {
           if (caller.id !== leadRow.forwarded_to_id) return forbidden("This lead hasn't been forwarded to you.");
           break;
         }
-        if (!isPr && !isReviewer && !isRa) {
-          return forbidden("Only the Person Responsible, Reviewer, or Recommending Authority can drop this lead.");
+        if (leadRow.status === "pa_review") {
+          const isPr = caller.id === leadRow.person_responsible_id;
+          const isReviewer = caller.id === leadRow.reviewer_id;
+          const isRa = caller.id === leadRow.recommending_authority_id;
+          if (!isPr && !isReviewer && !isRa) {
+            return forbidden("Only the Person Responsible, Reviewer, or Recommending Authority can drop this lead.");
+          }
+          break;
         }
-        // Withdrawing a lead the MD has already approved is a bigger deal
-        // than dropping it at any earlier stage — require a written
-        // justification here specifically; every other stage's drop keeps
-        // comment optional, unchanged.
-        if (leadRow.status === "md_approved" && !trimmedComment) {
-          return jsonRes(req, 400, { error: "A justification is required to drop an approved lead." });
+        if (leadRow.status === "recommending_authority_review") {
+          const isPr = caller.id === leadRow.person_responsible_id;
+          const isRa = caller.id === leadRow.recommending_authority_id;
+          if (!isPr && !isRa) {
+            return forbidden("Only the Person Responsible or the Recommending Authority can drop this lead.");
+          }
+          break;
+        }
+        // pa_action_required
+        if (caller.id !== leadRow.person_responsible_id || !["pmt_review", "md_review"].includes(leadRow.declined_from_status as string)) {
+          return forbidden("Only the Person Responsible can drop this lead, and only if PMT or MD sent it back.");
         }
         break;
       }

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { useAuth } from "../../hooks/useAuth";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import PinInput from "../../components/ui/PinInput";
@@ -13,11 +12,12 @@ const PIN_PATTERN = /^\d{4}$/;
 // A 4-digit action PIN, separate from the login password — gates every
 // committee/MD decision in Lead Generation (accept/approve/decline/
 // escalate/forward/drop). Mirrors SetPasswordForm's shape: re-verify the
-// current password first (supabase.auth.signInWithPassword — the same
-// "prove it's really you" gate used everywhere else for a self-service
-// change), then call set-own-pin with just the new PIN.
+// current password first (via the verify-own-password edge function, not
+// a direct client-side supabase.auth.signInWithPassword call — that's
+// captcha-gated through the anon key once Turnstile is enabled; the edge
+// function checks server-side with the service role key instead, which is
+// exempt), then call set-own-pin with just the new PIN.
 export default function SetPinForm({ hasPin }) {
-  const { profile } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
@@ -37,8 +37,8 @@ export default function SetPinForm({ hasPin }) {
 
     setLoading(true);
     try {
-      const { error: verifyError } = await supabase.auth.signInWithPassword({ email: profile.email, password: currentPassword });
-      if (verifyError) {
+      const { data: verifyData, error: verifyError } = await supabase.functions.invoke("verify-own-password", { body: { password: currentPassword } });
+      if (verifyError || !verifyData?.success) {
         setError("Current password is incorrect.");
         return;
       }

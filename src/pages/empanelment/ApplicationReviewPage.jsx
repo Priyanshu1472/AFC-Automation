@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
-import { ROLE_LABELS } from "../../lib/roles";
+import { ROLE_LABELS, OFFICE_LABELS } from "../../lib/roles";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
@@ -362,7 +362,7 @@ export default function ApplicationReviewPage() {
                   <Row label="Project Officer" value={app.po?.full_name} />
                   <Row label={advisorLabel} value={app.dgm?.full_name} />
                   <Row label="Team" value={app.team} />
-                  <Row label="Office" value={app.office} />
+                  <Row label="Office" value={app.office ? OFFICE_LABELS[app.office] || app.office : app.office} />
                   <Row label="Application Code" value={app.application_code} />
                   <Row label="Sent On" value={fmtDate(app.created_at)} />
                 </Card.Body>

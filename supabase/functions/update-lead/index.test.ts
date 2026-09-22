@@ -166,17 +166,31 @@ Deno.test("handleRequest - a resubmit_comment field, if sent, is simply ignored 
   assertEquals(body.status, "pa_action_required");
 });
 
-Deno.test("handleRequest - title/portal_name/bid_number in the request body are ignored — server keeps the lead's existing values", async () => {
+Deno.test("handleRequest - title/portal_name/bid_number are editable, unlike at creation", async () => {
   const client = buildClient({});
   const res = await handleRequest(
-    formReq(baseFields({ title: "Sneaky new title", portal_name: "Sneaky portal", bid_number: "Sneaky bid" })),
+    formReq(baseFields({
+      title: "Updated title", portal_name: "Updated portal", bid_number: "Updated bid",
+      recommending_authority_id: AUTHORITY_ID,
+    })),
     client as never
   );
   assertEquals(res.status, 200);
   const updateCall = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log
     .find((entry) => entry.table === "leads" && entry.calls.some((c) => c[0] === "update"));
   const updatePayload = updateCall?.calls.find((c) => c[0] === "update")?.[1] ?? "";
-  assertEquals(updatePayload.includes("Sneaky"), false);
+  assertEquals(updatePayload.includes("Updated title"), true);
+  assertEquals(updatePayload.includes("Updated portal"), true);
+  assertEquals(updatePayload.includes("Updated bid"), true);
+});
+
+Deno.test("handleRequest - an empty title is rejected", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(
+    formReq(baseFields({ title: "  ", recommending_authority_id: AUTHORITY_ID })),
+    client as never
+  );
+  assertEquals(res.status, 400);
 });
 
 Deno.test("handleRequest - a pa_review lead can be edited in place, status unchanged", async () => {

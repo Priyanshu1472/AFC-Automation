@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, COMMITTEES } from "../../lib/roles";
+import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, OFFICE_LABELS, COMMITTEES } from "../../lib/roles";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -10,20 +10,19 @@ import Select from "../../components/ui/Select";
 import TeamMultiSelect from "../../components/ui/TeamMultiSelect";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
-import FieldTooltip from "../../components/FieldTooltip";
 import "../../styles/CreateUserPage.css";
-
-const FIELD_HELP = {
-  email: "This becomes their login. They'll receive a temporary password here — make sure it's an address they can actually check.",
-  role: "Controls what this person can see and do. Admin can create any staff designation except Admin/MD.",
-  team: "The working group this person belongs to (e.g. BPDD, BIID). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
-  office: "The physical office this person is based out of.",
-  committee: "Optional Lead Generation review committee (PMT) — membership grants PMT-stage review/approval on leads, org-wide.",
-  signature: "Optional. If provided, this image is embedded as this person's signature on generated PDFs (e.g. the Lead Approval Note) instead of a blank signature line.",
-};
 
 const EMPTY_FORM = { full_name: "", email: "", role: "", teams: [], office: "", committee: "" };
 const SIGNATURE_TYPES = ["image/png", "image/jpeg"];
+
+// Each team has one "home" office — picking a team auto-fills Office with
+// it (still editable afterward, if the actual assignment differs).
+const TEAM_OFFICE_MAP = {
+  BPDD: "delhi",
+  BIID: "delhi",
+  LKN: "lucknow",
+  HO: "mumbai",
+};
 
 function isValidEmail(val) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
@@ -35,7 +34,7 @@ export default function CreateUserPage() {
     []
   );
 
-  const officeOptions = OFFICES.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }));
+  const officeOptions = OFFICES.map((o) => ({ value: o, label: OFFICE_LABELS[o] || o }));
   const teams = useTeamOptions();
   const committeeOptions = COMMITTEES.map((c) => ({ value: c, label: c }));
 
@@ -173,7 +172,7 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field full">
                   <label className="field-label" htmlFor="email">
-                    Email <span className="required">*</span> <FieldTooltip text={FIELD_HELP.email} />
+                    Email <span className="required">*</span>
                   </label>
                   <Input
                     id="email"
@@ -187,7 +186,7 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field">
                   <label className="field-label">
-                    Designation <span className="required">*</span> <FieldTooltip text={FIELD_HELP.role} />
+                    Designation <span className="required">*</span>
                   </label>
                   <Select
                     options={roleOptions}
@@ -202,12 +201,15 @@ export default function CreateUserPage() {
 
                 <div className="field">
                   <label className="field-label">
-                    Team <FieldTooltip text={FIELD_HELP.team} />
+                    Team
                   </label>
                   <TeamMultiSelect
                     options={teams}
                     value={form.teams}
-                    onChange={(v) => set("teams", v)}
+                    onChange={(v) => {
+                      const office = TEAM_OFFICE_MAP[v[0]];
+                      setForm((p) => ({ ...p, teams: v, office: office || p.office }));
+                    }}
                     disabled={saving}
                     error={errors.team}
                   />
@@ -215,7 +217,7 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field">
                   <label className="field-label">
-                    Office <span className="required">*</span> <FieldTooltip text={FIELD_HELP.office} />
+                    Office <span className="required">*</span>
                   </label>
                   <Select
                     options={officeOptions}
@@ -229,10 +231,10 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field">
                   <label className="field-label">
-                    Committee <FieldTooltip text={FIELD_HELP.committee} />
+                    Committee
                   </label>
                   <Select
-                    options={committeeOptions}
+                    options={[{ value: "", label: "— None —" }, ...committeeOptions]}
                     value={form.committee}
                     onChange={(v) => set("committee", v)}
                     placeholder="— None —"
@@ -241,7 +243,7 @@ export default function CreateUserPage() {
                 </div>
                 <div className="field full">
                   <label className="field-label">
-                    Signature <FieldTooltip text={FIELD_HELP.signature} />
+                    Signature
                   </label>
                   <label className="cup-file-drop">
                     <input type="file" accept="image/png,image/jpeg" onChange={handleSignatureChange} disabled={saving} />

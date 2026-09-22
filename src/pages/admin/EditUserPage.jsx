@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, COMMITTEES, can } from "../../lib/roles";
+import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, OFFICE_LABELS, COMMITTEES, can } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
@@ -16,6 +16,7 @@ import PageLoader from "../../components/ui/PageLoader";
 import FieldTooltip from "../../components/FieldTooltip";
 import ResetPinModal from "./ResetPinModal";
 import SignatureUploadModal from "./SignatureUploadModal";
+import DeleteUserModal from "./DeleteUserModal";
 import "../../styles/CreateUserPage.css";
 
 const FIELD_HELP = {
@@ -31,8 +32,11 @@ export default function EditUserPage() {
   const { profile } = useAuth();
   const { showToast } = useToast();
   const canEditRole = can.editUserRole(profile?.role);
+  // MD can open this page but only to view it — every edit affordance
+  // (fields, Save, PIN/signature, Danger Zone) is Admin-only.
+  const canEdit = can.editUsers(profile?.role);
 
-  const officeOptions = OFFICES.map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }));
+  const officeOptions = OFFICES.map((o) => ({ value: o, label: OFFICE_LABELS[o] || o }));
   const teams = useTeamOptions();
   const committeeOptions = COMMITTEES.map((c) => ({ value: c, label: c }));
 
@@ -58,6 +62,7 @@ export default function EditUserPage() {
   const [success, setSuccess] = useState(false);
   const [showResetPin, setShowResetPin] = useState(false);
   const [showSignatureUpload, setShowSignatureUpload] = useState(false);
+  const [showDeleteUser, setShowDeleteUser] = useState(false);
   const [signatureUrl, setSignatureUrl] = useState(null);
 
   const fetchUser = useCallback(async () => {
@@ -161,8 +166,12 @@ export default function EditUserPage() {
         <div className="page-header">
           <div className="page-title-row">
             <div>
-              <h1>Edit User</h1>
-              <p>Fix a mistake on this account — name, team, office{canEditRole ? ", or role" : ""}.</p>
+              <h1>{canEdit ? "Edit User" : "User"}</h1>
+              <p>
+                {canEdit
+                  ? `Fix a mistake on this account — name, team, office${canEditRole ? ", or role" : ""}.`
+                  : "Account information (view-only)."}
+              </p>
             </div>
             <Link to="/users" className="btn btn-secondary btn-sm">
               ← Back to Users
@@ -181,12 +190,19 @@ export default function EditUserPage() {
             <Card.Body>
               <div className="form-grid">
                 <div className="field full">
-                  <Input label="Full Name" required value={form.full_name} onChange={(e) => set("full_name", e.target.value)} error={errors.full_name} disabled={saving} />
+                  {canEdit ? (
+                    <Input label="Full Name" required value={form.full_name} onChange={(e) => set("full_name", e.target.value)} error={errors.full_name} disabled={saving} />
+                  ) : (
+                    <>
+                      <label className="field-label">Full Name</label>
+                      <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{target.full_name}</p>
+                    </>
+                  )}
                 </div>
                 <div className="field full">
                   <label className="field-label">Email</label>
                   <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>
-                    {target.email} <span className="text-tertiary">(login identity — cannot be changed here)</span>
+                    {target.email} <span className="text-tertiary">(login identity cannot be changed here)</span>
                   </p>
                 </div>
 
@@ -207,15 +223,23 @@ export default function EditUserPage() {
 
                 <div className="field">
                   <label className="field-label">
-                    Team <FieldTooltip text={FIELD_HELP.team} />
+                    Team {canEdit && <FieldTooltip text={FIELD_HELP.team} />}
                   </label>
-                  <TeamMultiSelect options={teams} value={form.teams} onChange={(v) => set("teams", v)} disabled={saving} />
+                  {canEdit ? (
+                    <TeamMultiSelect options={teams} value={form.teams} onChange={(v) => set("teams", v)} disabled={saving} />
+                  ) : (
+                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{form.teams.length ? form.teams.join(", ") : "—"}</p>
+                  )}
                 </div>
                 <div className="field">
                   <label className="field-label">
-                    Office <FieldTooltip text={FIELD_HELP.office} />
+                    Office {canEdit && <FieldTooltip text={FIELD_HELP.office} />}
                   </label>
-                  <Select options={officeOptions} value={form.office} onChange={(v) => set("office", v)} placeholder="Select office" disabled={saving} />
+                  {canEdit ? (
+                    <Select options={officeOptions} value={form.office} onChange={(v) => set("office", v)} placeholder="Select office" disabled={saving} />
+                  ) : (
+                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{target.office ? OFFICE_LABELS[target.office] || target.office : "—"}</p>
+                  )}
                 </div>
                 {canEditRole ? (
                   <div className="field">
@@ -264,13 +288,31 @@ export default function EditUserPage() {
                 )}
               </div>
             </Card.Body>
-            <Card.Footer>
-              <Button type="submit" variant="primary" loading={saving} disabled={saving}>
-                {saving ? "Saving…" : "Save Changes"}
-              </Button>
-            </Card.Footer>
+            {canEdit && (
+              <Card.Footer>
+                <Button type="submit" variant="primary" loading={saving} disabled={saving}>
+                  {saving ? "Saving…" : "Save Changes"}
+                </Button>
+              </Card.Footer>
+            )}
           </form>
         </Card>
+
+        {profile?.role === "admin" && target.id !== profile?.id && (
+          <Card className="danger-zone-card" style={{ marginTop: "var(--space-6)", borderColor: "var(--danger)" }}>
+            <Card.Header title="Danger Zone" />
+            <Card.Body>
+              <p className="text-sm text-secondary" style={{ marginBottom: "var(--space-3)" }}>
+                Permanently delete {target.full_name}'s account. This cannot be undone, and only succeeds if they have
+                no leads, proposals, or other activity on record — deactivate them instead if you just need to revoke
+                access.
+              </p>
+              <Button type="button" variant="danger" onClick={() => setShowDeleteUser(true)}>
+                Delete User
+              </Button>
+            </Card.Body>
+          </Card>
+        )}
 
         {showResetPin && (
           <ResetPinModal
@@ -296,6 +338,20 @@ export default function EditUserPage() {
               setSuccess(true);
               setBanner(`Signature uploaded for ${target.full_name}.`);
               fetchUser();
+            }}
+          />
+        )}
+
+        {showDeleteUser && (
+          <DeleteUserModal
+            targetUserId={target.id}
+            targetName={target.full_name}
+            targetEmail={target.email}
+            onClose={() => setShowDeleteUser(false)}
+            onSuccess={() => {
+              setShowDeleteUser(false);
+              showToast(`${target.full_name} was permanently deleted.`, "success");
+              navigate("/users");
             }}
           />
         )}

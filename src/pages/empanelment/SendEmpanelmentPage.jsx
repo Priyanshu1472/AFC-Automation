@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { ROLE_LABELS } from "../../lib/roles";
+import { ROLE_LABELS, OFFICE_LABELS } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -15,8 +15,8 @@ import "../../styles/SendEmpanelmentPage.css";
 function isValidEmail(v) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
-function capitalise(str) {
-  return str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
+function officeLabel(office) {
+  return office ? OFFICE_LABELS[office] || office : "";
 }
 
 function SendIcon() {
@@ -62,7 +62,7 @@ function SenderInfoRow({ profile, team, advisorName }) {
     { label: "Sent by", value: profile?.full_name },
     { label: "Advised by", value: advisorName || profile?.full_name },
     { label: "Team", value: team, highlight: true },
-    { label: "Office", value: capitalise(profile?.office) },
+    { label: "Office", value: officeLabel(profile?.office) },
   ];
   return (
     <div className="sef-sender-row">
@@ -326,7 +326,7 @@ export default function SendEmpanelmentPage() {
                     <div className="sef-summary-item"><span className="sef-summary-label">{reviewerLabel}</span><span className="sef-summary-value">{selectedPO?.full_name || "—"}</span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Advised by</span><span className="sef-summary-value">{advisedByName} <span className="sef-summary-role">({advisedByDesig})</span></span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Sent by</span><span className="sef-summary-value">{profile?.full_name}</span></div>
-                    <div className="sef-summary-item sef-summary-last"><span className="sef-summary-label">Team / Office</span><span className="sef-summary-value">{team} · {capitalise(profile?.office)}</span></div>
+                    <div className="sef-summary-item sef-summary-last"><span className="sef-summary-label">Team / Office</span><span className="sef-summary-value">{team} · {officeLabel(profile?.office)}</span></div>
                   </div>
                   <div className="sef-summary-notice">The application code is generated and sent securely in the actual email — it is not shown in this preview.</div>
                   {sendError && <Alert variant="danger" onClose={() => setSendError("")}>{sendError}</Alert>}

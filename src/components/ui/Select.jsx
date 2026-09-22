@@ -38,9 +38,16 @@ export default function Select({
   // value (not "") when it isn't in `options` — that's exactly the case
   // right after commitCreate below sets a brand-new value that `options`
   // doesn't know about yet, so this must not blank the input back out.
+  // Also re-syncs once `options` actually arrives (via selected?.label,
+  // not the `options` array itself, which is often a fresh inline literal
+  // every render and would otherwise re-fire this on every keystroke): an
+  // edit form typically sets `value` to an id immediately, before the
+  // matching option list has finished loading — without this, the raw id
+  // stays stuck on screen forever once the real label does arrive, since
+  // `value` itself never changes again.
   useEffect(() => {
     if (isFilterable && !open) setQuery(selected ? selected.label : value || "");
-  }, [isFilterable, open, value]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isFilterable, open, value, selected?.label]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const trimmedQuery = query.trim();
   const filtered = isFilterable && trimmedQuery

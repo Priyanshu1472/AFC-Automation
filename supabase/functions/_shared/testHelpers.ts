@@ -46,6 +46,7 @@ export function createFakeAdminClient(routes: Record<string, FakeResult[]> = {},
   auth?: {
     createUser?: FakeResult | ((args: Record<string, unknown>) => FakeResult);
     deleteUser?: FakeResult;
+    signInWithPassword?: FakeResult | ((args: Record<string, unknown>) => FakeResult);
   };
 } = {}) {
   const cursors: Record<string, number> = {};
@@ -89,6 +90,12 @@ export function createFakeAdminClient(routes: Record<string, FakeResult[]> = {},
           authCalls.push({ method: "deleteUser", args: [id] });
           return Promise.resolve(opts.auth?.deleteUser ?? { data: {}, error: null });
         },
+      },
+      signInWithPassword(args: Record<string, unknown>) {
+        authCalls.push({ method: "signInWithPassword", args: [args] });
+        const configured = opts.auth?.signInWithPassword;
+        const result = typeof configured === "function" ? configured(args) : configured;
+        return Promise.resolve(result ?? { data: { user: { id: "fake-user-id" } }, error: null });
       },
     },
     __log: log,

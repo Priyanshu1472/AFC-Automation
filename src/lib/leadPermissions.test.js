@@ -44,18 +44,30 @@ describe("leadCan", () => {
     expect(leadCan.drop({ id: "bystander" }, lead)).toBe(false);
   });
 
-  it("drop past pa_review allows the named PR, Reviewer, or Recommending Authority", () => {
-    const inPmtReview = { status: "pmt_review", created_by: "user-1", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "ra-1" };
-    expect(leadCan.drop(user, inPmtReview)).toBe(false); // creator alone
-    expect(leadCan.drop({ id: "pr-1" }, inPmtReview)).toBe(true);
-    expect(leadCan.drop({ id: "bystander" }, inPmtReview)).toBe(false);
+  it("drop at recommending_authority_review is available only to the Recommending Authority or the Person Responsible — not the Reviewer anymore", () => {
+    const lead = { status: "recommending_authority_review", created_by: "user-1", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "ra-1" };
+    expect(leadCan.drop(user, lead)).toBe(false); // creator alone
+    expect(leadCan.drop({ id: "pr-1" }, lead)).toBe(true);
+    expect(leadCan.drop({ id: "ra-1" }, lead)).toBe(true);
+    expect(leadCan.drop({ id: "reviewer-1" }, lead)).toBe(false); // no longer enough on its own
+    expect(leadCan.drop({ id: "bystander" }, lead)).toBe(false);
   });
 
-  it("drop is still available once MD has approved the lead — the one action left, for PR/Reviewer/RA", () => {
+  it("drop is removed entirely once a lead reaches pmt_review — no role has it anymore", () => {
+    const inPmtReview = { status: "pmt_review", created_by: "user-1", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "ra-1" };
+    expect(leadCan.drop(user, inPmtReview)).toBe(false);
+    expect(leadCan.drop({ id: "pr-1" }, inPmtReview)).toBe(false);
+    expect(leadCan.drop({ id: "ra-1" }, inPmtReview)).toBe(false);
+    expect(leadCan.drop({ id: "someone", role: "md" }, inPmtReview)).toBe(false);
+    expect(leadCan.drop({ id: "someone", committee: "PMT" }, inPmtReview)).toBe(false);
+  });
+
+  it("drop is removed entirely once MD has approved the lead — no action left there at all", () => {
     const approved = { status: "md_approved", created_by: "user-1", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "ra-1" };
-    expect(leadCan.drop(user, approved)).toBe(false); // creator alone
-    expect(leadCan.drop({ id: "pr-1" }, approved)).toBe(true);
-    expect(leadCan.drop({ id: "bystander" }, approved)).toBe(false);
+    expect(leadCan.drop(user, approved)).toBe(false);
+    expect(leadCan.drop({ id: "pr-1" }, approved)).toBe(false);
+    expect(leadCan.drop({ id: "someone", role: "md" }, approved)).toBe(false);
+    expect(leadCan.drop({ id: "someone", committee: "PMT" }, approved)).toBe(false);
   });
 
   it("drop is unavailable once MD has declined the lead, or it's already dropped — genuinely terminal", () => {
@@ -65,16 +77,28 @@ describe("leadCan", () => {
     expect(leadCan.drop(user, dropped)).toBe(false);
   });
 
-  it("drop at pa_action_required allows the named PR, Reviewer, or Recommending Authority", () => {
+  it("drop at pa_action_required is unavailable by default — only the two carved-out exceptions below apply", () => {
     const lead = { status: "pa_action_required", created_by: "user-1", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "ra-1" };
     expect(leadCan.drop(user, lead)).toBe(false); // creator alone
-    expect(leadCan.drop({ id: "pr-1" }, lead)).toBe(true);
+    expect(leadCan.drop({ id: "reviewer-1" }, lead)).toBe(false);
+    expect(leadCan.drop({ id: "ra-1" }, lead)).toBe(false);
+    expect(leadCan.drop({ id: "pr-1" }, lead)).toBe(false); // no declined_from_status — doesn't qualify
     expect(leadCan.drop({ id: "bystander" }, lead)).toBe(false);
   });
 
   it("drop at pa_action_required is unavailable when the Recommending Authority sent it back — only Edit & Resubmit", () => {
     const lead = { status: "pa_action_required", created_by: "user-1", person_responsible_id: "user-1", declined_from_status: "recommending_authority_review" };
     expect(leadCan.drop(user, lead)).toBe(false);
+  });
+
+  it("drop at pa_action_required reappears for the Person Responsible only, when PMT or MD sent it back", () => {
+    const fromPmt = { status: "pa_action_required", created_by: "user-1", person_responsible_id: "pr-1", recommending_authority_id: "ra-1", declined_from_status: "pmt_review" };
+    expect(leadCan.drop({ id: "pr-1" }, fromPmt)).toBe(true);
+    expect(leadCan.drop({ id: "ra-1" }, fromPmt)).toBe(false); // RA no longer gets Drop here either
+    expect(leadCan.drop({ id: "someone", role: "md" }, fromPmt)).toBe(false); // MD/PMT don't gain it just from being MD/PMT
+    const fromMd = { ...fromPmt, declined_from_status: "md_review" };
+    expect(leadCan.drop({ id: "pr-1" }, fromMd)).toBe(true);
+    expect(leadCan.drop({ id: "someone", committee: "PMT" }, fromMd)).toBe(false);
   });
 
   it("rejectReassign applies to the assigned PR at pa_review, whether or not they're also the creator", () => {
@@ -166,13 +190,15 @@ describe("leadCan", () => {
     expect(leadCan.recommendingAuthorityReview(user, { ...lead, status: "pmt_review" })).toBe(false);
   });
 
-  it("withdrawSubmission applies at any in-flight stage short of MD's final decision, for creator or PR", () => {
-    const lead = { status: "pmt_review", created_by: "creator-1", person_responsible_id: "user-1" };
+  it("withdrawSubmission (returns to pa_review, not a drop) only applies at recommending_authority_review, for creator or PR", () => {
+    const lead = { status: "recommending_authority_review", created_by: "creator-1", person_responsible_id: "user-1" };
     expect(leadCan.withdrawSubmission(user, lead)).toBe(true);
     expect(leadCan.withdrawSubmission({ id: "creator-1" }, lead)).toBe(true);
     expect(leadCan.withdrawSubmission({ id: "bystander" }, lead)).toBe(false);
-    expect(leadCan.withdrawSubmission(user, { ...lead, status: "recommending_authority_review" })).toBe(true);
-    expect(leadCan.withdrawSubmission(user, { ...lead, status: "md_review" })).toBe(true);
+    // Once a lead has passed Recommending Authority review, it can no
+    // longer be withdrawn — only dropped (see leadCan.drop).
+    expect(leadCan.withdrawSubmission(user, { ...lead, status: "pmt_review" })).toBe(false);
+    expect(leadCan.withdrawSubmission(user, { ...lead, status: "md_review" })).toBe(false);
     expect(leadCan.withdrawSubmission(user, { ...lead, status: "pa_review" })).toBe(false);
     expect(leadCan.withdrawSubmission(user, { ...lead, status: "md_approved" })).toBe(false);
   });

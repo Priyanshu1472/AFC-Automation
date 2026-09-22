@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
-import { ROLE_LABELS } from "../../lib/roles";
+import { ROLE_LABELS, OFFICE_LABELS } from "../../lib/roles";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
@@ -129,7 +129,7 @@ function AuditLogDetailModal({ log, onClose }) {
           </div>
           <div className="al-detail-row">
             <span className="al-detail-label">Office</span>
-            <span className="al-detail-value" style={{ textTransform: "capitalize" }}>{log.actor?.office || "—"}</span>
+            <span className="al-detail-value">{log.actor?.office ? OFFICE_LABELS[log.actor.office] || log.actor.office : "—"}</span>
           </div>
           <div className="al-detail-row">
             <span className="al-detail-label">Action</span>

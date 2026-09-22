@@ -86,6 +86,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!leadId) return jsonRes(req, 400, { error: "lead_id is required." });
 
   const input = {
+    title: get("title"),
     delivery_type: get("delivery_type") || null,
     person_responsible_id: get("person_responsible_id"),
     reviewer_id: get("reviewer_id"),
@@ -95,10 +96,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   const assignedBaId = get("assigned_ba_id") || null;
 
   try {
-    // title/portal_name/bid_number are locked once a lead exists — the UI
-    // disables them, and this is the server-side backstop: whatever the
-    // client sent for those three is ignored, the lead's existing values
-    // are always what gets written back.
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
       .select("id, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, forwarded_to_id, lead_number, documents, title, portal_name, bid_number, submission_deadline, assigned_ba_id")
@@ -122,7 +119,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     const inNormalEditWindow = lead.status === "pa_action_required" || lead.status === "pa_review";
     const allowReassignment = inNormalEditWindow;
 
-    const fieldErr = validateRequiredFields({ ...input, title: lead.title }, { requireAssignment: allowReassignment });
+    const fieldErr = validateRequiredFields(input, { requireAssignment: allowReassignment });
     if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
 
     if (isOverdue) {
@@ -205,8 +202,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     const { error: updateErr } = await adminClient
       .from("leads")
       .update({
-        // title/portal_name/bid_number deliberately NOT taken from the
-        // client — see the comment above the initial select.
+        title: input.title.trim(),
+        portal_name: clampText(get("portal_name"), 200),
+        bid_number: clampText(get("bid_number"), 200),
         client_name: clampText(get("client_name"), 300),
         state: clampText(get("state"), 100),
         submission_deadline: get("submission_deadline") || null,

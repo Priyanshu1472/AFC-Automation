@@ -80,10 +80,11 @@ export const ROLE_ABBR = {
   business_associate: "BP",
 };
 
-// ─── Admin can create any staff role except admin (avoid Admins silently
-// minting more Admins) and md (MD accounts aren't created through this
-// flow). ─────────────────────────────────────────────────────
+// ─── Admin can create any staff role, including more admin or md
+// accounts — per explicit product decision. ────────────────────
 export const ADMIN_CREATABLE_ROLES = [
+  "admin",
+  "md",
   "executive_director",
   "cfo",
   "cs",
@@ -100,10 +101,17 @@ export const ADMIN_CREATABLE_ROLES = [
 
 // ─── Users page — nav visibility and every /users*/create-user route's
 // allowedRoles must stay in sync, so all of them read from this single
-// list. User management (view, create, edit, activate/deactivate) is
-// Admin-only — no other role, including MD and DGM, can see or reach it.
+// list. User management (create, edit, activate/deactivate) is
+// Admin-only — no other role, including MD and DGM, can create or manage
+// accounts. Guards /create-user.
 // ──────────────────────────────────────────────
 export const USERS_PAGE_ROLES = ["admin"];
+
+// ─── MD gets read-only access to the Users list and a user's detail page
+// (view-only — see can.manageAllUsers/editUserRole below, which stay
+// Admin-only) — everyone else besides Admin still can't see or reach it.
+// Guards /users and /users/:id/edit.
+export const USERS_VIEW_ROLES = ["admin", "md"];
 
 // ─── Audit log — Admin only. ──────────────────────────────────────────
 export const AUDIT_LOG_ROLES = ["admin"];
@@ -133,6 +141,9 @@ export const can = {
   createUsers: (role) => role === "admin",
   editUsers: (role) => role === "admin",
   editUserRole: (role) => role === "admin",
+  // MD can open a user's detail page, but strictly to view it — every edit
+  // affordance on that page stays gated behind editUsers/editUserRole above.
+  viewUserDetail: (role) => USERS_VIEW_ROLES.includes(role),
 
   viewAllTeams: (role) => ["md", "cfo", "cs", "admin"].includes(role),
   // Reports page's Team/Office filters — narrower than viewAllTeams: only MD
@@ -171,7 +182,14 @@ export function isAdminLevel(role) {
 }
 
 // ─── Org structure ─────────────────────────────────────────────
+// Stored values stay the plain city names (existing afc_users.office data,
+// filters, etc. all key off these) — only the display label changed.
 export const OFFICES = ["delhi", "mumbai", "lucknow"];
+export const OFFICE_LABELS = {
+  delhi: "CO - New Delhi",
+  mumbai: "HO - Mumbai",
+  lucknow: "RO - Lucknow",
+};
 export const TEAMS = ["BPDD", "BIID"];
 
 // ─── Whitelist of valid roles — validate any role value from the DB before trusting it ──
