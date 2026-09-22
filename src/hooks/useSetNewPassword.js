@@ -14,13 +14,17 @@ const STRONG_PASSWORD = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
 // to stay on the current page and show `success` instead (My Profile).
 // requireCurrentPassword: My Profile only — the user already has a live
 // session, so nothing else proves the person at the keyboard is the account
-// owner. Verified by re-authenticating with signInWithPassword before the
-// update. Not used by ResetPasswordPage (recovery link) or ChangePasswordPage
-// (forced first login) — in both, the "current" password isn't something
-// the user should be assumed to still know/want to re-enter.
+// owner. Verified via the verify-own-password edge function before the
+// update (not a direct client-side supabase.auth.signInWithPassword call —
+// that goes through the anon key and is captcha-gated once Turnstile is
+// enabled on the project; the edge function checks it server-side with the
+// service role key instead, which is exempt). Not used by ResetPasswordPage
+// (recovery link) or ChangePasswordPage (forced first login) — in both, the
+// "current" password isn't something the user should be assumed to still
+// know/want to re-enter.
 export function useSetNewPassword({ requireMarkChanged = true, redirectTo = "/home", requireCurrentPassword = false } = {}) {
   const navigate = useNavigate();
-  const { profile, refreshProfile } = useAuth();
+  const { refreshProfile } = useAuth();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
@@ -53,11 +57,10 @@ export function useSetNewPassword({ requireMarkChanged = true, redirectTo = "/ho
       setLoading(true);
       try {
         if (requireCurrentPassword) {
-          const { error: verifyError } = await supabase.auth.signInWithPassword({
-            email: profile.email,
-            password: currentPassword,
+          const { data: verifyData, error: verifyError } = await supabase.functions.invoke("verify-own-password", {
+            body: { password: currentPassword },
           });
-          if (verifyError) {
+          if (verifyError || !verifyData?.success) {
             setError("Current password is incorrect.");
             return;
           }
@@ -92,7 +95,7 @@ export function useSetNewPassword({ requireMarkChanged = true, redirectTo = "/ho
         setLoading(false);
       }
     },
-    [currentPassword, password, confirmPassword, navigate, refreshProfile, requireMarkChanged, redirectTo, requireCurrentPassword, profile?.email]
+    [currentPassword, password, confirmPassword, navigate, refreshProfile, requireMarkChanged, redirectTo, requireCurrentPassword]
   );
 
   return {

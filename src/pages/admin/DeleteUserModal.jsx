@@ -2,12 +2,14 @@
 // — see delete-staff-user for exactly what that touches and why it fails
 // cleanly for any account with real history instead of cascading into
 // leads/proposals). Two safety gates before the irreversible call:
-// re-verifying the Admin's own password (same pattern as ResetPinModal),
-// and typing the target's exact email to confirm — a plain "Are you sure"
-// button is too easy to click by accident for something this permanent.
+// re-verifying the Admin's own password (via the verify-own-password edge
+// function, same pattern as ResetPinModal — not a direct client-side
+// supabase.auth.signInWithPassword call, which is captcha-gated through
+// the anon key once Turnstile is enabled), and typing the target's exact
+// email to confirm — a plain "Are you sure" button is too easy to click by
+// accident for something this permanent.
 import { useState } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { useAuth } from "../../hooks/useAuth";
 import Modal from "../../components/ui/Modal";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
@@ -15,7 +17,6 @@ import Alert from "../../components/ui/Alert";
 import { LockIcon } from "../../components/icons";
 
 export default function DeleteUserModal({ targetUserId, targetName, targetEmail, onClose, onSuccess }) {
-  const { profile } = useAuth();
   const [adminPassword, setAdminPassword] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
   const [error, setError] = useState("");
@@ -30,8 +31,8 @@ export default function DeleteUserModal({ targetUserId, targetName, targetEmail,
 
     setLoading(true);
     try {
-      const { error: verifyError } = await supabase.auth.signInWithPassword({ email: profile.email, password: adminPassword });
-      if (verifyError) {
+      const { data: verifyData, error: verifyError } = await supabase.functions.invoke("verify-own-password", { body: { password: adminPassword } });
+      if (verifyError || !verifyData?.success) {
         setError("Your password is incorrect.");
         return;
       }
