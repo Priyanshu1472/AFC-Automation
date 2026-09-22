@@ -16,6 +16,7 @@ import PageLoader from "../../components/ui/PageLoader";
 import FieldTooltip from "../../components/FieldTooltip";
 import ResetPinModal from "./ResetPinModal";
 import SignatureUploadModal from "./SignatureUploadModal";
+import DeleteUserModal from "./DeleteUserModal";
 import "../../styles/CreateUserPage.css";
 
 const FIELD_HELP = {
@@ -58,6 +59,7 @@ export default function EditUserPage() {
   const [success, setSuccess] = useState(false);
   const [showResetPin, setShowResetPin] = useState(false);
   const [showSignatureUpload, setShowSignatureUpload] = useState(false);
+  const [showDeleteUser, setShowDeleteUser] = useState(false);
   const [signatureUrl, setSignatureUrl] = useState(null);
 
   const fetchUser = useCallback(async () => {
@@ -272,6 +274,22 @@ export default function EditUserPage() {
           </form>
         </Card>
 
+        {profile?.role === "admin" && target.id !== profile?.id && (
+          <Card className="danger-zone-card" style={{ marginTop: "var(--space-6)", borderColor: "var(--danger)" }}>
+            <Card.Header title="Danger Zone" />
+            <Card.Body>
+              <p className="text-sm text-secondary" style={{ marginBottom: "var(--space-3)" }}>
+                Permanently delete {target.full_name}'s account. This cannot be undone, and only succeeds if they have
+                no leads, proposals, or other activity on record — deactivate them instead if you just need to revoke
+                access.
+              </p>
+              <Button type="button" variant="danger" onClick={() => setShowDeleteUser(true)}>
+                Delete User
+              </Button>
+            </Card.Body>
+          </Card>
+        )}
+
         {showResetPin && (
           <ResetPinModal
             targetUserId={target.id}
@@ -296,6 +314,20 @@ export default function EditUserPage() {
               setSuccess(true);
               setBanner(`Signature uploaded for ${target.full_name}.`);
               fetchUser();
+            }}
+          />
+        )}
+
+        {showDeleteUser && (
+          <DeleteUserModal
+            targetUserId={target.id}
+            targetName={target.full_name}
+            targetEmail={target.email}
+            onClose={() => setShowDeleteUser(false)}
+            onSuccess={() => {
+              setShowDeleteUser(false);
+              showToast(`${target.full_name} was permanently deleted.`, "success");
+              navigate("/users");
             }}
           />
         )}
