@@ -189,6 +189,15 @@
   border-top: 1px solid var(--border-subtle);
 }
 
+/* Wraps Support + Notifications together in the desktop rail so they sit
+   with a consistent gap instead of touching (a bare <span> is inline by
+   default). */
+.app-header-notif-desktop-only {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 /* Mobile-only top-bar copy of Notifications — see .app-header-mobile-
    utilities below for why it lives outside the drawer. Hidden on desktop,
    where the sidebar's own copy (further up) takes over instead. Knowledge
