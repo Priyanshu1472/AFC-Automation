@@ -101,6 +101,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const emailSent = await sendResendEmail({
       to: supportEmail,
+      cc: caller.email,
       subject: `Support request from ${senderName} — AFC Portal`,
       html,
       attachments: attachments.length ? attachments.map((a) => ({ filename: a.filename, content: a.content })) : undefined,
