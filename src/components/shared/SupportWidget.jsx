@@ -6,7 +6,7 @@
 import { useRef, useState, useEffect } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useToast } from "../../hooks/useToast";
-import { LifeBuoyIcon, CloseIcon, PaperclipIcon } from "../icons";
+import { HelpCircleIcon, CloseIcon, PaperclipIcon } from "../icons";
 import "../../styles/SupportWidget.css";
 
 const MAX_ATTACHMENTS = 4;
@@ -129,7 +129,7 @@ export default function SupportWidget() {
         aria-label="Support"
         aria-expanded={open}
       >
-        <LifeBuoyIcon />
+        <HelpCircleIcon />
       </button>
 
       {open && (
