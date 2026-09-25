@@ -125,6 +125,7 @@ export default function SupportWidget() {
         type="button"
         className="support-widget-btn"
         onClick={() => setOpen((p) => !p)}
+        title="Support"
         aria-label="Support"
         aria-expanded={open}
       >
