@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
+import SupportWidget from "./SupportWidget";
 import NavDropdown from "./NavDropdown";
 import UserMenu from "./UserMenu";
 import { useAuth } from "../../hooks/useAuth";
@@ -73,6 +74,7 @@ export default function AppHeader() {
           Hidden above the mobile breakpoint, where the equivalent icon
           already lives in the sidebar. */}
       <div className="app-header-mobile-utilities">
+        <SupportWidget />
         <NotificationBell />
       </div>
 
@@ -158,6 +160,7 @@ export default function AppHeader() {
         <div className="app-header-nav-utilities">
           <ThemeToggle />
           <span className="app-header-notif-desktop-only">
+            <SupportWidget />
             <NotificationBell />
           </span>
           <UserMenu />
