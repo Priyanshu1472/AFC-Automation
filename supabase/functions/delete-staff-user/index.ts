@@ -3,13 +3,17 @@
 // (auth.users) AND their afc_users profile, which cascades from it
 // (afc_users_id_fkey is ON DELETE CASCADE, same for afc_user_teams). This
 // is a genuine hard delete, not the reversible is_active toggle
-// (set-user-status) — Admin-only, irreversible, and only actually succeeds
-// for an account with no history: every other table that references
-// afc_users (leads, proposals, chat messages, activity/audit logs, etc.)
-// does so with ON DELETE NO ACTION, so deleting an account that's ever
-// created a lead, sent a chat message, or otherwise left a trace fails
-// with a foreign-key violation — surfaced here as a clear "can't delete,
-// deactivate instead" error rather than a raw Postgres error.
+// (set-user-status) — Admin-only, irreversible.
+//
+// Every record the account ever touched (leads, proposals, fee notes, chat
+// messages, audit log entries, etc.) is preserved — those FKs are
+// ON DELETE SET NULL, not NO ACTION (see the
+// preserve_records_on_user_delete migration), so deleting the person just
+// nulls out their reference on old rows instead of failing. A handful of
+// pure membership/OTP rows (a chat participant slot, a committee seat) have
+// no meaning without the user and cascade-delete instead. The
+// foreign-key-violation branch below is now just a defensive fallback for
+// any table that isn't covered by that migration, not the common case.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
