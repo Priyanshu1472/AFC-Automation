@@ -2,16 +2,15 @@
 // JWT must be ON. Fired by the navbar's Support widget (see
 // src/components/shared/SupportWidget.jsx) — any signed-in user describes an
 // issue and it's emailed straight to SUPPORT_EMAIL (falls back to
-// priyanshu.arora.afc@gmail.com until a dedicated support inbox exists — set
-// the secret once one does, no code change needed). No DB row is kept; this
-// is a one-way notice, same as send-ba-document-request.
+// support@pmis.afcindia.org.in if that secret isn't set). No DB row is kept;
+// this is a one-way notice, same as send-ba-document-request.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 
-const FALLBACK_SUPPORT_EMAIL = "priyanshu.arora.afc@gmail.com";
+const FALLBACK_SUPPORT_EMAIL = "support@pmis.afcindia.org.in";
 
 const ROLE_LABELS: Record<string, string> = {
   md: "Managing Director",
