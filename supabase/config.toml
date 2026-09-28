@@ -629,3 +629,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/experience-import/deno.json"
 entrypoint = "./functions/experience-import/index.ts"
+
+[functions.check-reset-email]
+enabled = true
+verify_jwt = false
+import_map = "./functions/check-reset-email/deno.json"
+entrypoint = "./functions/check-reset-email/index.ts"
