@@ -10,6 +10,11 @@
   padding-bottom: var(--space-12);
 }
 
+/* .page-header's own margin-bottom (App.css) would stack on top of the
+   gap above, doubling the space before the mode tabs — kr-page's gap
+   already spaces every section consistently, so cancel it here. */
+.kr-page .page-header { margin-bottom: 0; }
+
 .page-title-row {
   display: flex;
   align-items: center;
@@ -507,21 +512,24 @@
   .kr-table-wrap  { display: none; }
   .kr-mobile-list { display: block; }
 
-  /* Header actions — full width row */
+  /* Header actions — the view toggle stays a small icon-only control on
+     its own line; the labeled buttons below it wrap into a tidy 2-per-row
+     grid instead of every button fighting flex-shrink: 1 for space. */
   .kr-header-actions {
     width: 100%;
+    flex-wrap: wrap;
     gap: var(--space-2);
   }
 
-  .kr-btn-shortlists {
-    flex: 1;
+  .kr-view-toggle {
+    flex: 1 1 100%;
     justify-content: center;
-    padding: 8px 10px;
-    font-size: var(--text-xs);
   }
 
+  .kr-btn-shortlists,
   .kr-btn-add {
-    flex: 1;
+    flex: 1 1 calc(50% - var(--space-2) / 2);
+    min-width: 0;
     justify-content: center;
     padding: 8px 10px;
     font-size: var(--text-xs);

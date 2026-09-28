@@ -80,6 +80,7 @@ export default function NotificationBell() {
         type="button"
         className="notif-bell-btn"
         onClick={() => setOpen((p) => !p)}
+        title="Notifications"
         aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
         aria-expanded={open}
       >

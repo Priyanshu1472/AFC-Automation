@@ -18,6 +18,7 @@ const ACTION_META = {
   user_created_email_failed: { label: "User Created (email failed)", variant: "warning" },
   user_activated:            { label: "User Activated",     variant: "success" },
   user_deactivated:          { label: "User Deactivated",   variant: "danger" },
+  password_changed:          { label: "Password Changed",   variant: "info" },
 };
 
 const ACTION_OPTIONS = [

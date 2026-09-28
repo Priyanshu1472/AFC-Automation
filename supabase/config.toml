@@ -621,6 +621,12 @@ verify_jwt = true
 import_map = "./functions/send-support-request/deno.json"
 entrypoint = "./functions/send-support-request/index.ts"
 
+[functions.log-password-changed]
+enabled = true
+verify_jwt = true
+import_map = "./functions/log-password-changed/deno.json"
+entrypoint = "./functions/log-password-changed/index.ts"
+
 [functions.experience-import]
 enabled = true
 # Not a Supabase user JWT — Experience Intelligence signs its own

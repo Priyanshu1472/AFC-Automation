@@ -72,6 +72,18 @@ export function useSetNewPassword({ requireMarkChanged = true, redirectTo = "/ho
           return;
         }
 
+        // Best-effort — an admin-oversight audit trail, not something that
+        // should ever block the user's own password change if it fails.
+        // Awaited (but never surfaced) so it runs, and reads
+        // must_change_password's still-true value, before mark_password_changed
+        // below clears it — otherwise a first-time change could race the flag
+        // and log as an ordinary change instead.
+        try {
+          await supabase.functions.invoke("log-password-changed", { body: {} });
+        } catch {
+          // Swallow — logging failures must never block the password change.
+        }
+
         if (requireMarkChanged) {
           const { error: rpcError } = await supabase.rpc("mark_password_changed");
           if (rpcError) {

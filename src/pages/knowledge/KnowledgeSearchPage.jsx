@@ -391,7 +391,7 @@ export default function KnowledgeSearchPage() {
               <div>
                 <h1>Knowledge Repository</h1>
               </div>
-              <div className="kr-header-actions" style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+              <div className="kr-header-actions">
                 <div className="kr-view-toggle">
                   <button className={`kr-view-btn${viewMode === "folder" ? " kr-view-btn--active" : ""}`} onClick={() => setViewMode("folder")} title="Folder View"><IconGrid /></button>
                   <button className={`kr-view-btn${viewMode === "table" ? " kr-view-btn--active" : ""}`} onClick={() => setViewMode("table")} title="Table View"><IconTable /></button>

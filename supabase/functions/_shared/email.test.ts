@@ -64,3 +64,22 @@ Deno.test("sendResendEmail - returns false when Resend responds with a non-2xx s
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test("sendResendEmail - includes cc in the request body when passed, omits it when not", async () => {
+  Deno.env.set("RESEND_API_KEY", "test-key");
+  const originalFetch = globalThis.fetch;
+  let sentBody: Record<string, unknown> = {};
+  globalThis.fetch = ((_url: string, init: RequestInit) => {
+    sentBody = JSON.parse(init.body as string);
+    return Promise.resolve(new Response(JSON.stringify({ id: "email_1" }), { status: 200 }));
+  }) as typeof fetch;
+  try {
+    await sendResendEmail({ to: "a@b.com", cc: "sender@afc.com", subject: "hi", html: "<p>hi</p>" });
+    assertEquals(sentBody.cc, ["sender@afc.com"]);
+
+    await sendResendEmail({ to: "a@b.com", subject: "hi", html: "<p>hi</p>" });
+    assertEquals(Object.prototype.hasOwnProperty.call(sentBody, "cc"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
