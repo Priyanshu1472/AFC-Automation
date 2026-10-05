@@ -87,6 +87,8 @@ const LEAD_ACTION_META = {
   withdraw_submission:       { label: "Submission Withdrawn",         variant: "warning" },
   team_transfer:             { label: "Transferred to Another Team",  variant: "warning" },
   workflow_simplified:       { label: "Auto-Moved (Workflow Simplified)", variant: "info" },
+  cross_team_query_raised:   { label: "Cross-Team Query Raised",     variant: "warning" },
+  reopened_to_pmt:           { label: "Reopened to PMT (Query on Approved Lead)", variant: "warning" },
 };
 const LEAD_ACTION_OPTIONS = [
   { value: "all", label: "All Actions" },
