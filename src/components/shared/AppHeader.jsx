@@ -109,7 +109,7 @@ export default function AppHeader() {
           )}
           {canSeeLeads && (
             <NavLink to="/leads" className={navLinkClass} onClick={closeMenu}>
-              Leads
+              Leads Approval
             </NavLink>
           )}
           {canSeeLeads && (
