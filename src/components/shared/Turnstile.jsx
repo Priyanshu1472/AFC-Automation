@@ -28,12 +28,26 @@ function loadTurnstileScript() {
       script.async = true;
       script.defer = true;
       script.onload = () => resolve();
-      script.onerror = () => reject(new Error("Failed to load the verification widget."));
+      script.onerror = () => {
+        // Clear the cache on failure — otherwise this stays a permanently
+        // rejected promise for the rest of the tab's life, and every later
+        // mount (e.g. landing back on /login after signing out, which is a
+        // client-side route change, not a page reload) reuses it and fails
+        // instantly without ever re-attempting the actual network request.
+        document.head.removeChild(script);
+        scriptPromise = null;
+        reject(new Error("Failed to load the verification widget."));
+      };
       document.head.appendChild(script);
     });
   }
   return scriptPromise;
 }
+
+// How long to wait before offering a manual retry — Cloudflare's script is
+// usually near-instant, but a slow/filtered network can leave the widget
+// stuck with no feedback at all, which looks indistinguishable from broken.
+const SLOW_LOAD_MS = 8000;
 
 export default function Turnstile({ onVerify, onExpire }) {
   const containerRef = useRef(null);
@@ -41,12 +55,20 @@ export default function Turnstile({ onVerify, onExpire }) {
   const onVerifyRef = useRef(onVerify);
   const onExpireRef = useRef(onExpire);
   const [error, setError] = useState("");
+  const [slow, setSlow] = useState(false);
+  // Bumped by the "Try again" button to re-run the load effect below —
+  // separate from the parent's captchaResetKey remount, which is for
+  // starting a fresh challenge after a submit, not for retrying a load
+  // that never got off the ground.
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => { onVerifyRef.current = onVerify; }, [onVerify]);
   useEffect(() => { onExpireRef.current = onExpire; }, [onExpire]);
 
   useEffect(() => {
     let cancelled = false;
+    setSlow(false);
+    const slowTimer = setTimeout(() => { if (!cancelled) setSlow(true); }, SLOW_LOAD_MS);
     loadTurnstileScript()
       .then(() => {
         if (cancelled || !containerRef.current || widgetId.current !== null) return;
@@ -54,24 +76,49 @@ export default function Turnstile({ onVerify, onExpire }) {
           sitekey: SITE_KEY,
           callback: (token) => onVerifyRef.current?.(token),
           "expired-callback": () => onExpireRef.current?.(),
-          "error-callback": () => setError("Verification failed to load. Please refresh and try again."),
+          "error-callback": () => setError("Verification failed to load."),
         });
       })
-      .catch(() => setError("Couldn't load the verification widget. Check your connection and reload the page."));
+      .catch(() => setError("Couldn't load the verification widget."))
+      .finally(() => clearTimeout(slowTimer));
     return () => {
       cancelled = true;
+      clearTimeout(slowTimer);
       if (widgetId.current !== null && window.turnstile) {
         window.turnstile.remove(widgetId.current);
+        widgetId.current = null;
       }
     };
-    // Intentionally empty deps — this must render exactly once per mount;
-    // the parent forces a fresh mount (and thus a fresh widget) via `key`
-    // whenever a new challenge is needed, rather than this effect re-running.
-  }, []);
+    // retryNonce is the one intentional exception to "render once per
+    // mount" — it exists purely so the "Try again" button below can force
+    // a fresh attempt without waiting on the parent's captchaResetKey
+    // remount cycle (which only happens after a submit, not on a stuck load).
+  }, [retryNonce]);
+
+  function retry() {
+    setError("");
+    setSlow(false);
+    setRetryNonce((n) => n + 1);
+  }
 
   if (!SITE_KEY) {
     return <p className="field-error">Verification is not configured (missing site key).</p>;
   }
-  if (error) return <p className="field-error">{error}</p>;
-  return <div ref={containerRef} />;
+  return (
+    <>
+      <div ref={containerRef} />
+      {!error && slow && (
+        <p className="field-hint">
+          Still loading verification — this can take a moment on a slow connection.{" "}
+          <button type="button" className="afc-link-btn" onClick={retry}>Try again</button>
+        </p>
+      )}
+      {error && (
+        <p className="field-error">
+          {error}{" "}
+          <button type="button" className="afc-link-btn" onClick={retry}>Try again</button>
+        </p>
+      )}
+    </>
+  );
 }
