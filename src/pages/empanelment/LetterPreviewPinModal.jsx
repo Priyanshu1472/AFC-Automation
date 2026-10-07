@@ -9,7 +9,7 @@ import "../../styles/ApplicationReviewPage.css";
 
 const ACTION_META = {
   md_accept: { fnName: "advance-empanelment-stage", previewType: "final", label: "accept this application", confirmLabel: "Confirm & Accept" },
-  provisional_letter: { fnName: "send-provisional-letter", previewType: "provisional", label: "send the provisional letter", confirmLabel: "Confirm & Send" },
+  provisional_letter: { fnName: "send-provisional-letter", previewType: "provisional", label: "approve and send the provisional letter", confirmLabel: "Approve & Send" },
 };
 
 // Shows the exact PDF the real action would attach/send (via
@@ -17,7 +17,7 @@ const ACTION_META = {
 // the left, PIN confirmation on the right — same ar-grid/ar-left/ar-right
 // layout as the Lead Approval Note's preview-and-submit page, so this
 // looks and behaves the same way across both modules. Used for MD Accept
-// and the DGM's Provisional Letter — the two Empanelment actions that
+// and the MD's approval of the Provisional Letter — the two Empanelment actions that
 // actually produce a letter. (MD Reject has no letter, so it stays on the
 // plain PinConfirmModal.)
 export default function LetterPreviewPinModal({ applicationId, action, comment, onClose, onSuccess }) {
@@ -69,7 +69,7 @@ export default function LetterPreviewPinModal({ applicationId, action, comment, 
     try {
       const body =
         action === "provisional_letter"
-          ? { application_id: applicationId, pin }
+          ? { application_id: applicationId, action: "approve", pin }
           : { application_id: applicationId, action, comment, pin };
       const { data, error: err } = await supabase.functions.invoke(meta.fnName, { body });
       if (err) {

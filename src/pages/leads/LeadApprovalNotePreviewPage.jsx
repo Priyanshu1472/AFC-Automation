@@ -40,7 +40,7 @@ export default function LeadApprovalNotePreviewPage() {
     setLoading(false);
     const isResubmittable = data?.status === "pa_action_required";
     if ((data?.status === "pa_review" || isResubmittable) && !data.assigned_ba_id && data.team) {
-      supabase.rpc("get_team_business_associates", { p_team: data.team }).then(({ data: list }) => setBaOptions(list || []));
+      supabase.rpc("get_empanelled_business_partners").then(({ data: list }) => setBaOptions(list || []));
     }
     return data;
   }, [id]);
@@ -170,12 +170,13 @@ export default function LeadApprovalNotePreviewPage() {
                             <Select
                               options={[
                                 ...(lead.source === "in_house" ? [{ value: TBD_BA_VALUE, label: "Yet to be Decided" }] : []),
-                                ...baOptions.map((u) => ({ value: u.id, label: u.org_name })),
+                                ...baOptions.map((u) => ({ value: u.id, label: u.org_name, hint: u.team ? `Team: ${u.team}` : undefined })),
                               ]}
                               value={selectedBaId}
                               onChange={setSelectedBaId}
-                              placeholder={baOptions.length ? "Select a Business Partner" : "No active BPs found on your team."}
+                              placeholder={baOptions.length ? "Select a Business Partner" : "No empanelled Business Partners found yet."}
                               disabled={submitting}
+                              searchable
                             />
                             <span className="field-hint">Leave unselected (or pick "Yet to be Decided") to submit without one — the note will print "Yet to be Decided" until you edit the lead again to set it.</span>
                           </div>

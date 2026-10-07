@@ -122,15 +122,15 @@ export async function validateForwardedTo(admin: AdminClient, userId: string, te
   return null;
 }
 
-// Each team empanels its own Business Partners (via the Empanelment
-// module) — a BP's afc_users.team is set from the empanelment application's
-// team when their portal login is provisioned, so this mirrors the other
-// assignment validators: active + same team as the lead.
-export async function validateBusinessAssociate(admin: AdminClient, baId: string, team: string): Promise<string | null> {
-  const { data, error } = await admin.from("afc_users").select("id, role, team, is_active").eq("id", baId).maybeSingle();
+// Any active, empanelled Business Partner can be linked to a lead — from
+// any team, not just the lead's own (a BP's afc_users.team is just the team
+// that empanelled them). Mirrors get_empanelled_business_partners(). `_team`
+// is kept so callers don't need to change.
+export async function validateBusinessAssociate(admin: AdminClient, baId: string, _team?: string): Promise<string | null> {
+  const { data, error } = await admin.from("afc_users").select("id, role, is_active").eq("id", baId).maybeSingle();
   if (error || !data) return "Selected Business Partner not found.";
-  if (data.role !== "business_associate" || !data.is_active || data.team !== team) {
-    return "Selected Business Partner is not valid for this team.";
+  if (data.role !== "business_associate" || !data.is_active) {
+    return "Selected Business Partner is not an active, empanelled Business Partner.";
   }
   return null;
 }

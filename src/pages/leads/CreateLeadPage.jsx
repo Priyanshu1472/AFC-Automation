@@ -14,7 +14,7 @@ export default function CreateLeadPage() {
           <div className="page-title-row">
             <div>
               <h1>Add Lead</h1>
-              <p>Enter lead details and save to the system.</p>
+              <p>Capture a new opportunity — fill the sections below and save. Your summary updates on the right as you go.</p>
             </div>
             <Button variant="secondary" onClick={() => navigate("/leads")}>
               ← Back

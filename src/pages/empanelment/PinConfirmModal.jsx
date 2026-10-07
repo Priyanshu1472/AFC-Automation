@@ -7,7 +7,7 @@ import PinInput from "../../components/ui/PinInput";
 const ACTION_META = {
   md_accept: { fnName: "advance-empanelment-stage", label: "accept this application" },
   md_reject: { fnName: "advance-empanelment-stage", label: "mark this application ineligible" },
-  provisional_letter: { fnName: "send-provisional-letter", label: "send the provisional letter" },
+  provisional_letter: { fnName: "send-provisional-letter", label: "approve and send the provisional letter" },
 };
 
 // Gates MD accept/reject and the DGM's provisional-letter send behind the
@@ -32,7 +32,7 @@ export default function PinConfirmModal({ applicationId, action, comment, onClos
     try {
       const body =
         action === "provisional_letter"
-          ? { application_id: applicationId, pin }
+          ? { application_id: applicationId, action: "approve", pin }
           : { application_id: applicationId, action, comment, pin };
       const { data, error: err } = await supabase.functions.invoke(meta.fnName, { body });
       if (err) {

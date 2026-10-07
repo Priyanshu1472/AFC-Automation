@@ -37,6 +37,9 @@ const ACTION_LABELS = {
   dgm_rejected: "MARKED INELIGIBLE",
   po_forwarded: "PO FORWARDED TO CS",
   po_resent_cfo_cs: "PO SENT BACK TO CS & CFO",
+  provisional_requested: "PROVISIONAL LETTER — MD APPROVAL REQUESTED",
+  provisional_declined: "MD DECLINED PROVISIONAL LETTER",
+  provisional_letter_sent: "PROVISIONAL LETTER SENT",
 };
 export function actionLabel(action) {
   return ACTION_LABELS[action] || action.replace(/_/g, " ").toUpperCase().replace(/^BA /, "BP ");

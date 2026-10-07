@@ -133,11 +133,13 @@ Deno.test("accept - requires a BP when the lead has none and none is provided", 
   assertEquals((await res.json()).error, "Select a Business Partner");
 });
 
-Deno.test("accept - rejects a BP from a different team", async () => {
+// A BP from another team is now allowed (leads can use any empanelled BP
+// org-wide) — but an inactive / non-BP account is still rejected.
+Deno.test("accept - rejects an inactive BP", async () => {
   const client = createFakeAdminClient({
     afc_users: [
       { data: callerRow(), error: null },
-      { data: { id: "ba-9", role: "business_associate", team: "OtherTeam", is_active: true }, error: null },
+      { data: { id: "ba-9", role: "business_associate", team: "OtherTeam", is_active: false }, error: null },
     ],
     leads: [{ data: leadRow(), error: null }],
   });

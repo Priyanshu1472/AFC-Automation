@@ -95,7 +95,7 @@ export default function LeadApprovalNoteForm() {
       });
     }
     if (data?.assigned_ba_id && data?.team) {
-      const { data: baList } = await supabase.rpc("get_team_business_associates", { p_team: data.team });
+      const { data: baList } = await supabase.rpc("get_empanelled_business_partners");
       setBaOrgName((baList || []).find((b) => b.id === data.assigned_ba_id)?.org_name || null);
     }
     setLoading(false);

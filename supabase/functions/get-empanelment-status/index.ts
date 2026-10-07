@@ -55,6 +55,9 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     .from("empanelment_activity_log")
     .select("id, actor_role, action, comment, created_at")
     .eq("application_id", application.id)
+    // Internal advisor ↔ MD back-and-forth over the provisional letter — the
+    // BP only needs to see that it was sent.
+    .not("action", "in", "(provisional_requested,provisional_declined)")
     .order("created_at", { ascending: true });
   if (logsErr) return jsonRes(req, 500, { error: "Database error. Please try again." });
 

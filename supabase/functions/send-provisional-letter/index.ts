@@ -1,25 +1,33 @@
 // supabase/functions/send-provisional-letter/index.ts
-// JWT must be ON. Only the application's assigned advising authority (the DGM
-// or AGM in empanelment_applications.dgm_id) can send this — it's a
-// non-final, provisional empanelment letter (PDF) emailed to the BP, distinct
-// from the MD's final acceptance email (see the "Empanelment Letter" attached
-// in advance-empanelment-stage's md_accept). Sendable only once the PO has
-// forwarded the application to the CS (isProvisionalLetterOpen). PDF layout
-// ported from the previous AFC empanelment app's send-provisional-mail
-// function, adapted to this schema (empanelment_applications/
-// ba_registrations instead of empanelment_invitations). Letterhead engine
-// shared with the Empanelment Letter via _shared/letterPdf.ts.
+// JWT must be ON. The provisional empanelment letter (a non-final PDF emailed
+// to the BP, distinct from the MD's final acceptance email — see the
+// "Empanelment Letter" attached in advance-empanelment-stage's md_accept)
+// needs the MD's approval before it goes out. Three actions:
+//   - "request": the application's assigned advising authority (DGM / AGM /
+//     GM in empanelment_applications.dgm_id) asks the MD to approve it.
+//   - "approve": the MD approves with their action PIN — the letter is
+//     generated, signed in the *advisor's* name, and emailed to the BP.
+//   - "decline": the MD declines with a reason; the advisor may re-request.
+// Requestable only once the PO has forwarded the application to the CS
+// (isProvisionalLetterOpen). PDF layout ported from the previous AFC
+// empanelment app's send-provisional-mail function; letterhead engine shared
+// with the Empanelment Letter via _shared/letterPdf.ts.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { sendResendEmail } from "../_shared/email.ts";
-import { notifyUser } from "../_shared/notify.ts";
+import { emailRole, notifyRole, notifyUser, notifyUsers } from "../_shared/notify.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { bytesToBase64 } from "../_shared/letterPdf.ts";
 import { buildProvisionalLetter, isProvisionalLetterOpen } from "../_shared/provisionalLetterPdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
+
+const ADVISOR_ROLES = ["dgm", "agm", "general_manager"];
+function advisorLabel(role: string | null | undefined): string {
+  return role === "agm" ? "AGM" : role === "general_manager" ? "General Manager" : "DGM";
+}
 
 function buildEmailBody(orgName: string, refNumber: string, validUntil: string): string {
   return `
@@ -71,8 +79,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
 
-  if (!["dgm", "agm", "general_manager"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM, AGM, or General Manager can send the provisional empanelment letter." });
-
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -80,23 +86,91 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     return jsonRes(req, 400, { error: "Invalid JSON body." });
   }
 
-  const { application_id, pin } = body as { application_id?: string; pin?: unknown };
+  const { application_id, pin, action, note, reason } = body as { application_id?: string; pin?: unknown; action?: string; note?: unknown; reason?: unknown };
   if (!application_id || typeof application_id !== "string") return jsonRes(req, 400, { error: "application_id is required." });
+  if (action !== "request" && action !== "approve" && action !== "decline") return jsonRes(req, 400, { error: "Unknown action. Please refresh the page and try again." });
+
+  if (action === "request" && !ADVISOR_ROLES.includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM, AGM, or General Manager can request the provisional empanelment letter." });
+  if (action !== "request" && caller.role !== "md") return jsonRes(req, 403, { error: "Only the Managing Director can approve or decline the provisional empanelment letter." });
 
   const { data: app, error: appErr } = await adminClient
     .from("empanelment_applications")
-    .select("id, status, hold_origin_status, ba_email, team, sent_by, dgm_id, application_code, provisional_letter_sent")
+    .select("id, status, hold_origin_status, ba_email, team, sent_by, dgm_id, application_code, provisional_letter_sent, provisional_request_status, provisional_requested_by")
     .eq("id", application_id)
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
 
-  if (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id) {
-    return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can send its provisional letter." });
+  if (action === "request" && (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id)) {
+    return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can request its provisional letter." });
   }
   if (app.status === "rejected") return jsonRes(req, 400, { error: "This application was found ineligible — a provisional letter can't be sent." });
-  if (!isProvisionalLetterOpen(app.status, app.hold_origin_status)) return jsonRes(req, 400, { error: "The provisional letter can be sent only after the Project Officer has forwarded this application to the CS." });
+  if (!isProvisionalLetterOpen(app.status, app.hold_origin_status)) return jsonRes(req, 400, { error: "The provisional letter can be requested only after the Project Officer has forwarded this application to the CS." });
   if (app.provisional_letter_sent) return jsonRes(req, 400, { error: "A provisional letter has already been sent for this application." });
 
+  const { data: reg } = await adminClient
+    .from("ba_registrations")
+    .select("org_name, contact_person, designation, reg_address")
+    .eq("application_id", application_id)
+    .maybeSingle();
+  if (!reg) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet." });
+  const orgName = reg.org_name || "the Organization";
+
+  // ── Advisor asks the MD ──────────────────────────────────────────────
+  if (action === "request") {
+    if (app.provisional_request_status === "pending") return jsonRes(req, 400, { error: "MD approval for the provisional letter has already been requested." });
+    const noteText = typeof note === "string" && note.trim() ? note.trim().slice(0, 1000) : null;
+    const { error: updErr } = await adminClient
+      .from("empanelment_applications")
+      .update({
+        provisional_request_status: "pending",
+        provisional_requested_by: caller.id,
+        provisional_requested_at: new Date().toISOString(),
+        provisional_request_note: noteText,
+        provisional_decline_reason: null,
+      })
+      .eq("id", application_id)
+      .eq("provisional_letter_sent", false);
+    if (updErr) return jsonRes(req, 500, { error: "Database error. Please try again." });
+
+    await logActivity(adminClient, application_id, caller.id, caller.role, "provisional_requested", noteText || `Requested MD approval to send the provisional letter to ${orgName}.`);
+    await notifyRole(adminClient, "md", {
+      title: "Provisional letter awaiting your approval",
+      sub_text: `The ${advisorLabel(caller.role)} has requested approval to send ${orgName}'s provisional empanelment letter.`,
+      type: "action_required",
+      link: `/empanelment/${application_id}`,
+    });
+    await emailRole(adminClient, "md", {
+      subject: `Approval needed: Provisional Empanelment Letter — ${orgName}`,
+      html: `<p>Dear Sir / Ma'am,</p><p>The ${advisorLabel(caller.role)} has requested your approval to send the provisional empanelment letter to <strong>${orgName}</strong> (Application ${app.application_code || ""}).</p>${noteText ? `<p><em>Note: ${noteText}</em></p>` : ""}<p>Please log in to review the letter and approve or decline it.</p>`,
+    });
+    return jsonRes(req, 200, { success: true, requested: true });
+  }
+
+  // From here on the caller is the MD, acting on a pending request.
+  if (app.provisional_request_status !== "pending") return jsonRes(req, 400, { error: "There is no pending provisional letter request for this application." });
+
+  // ── MD declines ──────────────────────────────────────────────────────
+  if (action === "decline") {
+    const reasonText = typeof reason === "string" ? reason.trim().slice(0, 1000) : "";
+    if (!reasonText) return jsonRes(req, 400, { error: "Please give a reason for declining." });
+    const { error: updErr } = await adminClient
+      .from("empanelment_applications")
+      .update({ provisional_request_status: "declined", provisional_decline_reason: reasonText })
+      .eq("id", application_id)
+      .eq("provisional_request_status", "pending");
+    if (updErr) return jsonRes(req, 500, { error: "Database error. Please try again." });
+
+    await logActivity(adminClient, application_id, caller.id, caller.role, "provisional_declined", reasonText);
+    await notifyUser(adminClient, app.provisional_requested_by || app.dgm_id, {
+      title: "Provisional letter declined",
+      sub_text: `The MD declined the provisional letter for ${orgName}: ${reasonText}`,
+      type: "info",
+      link: `/empanelment/${application_id}`,
+    });
+    return jsonRes(req, 200, { success: true, declined: true });
+  }
+
+  // ── MD approves → letter is generated and emailed ────────────────────
   const pinErr = await verifyActionPin(adminClient, caller.id, caller.pin_hash, pin);
   if (pinErr) return jsonRes(req, 400, { error: pinErr });
 
@@ -104,18 +178,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!RESEND_API_KEY) return jsonRes(req, 500, { error: "Email service not configured." });
 
   try {
-    const { data: reg } = await adminClient
-      .from("ba_registrations")
-      .select("org_name, contact_person, designation, reg_address")
-      .eq("application_id", application_id)
-      .maybeSingle();
-    if (!reg) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet." });
-
-    const orgName = reg.org_name || "the Organization";
-
+    // Signed by the assigned advising authority, not the approving MD — every
+    // empanelment letter carries the advisor's signature. Only a legacy
+    // application with no dgm_id falls back to the MD.
     let built: Awaited<ReturnType<typeof buildProvisionalLetter>>;
     try {
-      built = await buildProvisionalLetter(adminClient, app, reg, caller.id);
+      built = await buildProvisionalLetter(adminClient, app, reg, app.dgm_id || caller.id);
     } catch (pdfErr) {
       console.error("PDF generation error:", pdfErr);
       return jsonRes(req, 500, { error: "Failed to generate PDF. Please try again." });
@@ -125,7 +193,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
     const { error: updateErr } = await adminClient
       .from("empanelment_applications")
-      .update({ provisional_letter_sent: true, provisional_sent_at: new Date().toISOString() })
+      .update({ provisional_letter_sent: true, provisional_sent_at: new Date().toISOString(), provisional_request_status: null, provisional_approved_by: caller.id })
       .eq("id", application_id)
       .eq("provisional_letter_sent", false);
     if (updateErr) return jsonRes(req, 500, { error: "Database error. Please try again." });
@@ -139,14 +207,17 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     });
 
     if (!emailSent) {
-      await adminClient.from("empanelment_applications").update({ provisional_letter_sent: false, provisional_sent_at: null }).eq("id", application_id);
+      await adminClient
+        .from("empanelment_applications")
+        .update({ provisional_letter_sent: false, provisional_sent_at: null, provisional_request_status: "pending", provisional_approved_by: null })
+        .eq("id", application_id);
       return jsonRes(req, 500, { error: "Email delivery failed. Please try again." });
     }
 
-    await logActivity(adminClient, application_id, caller.id, caller.role, "provisional_letter_sent", `Provisional letter sent to ${app.ba_email} (Ref: ${refNumber})`);
-    await notifyUser(adminClient, app.sent_by, {
+    await logActivity(adminClient, application_id, caller.id, caller.role, "provisional_letter_sent", `MD approved; provisional letter sent to ${app.ba_email} (Ref: ${refNumber})`);
+    await notifyUsers(adminClient, [app.sent_by, app.dgm_id, app.provisional_requested_by], {
       title: "Provisional letter sent",
-      sub_text: `${orgName}'s provisional empanelment letter (Ref: ${refNumber}) was sent by the ${caller.role === "agm" ? "AGM" : caller.role === "general_manager" ? "General Manager" : "DGM"}.`,
+      sub_text: `The MD approved ${orgName}'s provisional empanelment letter (Ref: ${refNumber}); it has been emailed to the BP.`,
       type: "info",
       link: `/empanelment/${application_id}`,
     });

@@ -678,14 +678,13 @@ export default function LeadReportsPage() {
 
         const list = leadRows || [];
 
-        // BP org names — one RPC call per distinct team present, same
-        // batching idea as Empanelment's ba_registrations lookup.
-        const teams = [...new Set(list.filter((l) => l.assigned_ba_id).map((l) => l.team).filter(Boolean))];
+        // BP org names — one org-wide lookup, since a lead's BP may belong
+        // to a different team than the lead.
         const baNameById = {};
-        await Promise.all(teams.map(async (team) => {
-          const { data } = await supabase.rpc("get_team_business_associates", { p_team: team });
+        if (list.some((l) => l.assigned_ba_id)) {
+          const { data } = await supabase.rpc("get_empanelled_business_partners");
           (data || []).forEach((b) => { baNameById[b.id] = b.org_name; });
-        }));
+        }
 
         setLeads(list.map((l) => ({ ...l, ba_org_name: l.assigned_ba_id ? baNameById[l.assigned_ba_id] : null })));
 

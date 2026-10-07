@@ -48,6 +48,8 @@ const EMP_ACTION_META = {
   md_accepted_email_failed:    { label: "MD Accepted (email failed)", variant: "warning" },
   hold_raised:                 { label: "Compliance Hold Raised",  variant: "warning" },
   ba_corrected:                { label: "BP Submitted Correction", variant: "info" },
+  provisional_requested:       { label: "Provisional Letter Requested (to MD)", variant: "info" },
+  provisional_declined:        { label: "MD Declined Provisional Letter", variant: "warning" },
   provisional_letter_sent:     { label: "Provisional Letter Sent", variant: "success" },
 };
 const EMP_ACTION_OPTIONS = [

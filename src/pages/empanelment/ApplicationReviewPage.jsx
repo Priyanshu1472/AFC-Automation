@@ -184,6 +184,12 @@ export default function ApplicationReviewPage() {
   const [rejectRemark, setRejectRemark] = useState("");
   const [showRejectPin, setShowRejectPin] = useState(false);
   const [showProvisionalPin, setShowProvisionalPin] = useState(false);
+  // Provisional letter: the advisor requests it, the MD approves (PIN) or
+  // declines — see send-provisional-letter.
+  const [provisionalNote, setProvisionalNote] = useState("");
+  const [provisionalDeclineReason, setProvisionalDeclineReason] = useState("");
+  const [showProvisionalDecline, setShowProvisionalDecline] = useState(false);
+  const [provisionalLoading, setProvisionalLoading] = useState(false);
 
   const fetchApp = useCallback(async () => {
     const { data: application } = await supabase
@@ -297,8 +303,32 @@ export default function ApplicationReviewPage() {
   }
   function handleProvisionalPinSuccess(data) {
     setShowProvisionalPin(false);
-    showBanner(`Provisional letter sent (Ref: ${data.ref}).`);
+    showBanner(`Provisional letter approved and sent to the BP (Ref: ${data.ref}).`);
     fetchApp();
+  }
+  async function runProvisional(action, extra, successMsg) {
+    setProvisionalLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-provisional-letter", { body: { application_id: id, action, ...extra } });
+      if (error) { showBanner(await extractFunctionErrorMessage(error, "Action failed."), "danger"); return; }
+      if (!data?.success) { showBanner(data?.error || "Action failed.", "danger"); return; }
+      showBanner(successMsg);
+      setProvisionalNote("");
+      setProvisionalDeclineReason("");
+      setShowProvisionalDecline(false);
+      fetchApp();
+    } catch (err) {
+      showBanner(err.message || "Something went wrong.", "danger");
+    } finally {
+      setProvisionalLoading(false);
+    }
+  }
+  function handleProvisionalRequest() {
+    runProvisional("request", { note: provisionalNote.trim() }, "Sent to the MD for approval. The letter goes out once the MD approves.");
+  }
+  function handleProvisionalDecline() {
+    if (!provisionalDeclineReason.trim()) { showBanner("Please give a reason for declining.", "danger"); return; }
+    runProvisional("decline", { reason: provisionalDeclineReason.trim() }, "Provisional letter request declined.");
   }
 
   function canAct() {
@@ -343,6 +373,8 @@ export default function ApplicationReviewPage() {
   // application to the CS (mirrors isProvisionalLetterOpen on the server).
   const PROVISIONAL_OPEN = ["cfo_cs_review", "po_final_review", "dgm_review", "md_review", "accepted"];
   const provisionalOpen = app.status === "on_hold" ? PROVISIONAL_OPEN.includes(app.hold_origin_status) : PROVISIONAL_OPEN.includes(app.status);
+  const provisionalPending = app.provisional_request_status === "pending";
+  const provisionalDeclined = app.provisional_request_status === "declined";
 
   return (
     <div className="app-shell">
@@ -528,16 +560,60 @@ export default function ApplicationReviewPage() {
 
               {isAssignedAdvisor && baData && app.status !== "rejected" && (
                 <Card className="ar-action-card">
-                  <Card.Header title="Provisional Letter" action={app.provisional_letter_sent ? <Badge variant="success">Sent</Badge> : null} />
+                  <Card.Header
+                    title="Provisional Letter"
+                    action={app.provisional_letter_sent ? <Badge variant="success">Sent</Badge>
+                      : provisionalPending ? <Badge variant="warning" dot>Awaiting MD</Badge>
+                      : provisionalDeclined ? <Badge variant="danger">Declined by MD</Badge>
+                      : null}
+                  />
                   <Card.Body className="ar-action-body">
                     <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
-                      {app.provisional_letter_sent || provisionalOpen
-                        ? "A non-final, provisional empanelment letter issued in your name and emailed to the BP — separate from the final Empanelment Letter sent on the MD's approval."
+                      {app.provisional_letter_sent
+                        ? `Approved by the MD and emailed to the BP${app.provisional_sent_at ? ` on ${fmtDate(app.provisional_sent_at)}` : ""}, issued in your name.`
+                        : provisionalPending
+                        ? `Sent to the MD for approval on ${fmtDate(app.provisional_requested_at)}. The letter will be emailed to the BP, in your name, once the MD approves.`
+                        : provisionalOpen
+                        ? "A non-final, provisional empanelment letter issued in your name. It needs the MD's approval before it is emailed to the BP."
                         : `Available once the ${poLabel} has completed their review and forwarded this application to the CS.`}
                     </p>
-                    <Button variant="secondary" block disabled={app.provisional_letter_sent || !provisionalOpen} icon={<DocumentIcon />} onClick={() => setShowProvisionalPin(true)}>
-                      {app.provisional_letter_sent ? "Provisional Letter Already Sent" : "Send Provisional Letter"}
-                    </Button>
+                    {provisionalDeclined && app.provisional_decline_reason && (
+                      <CommentCard label="MD's Reason for Declining" text={app.provisional_decline_reason} colorClass="orange" />
+                    )}
+                    {!app.provisional_letter_sent && !provisionalPending && provisionalOpen && (
+                      <div className="ar-field">
+                        <label className="ar-label">Note to MD (optional)</label>
+                        <textarea className="input" value={provisionalNote} onChange={(e) => setProvisionalNote(e.target.value)} placeholder="Why should the provisional letter be issued now?" rows={3} />
+                      </div>
+                    )}
+                    {!app.provisional_letter_sent && (
+                      <Button variant="secondary" block loading={provisionalLoading} disabled={provisionalPending || !provisionalOpen || provisionalLoading} icon={<DocumentIcon />} onClick={handleProvisionalRequest}>
+                        {provisionalPending ? "Awaiting MD Approval" : provisionalDeclined ? "Request MD Approval Again" : "Request MD Approval"}
+                      </Button>
+                    )}
+                  </Card.Body>
+                </Card>
+              )}
+
+              {role === "md" && provisionalPending && !app.provisional_letter_sent && app.status !== "rejected" && (
+                <Card className="ar-action-card">
+                  <Card.Header title="Provisional Letter — Approval Requested" action={<Badge variant="warning" dot>Your Approval</Badge>} />
+                  <Card.Body className="ar-action-body">
+                    <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
+                      The {advisorLabel}{app.dgm?.full_name ? ` (${app.dgm.full_name})` : ""} has asked to send this BP a provisional empanelment letter, issued in their name. Nothing goes to the BP until you approve.
+                    </p>
+                    {app.provisional_request_note && <CommentCard label={`${advisorLabel}'s Note`} text={app.provisional_request_note} colorClass="purple" />}
+                    {showProvisionalDecline ? (<>
+                      <div className="ar-field">
+                        <label className="ar-label">Reason for Declining <span className="ar-required">*</span></label>
+                        <textarea className="input" value={provisionalDeclineReason} onChange={(e) => setProvisionalDeclineReason(e.target.value)} placeholder={`Shared with the ${advisorLabel}...`} rows={3} autoFocus />
+                      </div>
+                      <Button variant="danger" block loading={provisionalLoading} disabled={!provisionalDeclineReason.trim() || provisionalLoading} icon={<XIcon />} onClick={handleProvisionalDecline}>Decline Request</Button>
+                      <Button variant="secondary" block disabled={provisionalLoading} onClick={() => setShowProvisionalDecline(false)}>Cancel</Button>
+                    </>) : (<>
+                      <Button variant="primary" block disabled={provisionalLoading} icon={<CheckIcon />} onClick={() => setShowProvisionalPin(true)}>Review &amp; Approve</Button>
+                      <Button variant="secondary" block disabled={provisionalLoading} icon={<XIcon />} onClick={() => setShowProvisionalDecline(true)}>Decline</Button>
+                    </>)}
                   </Card.Body>
                 </Card>
               )}

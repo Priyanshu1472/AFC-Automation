@@ -49,7 +49,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: app, error: appErr } = await adminClient
     .from("empanelment_applications")
-    .select("id, status, hold_origin_status, team, project_officer_id, sent_by, dgm_id, application_code, provisional_letter_sent, provisional_sent_at, empanelment_ref, empanelment_expires_at, decided_at")
+    .select("id, status, hold_origin_status, team, project_officer_id, sent_by, dgm_id, application_code, provisional_letter_sent, provisional_sent_at, provisional_request_status, empanelment_ref, empanelment_expires_at, decided_at")
     .eq("id", application_id)
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
@@ -126,9 +126,15 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     if (issued) {
       if (!canViewApplication) return jsonRes(req, 403, { error: "You do not have access to this application." });
     } else {
-      // Pre-issue preview — mirrors send-provisional-letter's authorization, minus the PIN.
-      if (!["dgm", "agm", "general_manager"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM, AGM, or General Manager can preview the provisional letter." });
-      if (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id) return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can preview its provisional letter." });
+      // Pre-issue preview — mirrors send-provisional-letter's authorization,
+      // minus the PIN: the assigned advisor (before requesting) or the MD
+      // (while a request is waiting on their approval).
+      if (caller.role === "md") {
+        if (app.provisional_request_status !== "pending") return jsonRes(req, 400, { error: "There is no pending provisional letter request for this application." });
+      } else {
+        if (!["dgm", "agm", "general_manager"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM, AGM, or General Manager, or the MD, can preview the provisional letter." });
+        if (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id) return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can preview its provisional letter." });
+      }
       if (!isProvisionalLetterOpen(app.status, app.hold_origin_status)) return jsonRes(req, 400, { error: "The provisional letter opens only after the Project Officer has forwarded this application to the CS." });
     }
 

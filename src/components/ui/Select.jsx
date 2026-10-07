@@ -51,7 +51,9 @@ export default function Select({
 
   const trimmedQuery = query.trim();
   const filtered = isFilterable && trimmedQuery
-    ? normalised.filter(o => o.label.toLowerCase().includes(trimmedQuery.toLowerCase()))
+    // Also matches a plain-text hint line (e.g. a role or team), so you can
+    // search by it. JSX hints (e.g. activity counts) are display-only.
+    ? normalised.filter(o => `${o.label} ${typeof o.hint === "string" ? o.hint : ""}`.toLowerCase().includes(trimmedQuery.toLowerCase()))
     : normalised;
   const exactMatch = normalised.find(o => o.label.toLowerCase() === trimmedQuery.toLowerCase());
   const showCreateOption = creatable && trimmedQuery !== "" && !exactMatch;

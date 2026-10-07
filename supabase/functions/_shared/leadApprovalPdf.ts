@@ -614,7 +614,8 @@ async function regenerateApprovalNoteInner(
 
   let baOrgName: string | null = null;
   if (lead.assigned_ba_id) {
-    const { data: baList } = await admin.rpc("get_team_business_associates", { p_team: lead.team });
+    // Org-wide: the linked BP may belong to another team.
+    const { data: baList } = await admin.rpc("get_empanelled_business_partners");
     const match = ((baList || []) as Row[]).find((b) => b.id === lead.assigned_ba_id);
     baOrgName = match?.org_name || null;
   }
