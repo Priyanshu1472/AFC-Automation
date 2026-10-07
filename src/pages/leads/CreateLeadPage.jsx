@@ -18,7 +18,6 @@ export default function CreateLeadPage() {
                 ← Back to Leads
               </button>
               <h1>Add Lead</h1>
-              <p>Capture a new opportunity — fill the sections below and save. Your summary stays on the right.</p>
             </div>
           }
         />
