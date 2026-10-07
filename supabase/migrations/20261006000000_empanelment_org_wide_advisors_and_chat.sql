@@ -44,7 +44,9 @@ $$;
 create table if not exists public.empanelment_chat_messages (
   id              uuid primary key default gen_random_uuid(),
   application_id  uuid not null references public.empanelment_applications(id) on delete cascade,
-  sender_id       uuid not null references public.afc_users(id),
+  -- Nullable + SET NULL so deleting a user keeps their messages (see
+  -- 20261004000000_preserve_records_on_user_delete.sql).
+  sender_id       uuid references public.afc_users(id) on delete set null,
   message         text not null,
   created_at      timestamptz not null default now()
 );

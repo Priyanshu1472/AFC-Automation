@@ -168,7 +168,7 @@ export default function EmpanelmentChatPanel({ app }) {
                   <div key={m.id} className={`ar-chat-msg${isOwn ? " ar-chat-msg-own" : ""}`}>
                     <div className="ar-chat-bubble">
                       <span className="ar-chat-sender">
-                        {sender?.full_name || "Unknown"}
+                        {sender?.full_name || (m.sender_id ? "Unknown" : "Deleted user")}
                         {sender?.role ? ` · ${ROLE_LABELS[sender.role] || sender.role}` : ""}
                       </span>
                       <p className="ar-chat-text">{m.message}</p>
