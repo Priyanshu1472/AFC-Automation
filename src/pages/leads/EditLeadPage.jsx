@@ -7,6 +7,7 @@ import AppHeader from "../../components/shared/AppHeader";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import LeadForm from "./LeadForm";
+import BackButton from "../../components/ui/BackButton";
 
 export default function EditLeadPage() {
   const { id } = useParams();
@@ -52,9 +53,7 @@ export default function EditLeadPage() {
 
   const pageHead = (
     <div className="lf-page-head">
-      <button type="button" className="lf-back" onClick={() => navigate(lead ? `/leads/${lead.id}` : "/leads")}>
-        ← Back to Lead
-      </button>
+      <BackButton to={lead ? `/leads/${lead.id}` : "/leads"} label="Back to Lead" />
       <h1>Edit Lead</h1>
       {lead && <p>{lead.lead_number} — {lead.title}</p>}
     </div>

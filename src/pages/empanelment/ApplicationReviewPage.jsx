@@ -16,6 +16,7 @@ import LetterPreviewPinModal from "./LetterPreviewPinModal";
 import { STATUS_FLOW, STATUS_BADGE, ProgressStepper, TimelineAccordion, stepLabel, displayStatus, INELIGIBLE_LABEL } from "../../components/empanelment/ApplicationTimeline";
 import EmpanelmentChatPanel from "../../components/empanelment/EmpanelmentChatPanel";
 import "../../styles/ApplicationReviewPage.css";
+import BackButton from "../../components/ui/BackButton";
 
 const SLOT_LABELS = {
   panCopy: "PAN Card Copy",
@@ -381,7 +382,7 @@ export default function ApplicationReviewPage() {
       <AppHeader />
       <div className="app-container">
         <div className="ar-page">
-          <button className="ar-back-btn" onClick={() => navigate(backTo)}><ArrowLeftIcon /> {backTo === "/home" ? "Back to Home" : "Back to Applications"}</button>
+          <BackButton to={backTo} label={backTo === "/home" ? "Back to Home" : "Back to Applications"} />
 
           <Card className="ar-header-card">
             <Card.Body className="ar-header-body">

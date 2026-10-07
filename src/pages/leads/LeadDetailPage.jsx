@@ -22,6 +22,7 @@ import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 // for Empanelment's review page — generic patterns (label/value rows,
 // stepper, action panel, doc list), no Lead-Gen-specific CSS needed yet.
 import "../../styles/ApplicationReviewPage.css";
+import BackButton from "../../components/ui/BackButton";
 
 function fmt(v) {
   return v === null || v === undefined || v === "" ? "—" : v;
@@ -556,7 +557,7 @@ export default function LeadDetailPage() {
       <AppHeader />
       <div className="app-container">
         <div className="ar-page">
-          <button className="ar-back-btn" onClick={() => navigate(backTo)}>← {backLabel}</button>
+          <BackButton to={backTo} label={backLabel} />
 
           <Card className="ar-header-card">
             <Card.Body className="ar-header-body">

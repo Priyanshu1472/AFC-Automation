@@ -505,32 +505,6 @@
   color: var(--text-secondary);
 }
 
-.lf-back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin: 0 0 var(--space-2) -8px;
-  padding: 4px 10px 4px 8px;
-  font-family: inherit;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.lf-back:hover {
-  color: var(--text-primary);
-  background: var(--bg-surface-2);
-}
-
-.lf-back:focus-visible {
-  outline: none;
-  box-shadow: var(--input-shadow-focus);
-}
-
 /* ── Pinned summary sidebar ────────────────────────────────── */
 /* top = the app container's top padding = the column's natural position,
    so sticky never visibly moves it. Height is capped to the viewport; the

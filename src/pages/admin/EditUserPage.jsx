@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, OFFICE_LABELS, COMMITTEES, can } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
@@ -18,6 +18,7 @@ import ResetPinModal from "./ResetPinModal";
 import SignatureUploadModal from "./SignatureUploadModal";
 import DeleteUserModal from "./DeleteUserModal";
 import "../../styles/CreateUserPage.css";
+import BackButton from "../../components/ui/BackButton";
 
 const FIELD_HELP = {
   role: "Changing a role controls what this person can see and do going forward. Only Admin and MD can change a role.",
@@ -164,6 +165,7 @@ export default function EditUserPage() {
       <AppHeader />
       <div className="app-container">
         <div className="page-header">
+          <BackButton to="/users" label="Back to Users" />
           <div className="page-title-row">
             <div>
               <h1>{canEdit ? "Edit User" : "User"}</h1>
@@ -173,9 +175,6 @@ export default function EditUserPage() {
                   : "Account information (view-only)."}
               </p>
             </div>
-            <Link to="/users" className="btn btn-secondary btn-sm">
-              ← Back to Users
-            </Link>
           </div>
         </div>
 

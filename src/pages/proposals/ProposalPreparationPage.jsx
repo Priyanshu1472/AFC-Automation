@@ -26,6 +26,7 @@ import { FileTextIcon, UsersIcon, CheckCircleIcon } from "../../components/icons
 import { isProposalLocked, CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS } from "../../lib/proposalPrep";
 import "../../styles/ApplicationReviewPage.css";
 import "../../styles/ProposalPreparationPage.css";
+import BackButton from "../../components/ui/BackButton";
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -136,7 +137,7 @@ export default function ProposalPreparationPage() {
       <AppHeader />
       <div className="app-container">
         <div className="pp-page animate-fadeUp">
-          <button className="ar-back-btn" onClick={() => navigate("/proposals")}>← Back to Proposals</button>
+          <BackButton to="/proposals" label="Back to Proposals" />
 
           <Card className="ar-header-card">
             <Card.Body className="ar-header-body">

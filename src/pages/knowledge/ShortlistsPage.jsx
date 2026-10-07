@@ -14,6 +14,7 @@ import {
 } from "../../utils/knowledgeDocumentEmbed";
 import AppHeader from "../../components/shared/AppHeader";
 import "../../styles/ShortlistsPage.css";
+import BackButton from "../../components/ui/BackButton";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -378,12 +379,12 @@ export default function ShortlistsPage() {
       <div className="app-container">
         <div className="slv-page">
           <div className="page-header">
+            <BackButton label="Back" fallback="/knowledge" />
             <div className="page-title-row">
               <div>
                 <h1>Shortlists</h1>
                 <p>Saved project collections — export as Word or PDF.</p>
               </div>
-              <button className="btn-back" onClick={() => navigate(-1)}>← Back</button>
             </div>
           </div>
 

@@ -11,6 +11,7 @@ import PinInput from "../../components/ui/PinInput";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import "../../styles/ApplicationReviewPage.css";
+import BackButton from "../../components/ui/BackButton";
 
 // Not a real business_associates row — picking this just flags that the BP
 // is still undecided. It never reaches the backend: submitForDgmApproval
@@ -123,7 +124,7 @@ export default function LeadApprovalNotePreviewPage() {
       <AppHeader />
       <div className="app-container">
         <div className="ar-page">
-          <button className="ar-back-btn" onClick={() => navigate(`/leads/${id}`)}>← Back to Lead</button>
+          <BackButton to={`/leads/${id}`} label="Back to Lead" />
 
           {!lead && <Alert variant="danger">Lead not found.</Alert>}
           {lead && !canManage && <Alert variant="danger">The Lead Approval Note can&apos;t be reviewed here right now.</Alert>}

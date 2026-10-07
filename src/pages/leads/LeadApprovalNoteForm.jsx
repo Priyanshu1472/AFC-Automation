@@ -12,6 +12,7 @@ import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import { SCRUTINY_PARAMETERS, defaultScrutinyEntries, deriveNatureOfLead } from "../../lib/leadApprovalNote";
 import "../../styles/LeadForm.css";
+import BackButton from "../../components/ui/BackButton";
 
 const YES_NO_OPTIONS = [
   { value: "Yes", label: "Yes" },
@@ -222,14 +223,12 @@ export default function LeadApprovalNoteForm() {
       <AppHeader />
       <div className="app-container">
         <div className="page-header">
+          <BackButton to={lead ? `/leads/${lead.id}` : "/leads"} label="Back to Lead" />
           <div className="page-title-row">
             <div>
               <h1>Lead Approval Note</h1>
               {lead && <p>{lead.lead_number} — {lead.title}</p>}
             </div>
-            <Button variant="secondary" onClick={() => navigate(lead ? `/leads/${lead.id}` : "/leads")}>
-              ← Back
-            </Button>
           </div>
         </div>
 

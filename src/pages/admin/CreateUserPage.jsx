@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { ADMIN_CREATABLE_ROLES, ROLE_LABELS, OFFICES, OFFICE_LABELS, COMMITTEES } from "../../lib/roles";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
@@ -11,6 +10,7 @@ import TeamMultiSelect from "../../components/ui/TeamMultiSelect";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import "../../styles/CreateUserPage.css";
+import BackButton from "../../components/ui/BackButton";
 
 const EMPTY_FORM = { full_name: "", email: "", role: "", teams: [], office: "", committee: "" };
 const SIGNATURE_TYPES = ["image/png", "image/jpeg"];
@@ -128,14 +128,12 @@ export default function CreateUserPage() {
       <AppHeader />
       <div className="app-container">
         <div className="page-header">
+          <BackButton to="/users" label="Back to Users" />
           <div className="page-title-row">
             <div>
               <h1>Create User</h1>
               <p>Create a staff account. A temporary password will be generated and emailed automatically.</p>
             </div>
-            <Link to="/users" className="btn btn-secondary btn-sm">
-              ← Back to Users
-            </Link>
           </div>
         </div>
 

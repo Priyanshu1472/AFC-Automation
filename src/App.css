@@ -582,6 +582,41 @@ h1,h2,h3,h4,h5,h6 { font-family: var(--font-display); font-weight: 600; line-hei
   flex-wrap: wrap;
 }
 
+/* Shared page back link (components/ui/BackButton.jsx) — always top-left,
+   directly above the page title, same look on every page. */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 var(--space-3) -10px;
+  padding: 6px 12px 6px 10px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out);
+}
+.back-link:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-surface-2);
+}
+.back-link:hover:not(:disabled) svg { transform: translateX(-2px); }
+.back-link svg { transition: transform var(--duration-fast) var(--ease-out); }
+.back-link:focus-visible {
+  outline: none;
+  box-shadow: var(--input-shadow-focus);
+}
+.back-link:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Where the parent column already spaces its children with `gap`. */
+.ar-page > .back-link,
+.pp-page > .back-link,
+.details-topbar > .back-link { margin-bottom: 0; }
+
 /* ============================================================
    8. BUTTONS
    ============================================================ */

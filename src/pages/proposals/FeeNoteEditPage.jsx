@@ -36,6 +36,7 @@ import { FEE_LINES, FEE_NOTE_TITLE, PAYMENT_MODE_LABELS, needsPayeeDetails } fro
 import { composeFeeNotePreview, composeImplementationArrangements, portalRefLabel } from "../../lib/feeNoteDraft";
 import "../../styles/LeadForm.css";
 import "../../styles/ProposalPreparationPage.css";
+import BackButton from "../../components/ui/BackButton";
 
 const PAYMENT_MODE_OPTIONS = Object.entries(PAYMENT_MODE_LABELS).map(([value, label]) => ({ value, label }));
 
@@ -280,12 +281,12 @@ export default function FeeNoteEditPage() {
       <AppHeader />
       <div className="app-container">
         <div className="page-header">
+          <BackButton to={`/proposals/${leadId}`} label="Back to Proposal" />
           <div className="page-title-row">
             <div>
               <h1>{FEE_NOTE_TITLE}</h1>
               {ctx?.lead && <p>{ctx.lead.lead_number} — {ctx.lead.title}</p>}
             </div>
-            <Button variant="secondary" onClick={() => navigate(`/proposals/${leadId}`)}>← Back</Button>
           </div>
         </div>
 

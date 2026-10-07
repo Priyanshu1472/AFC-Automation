@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import AppHeader from "../../components/shared/AppHeader";
 import LeadForm from "./LeadForm";
+import BackButton from "../../components/ui/BackButton";
 
 export default function CreateLeadPage() {
   const navigate = useNavigate();
@@ -14,9 +15,7 @@ export default function CreateLeadPage() {
           onSuccess={(data) => navigate(`/leads/${data.id}`)}
           header={
             <div className="lf-page-head">
-              <button type="button" className="lf-back" onClick={() => navigate("/leads")}>
-                ← Back to Leads
-              </button>
+              <BackButton to="/leads" label="Back to Leads" />
               <h1>Add Lead</h1>
             </div>
           }
