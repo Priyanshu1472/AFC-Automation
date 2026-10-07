@@ -74,7 +74,10 @@ function toPrOptions(users) {
 }
 
 // mode: "create" | "edit". `lead` is the existing row when editing/resubmitting.
-export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
+// header: the page title/back link, rendered at the top of the left column
+// (not above both columns) so the summary sidebar starts at the very top and
+// never shifts while scrolling.
+export default function LeadForm({ mode = "create", lead = null, onSuccess, header = null }) {
   const navigate = useNavigate();
   const { profile, activeTeam } = useAuth();
   const { showToast } = useToast();
@@ -355,6 +358,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
   return (
     <form onSubmit={handleSubmit} noValidate className="lf-layout">
       <div className="lf-main">
+        {header}
         <Card className="lf-section">
           <SectionHead step={1} title="Lead Type & Source" subtitle={isEdit ? "Locked once a lead is created — cannot be changed." : "What kind of opportunity is this, and where did it come from?"} />
           <Card.Body className="lf-body">
@@ -706,7 +710,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess }) {
             {summaryRows.map((r) => (
               <div key={r.label} className="lf-summary-row">
                 <dt>{r.label}</dt>
-                <dd className={r.value ? "" : "lf-summary-empty"}>{r.value || "Not set"}</dd>
+                <dd className={r.value ? "" : "lf-summary-empty"} title={r.value || undefined}>{r.value || "Not set"}</dd>
               </div>
             ))}
           </dl>

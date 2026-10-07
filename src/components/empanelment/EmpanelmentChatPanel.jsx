@@ -159,7 +159,7 @@ export default function EmpanelmentChatPanel({ app }) {
             {loading ? (
               <p className="ar-empty-text">Loading messages…</p>
             ) : messages.length === 0 ? (
-              <p className="ar-empty-text">No messages yet. The sender, Project Officer, advising authority, CS, CFO and MD can discuss this application here.</p>
+              <p className="ar-empty-text">No messages yet.</p>
             ) : (
               messages.map((m) => {
                 const isOwn = m.sender_id === profile?.id;

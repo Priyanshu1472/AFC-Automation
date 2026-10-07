@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import AppHeader from "../../components/shared/AppHeader";
-import Button from "../../components/ui/Button";
 import LeadForm from "./LeadForm";
 
 export default function CreateLeadPage() {
@@ -10,18 +9,19 @@ export default function CreateLeadPage() {
     <div className="app-shell">
       <AppHeader />
       <div className="app-container">
-        <div className="page-header">
-          <div className="page-title-row">
-            <div>
+        <LeadForm
+          mode="create"
+          onSuccess={(data) => navigate(`/leads/${data.id}`)}
+          header={
+            <div className="lf-page-head">
+              <button type="button" className="lf-back" onClick={() => navigate("/leads")}>
+                ← Back to Leads
+              </button>
               <h1>Add Lead</h1>
-              <p>Capture a new opportunity — fill the sections below and save. Your summary updates on the right as you go.</p>
+              <p>Capture a new opportunity — fill the sections below and save. Your summary stays on the right.</p>
             </div>
-            <Button variant="secondary" onClick={() => navigate("/leads")}>
-              ← Back
-            </Button>
-          </div>
-        </div>
-        <LeadForm mode="create" onSuccess={(data) => navigate(`/leads/${data.id}`)} />
+          }
+        />
       </div>
     </div>
   );

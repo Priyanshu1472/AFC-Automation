@@ -5,7 +5,6 @@ import { useAuth } from "../../hooks/useAuth";
 import { isLeadOverdue, overdueEditorId } from "../../components/leads/leadStatus";
 import AppHeader from "../../components/shared/AppHeader";
 import Alert from "../../components/ui/Alert";
-import Button from "../../components/ui/Button";
 import PageLoader from "../../components/ui/PageLoader";
 import LeadForm from "./LeadForm";
 
@@ -51,25 +50,29 @@ export default function EditLeadPage() {
   // deliberate step: the Lead Approval Note's "Resubmit Lead Approval Form"
   // action from the lead's detail page.
 
+  const pageHead = (
+    <div className="lf-page-head">
+      <button type="button" className="lf-back" onClick={() => navigate(lead ? `/leads/${lead.id}` : "/leads")}>
+        ← Back to Lead
+      </button>
+      <h1>Edit Lead</h1>
+      {lead && <p>{lead.lead_number} — {lead.title}</p>}
+    </div>
+  );
+
   return (
     <div className="app-shell">
       <AppHeader />
       <div className="app-container">
-        <div className="page-header">
-          <div className="page-title-row">
-            <div>
-              <h1>Edit Lead</h1>
-              {lead && <p>{lead.lead_number} — {lead.title}</p>}
-            </div>
-            <Button variant="secondary" onClick={() => navigate(lead ? `/leads/${lead.id}` : "/leads")}>
-              ← Back
-            </Button>
-          </div>
-        </div>
-
-        {!lead && <Alert variant="danger">Lead not found.</Alert>}
-        {lead && !canEdit && <Alert variant="danger">This lead can&apos;t be edited right now.</Alert>}
-        {lead && canEdit && <LeadForm mode="edit" lead={lead} onSuccess={() => navigate(`/leads/${lead.id}`)} />}
+        {lead && canEdit ? (
+          <LeadForm mode="edit" lead={lead} onSuccess={() => navigate(`/leads/${lead.id}`)} header={pageHead} />
+        ) : (
+          <>
+            {pageHead}
+            {!lead && <Alert variant="danger">Lead not found.</Alert>}
+            {lead && !canEdit && <Alert variant="danger">This lead can&apos;t be edited right now.</Alert>}
+          </>
+        )}
       </div>
     </div>
   );

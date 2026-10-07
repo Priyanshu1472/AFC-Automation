@@ -623,7 +623,7 @@ export default function ApplicationReviewPage() {
                   <Card.Header title="On Hold — Awaiting BP Correction" action={<Badge variant="warning">On Hold</Badge>} />
                   <Card.Body className="ar-action-body">
                     <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
-                      The BP was emailed and can submit corrections for the item(s) below. Review will resume from the stage that raised this hold once they do.
+                      The BP was emailed and can submit corrections for the item(s) below. Review will resume from the stage that raised this hold.
                     </p>
                     <div className="ar-flag-list">
                       {openFlags.map((f) => (
