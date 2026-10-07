@@ -6,6 +6,7 @@ import Badge from "../components/ui/Badge";
 import PageLoader from "../components/ui/PageLoader";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
+import { EMPANELMENT_ROLES, LEAD_GENERATION_NAV_ROLES } from "../lib/roles";
 import { fetchPendingActionNotifications, subscribeToNotifications, markNotificationRead } from "../lib/notifications";
 import "../styles/HomePage.css";
 
@@ -42,7 +43,7 @@ function timeAgo(val) {
 
 function BellIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
@@ -51,8 +52,49 @@ function BellIcon() {
 
 function ChevronRightIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16, flexShrink: 0 }}>
       <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function TargetIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
     </svg>
   );
 }
@@ -107,9 +149,29 @@ function BaStatusCard() {
   );
 }
 
+// Module boxes on Home. `canSee` mirrors AppHeader's nav gates, so nobody
+// gets an always-empty box for a module they can't open.
+const ACTION_CATEGORIES = [
+  { key: "empanelment", title: "Empanelment", to: "/empanelment", canSee: (role) => EMPANELMENT_ROLES.includes(role), icon: <UsersIcon /> },
+  { key: "leads", title: "Leads Approval", to: "/leads", canSee: (role) => LEAD_GENERATION_NAV_ROLES.includes(role), icon: <TargetIcon /> },
+  { key: "proposals", title: "Proposals", to: "/proposals", canSee: (role) => LEAD_GENERATION_NAV_ROLES.includes(role), icon: <FileIcon /> },
+];
+
+// Which box an alert belongs in — by the page it links to. Bid Payment
+// Requisition (fee) note alerts created before 2026-10-07 linked to the
+// plain "/leads" list, so those are recognised by their title instead.
+function categoryOf(n) {
+  const link = n.link || "";
+  if (link.startsWith("/empanelment")) return "empanelment";
+  if (link.startsWith("/proposals")) return "proposals";
+  if (link.startsWith("/leads")) return /requisition note|fee note/i.test(n.title || "") ? "proposals" : "leads";
+  return "other";
+}
+
 // Notifications the recipient hasn't acted on yet (type: "action_required",
 // unread) — a review stage waiting on this specific person, not a generic
-// activity feed. Clicking one marks it read and jumps to the application.
+// activity feed — grouped into one box per module. Clicking one marks it
+// read and jumps to the item.
 function PendingActionsPanel() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -120,7 +182,7 @@ function PendingActionsPanel() {
     if (!profile?.id) return;
     let cancelled = false;
 
-    fetchPendingActionNotifications(profile.id)
+    fetchPendingActionNotifications(profile.id, 200)
       .then((rows) => {
         if (!cancelled) setItems(rows);
       })
@@ -148,30 +210,64 @@ function PendingActionsPanel() {
     if (n.link) navigate(n.link, { state: { from: "home" } });
   }
 
-  if (loading || items.length === 0) return null;
+  if (loading) return <PageLoader text="Loading your alerts…" />;
+
+  const grouped = { empanelment: [], leads: [], proposals: [], other: [] };
+  items.forEach((n) => grouped[categoryOf(n)].push(n));
+
+  const boxes = ACTION_CATEGORIES.filter((c) => c.canSee(profile?.role) || grouped[c.key].length > 0);
+  if (grouped.other.length > 0) boxes.push({ key: "other", title: "General", to: null, icon: <BellIcon /> });
 
   return (
-    <Card className="pending-actions-card">
-      <Card.Header
-        title="Needs your action"
-        subtitle={`${items.length} application${items.length !== 1 ? "s" : ""} waiting on you`}
-      />
-      <div className="pending-actions-list">
-        {items.map((n) => (
-          <button key={n.id} type="button" className="pending-action-item" onClick={() => handleClick(n)}>
-            <span className="pending-action-icon" aria-hidden="true"><BellIcon /></span>
-            <span className="pending-action-body">
-              <span className="pending-action-title">{n.title}</span>
-              {n.sub_text && <span className="pending-action-sub">{n.sub_text}</span>}
-            </span>
-            <span className="pending-action-right">
-              {n.created_at && <span className="pending-action-time">{timeAgo(n.created_at)}</span>}
-              <ChevronRightIcon />
-            </span>
-          </button>
-        ))}
+    <section className="home-actions" aria-labelledby="home-actions-title">
+      <div className="home-actions-head">
+        <h2 id="home-actions-title">Needs your action</h2>
+        <p>{items.length === 0 ? "You're all caught up." : `${items.length} item${items.length !== 1 ? "s" : ""} waiting on you`}</p>
       </div>
-    </Card>
+
+      <div className="home-boxes">
+        {boxes.map((c) => {
+          const list = grouped[c.key];
+          return (
+            <div key={c.key} className={`home-box home-box-${c.key}${list.length ? " home-box-has" : ""}`}>
+              <div className="home-box-head">
+                <span className="home-box-icon" aria-hidden="true">{c.icon}</span>
+                <h3 className="home-box-title">{c.title}</h3>
+                <span className={`home-box-count${list.length ? " home-box-count-has" : ""}`}>{list.length}</span>
+              </div>
+
+              {list.length === 0 ? (
+                <div className="home-box-empty">
+                  <CheckCircleIcon />
+                  <span>Nothing pending</span>
+                </div>
+              ) : (
+                <div className="home-box-list">
+                  {list.map((n) => (
+                    <button key={n.id} type="button" className="home-alert" onClick={() => handleClick(n)}>
+                      <span className="home-alert-body">
+                        <span className="home-alert-title">{n.title}</span>
+                        {n.sub_text && <span className="home-alert-sub">{n.sub_text}</span>}
+                      </span>
+                      <span className="home-alert-right">
+                        {n.created_at && <span className="home-alert-time">{timeAgo(n.created_at)}</span>}
+                        <ChevronRightIcon />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {c.to && (
+                <button type="button" className="home-box-foot" onClick={() => navigate(c.to)}>
+                  Open {c.title} <ChevronRightIcon />
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

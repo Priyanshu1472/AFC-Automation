@@ -89,7 +89,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         ? `The MD approved the ${noteLabel} for "${lead?.title}".`
         : `The MD sent the ${noteLabel} for "${lead?.title}" back: ${remark}`,
       type: decision === "approved" ? "info" : "action_required",
-      link: "/leads",
+      link: proposal?.lead_id ? `/proposals/${proposal.lead_id}` : "/proposals",
     });
 
     return jsonRes(req, 200, { success: true });

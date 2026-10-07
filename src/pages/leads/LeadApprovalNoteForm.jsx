@@ -6,13 +6,13 @@ import { useToast } from "../../hooks/useToast";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
-import Select from "../../components/ui/Select";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import { SCRUTINY_PARAMETERS, defaultScrutinyEntries, deriveNatureOfLead } from "../../lib/leadApprovalNote";
 import "../../styles/LeadForm.css";
 import BackButton from "../../components/ui/BackButton";
+import SectionHead from "../../components/leads/SectionHead";
 
 const YES_NO_OPTIONS = [
   { value: "Yes", label: "Yes" },
@@ -236,26 +236,49 @@ export default function LeadApprovalNoteForm() {
         {lead && !canManage && <Alert variant="danger">The Lead Approval Note can&apos;t be edited right now.</Alert>}
 
         {lead && canManage && (
-          <form onSubmit={handleGenerate} noValidate>
-            <Card>
-              <Card.Header title="Business Lead Approval Note" />
-              <Card.Body>
-                <Input
-                  label="Nature of Lead"
-                  value={deriveNatureOfLead(lead.source, lead.lead_type)}
-                  disabled
-                  hint="Determined by the lead's type/source — edit the lead itself to change this."
-                />
+          <form onSubmit={handleGenerate} noValidate className="lan-form">
+            <Card className="lf-section">
+              <SectionHead step={1} title="From the Lead" subtitle="These details are taken from the lead and printed on the note as they are." />
+              <Card.Body className="lf-body">
+                <dl className="lan-info-grid">
+                  <div className="lan-info-item">
+                    <dt>Nature of Lead</dt>
+                    <dd>{deriveNatureOfLead(lead.source, lead.lead_type)}</dd>
+                  </div>
+                  <div className="lan-info-item">
+                    <dt>Implementation</dt>
+                    <dd>{lead.assigned_ba_id ? "Business Partner" : "In-house"}</dd>
+                  </div>
+                  <div className="lan-info-item lan-info-wide">
+                    <dt>Title of Proposed Assignment</dt>
+                    <dd>{lead.title}</dd>
+                  </div>
+                  <div className={`lan-info-item${errors.lead_client_name ? " lan-info-missing" : ""}`}>
+                    <dt>Client / Department</dt>
+                    <dd>{lead.client_name || "Not set"}</dd>
+                  </div>
+                  <div className={`lan-info-item${errors.lead_submission_deadline ? " lan-info-missing" : ""}`}>
+                    <dt>Last Date for Submission</dt>
+                    <dd>{lead.submission_deadline ? fmtDate(lead.submission_deadline) : "Not set"}</dd>
+                  </div>
+                  {lead.assigned_ba_id && (
+                    <div className="lan-info-item lan-info-wide">
+                      <dt>Name of BP</dt>
+                      <dd>{baOrgName || "—"}</dd>
+                    </div>
+                  )}
+                </dl>
+                {(errors.lead_client_name || errors.lead_submission_deadline) && (
+                  <Alert variant="danger">
+                    {[errors.lead_client_name, errors.lead_submission_deadline].filter(Boolean).map((m) => <p key={m}>{m}</p>)}
+                  </Alert>
+                )}
+              </Card.Body>
+            </Card>
 
-                <Input label="Title of Proposed Assignment" value={lead.title} disabled hint="From the lead — edit the lead itself to change this." />
-                <Input
-                  label="Client / Department"
-                  value={lead.client_name || "—"}
-                  disabled
-                  hint="From the lead — edit the lead itself to change this."
-                  error={errors.lead_client_name}
-                />
-
+            <Card className="lf-section">
+              <SectionHead step={2} title="Assignment Details" subtitle="Client address, objectives, scope and timeline." />
+              <Card.Body className="lf-body">
                 <div className="field">
                   <label className="field-label">Client Address <span className="required">*</span></label>
                   <textarea
@@ -295,28 +318,31 @@ export default function LeadApprovalNoteForm() {
                   {errors.scope_of_work && <span className="field-error">{errors.scope_of_work}</span>}
                 </div>
 
-                <Input
-                  label="Project Timeline"
-                  required
-                  value={form.project_timeline}
-                  onChange={(e) => set("project_timeline", e.target.value)}
-                  placeholder="e.g. 15 Months"
-                  error={errors.project_timeline}
-                  disabled={submitting}
-                />
+                <div className="grid-2 lf-grid">
+                  <Input
+                    label="Project Timeline"
+                    required
+                    value={form.project_timeline}
+                    onChange={(e) => set("project_timeline", e.target.value)}
+                    placeholder="e.g. 15 Months"
+                    error={errors.project_timeline}
+                    disabled={submitting}
+                  />
+                  <Input
+                    label="Revenue Sharing"
+                    value={form.revenue_sharing}
+                    onChange={(e) => set("revenue_sharing", e.target.value)}
+                    placeholder="NA"
+                    disabled={submitting}
+                  />
+                </div>
+              </Card.Body>
+            </Card>
 
-                <Input
-                  label="Proposed Implementation Arrangement"
-                  value={lead.assigned_ba_id ? "Business Partner" : "In-house"}
-                  disabled
-                  hint="Determined by whether a Business Partner is assigned to this lead."
-                />
-                {lead.assigned_ba_id && (
-                  <Input label="Name of BP" value={baOrgName || "—"} disabled />
-                )}
-
-                <div className="field">
-                  <label className="field-label">Financial Requirement</label>
+            <Card className="lf-section">
+              <SectionHead step={3} title="Financial Requirement" subtitle="Amounts in numbers only. Leave a field blank to print it as NA." />
+              <Card.Body className="lf-body">
+                <div className="grid-2 lf-grid">
                   <Input
                     label="Document Fee / Tender Fee"
                     value={form.document_fee}
@@ -324,7 +350,6 @@ export default function LeadApprovalNoteForm() {
                     placeholder="NA"
                     inputMode="decimal"
                     error={errors.document_fee}
-                    hint={!errors.document_fee ? "leave blank to print as NA" : undefined}
                     disabled={submitting}
                   />
                   <Input
@@ -336,6 +361,8 @@ export default function LeadApprovalNoteForm() {
                     error={errors.pbg}
                     disabled={submitting}
                   />
+                </div>
+                <div className="grid-2 lf-grid">
                   <Input
                     label="EMD"
                     value={form.emd}
@@ -355,74 +382,69 @@ export default function LeadApprovalNoteForm() {
                     disabled={submitting}
                   />
                 </div>
-
-                <Input
-                  label="Last Date for Submission of Proposal"
-                  value={fmtDate(lead.submission_deadline)}
-                  disabled
-                  error={errors.lead_submission_deadline}
-                />
-
-                <Input
-                  label="Revenue Sharing"
-                  value={form.revenue_sharing}
-                  onChange={(e) => set("revenue_sharing", e.target.value)}
-                  placeholder="NA"
-                  disabled={submitting}
-                />
               </Card.Body>
             </Card>
 
-            <Card>
-              <Card.Header title="Preliminary Scrutiny by Office" />
-              <Card.Body>
-                {SCRUTINY_PARAMETERS.map((param, i) => (
-                  <div key={param.key} className="lan-scrutiny-row">
-                    <div className="lan-scrutiny-label">{param.label}</div>
-                    <div className="lan-scrutiny-yesno">
-                      <label className="field-label">Yes/No</label>
-                      <Select
-                        options={YES_NO_OPTIONS}
-                        value={form.scrutiny[i].yes_no}
-                        onChange={(v) => setScrutinyField(i, "yes_no", v)}
-                        disabled={submitting}
-                      />
-                    </div>
-                    <div className="lan-scrutiny-remarks">
-                      <label className="field-label">Justification / Remarks <span className="required">*</span></label>
+            <Card className="lf-section">
+              <SectionHead step={4} title="Preliminary Scrutiny by Office" subtitle="Mark each parameter and give a remark for it." />
+              <Card.Body className="lf-body">
+                <div className="lan-scrutiny-list">
+                  {SCRUTINY_PARAMETERS.map((param, i) => (
+                    <div key={param.key} className="lan-scrutiny-row">
+                      <div className="lan-scrutiny-head">
+                        <span className="lan-scrutiny-num">{i + 1}</span>
+                        <span className="lan-scrutiny-label">{param.label}</span>
+                        <div className="lan-yesno" role="radiogroup" aria-label={`${param.label}: Yes or No`}>
+                          {YES_NO_OPTIONS.map((o) => (
+                            <button
+                              key={o.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={form.scrutiny[i].yes_no === o.value}
+                              className={`lan-yesno-btn lan-yesno-${o.value.toLowerCase()}${form.scrutiny[i].yes_no === o.value ? " lan-yesno-active" : ""}`}
+                              onClick={() => setScrutinyField(i, "yes_no", o.value)}
+                              disabled={submitting}
+                            >
+                              {o.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                       <textarea
                         className={`input${errors[`scrutiny_${i}`] ? " input-error" : ""}`}
                         rows={2}
                         value={form.scrutiny[i].remarks}
                         onChange={(e) => setScrutinyField(i, "remarks", e.target.value)}
                         disabled={submitting}
+                        placeholder="Justification / remarks"
+                        aria-label={`${param.label} — justification / remarks`}
                       />
                       {errors[`scrutiny_${i}`] && <span className="field-error">{errors[`scrutiny_${i}`]}</span>}
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
 
                 <div className="field">
-                  <label className="field-label">Justification <span className="required">*</span></label>
+                  <label className="field-label">Overall Justification <span className="required">*</span></label>
                   <textarea
                     className={`input${errors.justification ? " input-error" : ""}`}
                     rows={4}
                     value={form.justification}
                     onChange={(e) => set("justification", e.target.value)}
                     disabled={submitting}
-                    placeholder="Overall justification for taking up this lead — appears on the PDF just under the Preliminary Scrutiny table."
+                    placeholder="Why this lead should be taken up — printed just under the scrutiny table."
                   />
                   {errors.justification && <span className="field-error">{errors.justification}</span>}
                 </div>
               </Card.Body>
             </Card>
 
-            <div className="lf-actions">
-              <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
-                {profile?.id === lead.person_responsible_id ? "Generate PDF" : "Send for Person Responsible Review"}
-              </Button>
+            <div className="lan-actions">
               <Button type="button" variant="secondary" disabled={submitting} onClick={() => navigate(`/leads/${id}`)}>
                 Cancel
+              </Button>
+              <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
+                {profile?.id === lead.person_responsible_id ? "Generate PDF" : "Send for Person Responsible Review"}
               </Button>
             </div>
           </form>

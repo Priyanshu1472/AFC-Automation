@@ -14,6 +14,7 @@ import { DELIVERY_TYPE_LABELS } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 import { ROLE_LABELS } from "../../lib/roles";
 import BusinessPartnerPicker from "../../components/leads/BusinessPartnerPicker";
+import SectionHead from "../../components/leads/SectionHead";
 import "../../styles/LeadForm.css";
 
 const DELIVERY_TYPE_OPTIONS = Object.entries(DELIVERY_TYPE_LABELS).map(([value, label]) => ({ value, label }));
@@ -49,18 +50,6 @@ function UploadIcon() {
 }
 function FileIcon() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>;
-}
-
-function SectionHead({ step, title, subtitle }) {
-  return (
-    <div className="lf-section-head">
-      <span className="lf-step" aria-hidden="true">{step}</span>
-      <div>
-        <h2 className="lf-section-title">{title}</h2>
-        {subtitle && <p className="lf-section-sub">{subtitle}</p>}
-      </div>
-    </div>
-  );
 }
 
 function toOptions(users) {

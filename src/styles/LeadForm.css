@@ -647,34 +647,183 @@
   }
 }
 
-/* ── Preliminary Scrutiny by Office (LeadApprovalNoteForm) ─────────── */
+/* ── Section head extras (shared SectionHead component) ───── */
+.lf-section-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.lf-section-action {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* ============================================================
+   Lead Approval Note form (LeadApprovalNoteForm.jsx)
+   ============================================================ */
+.lan-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 920px;
+  padding-bottom: var(--space-12);
+}
+
+/* ── "From the Lead" read-only summary ─────────────────────── */
+.lan-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.lan-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-surface);
+  min-width: 0;
+}
+
+.lan-info-wide {
+  grid-column: 1 / -1;
+}
+
+.lan-info-item dt {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+.lan-info-item dd {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.lan-info-missing {
+  background: var(--danger-light);
+}
+
+.lan-info-missing dd {
+  color: var(--danger);
+  font-style: italic;
+}
+
+/* ── Preliminary Scrutiny ──────────────────────────────────── */
+.lan-scrutiny-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
 
 .lan-scrutiny-row {
-  display: grid;
-  grid-template-columns: 1fr 110px 2fr;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.lan-scrutiny-head {
+  display: flex;
+  align-items: center;
   gap: var(--space-3);
-  align-items: start;
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border-subtle);
 }
 
-.lan-scrutiny-row:first-child {
-  padding-top: 0;
-}
-
-.lan-scrutiny-row:last-child {
-  border-bottom: none;
+.lan-scrutiny-num {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--bg-surface-3);
 }
 
 .lan-scrutiny-label {
-  padding-top: var(--space-2);
+  flex: 1;
+  min-width: 0;
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
 
+.lan-yesno {
+  flex-shrink: 0;
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.lan-yesno-btn {
+  min-width: 52px;
+  padding: 5px var(--space-3);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-md) - 3px);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.lan-yesno-btn:disabled {
+  cursor: not-allowed;
+}
+
+.lan-yesno-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--input-shadow-focus);
+}
+
+.lan-yesno-yes.lan-yesno-active {
+  color: var(--btn-primary-text);
+  background: var(--btn-primary-bg);
+}
+
+.lan-yesno-no.lan-yesno-active {
+  color: #fff;
+  background: var(--danger);
+}
+
+/* ── Bottom actions ────────────────────────────────────────── */
+.lan-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
 @media (max-width: 720px) {
-  .lan-scrutiny-row {
-    grid-template-columns: 1fr;
+  .lan-info-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lan-scrutiny-head {
+    flex-wrap: wrap;
+  }
+  .lan-actions {
+    flex-direction: column-reverse;
+  }
+  .lan-actions .btn {
+    width: 100%;
   }
 }

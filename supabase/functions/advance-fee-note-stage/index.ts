@@ -127,7 +127,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           title: `${noteLabel} awaiting your approval`,
           sub_text: `${noteLabel} for "${lead.title}" has been forwarded to you.`,
           type: "action_required",
-          link: "/leads",
+          link: `/proposals/${proposal.lead_id}`,
         });
       }
 
@@ -158,7 +158,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         title: `${noteLabel} awaiting your approval`,
         sub_text: `${noteLabel} for "${lead.title}" needs your approval.`,
         type: "action_required",
-        link: "/leads",
+        link: `/proposals/${proposal.lead_id}`,
       });
       await emailRole(adminClient, "md", {
         subject: "Fee Note Awaiting Your Approval — AFC India Limited",
@@ -186,7 +186,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       title: `${noteLabel} sent back for changes`,
       sub_text: `The Recommending Authority sent the ${noteLabel} for "${lead.title}" back: ${remark}`,
       type: "action_required",
-      link: "/leads",
+      link: `/proposals/${proposal.lead_id}`,
     });
 
     return jsonRes(req, 200, { success: true });
