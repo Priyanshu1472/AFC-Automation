@@ -58,6 +58,15 @@ function ChevronRightIcon() {
   );
 }
 
+function InboxIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+    </svg>
+  );
+}
+
 function UsersIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
@@ -149,15 +158,16 @@ function BaStatusCard() {
   );
 }
 
-// Module boxes on Home. `canSee` mirrors AppHeader's nav gates, so nobody
-// gets an always-empty box for a module they can't open.
+// Module tabs in Home's own side menu. `canSee` mirrors AppHeader's nav
+// gates, so nobody gets an always-empty entry for a module they can't open.
 const ACTION_CATEGORIES = [
   { key: "empanelment", title: "Empanelment", to: "/empanelment", canSee: (role) => EMPANELMENT_ROLES.includes(role), icon: <UsersIcon /> },
   { key: "leads", title: "Leads Approval", to: "/leads", canSee: (role) => LEAD_GENERATION_NAV_ROLES.includes(role), icon: <TargetIcon /> },
   { key: "proposals", title: "Proposals", to: "/proposals", canSee: (role) => LEAD_GENERATION_NAV_ROLES.includes(role), icon: <FileIcon /> },
 ];
+const CATEGORY_TITLE = { empanelment: "Empanelment", leads: "Leads Approval", proposals: "Proposals", other: "General" };
 
-// Which box an alert belongs in — by the page it links to. Bid Payment
+// Which module an alert belongs to — by the page it links to. Bid Payment
 // Requisition (fee) note alerts created before 2026-10-07 linked to the
 // plain "/leads" list, so those are recognised by their title instead.
 function categoryOf(n) {
@@ -170,13 +180,15 @@ function categoryOf(n) {
 
 // Notifications the recipient hasn't acted on yet (type: "action_required",
 // unread) — a review stage waiting on this specific person, not a generic
-// activity feed — grouped into one box per module. Clicking one marks it
-// read and jumps to the item.
+// activity feed. Laid out like the app's own left nav: a side menu of
+// modules, each with its live pending count; the selected one's alerts
+// show on the right. Clicking an alert marks it read and opens it.
 function PendingActionsPanel() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [active, setActive] = useState("all");
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -215,57 +227,73 @@ function PendingActionsPanel() {
   const grouped = { empanelment: [], leads: [], proposals: [], other: [] };
   items.forEach((n) => grouped[categoryOf(n)].push(n));
 
-  const boxes = ACTION_CATEGORIES.filter((c) => c.canSee(profile?.role) || grouped[c.key].length > 0);
-  if (grouped.other.length > 0) boxes.push({ key: "other", title: "General", to: null, icon: <BellIcon /> });
+  const tabs = [
+    { key: "all", title: "All", icon: <InboxIcon />, count: items.length },
+    ...ACTION_CATEGORIES.filter((c) => c.canSee(profile?.role) || grouped[c.key].length > 0).map((c) => ({ ...c, count: grouped[c.key].length })),
+    ...(grouped.other.length ? [{ key: "other", title: "General", icon: <BellIcon />, count: grouped.other.length }] : []),
+  ];
+  const current = tabs.find((t) => t.key === active) || tabs[0];
+  const list = current.key === "all" ? items : grouped[current.key];
 
   return (
-    <section className="home-actions" aria-labelledby="home-actions-title">
-      <div className="home-actions-head">
-        <h2 id="home-actions-title">Needs your action</h2>
-        <p>{items.length === 0 ? "You're all caught up." : `${items.length} item${items.length !== 1 ? "s" : ""} waiting on you`}</p>
-      </div>
+    <section className="home-inbox" aria-label="Needs your action">
+      <nav className="home-inbox-nav" aria-label="Alert categories">
+        <p className="home-inbox-nav-heading">Needs your action</p>
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            className={`home-inbox-tab${current.key === t.key ? " active" : ""}`}
+            aria-current={current.key === t.key ? "true" : undefined}
+            onClick={() => setActive(t.key)}
+          >
+            <span className="home-inbox-tab-icon" aria-hidden="true">{t.icon}</span>
+            <span className="home-inbox-tab-label">{t.title}</span>
+            <span className={`home-inbox-tab-count${t.count ? " has" : ""}`}>{t.count}</span>
+          </button>
+        ))}
+      </nav>
 
-      <div className="home-boxes">
-        {boxes.map((c) => {
-          const list = grouped[c.key];
-          return (
-            <div key={c.key} className={`home-box home-box-${c.key}${list.length ? " home-box-has" : ""}`}>
-              <div className="home-box-head">
-                <span className="home-box-icon" aria-hidden="true">{c.icon}</span>
-                <h3 className="home-box-title">{c.title}</h3>
-                <span className={`home-box-count${list.length ? " home-box-count-has" : ""}`}>{list.length}</span>
-              </div>
+      <div className="home-inbox-pane">
+        <div className="home-inbox-pane-head">
+          <div>
+            <h2>{current.title === "All" ? "All pending items" : current.title}</h2>
+            <p>{list.length === 0 ? "Nothing waiting on you here." : `${list.length} item${list.length !== 1 ? "s" : ""} waiting on you`}</p>
+          </div>
+          {current.to && (
+            <button type="button" className="home-inbox-open" onClick={() => navigate(current.to)}>
+              Open {current.title} <ChevronRightIcon />
+            </button>
+          )}
+        </div>
 
-              {list.length === 0 ? (
-                <div className="home-box-empty">
-                  <CheckCircleIcon />
-                  <span>Nothing pending</span>
-                </div>
-              ) : (
-                <div className="home-box-list">
-                  {list.map((n) => (
-                    <button key={n.id} type="button" className="home-alert" onClick={() => handleClick(n)}>
-                      <span className="home-alert-body">
-                        <span className="home-alert-title">{n.title}</span>
-                        {n.sub_text && <span className="home-alert-sub">{n.sub_text}</span>}
-                      </span>
-                      <span className="home-alert-right">
-                        {n.created_at && <span className="home-alert-time">{timeAgo(n.created_at)}</span>}
-                        <ChevronRightIcon />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {c.to && (
-                <button type="button" className="home-box-foot" onClick={() => navigate(c.to)}>
-                  Open {c.title} <ChevronRightIcon />
+        {list.length === 0 ? (
+          <div className="home-inbox-empty">
+            <span className="home-inbox-empty-icon" aria-hidden="true"><CheckCircleIcon /></span>
+            <p className="home-inbox-empty-title">All caught up</p>
+            <p className="home-inbox-empty-sub">New items will appear here as soon as they need you.</p>
+          </div>
+        ) : (
+          <div className="home-inbox-list">
+            {list.map((n) => {
+              const cat = categoryOf(n);
+              return (
+                <button key={n.id} type="button" className="home-alert" onClick={() => handleClick(n)}>
+                  <span className={`home-alert-dot home-alert-dot-${cat}`} aria-hidden="true" />
+                  <span className="home-alert-body">
+                    <span className="home-alert-title">{n.title}</span>
+                    {n.sub_text && <span className="home-alert-sub">{n.sub_text}</span>}
+                    {current.key === "all" && <span className="home-alert-cat">{CATEGORY_TITLE[cat]}</span>}
+                  </span>
+                  <span className="home-alert-right">
+                    {n.created_at && <span className="home-alert-time">{timeAgo(n.created_at)}</span>}
+                    <ChevronRightIcon />
+                  </span>
                 </button>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );
