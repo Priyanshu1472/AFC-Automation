@@ -3,8 +3,8 @@
 // or AGM in empanelment_applications.dgm_id) can send this — it's a
 // non-final, provisional empanelment letter (PDF) emailed to the BP, distinct
 // from the MD's final acceptance email (see the "Empanelment Letter" attached
-// in advance-empanelment-stage's md_accept). Sendable at ANY stage once the
-// BP has filled the form — not gated behind MD's recommendation. PDF layout
+// in advance-empanelment-stage's md_accept). Sendable only once the PO has
+// forwarded the application to the CS (isProvisionalLetterOpen). PDF layout
 // ported from the previous AFC empanelment app's send-provisional-mail
 // function, adapted to this schema (empanelment_applications/
 // ba_registrations instead of empanelment_invitations). Letterhead engine
@@ -17,7 +17,7 @@ import { sendResendEmail } from "../_shared/email.ts";
 import { notifyUser } from "../_shared/notify.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { bytesToBase64 } from "../_shared/letterPdf.ts";
-import { buildProvisionalLetter } from "../_shared/provisionalLetterPdf.ts";
+import { buildProvisionalLetter, isProvisionalLetterOpen } from "../_shared/provisionalLetterPdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -59,12 +59,6 @@ function buildEmailBody(orgName: string, refNumber: string, validUntil: string):
     </div>`;
 }
 
-// Any stage once the BP has filled the form — the DGM doesn't have to wait
-// for their own review turn, let alone MD's recommendation.
-const ALLOWED_STATUSES = new Set([
-  "filled", "po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "accepted", "on_hold",
-]);
-
 async function logActivity(admin: AdminClient, applicationId: string, actorId: string, actorRole: string, action: string, comment: string | null) {
   await admin.from("empanelment_activity_log").insert({ application_id: applicationId, actor_id: actorId, actor_role: actorRole, action, comment });
 }
@@ -91,7 +85,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: app, error: appErr } = await adminClient
     .from("empanelment_applications")
-    .select("id, status, ba_email, team, sent_by, dgm_id, application_code, provisional_letter_sent")
+    .select("id, status, hold_origin_status, ba_email, team, sent_by, dgm_id, application_code, provisional_letter_sent")
     .eq("id", application_id)
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
@@ -99,7 +93,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id) {
     return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can send its provisional letter." });
   }
-  if (!ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: `The BP hasn't submitted their form yet, so there's nothing to send a letter for.` });
+  if (app.status === "rejected") return jsonRes(req, 400, { error: "This application was found ineligible — a provisional letter can't be sent." });
+  if (!isProvisionalLetterOpen(app.status, app.hold_origin_status)) return jsonRes(req, 400, { error: "The provisional letter can be sent only after the Project Officer has forwarded this application to the CS." });
   if (app.provisional_letter_sent) return jsonRes(req, 400, { error: "A provisional letter has already been sent for this application." });
 
   const pinErr = await verifyActionPin(adminClient, caller.id, caller.pin_hash, pin);
@@ -151,7 +146,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     await logActivity(adminClient, application_id, caller.id, caller.role, "provisional_letter_sent", `Provisional letter sent to ${app.ba_email} (Ref: ${refNumber})`);
     await notifyUser(adminClient, app.sent_by, {
       title: "Provisional letter sent",
-      sub_text: `${orgName}'s provisional empanelment letter (Ref: ${refNumber}) was sent by the DGM.`,
+      sub_text: `${orgName}'s provisional empanelment letter (Ref: ${refNumber}) was sent by the ${caller.role === "agm" ? "AGM" : caller.role === "general_manager" ? "General Manager" : "DGM"}.`,
       type: "info",
       link: `/empanelment/${application_id}`,
     });

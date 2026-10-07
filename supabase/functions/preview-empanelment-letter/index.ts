@@ -24,14 +24,9 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { bytesToBase64, formatDateDDMMYYYY, formatDateLong } from "../_shared/letterPdf.ts";
 import { buildEmpanelmentLetter } from "../_shared/empanelmentLetterPdf.ts";
-import { buildProvisionalLetter } from "../_shared/provisionalLetterPdf.ts";
+import { buildProvisionalLetter, isProvisionalLetterOpen } from "../_shared/provisionalLetterPdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
-
-// Same set send-provisional-letter allows sending from.
-const PROVISIONAL_ALLOWED_STATUSES = new Set([
-  "filled", "po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "accepted", "on_hold",
-]);
 
 export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
@@ -54,7 +49,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: app, error: appErr } = await adminClient
     .from("empanelment_applications")
-    .select("id, status, team, project_officer_id, sent_by, dgm_id, application_code, provisional_letter_sent, provisional_sent_at, empanelment_ref, empanelment_expires_at, decided_at")
+    .select("id, status, hold_origin_status, team, project_officer_id, sent_by, dgm_id, application_code, provisional_letter_sent, provisional_sent_at, empanelment_ref, empanelment_expires_at, decided_at")
     .eq("id", application_id)
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
@@ -64,10 +59,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   // exactly (not just the one person recorded as project_officer_id — see
   // get-empanelment-document-url for why that was too narrow), since
   // auth.uid() is null for the service-role client used here.
+  // DGM / AGM / GM see every team's applications (and letters) so they can
+  // spot a company that's already empanelled via another team.
   const canViewApplication =
-    ["md", "cfo", "cs", "admin"].includes(caller.role) ||
+    ["md", "cfo", "cs", "admin", "dgm", "agm", "general_manager"].includes(caller.role) ||
     (
-      ["dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant", "area_manager", "regional_manager", "general_manager"].includes(caller.role) &&
+      ["srm", "project_officer", "associate_consultant", "project_assistant", "area_manager", "regional_manager"].includes(caller.role) &&
       isCallerOnTeam(caller, app.team)
     );
 
@@ -90,11 +87,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         .maybeSingle();
       if (!baData) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet." });
 
-      // For an issued letter, sign it as the MD who actually accepted it (from
-      // the activity log), falling back to any MD; for a preview it's the
-      // previewing MD themselves.
-      let signerId = caller.id;
-      if (issued) {
+      // Signed by the application's advising authority — same signer
+      // md_accept uses (advance-empanelment-stage). Only a legacy
+      // application with no advisor recorded falls back to the accepting MD
+      // (from the activity log) / the previewing MD.
+      let signerId = app.dgm_id || caller.id;
+      if (!app.dgm_id && issued) {
         const { data: acceptLog } = await adminClient
           .from("empanelment_activity_log")
           .select("actor_id")
@@ -103,11 +101,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        signerId = acceptLog?.actor_id || caller.id;
-        if (!acceptLog?.actor_id) {
-          const { data: anyMd } = await adminClient.from("afc_users").select("id").eq("role", "md").eq("is_active", true).limit(1).maybeSingle();
-          if (anyMd?.id) signerId = anyMd.id;
-        }
+        if (acceptLog?.actor_id) signerId = acceptLog.actor_id;
       }
 
       const built = await buildEmpanelmentLetter(
@@ -135,7 +129,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       // Pre-issue preview — mirrors send-provisional-letter's authorization, minus the PIN.
       if (!["dgm", "agm", "general_manager"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM, AGM, or General Manager can preview the provisional letter." });
       if (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id) return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can preview its provisional letter." });
-      if (!PROVISIONAL_ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet, so there's nothing to preview." });
+      if (!isProvisionalLetterOpen(app.status, app.hold_origin_status)) return jsonRes(req, 400, { error: "The provisional letter opens only after the Project Officer has forwarded this application to the CS." });
     }
 
     const { data: reg } = await adminClient

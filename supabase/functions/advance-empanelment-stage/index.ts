@@ -151,15 +151,18 @@ async function provisionBaAccount(
 // Best-effort: a logo-fetch or PDF-generation hiccup must never block the
 // MD's accept action — falls back to null, and sendDecisionMail just sends
 // the credentials email without an attachment (same as before this letter
-// existed).
+// existed). The letter is issued and signed by the application's advising
+// authority (dgm_id) — the MD approves it, but it goes out in the advisor's
+// name. Falls back to the accepting MD only for a legacy application with
+// no advisor recorded.
 async function tryBuildEmpanelmentLetter(
   admin: AdminClient,
   app: { id: string; application_code: string; team: string; dgm_id: string | null },
   baData: { org_name: string | null; contact_person: string | null; designation: string | null; reg_address: string | null; sectors_served: unknown } | null,
-  mdId: string
+  fallbackSignerId: string
 ): Promise<{ attachment: { filename: string; content: string }; refNumber: string; validUntil: string } | null> {
   try {
-    const built = await buildEmpanelmentLetter(admin, baData, mdId);
+    const built = await buildEmpanelmentLetter(admin, baData, app.dgm_id || fallbackSignerId);
     if (!built) return null;
 
     await admin.from("empanelment_applications").update({ empanelment_ref: built.refNumber, empanelment_expires_at: built.validUntilDate.toISOString() }).eq("id", app.id);
@@ -209,13 +212,14 @@ async function sendDecisionMail(
       : `
         <p style="margin:0 0 16px;font-size:14px;color:#374151;">Dear Sir / Ma'am,</p>
         <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
-          We regret to inform you that the empanelment application submitted by <strong>${escapeHtml(orgName)}</strong> has been <strong style="color:#dc2626;">rejected</strong>.
+          Thank you for your interest in partnering with AFC India Limited. After careful evaluation, the empanelment application submitted by <strong>${escapeHtml(orgName)}</strong> has been found <strong>ineligible</strong> for empanelment at this time.
         </p>
-        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
-          <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:0.08em;">Remarks</p>
-          <p style="margin:0;font-size:13px;color:#7f1d1d;line-height:1.7;">${escapeHtml(remarks)}</p>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+          <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.08em;">Remarks</p>
+          <p style="margin:0;font-size:13px;color:#374151;line-height:1.7;">${escapeHtml(remarks)}</p>
         </div>
-        <p style="margin:0;font-size:13px;color:#374151;">For queries, contact us at afc@afcindia.org.in.</p>
+        <p style="margin:0 0 8px;font-size:13px;color:#374151;line-height:1.7;">We value your interest and look forward to the possibility of working together in the future.</p>
+        <p style="margin:0;font-size:13px;color:#374151;">For any queries, please write to us at afc@afcindia.org.in.</p>
       `
   );
   return sendResendEmail({
@@ -286,19 +290,18 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         if (!PO_REVIEWER_ROLES.includes(caller.role) || caller.id !== app.project_officer_id) return forbidden("Only the assigned Project Officer can forward this application.");
         if (app.status !== "po_review") return badState("po_review");
         if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
+        // The finance/compliance stage is sequential — CS first, then CFO.
+        // The status stays cfo_cs_review for both halves (cs_reviewed tells
+        // them apart), so only the CS is notified here.
         await adminClient.from("empanelment_applications").update({ status: "cfo_cs_review", po_comment: trimmedComment }).eq("id", app.id);
         await logActivity(adminClient, app.id, caller.id, caller.role, "po_forwarded", trimmedComment);
-        const forwardPayload = {
+        await notifyRole(adminClient, "cs", {
           title: "Empanelment application awaiting your review",
           sub_text: `${orgName}'s application was forwarded by the ${reviewerLabel(caller.role)}.`,
           type: "action_required",
           link: `/empanelment/${app.id}`,
-        };
-        await notifyRole(adminClient, "cfo", forwardPayload);
-        await notifyRole(adminClient, "cs", forwardPayload);
-        const forwardMail = { subject: "Empanelment Application Awaiting Your Review — AFC India Limited", html: cfoCsReviewEmailHtml(orgName, app.id) };
-        await emailRole(adminClient, "cfo", forwardMail);
-        await emailRole(adminClient, "cs", forwardMail);
+        });
+        await emailRole(adminClient, "cs", { subject: "Empanelment Application Awaiting Your Review — AFC India Limited", html: cfoCsReviewEmailHtml(orgName, app.id) });
         return jsonRes(req, 200, { success: true, status: "cfo_cs_review" });
       }
 
@@ -309,31 +312,46 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         if (app.status !== "cfo_cs_review") return badState("cfo_cs_review");
         if (isCfo && app.cfo_reviewed) return jsonRes(req, 400, { error: "You have already reviewed this application." });
         if (!isCfo && app.cs_reviewed) return jsonRes(req, 400, { error: "You have already reviewed this application." });
+        // Sequential: the CFO reviews only after the CS has.
+        if (isCfo && !app.cs_reviewed) return jsonRes(req, 400, { error: "The CS hasn't reviewed this application yet — it comes to the CFO after the CS." });
         if (!trimmedComment) return jsonRes(req, 400, { error: "A comment is required." });
 
+        // Both done → on to the PO's final review. In the sequential flow
+        // that's always on the CFO's turn; an application already half-way
+        // through the old parallel flow (CFO reviewed before CS) also
+        // completes on the CS's review.
         const otherDone = isCfo ? app.cs_reviewed : app.cfo_reviewed;
         const update: Record<string, unknown> = isCfo ? { cfo_comment: trimmedComment, cfo_reviewed: true } : { cs_comment: trimmedComment, cs_reviewed: true };
         if (otherDone) update.status = "po_final_review";
 
         await adminClient.from("empanelment_applications").update(update).eq("id", app.id);
         await logActivity(adminClient, app.id, caller.id, caller.role, isCfo ? "cfo_reviewed" : "cs_reviewed", trimmedComment);
+        if (!isCfo && !otherDone) {
+          await notifyRole(adminClient, "cfo", {
+            title: "Empanelment application awaiting your review",
+            sub_text: `${orgName}'s application was reviewed by the CS and is now awaiting your review.`,
+            type: "action_required",
+            link: `/empanelment/${app.id}`,
+          });
+          await emailRole(adminClient, "cfo", { subject: "Empanelment Application Awaiting Your Review — AFC India Limited", html: cfoCsReviewEmailHtml(orgName, app.id) });
+        }
         if (otherDone) {
           await notifyUser(adminClient, app.project_officer_id, {
             title: "Empanelment application awaiting your review",
-            sub_text: `${orgName}'s application cleared CFO and CS review. Please give it a final look before forwarding to the ${advLabel}.`,
+            sub_text: `${orgName}'s application cleared CS and CFO review. Please give it a final look before forwarding to the ${advLabel}.`,
             type: "action_required",
             link: `/empanelment/${app.id}`,
           });
           await emailUser(adminClient, app.project_officer_id, {
             subject: "Empanelment Application Awaiting Your Final Review — AFC India Limited",
-            html: actionRequiredEmailHtml(orgName, app.id, `give it a final look before forwarding to the ${advLabel}, now that CFO and CS review is complete`),
+            html: actionRequiredEmailHtml(orgName, app.id, `give it a final look before forwarding to the ${advLabel}, now that CS and CFO review is complete`),
           });
         }
         return jsonRes(req, 200, { success: true, status: otherDone ? "po_final_review" : "cfo_cs_review", forwarded: !!otherDone });
       }
 
       case "po_resend_cfo_cs": {
-        if (!PO_REVIEWER_ROLES.includes(caller.role) || caller.id !== app.project_officer_id) return forbidden("Only the assigned Project Officer can send this back to CFO and CS.");
+        if (!PO_REVIEWER_ROLES.includes(caller.role) || caller.id !== app.project_officer_id) return forbidden("Only the assigned Project Officer can send this back to CS and CFO.");
         if (app.status !== "po_final_review") return badState("po_final_review");
         await adminClient.from("empanelment_applications").update({
           status: "cfo_cs_review",
@@ -342,18 +360,15 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           cfo_comment: null,
           cs_comment: null,
         }).eq("id", app.id);
-        await logActivity(adminClient, app.id, caller.id, caller.role, "po_resent_cfo_cs", trimmedComment || "Sent back to CFO and CS for a fresh review.");
-        const resendPayload = {
+        await logActivity(adminClient, app.id, caller.id, caller.role, "po_resent_cfo_cs", trimmedComment || "Sent back to CS and CFO for a fresh review.");
+        // Restarts the sequential CS → CFO review, so the CS goes first again.
+        await notifyRole(adminClient, "cs", {
           title: "Empanelment application sent back for review",
           sub_text: `${orgName}'s application was sent back by the ${reviewerLabel(caller.role)} for a fresh look.`,
           type: "action_required",
           link: `/empanelment/${app.id}`,
-        };
-        await notifyRole(adminClient, "cfo", resendPayload);
-        await notifyRole(adminClient, "cs", resendPayload);
-        const resendMail = { subject: "Empanelment Application Awaiting Your Review — AFC India Limited", html: cfoCsReviewEmailHtml(orgName, app.id) };
-        await emailRole(adminClient, "cfo", resendMail);
-        await emailRole(adminClient, "cs", resendMail);
+        });
+        await emailRole(adminClient, "cs", { subject: "Empanelment Application Awaiting Your Review — AFC India Limited", html: cfoCsReviewEmailHtml(orgName, app.id) });
         return jsonRes(req, 200, { success: true, status: "cfo_cs_review" });
       }
 
@@ -448,17 +463,20 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         return jsonRes(req, 200, { success: true, status: "dgm_review" });
       }
 
-      // DGMs can no longer reject directly — kept as an explicit case
+      // The advisor can't mark ineligible directly — kept as an explicit case
       // (rather than falling through to "Unknown action") so the intent is
       // clear if this is ever hit directly, e.g. a stale client.
       case "dgm_reject": {
-        return forbidden("DGMs can no longer reject applications directly. Send it back to the Project Officer, or forward it to the MD for a final decision.");
+        return forbidden("The advising authority can't mark an application ineligible directly. Send it back to the Project Officer, or forward it to the MD for a final decision.");
       }
 
+      // "Ineligible" everywhere a user can see it. The internal keys
+      // (md_reject action, "rejected" status, md_rejected log entry) are
+      // left as-is — they're stored DB values and audit history.
       case "md_reject": {
-        if (caller.role !== "md") return forbidden("Only the MD can reject at this stage.");
+        if (caller.role !== "md") return forbidden("Only the MD can mark an application ineligible.");
         if (app.status !== "md_review") return badState("md_review");
-        if (!trimmedComment) return jsonRes(req, 400, { error: "Rejection remarks are required." });
+        if (!trimmedComment) return jsonRes(req, 400, { error: "Remarks are required." });
 
         const rejectPinErr = await verifyActionPin(adminClient, caller.id, caller.pin_hash, body.pin);
         if (rejectPinErr) return jsonRes(req, 400, { error: rejectPinErr });
@@ -467,10 +485,10 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         const emailSent = await sendDecisionMail(orgName, app.ba_email, false, trimmedComment);
         await logActivity(adminClient, app.id, caller.id, caller.role, "md_rejected", trimmedComment);
         // Whole team, not just the AC who sent the invite — the team should
-        // know an application they worked on was ultimately rejected.
+        // know how an application they worked on was finally decided.
         await notifyTeam(adminClient, app.team, {
-          title: "Empanelment application rejected",
-          sub_text: `${orgName}'s application was rejected by the MD. Remarks: ${trimmedComment}`,
+          title: "Empanelment application found ineligible",
+          sub_text: `${orgName}'s application was found ineligible by the MD. Remarks: ${trimmedComment}`,
           type: "info",
           link: `/empanelment/${app.id}`,
         }, caller.id);

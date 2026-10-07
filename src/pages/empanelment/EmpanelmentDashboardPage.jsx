@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { can } from "../../lib/roles";
+import { displayStatus, INELIGIBLE_LABEL } from "../../components/empanelment/ApplicationTimeline";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
@@ -17,16 +18,19 @@ const STATUS_MAP = {
   sent: { label: "Sent", variant: "info" },
   filled: { label: "BP Filled", variant: "warning" },
   po_review: { label: "PO Review", variant: "warning" },
-  cfo_cs_review: { label: "CFO / CS", variant: "info" },
+  // The stored cfo_cs_review is shown as its two sequential halves.
+  cs_review: { label: "CS Review", variant: "info" },
+  cfo_review: { label: "CFO Review", variant: "info" },
   po_final_review: { label: "PO Final", variant: "warning" },
   dgm_review: { label: "DGM Review", variant: "neutral" },
   md_review: { label: "MD Review", variant: "neutral" },
   accepted: { label: "Accepted", variant: "success" },
-  rejected: { label: "Rejected", variant: "danger" },
+  rejected: { label: INELIGIBLE_LABEL, variant: "neutral" },
   on_hold: { label: "On Hold", variant: "warning" },
 };
-const PIPELINE = ["sent", "po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "accepted"];
+const PIPELINE = ["sent", "po_review", "cs_review", "cfo_review", "po_final_review", "dgm_review", "md_review", "accepted"];
 const TERMINAL = ["accepted", "rejected"];
+const shownStatus = (a) => displayStatus(a.status, a.cs_reviewed);
 const IN_PROGRESS_STATUSES = ["po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "on_hold"];
 const DATE_RANGES = [
   { label: "7d", days: 7 },
@@ -42,12 +46,12 @@ const DATE_RANGES = [
 const DONUT_BUCKETS = [
   { key: "awaiting", label: "Awaiting BP", match: (s) => s === "sent" || s === "filled", colorVar: "--edb-cat-1" },
   { key: "accepted", label: "Accepted", match: (s) => s === "accepted", colorVar: "--edb-cat-2" },
-  { key: "cfo_cs", label: "CFO / CS Review", match: (s) => s === "cfo_cs_review", colorVar: "--edb-cat-3" },
+  { key: "cfo_cs", label: "CS / CFO Review", match: (s) => s === "cfo_cs_review", colorVar: "--edb-cat-3" },
   { key: "po", label: "PO Review", match: (s) => s === "po_review" || s === "po_final_review", colorVar: "--edb-cat-4" },
   { key: "dgm", label: "DGM Review", match: (s) => s === "dgm_review", colorVar: "--edb-cat-5" },
   { key: "hold", label: "On Hold", match: (s) => s === "on_hold", colorVar: "--edb-cat-6" },
   { key: "md", label: "MD Review", match: (s) => s === "md_review", colorVar: "--edb-cat-7" },
-  { key: "rejected", label: "Rejected", match: (s) => s === "rejected", colorVar: "--edb-cat-8" },
+  { key: "rejected", label: INELIGIBLE_LABEL, match: (s) => s === "rejected", colorVar: "--edb-cat-8" },
 ];
 
 function daysSince(iso) {
@@ -249,7 +253,7 @@ function DrillDownPanel({ title, apps, onClose, onView }) {
                   <span className="edb-drill-email">{a.ba_email}</span>
                   <span className="edb-drill-code">{a.application_code}{a.team ? ` · ${a.team}` : ""}</span>
                 </span>
-                <Badge variant={STATUS_MAP[a.status]?.variant || "neutral"}>{STATUS_MAP[a.status]?.label || a.status}</Badge>
+                <Badge variant={STATUS_MAP[shownStatus(a)]?.variant || "neutral"}>{STATUS_MAP[shownStatus(a)]?.label || a.status}</Badge>
               </button>
             ))
           )}
@@ -284,7 +288,7 @@ export default function EmpanelmentDashboardPage() {
     // every team, dgm their own team, po/ac their own applications.
     const { data: appRows } = await supabase
       .from("empanelment_applications")
-      .select("id, status, team, office, ba_email, application_code, created_at, decided_at, provisional_letter_sent")
+      .select("id, status, cs_reviewed, team, office, ba_email, application_code, created_at, decided_at, provisional_letter_sent")
       .order("created_at", { ascending: false })
       .limit(2000);
     const list = appRows || [];
@@ -353,7 +357,7 @@ export default function EmpanelmentDashboardPage() {
   // paused, not at a numbered stage) — surfaced separately via the "On
   // Hold" KPI tile and the donut instead.
   const funnelCounts = useMemo(
-    () => PIPELINE.map((s) => ({ key: s, count: filtered.filter((a) => a.status === s).length })),
+    () => PIPELINE.map((s) => ({ key: s, count: filtered.filter((a) => shownStatus(a) === s).length })),
     [filtered]
   );
 
@@ -438,7 +442,7 @@ export default function EmpanelmentDashboardPage() {
     if (activeStage === stageKey) { closeDrill(); return; }
     clearDrillTriggers();
     setActiveStage(stageKey);
-    openDrill(STATUS_MAP[stageKey]?.label || stageKey, filtered.filter((a) => a.status === stageKey));
+    openDrill(STATUS_MAP[stageKey]?.label || stageKey, filtered.filter((a) => shownStatus(a) === stageKey));
   }
   function handleMonthClick(month) {
     openDrill(`Sent in ${month.label}`, month.apps);
@@ -483,7 +487,7 @@ export default function EmpanelmentDashboardPage() {
           <StatTile label="Total Applications" value={total} sub={dateRangeDays ? `Last ${dateRangeDays} days` : "All time"} variant="brand" icon={Icon.send} onClick={() => handleKpiClick("total", "All Applications", filtered)} active={activeKpi === "total"} />
           <StatTile label="In Progress" value={inProgress} sub="Active pipeline" variant="warning" icon={Icon.clock} onClick={() => handleKpiClick("progress", "In Progress", filtered.filter((a) => IN_PROGRESS_STATUSES.includes(a.status)))} active={activeKpi === "progress"} />
           <StatTile label="Empanelled" value={accepted} sub={acceptRate !== null ? `${acceptRate}% acceptance rate` : "—"} variant="success" icon={Icon.check} onClick={() => handleKpiClick("accepted", "Empanelled", filtered.filter((a) => a.status === "accepted"))} active={activeKpi === "accepted"} />
-          <StatTile label="Rejected" value={rejected} sub="Final decisions" variant="danger" icon={Icon.x} onClick={() => handleKpiClick("rejected", "Rejected", filtered.filter((a) => a.status === "rejected"))} active={activeKpi === "rejected"} />
+          <StatTile label={INELIGIBLE_LABEL} value={rejected} sub="Final decisions" variant="danger" icon={Icon.x} onClick={() => handleKpiClick("rejected", INELIGIBLE_LABEL, filtered.filter((a) => a.status === "rejected"))} active={activeKpi === "rejected"} />
           <StatTile label="On Hold" value={onHold} sub="Awaiting BP correction" variant="neutral" icon={Icon.pause} onClick={() => handleKpiClick("hold", "On Hold", filtered.filter((a) => a.status === "on_hold"))} active={activeKpi === "hold"} />
           {avgTat !== null && <StatTile label="Avg. Time to Accept" value={`${avgTat}d`} sub="Sent → accepted" variant="info" icon={Icon.trending} />}
           <StatTile label="Provisional Letters Sent" value={provisionalSent} sub={`${total - provisionalSent} not yet sent`} variant="info" icon={Icon.mail} />

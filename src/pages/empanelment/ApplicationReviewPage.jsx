@@ -13,7 +13,8 @@ import PageLoader from "../../components/ui/PageLoader";
 import ComplianceHoldModal from "./ComplianceHoldModal";
 import PinConfirmModal from "./PinConfirmModal";
 import LetterPreviewPinModal from "./LetterPreviewPinModal";
-import { STATUS_FLOW, STATUS_BADGE, ProgressStepper, TimelineAccordion, stepLabel } from "../../components/empanelment/ApplicationTimeline";
+import { STATUS_FLOW, STATUS_BADGE, ProgressStepper, TimelineAccordion, stepLabel, displayStatus, INELIGIBLE_LABEL } from "../../components/empanelment/ApplicationTimeline";
+import EmpanelmentChatPanel from "../../components/empanelment/EmpanelmentChatPanel";
 import "../../styles/ApplicationReviewPage.css";
 
 const SLOT_LABELS = {
@@ -69,7 +70,10 @@ function getContextComments(app, logs) {
   const lastAction = logs.find((l) => l.comment && l.actor_role !== "ba");
 
   if (app.status === "cfo_cs_review") {
-    if (lastAction?.action === "po_resent_cfo_cs") {
+    // Sequential CS → CFO: the CS sees the PO's note; the CFO (acting after
+    // the CS) sees the CS's comment too.
+    if (app.cs_reviewed && app.cs_comment) out.push({ label: "CS Comment", text: app.cs_comment, colorClass: "green" });
+    if (lastAction?.action === "po_resent_cfo_cs" && !app.cs_reviewed) {
       out.push({ label: `Sent Back by ${poLabel}`, text: lastAction.comment, colorClass: "orange" });
     } else if (app.po_comment) {
       out.push({ label: `${poLabel}'s Review`, text: app.po_comment, colorClass: "cyan" });
@@ -78,8 +82,8 @@ function getContextComments(app, logs) {
     if (lastAction?.action === "dgm_sent_back") {
       out.push({ label: `Sent Back by ${advLabel}`, text: lastAction.comment, colorClass: "orange" });
     } else {
-      if (app.cfo_comment) out.push({ label: "CFO Comment", text: app.cfo_comment, colorClass: "cyan" });
       if (app.cs_comment) out.push({ label: "CS Comment", text: app.cs_comment, colorClass: "green" });
+      if (app.cfo_comment) out.push({ label: "CFO Comment", text: app.cfo_comment, colorClass: "cyan" });
     }
   } else if (app.status === "dgm_review") {
     if (lastAction?.action === "md_sent_back") {
@@ -93,18 +97,20 @@ function getContextComments(app, logs) {
   return out;
 }
 
-// MD-only now (DGM can no longer reject — see the removed dgm_reject
-// button/handler below). No preview step: the PIN modal that follows this
-// one is the actual safety gate, so this is just remarks capture.
-function RejectModal({ onConfirm, onClose }) {
+// MD-only (the advisor can't mark ineligible — see the dgm_reject case in
+// advance-empanelment-stage). The stored action/status keep the "reject"
+// name; every visible word says "Ineligible". No preview step: the PIN
+// modal that follows this one is the actual safety gate, so this is just
+// remarks capture.
+function IneligibleModal({ onConfirm, onClose }) {
   const [remark, setRemark] = useState("");
   return (
     <div className="ar-modal-backdrop" onClick={() => onClose()}>
       <div className="ar-modal ar-modal-lg" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div className="ar-modal-header"><h3 className="ar-modal-title">Reject Application</h3><p className="ar-modal-desc">Write the rejection remarks — you'll be asked to confirm with your action PIN before this is sent.</p></div>
-        <div className="ar-field"><label className="ar-label">Rejection Remarks <span className="ar-required">*</span></label><textarea className="input" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="Write the reason for rejection clearly..." rows={4} /></div>
+        <div className="ar-modal-header"><h3 className="ar-modal-title">Mark Application Ineligible</h3><p className="ar-modal-desc">Write your remarks — they'll be shared with the BP. You'll be asked to confirm with your action PIN before this is sent.</p></div>
+        <div className="ar-field"><label className="ar-label">Remarks <span className="ar-required">*</span></label><textarea className="input" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="Explain clearly why this application is ineligible..." rows={4} /></div>
         <div className="ar-modal-actions">
-          <Button variant="danger" block disabled={!remark.trim()} onClick={() => onConfirm(remark.trim())} icon={<XIcon />}>Reject Application</Button>
+          <Button variant="danger" block disabled={!remark.trim()} onClick={() => onConfirm(remark.trim())} icon={<XIcon />}>Mark Ineligible</Button>
           <Button variant="secondary" block onClick={onClose}>Cancel</Button>
         </div>
       </div>
@@ -221,6 +227,7 @@ export default function ApplicationReviewPage() {
   }, [id, fetchApp]);
 
   function showBanner(msg, type = "success") { showToast(msg, type); }
+  const poLabel = app?.po?.role === "project_assistant" ? "Project Assistant" : "Project Officer";
 
   async function runAction(action, extra = {}) {
     setActionLoading(true);
@@ -242,7 +249,7 @@ export default function ApplicationReviewPage() {
   async function handlePOForward() {
     if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
     const data = await runAction("po_forward");
-    if (data) { showBanner("Forwarded to CFO and CS."); setComment(""); fetchApp(); }
+    if (data) { showBanner("Forwarded to CS."); setComment(""); fetchApp(); }
   }
   async function handlePOFinalForward() {
     const data = await runAction("po_final_forward");
@@ -250,17 +257,17 @@ export default function ApplicationReviewPage() {
   }
   async function handlePOResendCfoCs() {
     const data = await runAction("po_resend_cfo_cs");
-    if (data) { showBanner("Sent back to CFO and CS for a fresh review."); setComment(""); fetchApp(); }
+    if (data) { showBanner("Sent back to CS and CFO for a fresh review."); setComment(""); fetchApp(); }
   }
   async function handleCFOForward() {
     if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
     const data = await runAction("cfo_review");
-    if (data) { showBanner(data.forwarded ? "Both CFO and CS reviewed. Forwarded to Project Officer." : "Your review has been saved. Waiting for CS to review."); setComment(""); fetchApp(); }
+    if (data) { showBanner(`Review submitted. Forwarded to the ${poLabel} for final review.`); setComment(""); fetchApp(); }
   }
   async function handleCSForward() {
     if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
     const data = await runAction("cs_review");
-    if (data) { showBanner(data.forwarded ? "Both CFO and CS reviewed. Forwarded to Project Officer." : "Your review has been saved. Waiting for CFO to review."); setComment(""); fetchApp(); }
+    if (data) { showBanner(data.forwarded ? `Review submitted. Forwarded to the ${poLabel} for final review.` : "Review submitted. Forwarded to the CFO."); setComment(""); fetchApp(); }
   }
   async function handleDGMRecommend() {
     if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
@@ -270,7 +277,7 @@ export default function ApplicationReviewPage() {
   async function handleDGMSendBack() {
     if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
     const data = await runAction("dgm_send_back");
-    if (data) { showBanner(`Sent back to ${app?.po?.role === "project_assistant" ? "Project Assistant" : "Project Officer"}.`); setComment(""); fetchApp(); }
+    if (data) { showBanner(`Sent back to ${poLabel}.`); setComment(""); fetchApp(); }
   }
   async function handleMDSendBack() {
     if (!comment.trim()) { showBanner("Comment is required.", "danger"); return; }
@@ -283,7 +290,7 @@ export default function ApplicationReviewPage() {
   }
   function handleRejectPinSuccess(data) {
     setShowRejectPin(false);
-    showBanner(`Application rejected. Rejection email ${data.email_sent ? "sent to" : "failed to send to"} BP.`, data.email_sent ? "success" : "warning");
+    showBanner(`Application marked ineligible. Email ${data.email_sent ? "sent to" : "failed to send to"} the BP.`, data.email_sent ? "success" : "warning");
     setComment("");
     setRejectRemark("");
     fetchApp();
@@ -298,8 +305,9 @@ export default function ApplicationReviewPage() {
     if (!app) return false;
     const s = app.status;
     if (["project_officer", "area_manager", "regional_manager", "project_assistant"].includes(role) && app.project_officer_id === profile.id && (s === "po_review" || s === "po_final_review")) return true;
-    if (role === "cfo" && s === "cfo_cs_review" && !app.cfo_reviewed) return true;
+    // Sequential: CS first, then the CFO.
     if (role === "cs" && s === "cfo_cs_review" && !app.cs_reviewed) return true;
+    if (role === "cfo" && s === "cfo_cs_review" && app.cs_reviewed && !app.cfo_reviewed) return true;
     // The dgm_review stage belongs to the assigned advising authority
     // (dgm_id) — a DGM or an AGM — not just any DGM on the team.
     if (["dgm", "agm", "general_manager"].includes(role) && app.dgm_id === profile.id && s === "dgm_review") return true;
@@ -324,6 +332,17 @@ export default function ApplicationReviewPage() {
   const advisorLabel = advisorRole === "agm" ? "AGM" : advisorRole === "general_manager" ? "General Manager" : "DGM";
   const isAssignedAdvisor = ["dgm", "agm", "general_manager"].includes(role) && app.dgm_id === profile.id;
   const contextComments = getContextComments(app, auditLogs);
+  // CS → CFO are two pipeline steps sharing one stored status.
+  const shownStatus = displayStatus(app.status, app.cs_reviewed);
+  const statusText = app.status === "rejected"
+    ? INELIGIBLE_LABEL
+    : app.status === "accepted" ? "Accepted"
+    : app.status === "on_hold" ? "On Hold"
+    : stepLabel(shownStatus, STATUS_FLOW.find((s) => s.key === shownStatus)?.label, app.po?.role, advisorRole) || app.status;
+  // Opens only after the PO's first step — once they've forwarded the
+  // application to the CS (mirrors isProvisionalLetterOpen on the server).
+  const PROVISIONAL_OPEN = ["cfo_cs_review", "po_final_review", "dgm_review", "md_review", "accepted"];
+  const provisionalOpen = app.status === "on_hold" ? PROVISIONAL_OPEN.includes(app.hold_origin_status) : PROVISIONAL_OPEN.includes(app.status);
 
   return (
     <div className="app-shell">
@@ -337,7 +356,7 @@ export default function ApplicationReviewPage() {
               <div className="ar-header-left">
                 <div className="ar-header-badges">
                   <Badge variant="brand">Application Review</Badge>
-                  <Badge variant={STATUS_BADGE[app.status] || "neutral"} dot>{stepLabel(app.status, STATUS_FLOW.find((s) => s.key === app.status)?.label, app.po?.role, advisorRole) || app.status}</Badge>
+                  <Badge variant={app.status === "rejected" ? "neutral" : STATUS_BADGE[shownStatus] || "neutral"} dot>{statusText}</Badge>
                 </div>
                 <h1 className="ar-header-email">{app.ba_email}</h1>
                 <p className="ar-header-meta">Code: <strong>{app.application_code}</strong> · Team: <strong>{app.team || "—"}</strong> · Sent: <strong>{fmtDate(app.created_at)}</strong></p>
@@ -348,7 +367,7 @@ export default function ApplicationReviewPage() {
           <Card>
             <Card.Body className="ar-stepper-body">
               <p className="ar-stepper-heading">Application Progress</p>
-              <ProgressStepper currentStatus={app.status} reviewerRole={app.po?.role} advisorRole={advisorRole} />
+              <ProgressStepper currentStatus={app.status} csReviewed={app.cs_reviewed} reviewerRole={app.po?.role} advisorRole={advisorRole} />
             </Card.Body>
           </Card>
 
@@ -358,8 +377,8 @@ export default function ApplicationReviewPage() {
                 <Card.Header title="Application Info" />
                 <Card.Body className="ar-detail-body">
                   <Row label="BP Email" value={app.ba_email} />
-                  <Row label="Sent By (AC)" value={app.ac?.full_name} />
-                  <Row label="Project Officer" value={app.po?.full_name} />
+                  <Row label="Sent By" value={app.ac?.full_name} />
+                  <Row label={poLabel} value={app.po?.full_name} />
                   <Row label={advisorLabel} value={app.dgm?.full_name} />
                   <Row label="Team" value={app.team} />
                   <Row label="Office" value={app.office ? OFFICE_LABELS[app.office] || app.office : app.office} />
@@ -457,9 +476,9 @@ export default function ApplicationReviewPage() {
                       {app.status === "po_final_review"
                         ? (<>
                             <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handlePOFinalForward}>{actionLoading ? "Forwarding..." : `Forward to ${advisorLabel}`}</Button>
-                            <Button variant="secondary" block disabled={actionLoading} onClick={handlePOResendCfoCs}>Send Back to CFO &amp; CS for Review</Button>
+                            <Button variant="secondary" block disabled={actionLoading} onClick={handlePOResendCfoCs}>Send Back to CS &amp; CFO for Review</Button>
                           </>)
-                        : <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handlePOForward}>{actionLoading ? "Forwarding..." : "Forward to CFO and CS"}</Button>}
+                        : <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handlePOForward}>{actionLoading ? "Forwarding..." : "Forward to CS"}</Button>}
                     </>)}
 
                     {role === "cfo" && (<>
@@ -467,8 +486,7 @@ export default function ApplicationReviewPage() {
                         <label className="ar-label">Financial Review Comment <span className="ar-required">*</span></label>
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Review the financial details and write your comments..." rows={4} />
                       </div>
-                      {app.cs_reviewed && <div className="ar-view-only" style={{ marginBottom: 8 }}><EyeIcon /><span>CS has already reviewed this application.</span></div>}
-                      <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleCFOForward}>{actionLoading ? "Saving..." : "Submit Review"}</Button>
+                      <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleCFOForward}>{actionLoading ? "Saving..." : `Submit & Forward to ${poLabel}`}</Button>
                     </>)}
 
                     {role === "cs" && (<>
@@ -476,8 +494,7 @@ export default function ApplicationReviewPage() {
                         <label className="ar-label">Compliance Review Comment <span className="ar-required">*</span></label>
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Review compliance details and write your comments..." rows={4} />
                       </div>
-                      {app.cfo_reviewed && <div className="ar-view-only" style={{ marginBottom: 8 }}><EyeIcon /><span>CFO has already reviewed this application.</span></div>}
-                      <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleCSForward}>{actionLoading ? "Saving..." : "Submit Review"}</Button>
+                      <Button variant="primary" block loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleCSForward}>{actionLoading ? "Saving..." : app.cfo_reviewed ? `Submit & Forward to ${poLabel}` : "Submit & Forward to CFO"}</Button>
                     </>)}
 
                     {["dgm", "agm", "general_manager"].includes(role) && (<>
@@ -486,7 +503,7 @@ export default function ApplicationReviewPage() {
                         <textarea className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write your recommendation..." rows={4} />
                       </div>
                       <Button variant="primary" block disabled={!comment.trim() || actionLoading} loading={actionLoading} iconRight={<ArrowRightIcon />} onClick={handleDGMRecommend}>{actionLoading ? "Sending..." : "Recommend to Managing Director"}</Button>
-                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleDGMSendBack}>Send Back to {app.po?.role === "project_assistant" ? "Project Assistant" : "Project Officer"}</Button>
+                      <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleDGMSendBack}>Send Back to {poLabel}</Button>
                     </>)}
 
                     {role === "md" && (<>
@@ -496,7 +513,7 @@ export default function ApplicationReviewPage() {
                       </div>
                       <Button variant="primary" block disabled={!comment.trim() || actionLoading} icon={<CheckIcon />} onClick={() => setShowAcceptPin(true)}>Accept</Button>
                       <Button variant="secondary" block disabled={actionLoading || !comment.trim()} icon={<ArrowLeftIcon />} onClick={handleMDSendBack}>Send Back to {advisorLabel}</Button>
-                      <Button variant="danger" block disabled={actionLoading} icon={<XIcon />} onClick={() => setShowReject(true)}>Reject</Button>
+                      <Button variant="danger" block disabled={actionLoading} icon={<XIcon />} onClick={() => setShowReject(true)}>Mark Ineligible</Button>
                     </>)}
 
                     {["project_officer", "area_manager", "regional_manager", "project_assistant", "dgm", "agm", "general_manager", "md"].includes(role) && (
@@ -514,9 +531,11 @@ export default function ApplicationReviewPage() {
                   <Card.Header title="Provisional Letter" action={app.provisional_letter_sent ? <Badge variant="success">Sent</Badge> : null} />
                   <Card.Body className="ar-action-body">
                     <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
-                      A non-final, provisional empanelment letter emailed to the BP — separate from the MD&apos;s final acceptance email.
+                      {app.provisional_letter_sent || provisionalOpen
+                        ? "A non-final, provisional empanelment letter issued in your name and emailed to the BP — separate from the final Empanelment Letter sent on the MD's approval."
+                        : `Available once the ${poLabel} has completed their review and forwarded this application to the CS.`}
                     </p>
-                    <Button variant="secondary" block disabled={app.provisional_letter_sent} icon={<DocumentIcon />} onClick={() => setShowProvisionalPin(true)}>
+                    <Button variant="secondary" block disabled={app.provisional_letter_sent || !provisionalOpen} icon={<DocumentIcon />} onClick={() => setShowProvisionalPin(true)}>
                       {app.provisional_letter_sent ? "Provisional Letter Already Sent" : "Send Provisional Letter"}
                     </Button>
                   </Card.Body>
@@ -545,14 +564,14 @@ export default function ApplicationReviewPage() {
               {isFinalised && (
                 <Card className={`ar-final-card ar-final-${app.status}`}>
                   <Card.Body>
-                    <p className="ar-final-title">{app.status === "accepted" ? "Application Accepted" : "Application Rejected"}</p>
+                    <p className="ar-final-title">{app.status === "accepted" ? "Application Accepted" : "Application Found Ineligible"}</p>
                     {(app.md_remarks || app.dgm_comment) && <p className="ar-final-remark">{app.md_remarks || app.dgm_comment}</p>}
                   </Card.Body>
                 </Card>
               )}
 
               {!userCanAct && !isFinalised && app.status !== "on_hold" && (
-                <Card><Card.Body className="ar-view-only"><EyeIcon /><span>Viewing only. Action pending from <strong>{stepLabel(app.status, STATUS_FLOW.find((s) => s.key === app.status)?.label, app.po?.role, advisorRole) || app.status}</strong></span></Card.Body></Card>
+                <Card><Card.Body className="ar-view-only"><EyeIcon /><span>Viewing only. Action pending from <strong>{statusText}</strong></span></Card.Body></Card>
               )}
 
               <Card>
@@ -564,8 +583,10 @@ export default function ApplicationReviewPage() {
         </div>
       </div>
 
+      <EmpanelmentChatPanel app={app} />
+
       {showReject && (
-        <RejectModal
+        <IneligibleModal
           onConfirm={(remark) => { setRejectRemark(remark); setShowReject(false); setShowRejectPin(true); }}
           onClose={() => setShowReject(false)}
         />

@@ -33,12 +33,26 @@ function req(body: Record<string, unknown>) {
 
 const okFetch = (() => Promise.resolve(new Response(JSON.stringify({ id: "e1" }), { status: 200 }))) as unknown as typeof fetch;
 
-Deno.test("send-empanelment-invite - rejects a role that can't send invites (e.g. project_officer)", async () => {
+Deno.test("send-empanelment-invite - rejects a role that can't send invites (e.g. cfo)", async () => {
   const res = await handleRequest(
     req({ ba_email: "ba@org.com", project_officer_id: PO_ID }),
-    client({ caller: callerRow({ role: "project_officer" }) }) as never,
+    client({ caller: callerRow({ role: "cfo" }) }) as never,
   );
   assertEquals(res.status, 403);
+});
+
+Deno.test("send-empanelment-invite - project_officer can now send invites too", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = okFetch;
+  try {
+    const res = await handleRequest(
+      req({ ba_email: "ba@org.com", project_officer_id: PO_ID }),
+      client({ caller: callerRow({ role: "project_officer" }) }) as never,
+    );
+    assertEquals(res.status, 200);
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 
 Deno.test("send-empanelment-invite - project_assistant has the same send permission as associate_consultant", async () => {

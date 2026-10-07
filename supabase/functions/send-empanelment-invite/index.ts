@@ -1,6 +1,7 @@
 // supabase/functions/send-empanelment-invite/index.ts
-// JWT must be ON. Caller must be an active associate_consultant or
-// project_assistant (same send permissions).
+// JWT must be ON. Caller must be an active associate_consultant,
+// project_assistant or Project Officer (incl. the PO-tier area/regional
+// managers) — same send permissions for all.
 // Generates a 5-digit application code, creates the empanelment_applications
 // row, and emails the BP the invite + code.
 
@@ -25,6 +26,8 @@ const ROLE_LABELS: Record<string, string> = {
   project_assistant: "Project Assistant",
 };
 
+const SENDER_ROLES = ["associate_consultant", "project_assistant", "project_officer", "area_manager", "regional_manager"];
+
 function generateAppCode(): string {
   const arr = new Uint32Array(1);
   crypto.getRandomValues(arr);
@@ -43,8 +46,9 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
 
-  if (!["associate_consultant", "project_assistant"].includes(caller.role)) {
-    return jsonRes(req, 403, { error: "Only Associate Consultants or Project Assistants can send empanelment invitations." });
+  // Project Officers (and the PO-tier Area/Regional Managers) can send too.
+  if (!SENDER_ROLES.includes(caller.role)) {
+    return jsonRes(req, 403, { error: "Only Associate Consultants, Project Assistants or Project Officers can send empanelment invitations." });
   }
 
   let body: Record<string, unknown>;
@@ -176,8 +180,11 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       <p style="margin:0 0 16px;font-size:14px;color:#374151;">Dear Sir / Ma'am,</p>
       <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">Greetings from AFC India Limited!</p>
       <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
-        As advised by <strong>${escapeHtml(advisedByName)}</strong> (${escapeHtml(advisedByDesig)}), please find enclosed the link for the
-        Business Partner (BP) empanelment form for your kind perusal.
+        As advised by <strong>${escapeHtml(advisedByName)}</strong> (${escapeHtml(advisedByDesig)}), you are requested to fill in the
+        Business Partner (BP) Empanelment Form using the link below to initiate your empanelment process with AFC India Limited.
+      </p>
+      <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
+        Kindly complete and submit the form at your earliest convenience, along with the supporting documents requested in it.
       </p>
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:20px 24px;margin:0 0 24px;">
         <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:0.08em;">Your Application Code</p>
@@ -186,7 +193,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       <p style="margin:0 0 8px;">
         <a href="${siteUrl}/ba-form" style="display:inline-block;background:#1a5fd4;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:600;font-size:14px;">Open Empanelment Form &rarr;</a>
       </p>
-      <p style="margin:16px 0 0;font-size:13px;color:#374151;line-height:1.7;">Keep this code safe — you will need it to submit the form.</p>
+      <p style="margin:16px 0 0;font-size:13px;color:#374151;line-height:1.7;">Please keep this application code safe — you will need it to submit the form.</p>
     `);
 
     const emailSent = await sendResendEmail({

@@ -13,12 +13,12 @@ const STATUS_MAP = {
   sent: { label: "Sent", variant: "info" },
   filled: { label: "Form Filled", variant: "warning" },
   po_review: { label: "Under Review — Project Officer", variant: "warning" },
-  cfo_cs_review: { label: "Under Review — CFO / CS", variant: "info" },
+  cfo_cs_review: { label: "Under Review — CS / CFO", variant: "info" },
   po_final_review: { label: "Under Review — Project Officer", variant: "warning" },
   dgm_review: { label: "Under Review — DGM", variant: "neutral" },
   md_review: { label: "Under Review — Managing Director", variant: "neutral" },
   accepted: { label: "Accepted", variant: "success" },
-  rejected: { label: "Rejected", variant: "danger" },
+  rejected: { label: "Ineligible", variant: "neutral" },
   on_hold: { label: "Correction Needed", variant: "warning" },
 };
 

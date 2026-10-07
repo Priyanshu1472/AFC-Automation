@@ -6,14 +6,41 @@ import "../../styles/ApplicationReviewPage.css";
 // correction submission), which isn't a real staff role in ROLE_LABELS.
 const ROLE_DISPLAY = { ...ROLE_LABELS, ba: "Business Partner" };
 
+// The finance/compliance stage is sequential — CS first, then CFO — but it
+// is still ONE database status (cfo_cs_review); cs_reviewed tells the two
+// halves apart. The pipeline displays them as two steps, keyed by these
+// display-only pseudo-statuses (never stored in the DB).
 export const STATUS_FLOW = [
   { key: "sent", label: "Sent" },
   { key: "po_review", label: "PO" },
-  { key: "cfo_cs_review", label: "CFO / CS" },
+  { key: "cs_review", label: "CS" },
+  { key: "cfo_review", label: "CFO" },
   { key: "po_final_review", label: "PO Final" },
   { key: "dgm_review", label: "DGM" },
   { key: "md_review", label: "MD" },
 ];
+
+// Maps a stored status to the step key shown on the pipeline/badges.
+export function displayStatus(status, csReviewed) {
+  if (status === "cfo_cs_review") return csReviewed ? "cfo_review" : "cs_review";
+  return status;
+}
+
+// "Rejected" is never shown to anyone — the stored status/action keys keep
+// the old name, every visible label says "Ineligible".
+export const INELIGIBLE_LABEL = "Ineligible";
+
+// Display text for activity-log actions whose raw key would read wrong
+// (everything else falls back to the key, underscores → spaces).
+const ACTION_LABELS = {
+  md_rejected: "MD MARKED INELIGIBLE",
+  dgm_rejected: "MARKED INELIGIBLE",
+  po_forwarded: "PO FORWARDED TO CS",
+  po_resent_cfo_cs: "PO SENT BACK TO CS & CFO",
+};
+export function actionLabel(action) {
+  return ACTION_LABELS[action] || action.replace(/_/g, " ").toUpperCase().replace(/^BA /, "BP ");
+}
 
 // Two of the review steps belong to a role that isn't fixed:
 //  - PO / PO Final go to a Project Assistant when the team has no active
@@ -37,7 +64,8 @@ export function stepLabel(stepKey, label, reviewerRole, advisorRole) {
 const STATUS_FLOW_FULL_LABELS = {
   sent: "Sent",
   po_review: "Project Officer",
-  cfo_cs_review: "Chief Financial Officer / Company Secretary",
+  cs_review: "Company Secretary",
+  cfo_review: "Chief Financial Officer",
   po_final_review: "Project Officer (Final Review)",
   dgm_review: "Deputy General Manager",
   md_review: "Managing Director",
@@ -52,14 +80,15 @@ const STATUS_FLOW_FULL_LABEL_GM = "General Manager";
 
 export const STATUS_BADGE = {
   sent: "info", filled: "warning", po_review: "warning",
-  cfo_cs_review: "info", po_final_review: "warning", dgm_review: "neutral",
+  cfo_cs_review: "info", cs_review: "info", cfo_review: "info", po_final_review: "warning", dgm_review: "neutral",
   md_review: "neutral", accepted: "success", rejected: "danger", on_hold: "warning",
 };
 
 function CheckIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>; }
 function XIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>; }
 
-export function ProgressStepper({ currentStatus, publicView = false, reviewerRole, advisorRole }) {
+export function ProgressStepper({ currentStatus: storedStatus, csReviewed, publicView = false, reviewerRole, advisorRole }) {
+  const currentStatus = displayStatus(storedStatus, csReviewed);
   const keys = STATUS_FLOW.map((s) => s.key);
   const isAccepted = currentStatus === "accepted";
   const isRejected = currentStatus === "rejected";
@@ -111,7 +140,7 @@ export function TimelineAccordion({ logs, showActorName = true }) {
                   {showActorName ? (log.actor?.full_name || "Business Partner") : roleLabel}
                   {showActorName && <span className="ar-acc-role"> ({roleLabel})</span>}
                 </span>
-                <span className="ar-acc-action">{log.action.replace(/_/g, " ").toUpperCase().replace(/^BA /, "BP ")}</span>
+                <span className="ar-acc-action">{actionLabel(log.action)}</span>
               </div>
               <div className="ar-acc-right">
                 <span className="ar-acc-time">{time}</span>

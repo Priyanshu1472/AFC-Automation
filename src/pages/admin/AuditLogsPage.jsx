@@ -34,16 +34,16 @@ const ROLE_OPTIONS = [
 // (empanelment_activity_log) — different action vocabulary, so its own
 // meta map rather than merging into ACTION_META above.
 const EMP_ACTION_META = {
-  po_forwarded:              { label: "PO Forwarded to CFO/CS",  variant: "info" },
+  po_forwarded:              { label: "PO Forwarded to CS",     variant: "info" },
   cfo_reviewed:               { label: "CFO Reviewed",            variant: "info" },
   cs_reviewed:                { label: "CS Reviewed",             variant: "info" },
-  po_resent_cfo_cs:           { label: "PO Sent Back to CFO/CS",  variant: "warning" },
+  po_resent_cfo_cs:           { label: "PO Sent Back to CS/CFO",  variant: "warning" },
   po_final_forwarded:         { label: "PO Forwarded to DGM",     variant: "info" },
   dgm_recommended:            { label: "DGM Recommended to MD",   variant: "info" },
   dgm_sent_back:               { label: "DGM Sent Back to PO",     variant: "warning" },
-  dgm_rejected:                { label: "DGM Rejected",            variant: "danger" },
+  dgm_rejected:                { label: "DGM Marked Ineligible",   variant: "danger" },
   md_sent_back:                { label: "MD Sent Back to DGM",     variant: "warning" },
-  md_rejected:                 { label: "MD Rejected",             variant: "danger" },
+  md_rejected:                 { label: "MD Marked Ineligible",    variant: "danger" },
   md_accepted:                 { label: "MD Accepted",             variant: "success" },
   md_accepted_email_failed:    { label: "MD Accepted (email failed)", variant: "warning" },
   hold_raised:                 { label: "Compliance Hold Raised",  variant: "warning" },

@@ -55,10 +55,12 @@ serve(async (req) => {
   // requiring an exact project_officer_id match here just meant whoever
   // *wasn't* that one recorded person got a confusing "no access" the
   // moment they tried to open the actual document.
+  // DGM / AGM / GM are org-wide (every team's applications), same as
+  // can_view_empanelment_application() since 20261006000000.
   const authorized =
-    ["md", "cfo", "cs", "admin"].includes(caller.role) ||
+    ["md", "cfo", "cs", "admin", "dgm", "agm", "general_manager"].includes(caller.role) ||
     (
-      ["dgm", "agm", "srm", "project_officer", "associate_consultant", "project_assistant", "area_manager", "regional_manager", "general_manager"].includes(caller.role) &&
+      ["srm", "project_officer", "associate_consultant", "project_assistant", "area_manager", "regional_manager"].includes(caller.role) &&
       isCallerOnTeam(caller, application.team)
     );
 

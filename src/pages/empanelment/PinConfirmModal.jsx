@@ -6,7 +6,7 @@ import PinInput from "../../components/ui/PinInput";
 
 const ACTION_META = {
   md_accept: { fnName: "advance-empanelment-stage", label: "accept this application" },
-  md_reject: { fnName: "advance-empanelment-stage", label: "reject this application" },
+  md_reject: { fnName: "advance-empanelment-stage", label: "mark this application ineligible" },
   provisional_letter: { fnName: "send-provisional-letter", label: "send the provisional letter" },
 };
 

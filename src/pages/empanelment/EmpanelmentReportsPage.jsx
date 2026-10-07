@@ -23,9 +23,9 @@ import "../../styles/EmpanelmentReportsPage.css";
 
 const PIPELINE = ["sent", "filled", "po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "accepted", "rejected", "on_hold"];
 const STATUS_LABELS = {
-  sent: "Sent", filled: "BP Filled", po_review: "PO Review", cfo_cs_review: "CFO / CS",
+  sent: "Sent", filled: "BP Filled", po_review: "PO Review", cfo_cs_review: "CS / CFO",
   po_final_review: "PO Final", dgm_review: "DGM Review", md_review: "MD Review",
-  accepted: "Accepted", rejected: "Rejected", on_hold: "On Hold",
+  accepted: "Accepted", rejected: "Ineligible", on_hold: "On Hold",
 };
 const TERMINAL = ["accepted", "rejected"];
 
@@ -90,7 +90,7 @@ const REPORTS = [
       return {
         kpis: [
           { label: "Total Applications", value: total }, { label: "Empanelled", value: acc },
-          { label: "Rejected", value: rej }, { label: "In Progress", value: prog },
+          { label: "Ineligible", value: rej }, { label: "In Progress", value: prog },
           { label: "Awaiting BP Fill", value: wait }, { label: "Acceptance Rate", value: pct(acc, acc + rej) + "%" },
         ],
         columns: [{ key: "status", label: "Status" }, { key: "count", label: "Count" }, { key: "share", label: "Share %" }],
@@ -98,7 +98,7 @@ const REPORTS = [
           { status: "Awaiting BP Fill", count: wait, share: pct(wait, total) },
           { status: "In Progress", count: prog, share: pct(prog, total) },
           { status: "Empanelled", count: acc, share: pct(acc, total) },
-          { status: "Rejected", count: rej, share: pct(rej, total) },
+          { status: "Ineligible", count: rej, share: pct(rej, total) },
           { status: "Total", count: total, share: 100 },
         ],
       };
@@ -123,13 +123,13 @@ const REPORTS = [
   },
   {
     id: "monthly", group: "Overview", title: "Monthly Trend",
-    desc: "Applications raised per month, with how many were empanelled or rejected.",
+    desc: "Applications raised per month, with how many were empanelled or found ineligible.",
     build: ({ apps }) => {
       const g = groupBy(apps, (a) => (a.created_at ? new Date(a.created_at).toISOString().slice(0, 7) : "—"));
       return {
         columns: [
           { key: "month", label: "Month" }, { key: "total", label: "Raised" }, { key: "accepted", label: "Empanelled" },
-          { key: "rejected", label: "Rejected" }, { key: "progress", label: "In Progress" }, { key: "rate", label: "Acceptance %" },
+          { key: "rejected", label: "Ineligible" }, { key: "progress", label: "In Progress" }, { key: "rate", label: "Acceptance %" },
         ],
         rows: [...g.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([key, arr]) => {
           const acc = arr.filter(isAccepted).length, rej = arr.filter(isRejected).length;
@@ -242,11 +242,11 @@ const REPORTS = [
   },
   {
     id: "team", group: "Teams & People", title: "Team Performance",
-    desc: "Per-team applications raised, empanelled, rejected and still open.",
+    desc: "Per-team applications raised, empanelled, found ineligible and still open.",
     build: ({ apps }) => ({
       columns: [
         { key: "team", label: "Team" }, { key: "total", label: "Raised" }, { key: "accepted", label: "Empanelled" },
-        { key: "rejected", label: "Rejected" }, { key: "progress", label: "In Progress" }, { key: "rate", label: "Acceptance %" },
+        { key: "rejected", label: "Ineligible" }, { key: "progress", label: "In Progress" }, { key: "rate", label: "Acceptance %" },
       ],
       rows: [...groupBy(apps, (a) => a.team)].map(([team, arr]) => {
         const acc = arr.filter(isAccepted).length, rej = arr.filter(isRejected).length;
@@ -260,7 +260,7 @@ const REPORTS = [
     build: ({ apps }) => ({
       columns: [
         { key: "officer", label: "Project Officer" }, { key: "team", label: "Team" }, { key: "total", label: "Assigned" },
-        { key: "accepted", label: "Empanelled" }, { key: "rejected", label: "Rejected" }, { key: "open", label: "Still Open" }, { key: "rate", label: "Acceptance %" },
+        { key: "accepted", label: "Empanelled" }, { key: "rejected", label: "Ineligible" }, { key: "open", label: "Still Open" }, { key: "rate", label: "Acceptance %" },
       ],
       rows: [...groupBy(apps, (a) => a.po_name || "—")].map(([officer, arr]) => {
         const acc = arr.filter(isAccepted).length, rej = arr.filter(isRejected).length;
@@ -277,7 +277,7 @@ const REPORTS = [
     build: ({ apps }) => ({
       columns: [
         { key: "office", label: "Office" }, { key: "total", label: "Raised" }, { key: "accepted", label: "Empanelled" },
-        { key: "rejected", label: "Rejected" }, { key: "open", label: "Still Open" }, { key: "rate", label: "Acceptance %" },
+        { key: "rejected", label: "Ineligible" }, { key: "open", label: "Still Open" }, { key: "rate", label: "Acceptance %" },
       ],
       rows: [...groupBy(apps, (a) => a.office)].map(([office, arr]) => {
         const acc = arr.filter(isAccepted).length, rej = arr.filter(isRejected).length;
@@ -306,14 +306,14 @@ const REPORTS = [
     },
   },
   {
-    id: "rejected", group: "Empanelment", title: "Rejected Applications",
-    desc: "Applications that were turned down, with the final remark on record.",
+    id: "rejected", group: "Empanelment", title: "Ineligible Applications",
+    desc: "Applications found ineligible, with the final remark on record.",
     build: ({ apps }) => {
       const rows = apps.filter(isRejected).map((a) => ({
         org_name: dash(a.reg_org_name), code: codeOf(a), ba_email: dash(a.ba_email), team: dash(a.team),
         reason: dash(a.md_remarks || a.dgm_comment), sent_f: fmt(a.created_at), decided_f: fmt(a.decided_at),
       }));
-      return { kpis: [{ label: "Rejected", value: rows.length }], columns: [
+      return { kpis: [{ label: "Ineligible", value: rows.length }], columns: [
         { key: "org_name", label: "Organisation" }, { key: "code", label: "App Code" }, { key: "ba_email", label: "BP Email" },
         { key: "team", label: "Team" }, { key: "reason", label: "Reason / Remark" }, { key: "sent_f", label: "Sent On" }, { key: "decided_f", label: "Decided On" },
       ], rows };

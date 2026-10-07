@@ -98,14 +98,14 @@ function EmailPreview({ to, advisedByName, advisedByDesig, acName }) {
         <p className="sef-email-salutation">Dear Sir / Ma'am,</p>
         <p className="sef-email-para">Greetings from AFC India Limited!</p>
         <p className="sef-email-para">
-          As advised by <strong>{advisedByName}</strong> ({advisedByDesig}), please find enclosed the link for the Business Partner (BP)
-          empanelment form for your kind perusal.
+          As advised by <strong>{advisedByName}</strong> ({advisedByDesig}), you are requested to fill in the Business Partner (BP)
+          Empanelment Form using the link below to initiate your empanelment process with AFC India Limited.
         </p>
-        <p className="sef-email-para">Kindly fill in the form at your earliest convenience to initiate the empanelment process with AFC India Limited.</p>
+        <p className="sef-email-para">Kindly complete and submit the form at your earliest convenience, along with the supporting documents requested in it.</p>
         <div className="sef-email-code-block">
           <span className="sef-email-code-label">Your Application Code</span>
           <span className="sef-email-code-value">XXXXX</span>
-          <span className="sef-email-code-note">This code is sent securely in the actual email. Keep it safe — you will need it to submit the form.</span>
+          <span className="sef-email-code-note">This code is sent securely in the actual email. Please keep it safe — you will need it to submit the form.</span>
         </div>
         <div className="sef-email-cta-wrap">
           <div className="sef-email-cta" aria-hidden="true">Open Empanelment Form →</div>
@@ -170,6 +170,9 @@ export default function SendEmpanelmentPage() {
     if (pos && pos.length > 0) {
       setProjectOfficers(pos);
       setReviewerRole("project_officer");
+      // A Project Officer sending the form themselves is preselected as its
+      // reviewer — they can still pick a different PO.
+      if (pos.some((p) => p.id === profile?.id)) setForm((p) => ({ ...p, projectOfficer: p.projectOfficer || profile.id }));
     } else {
       const { data: pas } = await supabase.from("afc_users").select("id, full_name, email").eq("role", "project_assistant").eq("team", team).eq("is_active", true).order("full_name");
       setProjectOfficers(pas || []);
@@ -178,7 +181,7 @@ export default function SendEmpanelmentPage() {
     setAdvisors(advs || []);
     setForm((p) => ({ ...p, advisorId: p.advisorId || advs?.[0]?.id || "" }));
     setLoadingPOs(false);
-  }, [team]);
+  }, [team, profile?.id]);
 
   useEffect(() => {
     fetchPOs();

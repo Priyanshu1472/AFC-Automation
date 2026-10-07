@@ -118,12 +118,23 @@ export const AUDIT_LOG_ROLES = ["admin"];
 
 // ─── Empanelment — visible to every staff role (not the business_associate
 // portal role, which has its own separate area, and not executive_director,
-// which has no permissions defined yet). Only associate_consultant can
+// which has no permissions defined yet). Only EMPANELMENT_SENDER_ROLES can
 // actually send a new one; who can act at each review stage is enforced
 // by the empanelment RLS policies, not by this nav-level list. Admin is
 // included here for read-only visibility — it has no branch in any
 // review-stage action UI, so it naturally lands as view-only.
 export const EMPANELMENT_ROLES = Object.keys(ROLES).filter((r) => r !== "business_associate" && r !== "executive_director");
+
+// Who can send a BP the empanelment form — mirrors send-empanelment-invite's
+// SENDER_ROLES. Project Officers (and the PO-tier Area/Regional Managers)
+// can send as well as AC/PA.
+export const EMPANELMENT_SENDER_ROLES = ["associate_consultant", "project_assistant", "project_officer", "area_manager", "regional_manager"];
+
+// DGM / AGM / GM read every team's applications (can_view_empanelment_
+// application) and get My Team / All Teams tabs on the list — so they can
+// check a company isn't already empanelled via another team before an
+// invite goes out.
+export const EMPANELMENT_ALL_TEAMS_ROLES = ["dgm", "agm", "general_manager"];
 
 // ─── Knowledge Repository — visible to every staff role (not the
 // business_associate portal role, and not executive_director, which has no

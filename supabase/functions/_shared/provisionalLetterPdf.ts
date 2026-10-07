@@ -1,10 +1,12 @@
 // supabase/functions/_shared/provisionalLetterPdf.ts
 // The advising authority's non-final, provisional empanelment letter —
 // distinct from the MD's final Empanelment Letter
-// (_shared/empanelmentLetterPdf.ts). Sendable at any stage once the BP has
-// filled the form, signed by the application's assigned advisor (a DGM or an
-// AGM) with the designation line following their actual role. Ported from
-// the previous AFC empanelment app's send-provisional-mail function.
+// (_shared/empanelmentLetterPdf.ts). Sendable only once the Project Officer
+// has finished their first review and forwarded the application to the CS
+// (see isProvisionalLetterOpen), signed by the application's assigned advisor
+// (DGM / AGM / GM) with the designation line following their actual role.
+// Ported from the previous AFC empanelment app's send-provisional-mail
+// function.
 //
 // Shared between send-provisional-letter (the real send, which persists
 // provisional_letter_sent) and preview-empanelment-letter (a read-only
@@ -17,6 +19,7 @@ import {
   embedImageAuto, fetchSignatureBytes, drawSignatureClosing,
   formatDateDDMMYYYY, formatDateLong, addMonths,
 } from "./letterPdf.ts";
+import { signatoryDesignationFor } from "./empanelmentLetterPdf.ts";
 
 // deno-lint-ignore no-explicit-any
 type AdminClient = any;
@@ -128,6 +131,18 @@ export async function generateProvisionalPDF(opts: {
   return await pdf.save();
 }
 
+// The provisional letter opens only after the PO's first step — once the PO
+// has forwarded the application to the CS. Every status from there on
+// qualifies; an on-hold application qualifies only if the hold was raised
+// after that point (holds can be raised at po_review too, before the PO
+// forwarded). Shared by send-provisional-letter and preview-empanelment-
+// letter so the two gates can never drift.
+const PROVISIONAL_OPEN_STATUSES = new Set(["cfo_cs_review", "po_final_review", "dgm_review", "md_review", "accepted"]);
+export function isProvisionalLetterOpen(status: string, holdOriginStatus: string | null | undefined): boolean {
+  if (status === "on_hold") return PROVISIONAL_OPEN_STATUSES.has(holdOriginStatus || "");
+  return PROVISIONAL_OPEN_STATUSES.has(status);
+}
+
 export type BuiltProvisionalLetter = {
   pdfBytes: Uint8Array;
   refNumber: string;
@@ -151,7 +166,7 @@ export async function buildProvisionalLetter(
 ): Promise<BuiltProvisionalLetter | null> {
   const { data: signatoryRow } = await admin.from("afc_users").select("full_name, role, signature_path").eq("id", signatoryId).maybeSingle();
   const signatureBytes = await fetchSignatureBytes(admin, signatoryRow?.signature_path);
-  const signatoryDesignation = signatoryRow?.role === "agm" ? "ASSISTANT GENERAL MANAGER" : "DEPUTY GENERAL MANAGER";
+  const signatoryDesignation = signatoryDesignationFor(signatoryRow?.role);
 
   const logoUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/public-assets/Logo.png`;
   const logoRes = await fetch(logoUrl);

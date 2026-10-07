@@ -7,7 +7,7 @@ import ErrorBoundary from "./components/shared/ErrorBoundary";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
 import PublicOnlyRoute from "./components/routing/PublicOnlyRoute";
 import PageLoader from "./components/ui/PageLoader";
-import { USERS_PAGE_ROLES, USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES } from "./lib/roles";
+import { USERS_PAGE_ROLES, USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, EMPANELMENT_SENDER_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES } from "./lib/roles";
 
 // Lazy-loaded so each page (and anything only it imports, e.g. xlsx/jspdf on
 // the Reports pages) ships as its own chunk instead of all ~30 pages being
@@ -146,7 +146,7 @@ export default function App() {
                 <Route
                   path="/empanelment/send"
                   element={
-                    <ProtectedRoute allowedRoles={["associate_consultant", "project_assistant"]}>
+                    <ProtectedRoute allowedRoles={EMPANELMENT_SENDER_ROLES}>
                       <SendEmpanelmentPage />
                     </ProtectedRoute>
                   }

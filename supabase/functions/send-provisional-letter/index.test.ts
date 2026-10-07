@@ -22,7 +22,7 @@ function pngBytes(): Uint8Array {
 
 function appRow(overrides: Record<string, unknown> = {}) {
   return {
-    id: APP_ID, status: "filled", ba_email: "ba@org.com", team: "BPDD",
+    id: APP_ID, status: "cfo_cs_review", ba_email: "ba@org.com", team: "BPDD",
     sent_by: "sender-1", dgm_id: CALLER_ID, application_code: "12345", provisional_letter_sent: false,
     ...overrides,
   };
@@ -78,6 +78,15 @@ Deno.test("send-provisional-letter - the assigned AGM can send it", async () => 
 Deno.test("send-provisional-letter - rejects before the BP has submitted the form", async () => {
   const res = await handleRequest(req({ application_id: APP_ID }), client({ app: appRow({ status: "sent" }) }) as never);
   assertEquals(res.status, 400);
+});
+
+Deno.test("send-provisional-letter - stays closed until the PO forwards to the CS", async () => {
+  for (const status of ["filled", "po_review"]) {
+    const res = await handleRequest(req({ application_id: APP_ID }), client({ app: appRow({ status }) }) as never);
+    assertEquals(res.status, 400);
+  }
+  const heldEarly = await handleRequest(req({ application_id: APP_ID }), client({ app: appRow({ status: "on_hold", hold_origin_status: "po_review" }) }) as never);
+  assertEquals(heldEarly.status, 400);
 });
 
 Deno.test("send-provisional-letter - rejects when already sent", async () => {

@@ -641,3 +641,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/check-reset-email/deno.json"
 entrypoint = "./functions/check-reset-email/index.ts"
+
+[functions.send-empanelment-chat-message]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-empanelment-chat-message/deno.json"
+entrypoint = "./functions/send-empanelment-chat-message/index.ts"

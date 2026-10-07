@@ -2,10 +2,10 @@
 // The final Empanelment Letter — attached to the same email that carries
 // the BP's portal credentials on MD accept. Distinct from the DGM's
 // provisional letter (_shared/provisionalLetterPdf.ts): this one is final,
-// references the application's actual sectors, and is issued and signed by
-// the accepting MD (not the team's DGM — the DGM only signs the
-// provisional letter). Ported from the previous AFC empanelment app's
-// send-welcome-mail function.
+// references the application's actual sectors. Both letters are issued and
+// signed by the application's advising authority (DGM / AGM / GM, dgm_id) —
+// the MD approves the final one but it goes out in the advisor's name.
+// Ported from the previous AFC empanelment app's send-welcome-mail function.
 //
 // Shared between advance-empanelment-stage (the real MD-accept action,
 // which persists the ref number) and preview-empanelment-letter (a
@@ -32,7 +32,8 @@ export async function generateEmpanelmentPDF(opts: {
   regAddress: string;
   sectors: string;
   validUntil: string;
-  mdName: string;
+  signatoryName: string;
+  signatoryDesignation: string;
   signatureBytes?: Uint8Array | null;
 }): Promise<Uint8Array> {
   const { pdf, fonts } = await newPdfDoc();
@@ -43,8 +44,8 @@ export async function generateEmpanelmentPDF(opts: {
 
   await e.newPage();
 
-  await sdLine(e, opts.mdName, S, true);
-  await sdLine(e, "MANAGING DIRECTOR", S, true);
+  await sdLine(e, opts.signatoryName, S, true);
+  await sdLine(e, opts.signatoryDesignation, S, true);
   await sdGap(e, 20);
 
   e.drawTextAt(opts.refNumber, e.LEFT, S, true);
@@ -114,9 +115,18 @@ export async function generateEmpanelmentPDF(opts: {
   ], S);
   await sdGap(e, 20);
 
-  await drawSignatureClosing(e, S, { name: opts.mdName, designation: "MANAGING DIRECTOR", signatureImage });
+  await drawSignatureClosing(e, S, { name: opts.signatoryName, designation: opts.signatoryDesignation, signatureImage });
 
   return await pdf.save();
+}
+
+// Designation line under the signatory's name, following their real role.
+// Shared with the provisional letter so both read the same.
+export function signatoryDesignationFor(role: string | null | undefined): string {
+  if (role === "agm") return "ASSISTANT GENERAL MANAGER";
+  if (role === "general_manager") return "GENERAL MANAGER";
+  if (role === "md") return "MANAGING DIRECTOR";
+  return "DEPUTY GENERAL MANAGER";
 }
 
 export type BuiltEmpanelmentLetter = {
@@ -135,7 +145,9 @@ export type BuiltEmpanelmentLetter = {
 export async function buildEmpanelmentLetter(
   admin: AdminClient,
   baData: { org_name: string | null; contact_person: string | null; designation: string | null; reg_address: string | null; sectors_served: unknown } | null,
-  mdId: string,
+  // The application's advising authority (DGM / AGM / GM) — the letter is
+  // issued and signed in their name, not the MD's.
+  signatoryId: string,
   // When re-rendering an already-issued letter for viewing, pass the values
   // persisted at issue time so the reproduced PDF matches what was emailed
   // instead of drifting (the ref is a live COUNT; the dates are "today").
@@ -143,8 +155,9 @@ export async function buildEmpanelmentLetter(
 ): Promise<BuiltEmpanelmentLetter | null> {
   if (!baData) return null;
 
-  const { data: mdRow } = await admin.from("afc_users").select("full_name, signature_path").eq("id", mdId).maybeSingle();
-  const signatureBytes = await fetchSignatureBytes(admin, mdRow?.signature_path);
+  const { data: signatoryRow } = await admin.from("afc_users").select("full_name, role, signature_path").eq("id", signatoryId).maybeSingle();
+  const signatureBytes = await fetchSignatureBytes(admin, signatoryRow?.signature_path);
+  const signatoryDesignation = signatoryDesignationFor(signatoryRow?.role);
 
   const logoUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/public-assets/Logo.png`;
   const logoRes = await fetch(logoUrl);
@@ -175,7 +188,8 @@ export async function buildEmpanelmentLetter(
     regAddress: baData.reg_address || "",
     sectors,
     validUntil,
-    mdName: (mdRow?.full_name || "Managing Director").toUpperCase(),
+    signatoryName: (signatoryRow?.full_name || signatoryDesignation).toUpperCase(),
+    signatoryDesignation,
     signatureBytes,
   });
 

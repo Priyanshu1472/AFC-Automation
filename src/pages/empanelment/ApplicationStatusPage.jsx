@@ -5,16 +5,23 @@ import Alert from "../../components/ui/Alert";
 import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import { FormNav } from "./formShared";
-import { STATUS_FLOW, STATUS_BADGE, ProgressStepper } from "../../components/empanelment/ApplicationTimeline";
+import { STATUS_FLOW, STATUS_BADGE, ProgressStepper, displayStatus, INELIGIBLE_LABEL } from "../../components/empanelment/ApplicationTimeline";
 import "../../styles/BaFormPage.css";
 
-function statusMessage(status) {
+function statusMessage(status, csReviewed) {
   if (status === "on_hold") return { variant: "warning", text: "One or more items need your correction before review can continue." };
   if (status === "accepted") return { variant: "success", text: "Congratulations — your application has been accepted. Check your email for your portal login details." };
-  if (status === "rejected") return { variant: "danger", text: "This application was not accepted." };
+  if (status === "rejected") return { variant: "info", text: "After careful evaluation, this application has been found ineligible for empanelment at this time." };
   if (status === "sent") return { variant: "info", text: "We're waiting for you to fill and submit the empanelment form." };
-  const stage = STATUS_FLOW.find((s) => s.key === status);
+  const stage = STATUS_FLOW.find((s) => s.key === displayStatus(status, csReviewed));
   return { variant: "info", text: stage ? `Currently with ${stage.label} for review.` : "Under review." };
+}
+
+function statusBadgeText(status, csReviewed) {
+  if (status === "on_hold") return "On Hold";
+  if (status === "accepted") return "Accepted";
+  if (status === "rejected") return INELIGIBLE_LABEL;
+  return STATUS_FLOW.find((s) => s.key === displayStatus(status, csReviewed))?.label || status;
 }
 
 export default function ApplicationStatusPage() {
@@ -46,7 +53,7 @@ export default function ApplicationStatusPage() {
     }
   }
 
-  const banner = result ? statusMessage(result.status) : null;
+  const banner = result ? statusMessage(result.status, result.cs_reviewed) : null;
 
   return (
     <div className="bf-page">
@@ -73,7 +80,7 @@ export default function ApplicationStatusPage() {
             <Card>
               <Card.Body className="bf-section-body bf-single-col">
                 <p className="ec-summary-title">{result.org_name || "Your Application"}</p>
-                <Badge variant={STATUS_BADGE[result.status] || "neutral"} dot>{STATUS_FLOW.find((s) => s.key === result.status)?.label || (result.status === "on_hold" ? "On Hold" : result.status === "accepted" ? "Accepted" : result.status === "rejected" ? "Rejected" : result.status)}</Badge>
+                <Badge variant={result.status === "rejected" ? "neutral" : STATUS_BADGE[result.status] || "neutral"} dot>{statusBadgeText(result.status, result.cs_reviewed)}</Badge>
               </Card.Body>
             </Card>
 
@@ -102,7 +109,7 @@ export default function ApplicationStatusPage() {
             <Card>
               <Card.Body className="bf-section-body bf-single-col">
                 <p className="ar-stepper-heading">Application Progress</p>
-                <ProgressStepper currentStatus={result.status} publicView />
+                <ProgressStepper currentStatus={result.status} csReviewed={result.cs_reviewed} publicView />
               </Card.Body>
             </Card>
 
