@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppHeader from "../components/shared/AppHeader";
 import Card from "../components/ui/Card";
@@ -8,6 +8,7 @@ import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { EMPANELMENT_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES } from "../lib/roles";
 import { fetchPendingActionNotifications, subscribeToNotifications, markNotificationRead } from "../lib/notifications";
+import { TargetIcon, ActivityIcon, RupeeIcon } from "../components/icons";
 import "../styles/HomePage.css";
 
 const STATUS_MAP = {
@@ -115,16 +116,6 @@ function UsersIcon() {
   );
 }
 
-function TargetIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="6" />
-      <circle cx="12" cy="12" r="2" />
-    </svg>
-  );
-}
-
 function FileIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
@@ -132,26 +123,6 @@ function FileIcon() {
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  );
-}
-
-function ActivityIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-    </svg>
-  );
-}
-
-function RupeeIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
-      <path d="M6 3h12" />
-      <path d="M6 8h12" />
-      <path d="m6 13 8.5 8" />
-      <path d="M6 13h3" />
-      <path d="M9 13c6.667 0 6.667-10 0-10" />
     </svg>
   );
 }
@@ -238,6 +209,29 @@ function categoryOf(n) {
   return "other";
 }
 
+// Narrowest a box may get in the one-line row (and the row's gap); below
+// that the panel switches to list mode — the phone layout — instead of
+// squashing or scrolling the boxes.
+const MIN_BOX_WIDTH = 118;
+const BOX_GAP = 12;
+
+// Returns [ref, isList]: isList is true whenever `count` boxes can't each
+// get MIN_BOX_WIDTH across the element's current width. Re-checked on
+// every resize of that element.
+function useListMode(count) {
+  const [el, setEl] = useState(null);
+  const [isList, setIsList] = useState(false);
+  useLayoutEffect(() => {
+    if (!el) return;
+    const check = () => setIsList(el.clientWidth < count * MIN_BOX_WIDTH + (count - 1) * BOX_GAP);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el, count]);
+  return [setEl, isList];
+}
+
 // Notifications the recipient hasn't acted on yet (type: "action_required",
 // unread) — a review stage waiting on this specific person, not a generic
 // activity feed. One box per module with its live pending count; clicking a
@@ -282,8 +276,6 @@ function PendingActionsPanel() {
     if (n.link) navigate(n.link, { state: { from: "home" } });
   }
 
-  if (loading) return <PageLoader text="Loading your alerts…" />;
-
   const grouped = { empanelment: [], leads: [], proposals: [], monitoring: [], financials: [], other: [] };
   items.forEach((n) => grouped[categoryOf(n)].push(n));
 
@@ -291,12 +283,16 @@ function PendingActionsPanel() {
     ...ACTION_CATEGORIES.filter((c) => c.canSee(profile?.role) || grouped[c.key].length > 0),
     ...(grouped.other.length ? [{ key: "other", title: "General", icon: <BellIcon /> }] : []),
   ];
+  const [sectionRef, isList] = useListMode(boxes.length);
+
+  if (loading) return <PageLoader text="Loading your alerts…" />;
+
   const current = boxes.find((b) => b.key === active) || null;
   const list = current ? grouped[current.key] : [];
 
   return (
-    <section className={`home-actions${current ? " has-active" : ""}`} aria-label="Needs your action">
-      <div className="home-boxes">
+    <section ref={sectionRef} className={`home-actions${isList ? " is-list" : ""}${current ? " has-active" : ""}`} aria-label="Needs your action">
+      <div className="home-boxes" style={{ "--box-count": boxes.length }}>
         {boxes.map((b, i) => {
           const rows = grouped[b.key];
           const isActive = current?.key === b.key;
@@ -315,8 +311,8 @@ function PendingActionsPanel() {
               </span>
               <span className="home-box-count"><CountUp value={rows.length} /></span>
               <span className="home-box-foot">
-                {rows.length === 0 ? "All caught up" : `Latest ${timeAgo(rows[0].created_at)}`}
-                <span className="home-box-view">{isActive ? "Hide" : "View"} <ChevronRightIcon /></span>
+                <span className="home-box-when">{rows.length === 0 ? "All caught up" : timeAgo(rows[0].created_at)}</span>
+                <span className="home-box-view" aria-hidden="true"><ChevronRightIcon /></span>
               </span>
             </button>
           );

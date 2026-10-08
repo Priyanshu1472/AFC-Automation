@@ -8,7 +8,7 @@
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-2);
-  padding: var(--space-5) var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-3);
   border-right: 1px solid var(--border-subtle);
   background: var(--nav-bg);
   position: fixed;
@@ -17,7 +17,12 @@
   bottom: 0;
   width: var(--sidebar-nav-w);
   z-index: var(--z-sticky);
-  overflow-y: auto;
+  /* Visible so the collapse handle can straddle the right border; the
+     spacing below is sized so the whole rail fits a laptop screen without
+     scrolling (.app-header-nav only scrolls as a last resort on very
+     short windows). */
+  overflow: visible;
+  transition: width var(--duration-slow) var(--ease-out), padding var(--duration-slow) var(--ease-out);
 }
 
 .app-header-brand {
@@ -25,9 +30,11 @@
   align-items: center;
   gap: var(--space-3);
   flex-shrink: 0;
-  padding-bottom: var(--space-4);
-  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-1);
   border-bottom: 1px solid var(--border-subtle);
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .app-header-brand:hover{
@@ -35,7 +42,7 @@
 }
 
 .app-header-logo {
-  height: 50px;
+  height: 44px;
   width: auto;
   border-radius: var(--radius-sm);
 }
@@ -48,25 +55,70 @@
   align-items: stretch;
   flex: 1;
   margin-left: 0;
-  gap: var(--space-1);
+  gap: 2px;
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.app-header-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .app-header-nav-links {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: var(--space-1);
+  gap: 2px;
 }
 
 .app-header-nav-links a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
-  padding: var(--space-2) var(--space-3);
+  padding: 7px var(--space-3);
   border-radius: var(--radius-md);
+  white-space: nowrap;
+  overflow: hidden;
   transition: background var(--duration-fast) var(--ease-out),
     color var(--duration-fast) var(--ease-out);
+}
+
+/* Icon + label pair shared by rail links, the Dashboard/Reports triggers
+   and the collapse toggle. */
+.app-header-nav-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.app-header-nav-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.app-header-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+
+.app-header-nav-links a:hover .app-header-nav-icon,
+.app-header-nav-links a.active .app-header-nav-icon,
+.nav-dropdown-trigger:hover .app-header-nav-icon,
+.nav-dropdown-trigger.active .app-header-nav-icon {
+  color: var(--text-primary);
+}
+
+/* Tooltip wrappers (folded rail only) must not shrink the link inside. */
+.app-header-nav .tt-wrapper {
+  display: block;
 }
 
 .app-header-nav-links a:hover {
@@ -169,11 +221,105 @@
   background: var(--bg-surface-3);
 }
 
-.app-header-nav-divider {
-  display: block;
-  height: 1px;
-  background: var(--border-subtle);
-  margin: var(--space-3) 0;
+.app-header-nav-dropdowns .nav-dropdown-trigger {
+  width: 100%;
+  gap: var(--space-3);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.app-header-nav-dropdowns .nav-dropdown-chevron {
+  margin-left: auto;
+}
+
+.nav-dropdown-heading {
+  padding: var(--space-1) var(--space-3) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+/* ── Collapse handle (desktop rail only) ───────────────────── */
+/* A small round button straddling the rail's right border, level with
+   the logo. Its Tooltip wrapper is what gets positioned, so the wrapper
+   doesn't take a slot in the rail's vertical stack. */
+.app-header > .tt-wrapper {
+  position: absolute;
+  top: 30px;
+  right: -12px;
+  z-index: 1;
+}
+
+.app-header-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-tertiary);
+  background: var(--card-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm, var(--shadow-xs));
+  cursor: pointer;
+  opacity: 0.85;
+  transition: color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+}
+
+.app-header:hover .app-header-collapse-btn,
+.app-header-collapse-btn:focus-visible {
+  opacity: 1;
+}
+
+.app-header-collapse-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  transform: scale(1.08);
+}
+
+.app-header-collapse-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--input-shadow-focus);
+}
+
+.app-header-collapse-btn svg {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+/* ── Folded rail: icons only ───────────────────────────────── */
+/* Horizontal padding chosen so a 12px-padded link's 18px icon lands
+   exactly centred in the 72px rail: (72 - 2*12 - 18) / 2 = 15. Labels
+   stay in flow but are clipped and faded, so nothing jumps mid-slide. */
+.app-header.collapsed {
+  padding-left: 15px;
+  padding-right: 15px;
+}
+
+.app-header.collapsed .app-header-nav-label,
+.app-header.collapsed .app-header-brand span,
+.app-header.collapsed .nav-dropdown-chevron,
+.app-header.collapsed .user-menu-text {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-header.collapsed .user-menu-text {
+  display: none;
+}
+
+.app-header.collapsed .app-header-collapse-btn svg {
+  transform: rotate(180deg);
+}
+
+.app-header.collapsed .app-header-logo {
+  max-width: 42px;
+  object-fit: contain;
 }
 
 /* Pinned to the bottom of the rail (margin-top: auto), wraps if the
@@ -182,10 +328,10 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: var(--space-2);
   margin-left: 0;
   margin-top: auto;
-  padding-top: var(--space-3);
+  padding-top: var(--space-2);
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -309,6 +455,11 @@
 
   .app-header-nav-links a {
     padding: var(--space-3);
+  }
+
+  /* The drawer always shows full labels; folding is a desktop-rail thing. */
+  .app-header > .tt-wrapper {
+    display: none;
   }
 
   .app-header-nav-dropdowns .nav-dropdown-trigger {
@@ -493,5 +644,198 @@
        hamburger included, to the right as one unit. A second auto margin
        on this button pulled it away from those icons instead of sitting
        close to them, leaving an odd gap. */
+  }
+}
+
+/* Folded rail: the bell sits borderless like the nav icons above it —
+   a plain icon that only shows a background on hover. Expanded keeps the
+   standard bordered square buttons. */
+.app-header.collapsed .theme-toggle,
+.app-header.collapsed .support-widget-btn,
+.app-header.collapsed .notif-bell-btn {
+  border-color: transparent;
+  background: transparent;
+}
+
+.app-header.collapsed .theme-toggle:hover,
+.app-header.collapsed .support-widget-btn:hover,
+.app-header.collapsed .notif-bell-btn:hover {
+  border-color: transparent;
+  background: var(--btn-ghost-bg-hover);
+}
+
+/* ── Desktop rail sizing ───────────────────────────────────────
+   Every rail item — nav links, Dashboard/Reports, theme, Support,
+   notifications, profile — is exactly --rail-item-h tall with the same
+   --rail-gap, so the top and bottom groups form one even column. Both
+   grow with the window height (within limits), so a tall screen spreads
+   the items out instead of leaving one big empty band above the bottom
+   group, and a short one tightens them so nothing scrolls. Heights are
+   set directly (not via padding) so different contents can't drift. */
+@media (min-width: 721px) {
+  .app-header {
+    --rail-item-h: clamp(34px, 5.2vh, 42px);
+    --rail-gap: clamp(2px, 0.7vh, 8px);
+  }
+
+  .app-header-nav,
+  .app-header-nav-links,
+  .app-header-nav-dropdowns {
+    gap: var(--rail-gap);
+  }
+
+  /* The bottom group sits flush under its divider line. */
+  .app-header-nav-utilities {
+    padding-top: var(--rail-gap);
+  }
+
+  /* Folded: badge tucked inside the button at the bell icon's corner —
+     outside the button it was clipped by the narrow rail's edge. */
+  .app-header.collapsed .notif-bell-badge {
+    top: 1px;
+    right: calc(50% - 17px);
+  }
+
+  .app-header-nav-links a,
+  .app-header-nav-dropdowns .nav-dropdown-trigger {
+    height: var(--rail-item-h);
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .app-header .theme-toggle,
+  .app-header .support-widget-btn,
+  .app-header .notif-bell-btn {
+    width: var(--rail-item-h);
+    height: var(--rail-item-h);
+  }
+
+  .app-header .user-menu-btn {
+    height: var(--rail-item-h);
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .app-header .user-menu-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: var(--text-xs);
+  }
+
+  .app-header-nav-utilities,
+  .app-header-notif-desktop-only {
+    gap: var(--rail-gap);
+  }
+
+  /* Folded: the logo centred on its own (brand text out of flow), and the
+     bottom buttons stacked full-width exactly like the icons above. */
+  .app-header.collapsed .app-header-brand {
+    justify-content: center;
+  }
+
+  .app-header.collapsed .app-header-brand span {
+    display: none;
+  }
+
+  .app-header.collapsed .app-header-nav-utilities,
+  .app-header.collapsed .app-header-notif-desktop-only {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .app-header.collapsed .app-header-nav-utilities > *,
+  .app-header.collapsed .app-header-notif-desktop-only > *,
+  .app-header.collapsed .theme-toggle,
+  .app-header.collapsed .support-widget-btn,
+  .app-header.collapsed .notif-bell-btn,
+  .app-header.collapsed .user-menu-btn {
+    width: 100%;
+  }
+
+  .app-header.collapsed .user-menu-btn {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* The 28px photo is 10px taller than an 18px icon, so it sits 5px
+     closer to the bell than icons sit to each other; this restores the
+     same icon-to-icon spacing as the links above. */
+  .app-header.collapsed .user-menu-wrap {
+    margin-top: calc((28px - 18px) / 2);
+  }
+}
+
+/* Expanded rail: the bottom group gets breathing room — the icon row
+   spaced out, and the profile card on its own full-width line, taller
+   than a nav item, with a bigger photo and space between photo and text. */
+@media (min-width: 721px) {
+  /* Theme, Support and the bell as bordered squares, left-aligned with an
+     even 8px gap; the profile card on its own line below. */
+  .app-header:not(.collapsed) .app-header-nav-utilities {
+    row-gap: var(--space-3);
+    column-gap: var(--space-2);
+    padding-top: var(--space-3);
+  }
+
+  .app-header:not(.collapsed) .app-header-notif-desktop-only {
+    gap: var(--space-2);
+  }
+
+  .app-header:not(.collapsed) .user-menu-wrap {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+
+  .app-header:not(.collapsed) .user-menu-btn {
+    width: 100%;
+    max-width: none;
+    height: auto;
+    min-height: 50px;
+    padding: var(--space-2);
+    gap: var(--space-3);
+  }
+
+  .app-header:not(.collapsed) .user-menu-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: var(--text-sm);
+  }
+
+  .app-header:not(.collapsed) .user-menu-text {
+    gap: 2px;
+  }
+}
+
+/* Short windows: smaller items and gaps so the rail still fits unscrolled
+   (checked down to a ~490px-tall viewport). */
+@media (min-width: 721px) and (max-height: 680px) {
+  .app-header {
+    --rail-item-h: clamp(28px, 5.6vh, 34px);
+    --rail-gap: 2px;
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-2);
+  }
+  .app-header-logo {
+    height: 30px;
+  }
+  .app-header > .tt-wrapper {
+    top: 24px;
+  }
+}
+
+/* Very short windows only: compact the expanded bottom group too. */
+@media (min-width: 721px) and (max-height: 560px) {
+  .app-header:not(.collapsed) .app-header-nav-utilities {
+    row-gap: var(--space-1);
+    padding-top: var(--space-2);
+  }
+  .app-header:not(.collapsed) .user-menu-btn {
+    min-height: 40px;
+    padding: var(--space-1) var(--space-2);
+  }
+  .app-header:not(.collapsed) .user-menu-avatar {
+    width: 30px;
+    height: 30px;
   }
 }

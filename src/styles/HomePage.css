@@ -11,18 +11,22 @@
 }
 
 /* ── Module boxes ──────────────────────────────────────────── */
+/* All module boxes on one line — one equal column per box (the count is
+   set inline from HomePage). When that row would make a box narrower than
+   MIN_BOX_WIDTH, HomePage switches to list mode (.is-list) instead. */
 .home-boxes {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(var(--box-count, 5), minmax(0, 1fr));
+  gap: var(--space-3);
 }
 
 .home-box {
   --box-accent: var(--text-tertiary);
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-5);
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4);
   font-family: inherit;
   text-align: left;
   background: var(--card-bg);
@@ -65,6 +69,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
 }
 
 .home-box-icon {
@@ -81,14 +86,28 @@
   transition: transform var(--duration-slow) var(--ease-out);
 }
 
+.home-box-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
 .home-box-title {
+  min-width: 0;
   font-size: var(--text-sm);
   font-weight: 600;
+  line-height: 1.25;
   color: var(--text-primary);
 }
 
+.home-box-when {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .home-box-count {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
   line-height: 1;
   color: var(--text-primary);
@@ -379,153 +398,194 @@
   animation: home-pop 500ms var(--ease-out) 150ms backwards;
 }
 
+/* Narrower desktops: tighter boxes so the one-line row still fits. */
+@media (min-width: 721px) and (max-width: 1200px) {
+  .home-boxes {
+    gap: var(--space-2);
+  }
+  .home-box {
+    padding: var(--space-3);
+  }
+  /* Icon above the title, so the title gets the box's full width and only
+     ever wraps between words. */
+  .home-box-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .home-box-title {
+    font-size: var(--text-xs);
+  }
+  .home-box-icon {
+    width: 28px;
+    height: 28px;
+  }
+  .home-box-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+  .home-box-count {
+    font-size: 1.5rem;
+  }
+}
+
 /* Desktop opens the table below the boxes, so no back button there. */
 .home-table-back {
   display: none;
 }
 
-/* ── Mobile: boxes become compact rows; picking one swaps the list
-   for its alerts in place, with a Back button to return ─────── */
-@media (max-width: 720px) {
-  .home-boxes {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border, var(--border-default));
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-  }
+/* List mode — boxes as compact rows; picking one swaps the list for its
+   alerts in place, with a Back button to return. Used on phones and on any
+   screen where the one-line row of boxes no longer fits (HomePage toggles
+   .is-list from the panel's measured width), so nothing ever scrolls
+   sideways. */
+.home-actions.is-list .home-boxes {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border, var(--border-default));
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
 
-  .home-box {
-    flex-direction: row;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    border: none;
-    border-left: 3px solid var(--box-accent);
-    border-bottom: 1px solid var(--border-subtle);
-    border-radius: 0;
-    box-shadow: none;
-  }
+.home-actions.is-list .home-box {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  border-left: 3px solid var(--box-accent);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  box-shadow: none;
+}
 
-  .home-box:last-child {
-    border-bottom: none;
-  }
+.home-actions.is-list .home-box:last-child {
+  border-bottom: none;
+}
 
-  .home-box:hover {
-    border-color: var(--border-subtle);
-    border-left-color: var(--box-accent);
-    box-shadow: none;
-    transform: none;
-  }
+.home-actions.is-list .home-box:hover {
+  border-color: var(--border-subtle);
+  border-left-color: var(--box-accent);
+  box-shadow: none;
+  transform: none;
+}
 
-  .home-box-top {
-    flex: 1;
-    min-width: 0;
-  }
+/* Rows keep the icon beside the title (overriding the narrow-desktop
+   stacked layout above). */
+.home-actions.is-list .home-box-top {
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
 
-  .home-box-icon {
-    width: 30px;
-    height: 30px;
-  }
+.home-actions.is-list .home-box-title {
+  font-size: var(--text-sm);
+}
 
-  .home-box-count {
-    min-width: 26px;
-    padding: 2px 8px;
-    font-size: var(--text-xs);
-    text-align: center;
-    color: var(--text-tertiary);
-    background: var(--bg-surface-2);
-    border-radius: var(--radius-full);
-  }
+.home-actions.is-list .home-box-icon {
+  width: 30px;
+  height: 30px;
+}
 
-  /* Only the chevron is kept from the footer ("Latest …" / "View" hidden). */
-  .home-box-foot {
-    font-size: 0;
-  }
+.home-actions.is-list .home-box-count {
+  min-width: 26px;
+  padding: 2px 8px;
+  font-size: var(--text-xs);
+  text-align: center;
+  color: var(--text-tertiary);
+  background: var(--bg-surface-2);
+  border-radius: var(--radius-full);
+}
 
-  .home-actions-hint,
-  .home-actions.has-active .home-boxes {
-    display: none;
-  }
+/* Only the chevron is kept from the footer ("Latest …" / "View" hidden). */
+.home-actions.is-list .home-box-foot {
+  font-size: 0;
+}
 
-  .home-table-back {
-    display: inline-flex;
-    margin: var(--space-3) var(--space-4) 0;
-  }
+.home-actions.is-list .home-actions-hint,
+.home-actions.is-list.has-active .home-boxes {
+  display: none;
+}
 
-  .home-table-head {
-    padding: var(--space-2) var(--space-4) var(--space-3);
-  }
+.home-actions.is-list .home-table-back {
+  display: inline-flex;
+  margin: var(--space-3) var(--space-4) 0;
+}
 
-  .home-table-open {
-    padding: 5px 10px;
-  }
+.home-actions.is-list .home-table-head {
+  padding: var(--space-2) var(--space-4) var(--space-3);
+}
 
-  /* Alerts as stacked cards instead of a wide, sideways-scrolling table. */
-  .home-table {
-    min-width: 0;
-  }
+.home-actions.is-list .home-table-open {
+  padding: 5px 10px;
+}
 
-  .home-table thead {
-    display: none;
-  }
+/* Alerts as stacked cards instead of a wide, sideways-scrolling table. */
+.home-actions.is-list .home-table {
+  min-width: 0;
+}
 
-  .home-table,
-  .home-table tbody,
-  .home-table-row {
-    display: block;
-  }
+.home-actions.is-list .home-table thead {
+  display: none;
+}
 
-  .home-table-row {
-    position: relative;
-    padding: var(--space-3) var(--space-10, 40px) var(--space-3) var(--space-4);
-    border-bottom: 1px solid var(--table-border);
-  }
+.home-actions.is-list .home-table,
+.home-actions.is-list .home-table tbody,
+.home-actions.is-list .home-table-row {
+  display: block;
+}
 
-  .home-table-row:last-child {
-    border-bottom: none;
-  }
+.home-actions.is-list .home-table-row {
+  position: relative;
+  padding: var(--space-3) var(--space-10, 40px) var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--table-border);
+}
 
-  .home-table tbody .home-table-row td {
-    display: block;
-    width: auto;
-    max-width: none;
-    min-width: 0;
-    padding: 0;
-    border: none;
-  }
+.home-actions.is-list .home-table-row:last-child {
+  border-bottom: none;
+}
 
-  .home-table .home-col-num {
-    display: none !important;
-  }
+.home-actions.is-list .home-table tbody .home-table-row td {
+  display: block;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  padding: 0;
+  border: none;
+}
 
-  .home-table-sub {
-    margin-top: 3px;
-    font-size: var(--text-sm);
-  }
+.home-actions.is-list .home-table .home-col-num {
+  display: none !important;
+}
 
-  .home-table .home-col-date {
-    margin-top: var(--space-1);
-  }
+.home-actions.is-list .home-table-sub {
+  margin-top: 3px;
+  font-size: var(--text-sm);
+}
 
-  .home-table-date,
-  .home-table-ago {
-    display: inline;
-    font-size: var(--text-xs);
-    color: var(--text-tertiary);
-  }
+.home-actions.is-list .home-table .home-col-date {
+  margin-top: var(--space-1);
+}
 
-  .home-table-ago::before {
-    content: " · ";
-  }
+.home-actions.is-list .home-table-date,
+.home-actions.is-list .home-table-ago {
+  display: inline;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
 
-  .home-table .home-col-open {
-    position: absolute;
-    top: 50%;
-    right: var(--space-3);
-    transform: translateY(-50%);
-  }
+.home-actions.is-list .home-table-ago::before {
+  content: " · ";
+}
+
+.home-actions.is-list .home-table .home-col-open {
+  position: absolute;
+  top: 50%;
+  right: var(--space-3);
+  transform: translateY(-50%);
 }
 
 /* Mobile view swap: alerts slide in from the right, and the module list
@@ -540,17 +600,15 @@
   to   { opacity: 1; transform: translateX(0); }
 }
 
-@media (max-width: 720px) {
-  .home-boxes {
-    animation: home-from-left 320ms var(--ease-out) backwards;
-  }
-  .home-box {
-    animation-duration: 360ms;
-    animation-delay: calc(var(--i, 0) * 45ms);
-  }
-  .home-actions.has-active .home-table-card {
-    animation: home-from-right 320ms var(--ease-out) backwards;
-  }
+.home-actions.is-list .home-boxes {
+  animation: home-from-left 320ms var(--ease-out) backwards;
+}
+.home-actions.is-list .home-box {
+  animation-duration: 360ms;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+.home-actions.is-list.has-active .home-table-card {
+  animation: home-from-right 320ms var(--ease-out) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {

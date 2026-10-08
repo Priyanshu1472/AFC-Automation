@@ -3,7 +3,7 @@
 // inbox (see send-support-request), which also stamps who sent it and when.
 // No in-app history is kept — this is a one-way notice, same shape as
 // NotificationBell's panel but for composing instead of reading.
-import { useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useToast } from "../../hooks/useToast";
 import { HelpCircleIcon, CloseIcon, PaperclipIcon } from "../icons";
@@ -21,9 +21,21 @@ function readAsBase64(file) {
   });
 }
 
-export default function SupportWidget() {
+// `open`/`onOpenChange` let a parent open the panel from elsewhere (the
+// folded rail opens it from the profile menu, with `showTrigger` off);
+// without them the widget manages its own open state.
+export default function SupportWidget({ open: openProp, onOpenChange, showTrigger = true }) {
   const { showToast } = useToast();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = useCallback(
+    (value) => {
+      const next = typeof value === "function" ? value(open) : value;
+      if (onOpenChange) onOpenChange(next);
+      else setOpenState(next);
+    },
+    [open, onOpenChange]
+  );
   const [message, setMessage] = useState("");
   const [files, setFiles] = useState([]); // [{ file, previewUrl }]
   const [sending, setSending] = useState(false);
@@ -37,7 +49,7 @@ export default function SupportWidget() {
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+  }, [open, setOpen]);
 
   useEffect(() => {
     // Revoke object URLs on unmount/replace so previews don't leak memory.
@@ -121,16 +133,18 @@ export default function SupportWidget() {
 
   return (
     <div className="support-widget-wrap" ref={wrapRef}>
-      <button
-        type="button"
-        className="support-widget-btn"
-        onClick={() => setOpen((p) => !p)}
-        title="Support"
-        aria-label="Support"
-        aria-expanded={open}
-      >
-        <HelpCircleIcon />
-      </button>
+      {showTrigger && (
+        <button
+          type="button"
+          className="support-widget-btn"
+          onClick={() => setOpen((p) => !p)}
+          title="Support"
+          aria-label="Support"
+          aria-expanded={open}
+        >
+          <HelpCircleIcon />
+        </button>
+      )}
 
       {open && (
         <div className="support-widget-panel" role="dialog" aria-label="Contact support">

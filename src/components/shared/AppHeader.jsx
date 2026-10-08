@@ -1,20 +1,84 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
 import SupportWidget from "./SupportWidget";
 import NavDropdown from "./NavDropdown";
 import UserMenu from "./UserMenu";
+import Tooltip from "../ui/Tooltip";
+import ProfileAvatar from "./ProfileAvatar";
 import { useAuth } from "../../hooks/useAuth";
 import { USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, ROLE_LABELS } from "../../lib/roles";
-import { MenuIcon, CloseIcon } from "../icons";
+import {
+  MenuIcon, CloseIcon, HomeIcon, BookIcon, UsersIcon, TargetIcon, FileTextIcon, ActivityIcon, RupeeIcon,
+  UserCogIcon, ClipboardListIcon, LayoutGridIcon, BarChartIcon, ChevronLeftIcon,
+} from "../icons";
 import logo from "../../images/Logo.png";
 import "../../styles/AppHeader.css";
+
+// Desktop rail folded to icons only — remembered per browser. Applied as
+// data-nav="collapsed" on <html>, which narrows --sidebar-nav-w (App.css),
+// so the page offset and the rail's own popovers all follow it.
+const NAV_COLLAPSED_KEY = "afc-nav-collapsed";
+const MOBILE_QUERY = "(max-width: 720px)";
+
+function readCollapsed() {
+  try {
+    return localStorage.getItem(NAV_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isMobile;
+}
+
+// A rail link: icon + label. When folded, the label is hidden and shown as
+// a tooltip instead (portaled, so the narrow rail can't clip it).
+function NavItem({ to, label, icon, collapsed, onClick }) {
+  const link = (
+    <NavLink to={to} className={({ isActive }) => (isActive ? "active" : "")} onClick={onClick} aria-label={collapsed ? label : undefined}>
+      <span className="app-header-nav-icon" aria-hidden="true">{icon}</span>
+      <span className="app-header-nav-label">{label}</span>
+    </NavLink>
+  );
+  return collapsed ? <Tooltip text={label} position="right" delay={150}>{link}</Tooltip> : link;
+}
 
 export default function AppHeader() {
   const { profile, activeTeam, setActiveTeam, signOut } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [collapsedPref, setCollapsedPref] = useState(readCollapsed);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const isMobile = useIsMobile();
+  // The mobile drawer always shows full labels, whatever the desktop choice.
+  const collapsed = collapsedPref && !isMobile;
+
+  useLayoutEffect(() => {
+    if (collapsedPref) document.documentElement.dataset.nav = "collapsed";
+    else delete document.documentElement.dataset.nav;
+  }, [collapsedPref]);
+
+  function toggleCollapsed() {
+    setCollapsedPref((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(NAV_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        // Storage blocked — the choice just won't survive a reload.
+      }
+      return next;
+    });
+  }
 
   function closeMenu() {
     setMenuOpen(false);
@@ -58,17 +122,39 @@ export default function AppHeader() {
   const canSeeLeads = LEAD_GENERATION_NAV_ROLES.includes(profile.role);
   const canSeeMonitoring = MONITORING_ROLES.includes(profile.role);
   const canSeeFinancials = FINANCIALS_ROLES.includes(profile.role);
-  const navLinkClass = ({ isActive }) => (isActive ? "active" : "");
+  const navItems = [
+    { to: "/home", label: "Home", icon: <HomeIcon />, show: true },
+    { to: "/knowledge", label: "Knowledge Repository", icon: <BookIcon />, show: canSeeKnowledge },
+    { to: "/empanelment", label: "Empanelment", icon: <UsersIcon />, show: canSeeEmpanelment },
+    { to: "/leads", label: "Leads Approval", icon: <TargetIcon />, show: canSeeLeads },
+    { to: "/proposals", label: "Proposals", icon: <FileTextIcon />, show: canSeeLeads },
+    { to: "/monitoring", label: "Monitoring", icon: <ActivityIcon />, show: canSeeMonitoring },
+    { to: "/financials", label: "Financials", icon: <RupeeIcon />, show: canSeeFinancials },
+    { to: "/users", label: "Users", icon: <UserCogIcon />, show: canSeeUsers },
+    { to: "/audit-logs", label: "Audit Logs", icon: <ClipboardListIcon />, show: canSeeAuditLogs },
+  ].filter((it) => it.show);
   const roleLabel = ROLE_LABELS[profile.role] || profile.role;
-  const initial = (profile.full_name || "?").trim().charAt(0).toUpperCase();
   const teams = profile.teams || [];
 
   return (
-    <header className="app-header">
+    <header className={`app-header${collapsed ? " collapsed" : ""}`}>
       <Link to="/home" className="app-header-brand">
         <img src={logo} className="app-header-logo" alt="AFC India Limited" />
         <span className="font-display font-semibold text-primary">AFC India Limited</span>
       </Link>
+
+      {/* Desktop-only fold/unfold handle, sitting on the rail's right edge. */}
+      <Tooltip text={collapsed ? "Expand sidebar" : "Collapse sidebar"} position="right" delay={300}>
+        <button
+          type="button"
+          className="app-header-collapse-btn"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-pressed={collapsed}
+        >
+          <ChevronLeftIcon />
+        </button>
+      </Tooltip>
 
       {/* Mobile-only — mirrors the desktop utilities row's Notifications
           button but sits in the top bar itself, not inside the off-canvas
@@ -86,9 +172,7 @@ export default function AppHeader() {
         {/* Mobile-drawer-only — hidden on desktop via CSS, where the
             equivalent info lives in UserMenu's chip + dropdown instead. */}
         <div className="app-header-nav-profile-mobile">
-          <span className="app-header-nav-profile-avatar" aria-hidden="true">
-            {initial}
-          </span>
+          <ProfileAvatar profile={profile} className="app-header-nav-profile-avatar" />
           <span className="app-header-nav-profile-text">
             <span className="app-header-nav-profile-name">{profile.full_name}</span>
             <span className="app-header-nav-profile-role">{roleLabel}</span>
@@ -96,49 +180,9 @@ export default function AppHeader() {
         </div>
 
         <div className="app-header-nav-links">
-          <NavLink to="/home" className={navLinkClass} onClick={closeMenu}>
-            Home
-          </NavLink>
-          {canSeeKnowledge && (
-            <NavLink to="/knowledge" className={navLinkClass} onClick={closeMenu}>
-              Knowledge Repository
-            </NavLink>
-          )}
-          {canSeeEmpanelment && (
-            <NavLink to="/empanelment" className={navLinkClass} onClick={closeMenu}>
-              Empanelment
-            </NavLink>
-          )}
-          {canSeeLeads && (
-            <NavLink to="/leads" className={navLinkClass} onClick={closeMenu}>
-              Leads Approval
-            </NavLink>
-          )}
-          {canSeeLeads && (
-            <NavLink to="/proposals" className={navLinkClass} onClick={closeMenu}>
-              Proposals
-            </NavLink>
-          )}
-          {canSeeMonitoring && (
-            <NavLink to="/monitoring" className={navLinkClass} onClick={closeMenu}>
-              Monitoring
-            </NavLink>
-          )}
-          {canSeeFinancials && (
-            <NavLink to="/financials" className={navLinkClass} onClick={closeMenu}>
-              Financials
-            </NavLink>
-          )}
-          {canSeeUsers && (
-            <NavLink to="/users" className={navLinkClass} onClick={closeMenu}>
-              Users
-            </NavLink>
-          )}
-          {canSeeAuditLogs && (
-            <NavLink to="/audit-logs" className={navLinkClass} onClick={closeMenu}>
-              Audit Logs
-            </NavLink>
-          )}
+          {navItems.map((it) => (
+            <NavItem key={it.to} to={it.to} label={it.label} icon={it.icon} collapsed={collapsed} onClick={closeMenu} />
+          ))}
         </div>
 
         {/* Dashboard / Reports dropdowns — kept as their own group, pushed to
@@ -148,6 +192,8 @@ export default function AppHeader() {
           {(canSeeEmpanelment || canSeeLeads) && (
             <NavDropdown
               label="Dashboard"
+              icon={<LayoutGridIcon />}
+              collapsed={collapsed}
               items={[
                 ...(canSeeEmpanelment ? [{ to: "/dashboard/empanelment", label: "Empanelment" }] : []),
                 ...(canSeeLeads ? [{ to: "/dashboard/leads", label: "Leads" }] : []),
@@ -158,6 +204,8 @@ export default function AppHeader() {
           {(canSeeEmpanelment || canSeeLeads) && (
             <NavDropdown
               label="Reports"
+              icon={<BarChartIcon />}
+              collapsed={collapsed}
               items={[
                 ...(canSeeEmpanelment ? [{ to: "/reports/empanelment", label: "Empanelment" }] : []),
                 ...(canSeeLeads ? [{ to: "/reports/leads", label: "Leads" }] : []),
@@ -167,15 +215,15 @@ export default function AppHeader() {
           )}
         </div>
 
-        <div className="app-header-nav-divider" aria-hidden="true" />
-
+        {/* Folded rail keeps only the bell + profile here; theme and Support
+            move into the profile menu as text items (UserMenu `compact`). */}
         <div className="app-header-nav-utilities">
-          <ThemeToggle />
+          {!collapsed && <ThemeToggle />}
           <span className="app-header-notif-desktop-only">
-            <SupportWidget />
+            <SupportWidget showTrigger={!collapsed} open={supportOpen} onOpenChange={setSupportOpen} />
             <NotificationBell />
           </span>
-          <UserMenu />
+          <UserMenu compact={collapsed} onOpenSupport={() => setSupportOpen(true)} />
         </div>
 
         {/* Mobile-drawer-only — mirrors UserMenu's desktop team switcher

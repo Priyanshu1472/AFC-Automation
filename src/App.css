@@ -355,6 +355,15 @@ h1,h2,h3,h4,h5,h6 { font-family: var(--font-display); font-weight: 600; line-hei
      Below 720px the header reverts to a normal in-flow top bar, so no
      offset is needed there (see the media query below). */
   padding-left: var(--sidebar-nav-w);
+  transition: padding-left var(--duration-slow) var(--ease-out);
+}
+
+/* Rail folded to icons only (AppHeader's collapse toggle sets this on
+   <html>) — desktop only, the mobile top bar has no rail to fold. */
+@media (min-width: 721px) {
+  :root[data-nav="collapsed"] {
+    --sidebar-nav-w: 72px;
+  }
 }
 
 @media (max-width: 720px) {
