@@ -86,7 +86,6 @@ export const PORTALS = [
   { name: "Industry Referral", category: "Private / Other", identifier: "Ref. No. (if any)" },
   { name: "Other", category: "Private / Other", identifier: "Ref. / ID No." },
 ];
-export const PORTAL_CATEGORIES = ["All", "Central Govt", "State Govt", "International", "Private / Other"];
 
 export const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat",
@@ -96,12 +95,6 @@ export const INDIAN_STATES = [
   "West Bengal", "Andaman & Nicobar Islands", "Chandigarh", "Dadra & Nagar Haveli",
   "Daman & Diu", "Delhi", "Jammu & Kashmir", "Ladakh", "Lakshadweep", "Puducherry",
 ];
-
-export const FIELD_LABELS = {
-  person_responsible_id: "Person Responsible",
-  reviewer_id: "Reviewer",
-  recommending_authority_id: "Recommending Authority",
-};
 
 export const LEAD_STOPWORDS = new Set([
   "request", "requests", "for", "proposal", "proposals", "rfp", "rfps",

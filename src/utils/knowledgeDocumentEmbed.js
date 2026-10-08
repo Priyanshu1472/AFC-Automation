@@ -79,7 +79,7 @@ async function imageParagraphDocx(rawBytes, rawExt, docx) {
 // PDF — pdf.js renders each page to an image (its own Word-embeddable
 // form has no lighter-weight option for arbitrary PDFs client-side).
 async function pdfPageParagraphsDocx(bytes, docx, label, pageBreakBeforeFirst, onPageProgress) {
-  const { Paragraph, TextRun, ImageRun } = docx;
+  const { Paragraph, ImageRun } = docx;
   const pdfjsLib = await import(/* @vite-ignore */ `https://esm.sh/pdfjs-dist@${PDFJS_VERSION}/build/pdf.mjs`);
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
 

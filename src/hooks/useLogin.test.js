@@ -25,6 +25,7 @@ async function submit(result, email, password) {
   act(() => {
     result.current.setEmail(email);
     result.current.setPassword(password);
+    result.current.setCaptchaToken("captcha-token");
   });
   await act(async () => {
     await result.current.handleLogin(fakeEvent());

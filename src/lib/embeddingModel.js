@@ -38,13 +38,6 @@ async function getExtractor(onProgress) {
   return extractorPromise;
 }
 
-// Loads the model (first call only — subsequent calls reuse the cached
-// pipeline) so callers can show a "preparing search…" state before the
-// user's first query, rather than surprising them with a slow first call.
-export async function preloadEmbeddingModel(onProgress) {
-  await getExtractor(onProgress);
-}
-
 // Returns a plain number[] of length EMBEDDING_DIMENSIONS (384 for
 // all-MiniLM-L6-v2), mean-pooled and L2-normalized — ready to hand to
 // pgvector as-is.

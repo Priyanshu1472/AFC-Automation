@@ -222,9 +222,7 @@ export default function UserListPage() {
     setCommitteeFilter(value);
     setPage(0);
   }
-  const activeFilterCount = [teamFilter !== "all", roleFilter !== "all", committeeFilter !== "all"].filter(Boolean).length;
-  const hasActiveFilters = activeFilterCount > 0;
-  function clearFilters() {
+  const activeFilterCount = [teamFilter !== "all", roleFilter !== "all", committeeFilter !== "all"].filter(Boolean).length;  function clearFilters() {
     setTeamFilter("all");
     setRoleFilter("all");
     setCommitteeFilter("all");

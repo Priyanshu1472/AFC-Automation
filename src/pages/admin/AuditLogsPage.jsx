@@ -9,7 +9,6 @@ import Button from "../../components/ui/Button";
 import Select from "../../components/ui/Select";
 import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
-import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import "../../styles/AuditLogsPage.css";
 

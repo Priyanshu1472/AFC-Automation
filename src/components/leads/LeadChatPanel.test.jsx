@@ -33,15 +33,22 @@ vi.mock("../../lib/supabase", () => ({
 }));
 
 const SAMPLE_MESSAGES = [
-  { id: "m1", lead_id: "lead-1", sender_id: "user-1", message: "Hello team", created_at: "2026-08-25T10:00:00Z", sender: { full_name: "Jane Doe" } },
-  { id: "m2", lead_id: "lead-1", sender_id: "user-2", message: "Looks good", created_at: "2026-08-25T10:05:00Z", sender: { full_name: "Bob Smith" } },
+  { id: "m1", lead_id: "lead-1", sender_id: "user-1", message: "Hello team", created_at: "2026-08-25T10:00:00Z" },
+  { id: "m2", lead_id: "lead-1", sender_id: "user-2", message: "Looks good", created_at: "2026-08-25T10:05:00Z" },
+];
+
+const SAMPLE_PARTICIPANTS = [
+  { user_id: "user-1", full_name: "Jane Doe" },
+  { user_id: "user-2", full_name: "Bob Smith" },
 ];
 
 beforeEach(() => {
   vi.clearAllMocks();
   order.mockResolvedValue({ data: SAMPLE_MESSAGES, error: null });
   invoke.mockResolvedValue({ data: { success: true }, error: null });
-  rpc.mockResolvedValue({ data: null, error: null });
+  rpc.mockImplementation(async (fn) =>
+    fn === "get_lead_chat_participant_names" ? { data: SAMPLE_PARTICIPANTS, error: null } : { data: null, error: null }
+  );
 });
 
 // The widget starts collapsed to a floating bubble — every test that needs
