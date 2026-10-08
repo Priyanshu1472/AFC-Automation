@@ -1,138 +1,153 @@
 /* ============================================================
-   HomePage.css — "Needs your action" inbox
-   A side menu styled like the app's own left nav (AppHeader.css
-   .app-header-nav-links) listing each module with its live pending
-   count; the selected module's alerts show in the pane on the right.
+   HomePage.css — "Needs your action"
+   One box per module with its live pending count; clicking a box
+   lists that module's alerts in a table below the boxes.
    ============================================================ */
 
-.home-inbox {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  min-height: 460px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border, var(--border-default));
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-  overflow: hidden;
-}
-
-/* ── Side menu (mirrors the main nav) ──────────────────────── */
-.home-inbox-nav {
+.home-actions {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-4) var(--space-3);
-  background: var(--bg-surface);
-  border-right: 1px solid var(--border-subtle);
+  gap: var(--space-4);
 }
 
-.home-inbox-nav-heading {
-  padding: 0 var(--space-3) var(--space-2);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-tertiary);
+/* ── Module boxes ──────────────────────────────────────────── */
+.home-boxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-4);
 }
 
-.home-inbox-tab {
+.home-box {
+  --box-accent: var(--text-tertiary);
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--space-3);
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-5);
   font-family: inherit;
-  font-size: var(--text-sm);
-  font-weight: 500;
   text-align: left;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border, var(--border-default));
+  border-top: 3px solid var(--box-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+  position: relative;
+  overflow: hidden;
+  transition: border-color var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out);
+  animation: home-rise 480ms var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 70ms);
 }
 
-.home-inbox-tab:hover {
-  color: var(--text-primary);
-  background: var(--btn-ghost-bg-hover, var(--bg-surface-2));
+.home-box-empanelment { --box-accent: var(--info, #3b82f6); }
+.home-box-leads       { --box-accent: var(--warning); }
+.home-box-proposals   { --box-accent: var(--success-dark, var(--success)); }
+.home-box-monitoring  { --box-accent: #8b5cf6; }
+.home-box-financials  { --box-accent: #0d9488; }
+
+.home-box:hover {
+  border-color: var(--border-strong);
+  border-top-color: var(--box-accent);
+  box-shadow: var(--shadow-sm, var(--shadow-xs));
+  transform: translateY(-1px);
 }
 
-.home-inbox-tab.active {
-  color: var(--text-primary);
-  font-weight: 700;
-  background: var(--bg-surface-3);
+.home-box.active {
+  border-color: var(--box-accent);
+  box-shadow: 0 0 0 1px var(--box-accent), var(--shadow-sm, var(--shadow-xs));
 }
 
-.home-inbox-tab:focus-visible {
+.home-box:focus-visible {
   outline: none;
   box-shadow: var(--input-shadow-focus);
 }
 
-.home-inbox-tab-icon {
-  flex-shrink: 0;
-  display: inline-flex;
-  color: var(--text-tertiary);
+.home-box-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.home-inbox-tab.active .home-inbox-tab-icon {
+.home-box-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  color: var(--box-accent);
+  background: var(--bg-surface-2);
+  background: color-mix(in srgb, var(--box-accent) 14%, transparent);
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+.home-box-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
   color: var(--text-primary);
 }
 
-.home-inbox-tab-label {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.home-inbox-tab-count {
-  flex-shrink: 0;
-  min-width: 24px;
-  padding: 1px 7px;
-  font-size: var(--text-xs);
+.home-box-count {
+  font-size: 2rem;
   font-weight: 700;
-  text-align: center;
-  color: var(--text-tertiary);
-  background: var(--bg-surface-2);
-  border-radius: var(--radius-full);
+  line-height: 1;
+  color: var(--text-primary);
 }
 
-.home-inbox-tab-count.has {
-  color: #fff;
-  background: var(--danger);
-}
-
-/* ── Right pane ────────────────────────────────────────────── */
-.home-inbox-pane {
+.home-box-foot {
   display: flex;
-  flex-direction: column;
-  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
-.home-inbox-pane-head {
+.home-box-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.home-box.active .home-box-view svg {
+  transform: rotate(90deg);
+}
+
+.home-actions-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-lg);
+}
+
+/* ── Alerts table ──────────────────────────────────────────── */
+.home-table-card {
+  overflow: hidden;
+}
+
+.home-table-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.home-inbox-pane-head h2 {
+.home-table-head h3 {
   font-size: var(--text-md);
   font-weight: 700;
   color: var(--text-primary);
 }
 
-.home-inbox-pane-head p {
-  margin-top: 2px;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.home-inbox-open {
+.home-table-open {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -149,113 +164,74 @@
   transition: color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
 }
 
-.home-inbox-open:hover {
+.home-table-open:hover {
   color: var(--text-primary);
   border-color: var(--border-strong);
 }
 
-.home-inbox-list {
-  display: flex;
-  flex-direction: column;
+.home-table-scroll {
+  overflow-x: auto;
 }
 
-/* ── One alert ─────────────────────────────────────────────── */
-.home-alert {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  width: 100%;
-  padding: var(--space-4) var(--space-6);
-  font-family: inherit;
-  text-align: left;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--border-subtle);
+.home-table {
+  min-width: 640px;
+}
+
+.home-table-row {
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
 }
 
-.home-alert:hover {
-  background: var(--bg-surface-2);
-}
-
-.home-alert:focus-visible {
+.home-table-row:focus-visible {
   outline: none;
   box-shadow: inset var(--input-shadow-focus);
 }
 
-.home-alert-dot {
-  flex-shrink: 0;
-  width: 8px;
-  height: 8px;
-  margin-top: 6px;
-  border-radius: var(--radius-full);
-  background: var(--text-tertiary);
-}
-
-.home-alert-dot-empanelment { background: var(--info, #3b82f6); }
-.home-alert-dot-leads       { background: var(--warning); }
-.home-alert-dot-proposals   { background: var(--success-dark, var(--success)); }
-
-.home-alert-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.home-alert-title {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.home-alert-sub {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  line-height: 1.45;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.home-alert-cat {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.home-table .home-col-num {
+  width: 48px;
   color: var(--text-tertiary);
 }
 
-.home-alert-right {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding-top: 2px;
-  color: var(--text-tertiary);
+.home-table-title {
+  font-weight: 600;
+  min-width: 200px;
 }
 
-.home-alert-time {
-  font-size: var(--text-xs);
+.home-table-sub {
+  color: var(--text-secondary) !important;
+  max-width: 420px;
+}
+
+.home-table .home-col-date {
+  width: 130px;
   white-space: nowrap;
 }
 
-/* ── Empty state ───────────────────────────────────────────── */
-.home-inbox-empty {
-  flex: 1;
+.home-table-date {
+  display: block;
+}
+
+.home-table-ago {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.home-table .home-col-open {
+  width: 40px;
+  color: var(--text-tertiary);
+}
+
+.home-table-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: var(--space-1);
-  padding: var(--space-12) var(--space-6);
+  padding: var(--space-10, var(--space-8)) var(--space-6);
   text-align: center;
 }
 
-.home-inbox-empty-icon {
+.home-table-empty-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -267,40 +243,322 @@
   background: var(--success-light);
 }
 
-.home-inbox-empty-title {
+.home-table-empty-title {
   font-size: var(--text-md);
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.home-inbox-empty-sub {
+.home-table-empty-sub {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
-/* ── Narrow screens: menu becomes a scrollable row of tabs ─── */
-@media (max-width: 820px) {
-  .home-inbox {
+/* ── Motion ────────────────────────────────────────────────── */
+@keyframes home-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes home-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes home-slide-down {
+  from { opacity: 0; transform: translateY(-10px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes home-row-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes home-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--box-accent) 45%, transparent); }
+  70%  { box-shadow: 0 0 0 9px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@keyframes home-pop {
+  0%   { opacity: 0; transform: scale(0.6); }
+  60%  { opacity: 1; transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.home-welcome {
+  animation: home-rise 420ms var(--ease-out) backwards;
+}
+
+/* Soft accent wash that fades in behind a hovered/selected box. */
+.home-box::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--box-accent) 12%, transparent), transparent 60%);
+  opacity: 0;
+  transition: opacity var(--duration-slow) var(--ease-out);
+}
+
+.home-box:hover::after,
+.home-box.active::after {
+  opacity: 1;
+}
+
+.home-box:hover {
+  transform: translateY(-3px);
+}
+
+.home-box:active {
+  transform: translateY(-1px) scale(0.99);
+}
+
+.home-box:hover .home-box-icon {
+  transform: scale(1.1) rotate(-6deg);
+}
+
+/* Boxes with something pending breathe gently to draw the eye. */
+.home-box.has-items .home-box-icon {
+  animation: home-pulse 2.4s var(--ease-out) 900ms infinite;
+}
+
+.home-box-view svg {
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+
+.home-box:hover:not(.active) .home-box-view svg {
+  transform: translateX(3px);
+}
+
+.home-actions-hint {
+  animation: home-fade-in 400ms var(--ease-out) 350ms backwards;
+}
+
+.home-table-card {
+  animation: home-slide-down 380ms var(--ease-out) backwards;
+}
+
+.home-table-row {
+  animation: home-row-in 340ms var(--ease-out) backwards;
+  animation-delay: calc(80ms + var(--i, 0) * 40ms);
+}
+
+/* Accent bar slides in on the left of a hovered row. */
+.home-table-row td:first-child {
+  position: relative;
+}
+
+.home-table-row td:first-child::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--primary, var(--text-primary));
+  transform: scaleY(0);
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+
+.home-table-row:hover td:first-child::before {
+  transform: scaleY(1);
+}
+
+.home-table .home-col-open svg {
+  transition: transform var(--duration-normal) var(--ease-out), color var(--duration-normal) var(--ease-out);
+}
+
+.home-table-row:hover .home-col-open svg {
+  transform: translateX(4px);
+  color: var(--text-primary);
+}
+
+.home-table-empty-icon {
+  animation: home-pop 500ms var(--ease-out) 150ms backwards;
+}
+
+/* Desktop opens the table below the boxes, so no back button there. */
+.home-table-back {
+  display: none;
+}
+
+/* ── Mobile: boxes become compact rows; picking one swaps the list
+   for its alerts in place, with a Back button to return ─────── */
+@media (max-width: 720px) {
+  .home-boxes {
     grid-template-columns: minmax(0, 1fr);
-    min-height: 0;
+    gap: 0;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border, var(--border-default));
+    border-radius: var(--radius-lg);
+    overflow: hidden;
   }
-  .home-inbox-nav {
+
+  .home-box {
     flex-direction: row;
-    overflow-x: auto;
-    padding: var(--space-2);
-    border-right: none;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: none;
+    border-left: 3px solid var(--box-accent);
     border-bottom: 1px solid var(--border-subtle);
+    border-radius: 0;
+    box-shadow: none;
   }
-  .home-inbox-nav-heading {
+
+  .home-box:last-child {
+    border-bottom: none;
+  }
+
+  .home-box:hover {
+    border-color: var(--border-subtle);
+    border-left-color: var(--box-accent);
+    box-shadow: none;
+    transform: none;
+  }
+
+  .home-box-top {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .home-box-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .home-box-count {
+    min-width: 26px;
+    padding: 2px 8px;
+    font-size: var(--text-xs);
+    text-align: center;
+    color: var(--text-tertiary);
+    background: var(--bg-surface-2);
+    border-radius: var(--radius-full);
+  }
+
+  /* Only the chevron is kept from the footer ("Latest …" / "View" hidden). */
+  .home-box-foot {
+    font-size: 0;
+  }
+
+  .home-actions-hint,
+  .home-actions.has-active .home-boxes {
     display: none;
   }
-  .home-inbox-tab {
-    width: auto;
-    flex-shrink: 0;
+
+  .home-table-back {
+    display: inline-flex;
+    margin: var(--space-3) var(--space-4) 0;
   }
-  .home-inbox-pane-head,
-  .home-alert {
-    padding-left: var(--space-4);
-    padding-right: var(--space-4);
+
+  .home-table-head {
+    padding: var(--space-2) var(--space-4) var(--space-3);
+  }
+
+  .home-table-open {
+    padding: 5px 10px;
+  }
+
+  /* Alerts as stacked cards instead of a wide, sideways-scrolling table. */
+  .home-table {
+    min-width: 0;
+  }
+
+  .home-table thead {
+    display: none;
+  }
+
+  .home-table,
+  .home-table tbody,
+  .home-table-row {
+    display: block;
+  }
+
+  .home-table-row {
+    position: relative;
+    padding: var(--space-3) var(--space-10, 40px) var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--table-border);
+  }
+
+  .home-table-row:last-child {
+    border-bottom: none;
+  }
+
+  .home-table tbody .home-table-row td {
+    display: block;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    padding: 0;
+    border: none;
+  }
+
+  .home-table .home-col-num {
+    display: none !important;
+  }
+
+  .home-table-sub {
+    margin-top: 3px;
+    font-size: var(--text-sm);
+  }
+
+  .home-table .home-col-date {
+    margin-top: var(--space-1);
+  }
+
+  .home-table-date,
+  .home-table-ago {
+    display: inline;
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+  }
+
+  .home-table-ago::before {
+    content: " · ";
+  }
+
+  .home-table .home-col-open {
+    position: absolute;
+    top: 50%;
+    right: var(--space-3);
+    transform: translateY(-50%);
+  }
+}
+
+/* Mobile view swap: alerts slide in from the right, and the module list
+   slides back in from the left after "Back". */
+@keyframes home-from-right {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes home-from-left {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@media (max-width: 720px) {
+  .home-boxes {
+    animation: home-from-left 320ms var(--ease-out) backwards;
+  }
+  .home-box {
+    animation-duration: 360ms;
+    animation-delay: calc(var(--i, 0) * 45ms);
+  }
+  .home-actions.has-active .home-table-card {
+    animation: home-from-right 320ms var(--ease-out) backwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-actions *,
+  .home-actions *::before,
+  .home-actions *::after,
+  .home-welcome {
+    animation: none !important;
+    transition: none !important;
   }
 }

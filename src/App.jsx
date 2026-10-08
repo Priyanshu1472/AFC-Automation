@@ -7,7 +7,7 @@ import ErrorBoundary from "./components/shared/ErrorBoundary";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
 import PublicOnlyRoute from "./components/routing/PublicOnlyRoute";
 import PageLoader from "./components/ui/PageLoader";
-import { USERS_PAGE_ROLES, USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, EMPANELMENT_SENDER_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES } from "./lib/roles";
+import { USERS_PAGE_ROLES, USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, EMPANELMENT_SENDER_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES } from "./lib/roles";
 
 // Lazy-loaded so each page (and anything only it imports, e.g. xlsx/jspdf on
 // the Reports pages) ships as its own chunk instead of all ~30 pages being
@@ -46,6 +46,7 @@ const LeadReportsPage = lazy(() => import("./pages/leads/LeadReportsPage"));
 const ProposalsListPage = lazy(() => import("./pages/proposals/ProposalsListPage"));
 const ProposalPreparationPage = lazy(() => import("./pages/proposals/ProposalPreparationPage"));
 const FeeNoteEditPage = lazy(() => import("./pages/proposals/FeeNoteEditPage"));
+const ComingSoonPage = lazy(() => import("./pages/ComingSoonPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
 import "./App.css";
@@ -253,6 +254,22 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
                       <ProposalsListPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/monitoring"
+                  element={
+                    <ProtectedRoute allowedRoles={MONITORING_ROLES}>
+                      <ComingSoonPage title="Monitoring" description="Project monitoring will be available here soon." />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/financials"
+                  element={
+                    <ProtectedRoute allowedRoles={FINANCIALS_ROLES}>
+                      <ComingSoonPage title="Financials" description="Financials will be available here soon." />
                     </ProtectedRoute>
                   }
                 />

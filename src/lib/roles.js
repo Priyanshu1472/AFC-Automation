@@ -232,3 +232,8 @@ export const LEAD_PA_TIER_ROLES = ["project_assistant", "project_officer", "area
 // action branch anywhere in advance-lead-stage — included so they can
 // actually reach the pages, not because they can act on anything yet.
 export const LEAD_GENERATION_NAV_ROLES = ["project_assistant", "project_officer", "area_manager", "regional_manager", "associate_consultant", "agm", "srm", "dgm", "general_manager", "md", "admin", "cfo", "cs"];
+
+// Monitoring and Financials aren't built yet (placeholder pages only), so
+// for now they're open to the same staff roles as Leads/Proposals.
+export const MONITORING_ROLES = LEAD_GENERATION_NAV_ROLES;
+export const FINANCIALS_ROLES = LEAD_GENERATION_NAV_ROLES;
