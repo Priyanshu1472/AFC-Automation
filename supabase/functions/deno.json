@@ -1,5 +1,5 @@
 {
   "tasks": {
-    "test": "deno test --allow-env --allow-read --no-check"
+    "test": "AFC_EDGE_TEST=1 deno test --allow-env --allow-read --no-check"
   }
 }

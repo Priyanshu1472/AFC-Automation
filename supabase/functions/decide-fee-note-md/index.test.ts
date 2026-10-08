@@ -21,7 +21,7 @@ function client(opts: {
     afc_users: [{ data: opts.caller ?? { id: MD_ID, role: "md", is_active: true, email: "md@afc.com", pin_hash: MD_PIN_HASH }, error: null }],
     fee_notes: [{ data: note, error: null }, { data: {}, error: null }],
     proposal_preparations: [{ data: { lead_id: "lead-1" }, error: null }],
-    leads: [{ data: { title: "DPR for Smart City", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", approval_authority_id: "aa-1" }, error: null }],
+    leads: [{ data: { title: "DPR for Smart City", person_responsible_id: "pr-1", reviewer_id: "reviewer-1", recommending_authority_id: "aa-1" }, error: null }],
   });
 }
 
@@ -102,5 +102,5 @@ Deno.test("decide-fee-note-md - a send-back resets both earlier signatures", asy
   const updateCall = fake.__log.filter((l) => l.table === "fee_notes").flatMap((l) => l.calls).find((c) => c[0] === "update");
   assertMatch(updateCall![1], /"status":"draft"/);
   assertMatch(updateCall![1], /"pr_signed_by":null/);
-  assertMatch(updateCall![1], /"aa_signed_by":null/);
+  assertMatch(updateCall![1], /"ra_signed_by":null/);
 });

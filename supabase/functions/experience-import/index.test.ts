@@ -6,6 +6,9 @@ const SECRET = "test-shared-secret";
 const CLIENT_ID = "experience-intelligence";
 const AUDIENCE = "experience-import-gateway";
 
+// The gateway refuses every request (500) until its shared secret is set.
+Deno.env.set("EXPERIENCE_IMPORT_SECRET", SECRET);
+
 function base64Url(input: string): string {
   return btoa(input).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }

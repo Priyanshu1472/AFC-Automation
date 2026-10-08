@@ -9,7 +9,7 @@ const LEAD_ID = "lead-1";
 
 // A real (tiny, valid) 1x1 PNG — pdf-lib actually parses the logo bytes.
 const MINIMAL_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
-function pngBytes(): Uint8Array {
+function pngBytes(): Uint8Array<ArrayBuffer> {
   const bin = atob(MINIMAL_PNG_BASE64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -47,7 +47,7 @@ function leadRow(overrides: Record<string, unknown> = {}) {
     title: "DPR for Smart City", client_name: "Municipal Corp", portal_name: "GeM (Government e-Marketplace)",
     bid_number: "BID/123", lead_type: "rfp", delivery_type: "offline", submission_deadline: "2026-07-02",
     source: "in_house", assigned_ba_id: null,
-    person_responsible_id: CALLER_ID, reviewer_id: "reviewer-1", approval_authority_id: "aa-1",
+    person_responsible_id: CALLER_ID, reviewer_id: "reviewer-1", recommending_authority_id: "aa-1",
     approval_note_data: { client_address: "Van Bhawan", objectives: "Evaluate works", scope_of_work: ["10% sampling", "Field visits"] },
     ...overrides,
   };
@@ -101,6 +101,22 @@ Deno.test("preview-fee-note - a caller with no relation to the lead is forbidden
   assertEquals(res.status, 403);
 });
 
+// Must run before any test that loads the logo successfully: fetchPublicAsset
+// caches a fetched logo for the rest of the module's life, so after a
+// success this test would never hit the failing fetch.
+Deno.test("preview-fee-note - logo fetch failure surfaces a clean 500", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (() => Promise.resolve(new Response("not found", { status: 404 }))) as unknown as typeof fetch;
+  try {
+    const res = await handleRequest(req({ fee_note_id: FEE_NOTE_ID }), client() as never);
+    const json = await res.json();
+    assertEquals(res.status, 500);
+    assertEquals(json.error, "Could not load the AFC letterhead logo. Please try again.");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("preview-fee-note - Person Responsible can preview and gets a PDF", async () => {
   await withStubbedAssetFetch(async () => {
     const res = await handleRequest(req({ fee_note_id: FEE_NOTE_ID }), client() as never);
@@ -121,15 +137,3 @@ Deno.test("preview-fee-note - md/admin can preview even without being named on t
   });
 });
 
-Deno.test("preview-fee-note - logo fetch failure surfaces a clean 500", async () => {
-  const original = globalThis.fetch;
-  globalThis.fetch = (() => Promise.resolve(new Response("not found", { status: 404 }))) as unknown as typeof fetch;
-  try {
-    const res = await handleRequest(req({ fee_note_id: FEE_NOTE_ID }), client() as never);
-    const json = await res.json();
-    assertEquals(res.status, 500);
-    assertEquals(json.error, "Could not load the AFC letterhead logo. Please try again.");
-  } finally {
-    globalThis.fetch = original;
-  }
-});

@@ -16,7 +16,7 @@ function callerRow(overrides: Record<string, unknown> = {}) {
 function leadRow(overrides: Record<string, unknown> = {}) {
   return {
     id: LEAD_ID, status: "md_approved",
-    person_responsible_id: PR_ID, reviewer_id: REVIEWER_ID, approval_authority_id: AUTHORITY_ID, assigned_ba_id: BA_ID,
+    person_responsible_id: PR_ID, reviewer_id: REVIEWER_ID, recommending_authority_id: AUTHORITY_ID, assigned_ba_id: BA_ID,
     ...overrides,
   };
 }

@@ -22,14 +22,16 @@ function baseFields(overrides: Record<string, string> = {}) {
   };
 }
 
-function formReq(fields: Record<string, string>, token = fakeJwt({ sub: CALLER_ID })): Request {
-  const fd = new FormData();
-  for (const [k, v] of Object.entries(fields)) fd.set(k, v);
-  return new Request("https://x.com/create-lead", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: fd });
-}
-
 function pdfFile(name: string): File {
   return new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00])], name, { type: "application/pdf" });
+}
+
+// At least one document is mandatory for every source except Suo Moto, so
+// the default request attaches one RFP PDF (none for a Suo Moto lead). Use
+// formReqWithFiles to control the attachments explicitly.
+function formReq(fields: Record<string, string>, token = fakeJwt({ sub: CALLER_ID })): Request {
+  const files = fields.source === "suo_moto" ? [] : [pdfFile("rfp.pdf")];
+  return formReqWithFiles(fields, files, token);
 }
 
 function formReqWithFiles(fields: Record<string, string>, files: File[], token = fakeJwt({ sub: CALLER_ID })): Request {
@@ -62,6 +64,9 @@ function buildClient(opts: {
     opts.authorityTarget ?? { data: { id: AUTHORITY_ID, role: "agm", team: TEAM, committee: "PMT Extended", is_active: true }, error: null },
   ];
   if (opts.baTarget) routes.afc_users.push(opts.baTarget);
+  // Any later afc_users lookup is a list query (notifyRole fan-out to the
+  // DGM/AGM/GM holders after creation) — answer it with an empty list.
+  routes.afc_users.push({ data: [], error: null });
   routes.leads = routes.leads ?? [{ data: { id: "new-lead-1", lead_number: "LH-2026-000001", status: "pa_review" }, error: null }];
   return createFakeAdminClient(routes, { rpc: { next_lead_number: { data: "LH-2026-000001", error: null }, ...(opts.rpc || {}) } });
 }
@@ -291,9 +296,17 @@ Deno.test("handleRequest - accepts more than one document and stores all of them
   assertEquals(insertBody.documents.map((d: { name: string }) => d.name), ["tender.pdf", "annexure-1.pdf", "annexure-2.pdf"]);
 });
 
-Deno.test("handleRequest - a lead with zero documents still succeeds (documents stays optional)", async () => {
+Deno.test("handleRequest - a non-Suo-Moto lead with zero documents is rejected", async () => {
   const client = buildClient({});
-  const res = await handleRequest(formReq(baseFields()), client as never);
+  const res = await handleRequest(formReqWithFiles(baseFields(), []), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "At least one document is required.");
+});
+
+Deno.test("handleRequest - a Suo Moto lead needs no document", async () => {
+  const BA_ID = "ba-1";
+  const client = buildClient({ baTarget: { data: { id: BA_ID, role: "business_associate", team: TEAM, is_active: true }, error: null } });
+  const res = await handleRequest(formReqWithFiles(baseFields({ source: "suo_moto", assigned_ba_id: BA_ID }), []), client as never);
   assertEquals(res.status, 200);
 
   const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;

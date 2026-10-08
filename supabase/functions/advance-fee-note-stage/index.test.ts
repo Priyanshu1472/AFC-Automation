@@ -26,7 +26,7 @@ function noteRow(overrides: Record<string, unknown> = {}) {
 function leadRow(overrides: Record<string, unknown> = {}) {
   return {
     id: "lead-1", title: "DPR for Smart City", submission_deadline: null,
-    person_responsible_id: PR_ID, reviewer_id: "reviewer-1", approval_authority_id: AA_ID,
+    person_responsible_id: PR_ID, reviewer_id: "reviewer-1", recommending_authority_id: AA_ID,
     ...overrides,
   };
 }
@@ -69,8 +69,8 @@ Deno.test("advance-fee-note-stage - invalid action is rejected", async () => {
   assertEquals(res.status, 400);
 });
 
-Deno.test("advance-fee-note-stage - aa_send_back requires a remark", async () => {
-  const res = await handleRequest(req({ fee_note_id: FEE_NOTE_ID, action: "aa_send_back" }), client() as never);
+Deno.test("advance-fee-note-stage - ra_send_back requires a remark", async () => {
+  const res = await handleRequest(req({ fee_note_id: FEE_NOTE_ID, action: "ra_send_back" }), client() as never);
   assertEquals(res.status, 400);
 });
 
@@ -94,7 +94,7 @@ Deno.test("pr_forward - a stranger can't forward the note", async () => {
 Deno.test("pr_forward - can't forward a note in the wrong status", async () => {
   const res = await handleRequest(
     req({ fee_note_id: FEE_NOTE_ID, action: "pr_forward", pin: CALLER_PIN }),
-    client({ note: noteRow({ status: "pending_approval_authority" }) }) as never,
+    client({ note: noteRow({ status: "pending_recommending_authority" }) }) as never,
   );
   assertEquals(res.status, 400);
 });
@@ -138,18 +138,18 @@ Deno.test("pr_forward - wrong PIN is rejected", async () => {
   assertEquals(json.error, "Incorrect PIN.");
 });
 
-Deno.test("pr_forward - happy path moves the note to pending_approval_authority", async () => {
+Deno.test("pr_forward - happy path moves the note to pending_recommending_authority", async () => {
   const res = await handleRequest(req({ fee_note_id: FEE_NOTE_ID, action: "pr_forward", pin: CALLER_PIN }), client() as never);
   const json = await res.json();
   assertEquals(res.status, 200);
   assertEquals(json.success, true);
 });
 
-// ── aa_forward / aa_send_back ───────────────────────────────────
+// ── ra_forward / ra_send_back ───────────────────────────────────
 function aaClient(opts: Parameters<typeof client>[0] = {}) {
   return client({
     caller: { id: AA_ID, role: "dgm", is_active: true, email: "aa@afc.com", pin_hash: AA_PIN_HASH },
-    note: noteRow({ status: "pending_approval_authority" }),
+    note: noteRow({ status: "pending_recommending_authority" }),
     afc_users_extra: [
       { data: [{ id: "md-1" }], error: null },
       { data: [{ email: "md@afc.com" }], error: null },
@@ -162,42 +162,42 @@ function aaReq(body: Record<string, unknown>) {
   return req(body, fakeJwt({ sub: AA_ID }));
 }
 
-Deno.test("aa_forward - only the assigned Approval Authority can act", async () => {
+Deno.test("ra_forward - only the assigned Recommending Authority can act", async () => {
   const res = await handleRequest(
-    aaReq({ fee_note_id: FEE_NOTE_ID, action: "aa_forward", pin: CALLER_PIN }),
+    aaReq({ fee_note_id: FEE_NOTE_ID, action: "ra_forward", pin: CALLER_PIN }),
     client({
       caller: { id: "someone-else", role: "dgm", is_active: true, email: "x@afc.com", pin_hash: AA_PIN_HASH },
-      note: noteRow({ status: "pending_approval_authority" }),
+      note: noteRow({ status: "pending_recommending_authority" }),
     }) as never,
   );
   assertEquals(res.status, 403);
 });
 
-Deno.test("aa_forward - md has no override — only this lead's own Approval Authority can act", async () => {
+Deno.test("ra_forward - md has no override — only this lead's own Recommending Authority can act", async () => {
   const res = await handleRequest(
-    req({ fee_note_id: FEE_NOTE_ID, action: "aa_forward", pin: CALLER_PIN }, fakeJwt({ sub: "md-1" })),
+    req({ fee_note_id: FEE_NOTE_ID, action: "ra_forward", pin: CALLER_PIN }, fakeJwt({ sub: "md-1" })),
     client({
       caller: { id: "md-1", role: "md", is_active: true, email: "md@afc.com", pin_hash: AA_PIN_HASH },
-      note: noteRow({ status: "pending_approval_authority" }),
+      note: noteRow({ status: "pending_recommending_authority" }),
     }) as never,
   );
   assertEquals(res.status, 403);
 });
 
-Deno.test("aa_forward - can't act on a note in the wrong status", async () => {
-  const res = await handleRequest(aaReq({ fee_note_id: FEE_NOTE_ID, action: "aa_forward", pin: CALLER_PIN }), aaClient({ note: noteRow({ status: "draft" }) }) as never);
+Deno.test("ra_forward - can't act on a note in the wrong status", async () => {
+  const res = await handleRequest(aaReq({ fee_note_id: FEE_NOTE_ID, action: "ra_forward", pin: CALLER_PIN }), aaClient({ note: noteRow({ status: "draft" }) }) as never);
   assertEquals(res.status, 400);
 });
 
-Deno.test("aa_forward - happy path moves the note to pending_md", async () => {
-  const res = await handleRequest(aaReq({ fee_note_id: FEE_NOTE_ID, action: "aa_forward", pin: CALLER_PIN }), aaClient() as never);
+Deno.test("ra_forward - happy path moves the note to pending_md", async () => {
+  const res = await handleRequest(aaReq({ fee_note_id: FEE_NOTE_ID, action: "ra_forward", pin: CALLER_PIN }), aaClient() as never);
   const json = await res.json();
   assertEquals(res.status, 200);
   assertEquals(json.success, true);
 });
 
-Deno.test("aa_send_back - happy path sends the note back to draft, no PIN required", async () => {
-  const res = await handleRequest(aaReq({ fee_note_id: FEE_NOTE_ID, action: "aa_send_back", remark: "Amount looks too high" }), aaClient() as never);
+Deno.test("ra_send_back - happy path sends the note back to draft, no PIN required", async () => {
+  const res = await handleRequest(aaReq({ fee_note_id: FEE_NOTE_ID, action: "ra_send_back", remark: "Amount looks too high" }), aaClient() as never);
   const json = await res.json();
   assertEquals(res.status, 200);
   assertEquals(json.success, true);

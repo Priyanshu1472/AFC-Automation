@@ -27,7 +27,7 @@ function baseFields(overrides: Record<string, string> = {}) {
     title: "Preparation of DPR for Smart City Project (revised)",
     person_responsible_id: PR_ID,
     reviewer_id: REVIEWER_ID,
-    approval_authority_id: AUTHORITY_ID,
+    recommending_authority_id: AUTHORITY_ID,
     ...overrides,
   };
 }
@@ -230,7 +230,7 @@ Deno.test("handleRequest - notifies newly-assigned Reviewer and Approval Authori
 
 Deno.test("handleRequest - notifies a newly-assigned Person Responsible when reassigned away from the original", async () => {
   const client = buildClient({
-    lead: leadRow({ person_responsible_id: "old-pr", reviewer_id: REVIEWER_ID, approval_authority_id: AUTHORITY_ID }),
+    lead: leadRow({ person_responsible_id: "old-pr", reviewer_id: REVIEWER_ID, recommending_authority_id: AUTHORITY_ID }),
   });
   const res = await handleRequest(formReq(baseFields()), client as never);
   assertEquals(res.status, 200);
@@ -260,7 +260,7 @@ Deno.test("handleRequest - does not notify the caller if they reassign themselve
 
 Deno.test("handleRequest - saving with no reassignment sends no notifications", async () => {
   const client = buildClient({
-    lead: leadRow({ person_responsible_id: PR_ID, reviewer_id: REVIEWER_ID, approval_authority_id: AUTHORITY_ID }),
+    lead: leadRow({ person_responsible_id: PR_ID, reviewer_id: REVIEWER_ID, recommending_authority_id: AUTHORITY_ID }),
   });
   const res = await handleRequest(formReq(baseFields()), client as never);
   assertEquals(res.status, 200);
@@ -364,7 +364,7 @@ Deno.test("overdue - editing past pa_review preserves the existing PR/Reviewer/R
   });
   const res = await handleRequest(
     formReq(
-      { lead_id: LEAD_ID, person_responsible_id: "someone-else", reviewer_id: "someone-else", recommending_authority_id: "someone-else" },
+      baseFields({ person_responsible_id: "someone-else", reviewer_id: "someone-else", recommending_authority_id: "someone-else" }),
       fakeJwt({ sub: PR_ID })
     ),
     client as never
