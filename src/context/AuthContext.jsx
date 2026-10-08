@@ -8,7 +8,7 @@ const ACTIVE_TEAM_STORAGE_PREFIX = "afc_active_team_";
 async function fetchProfile(userId) {
   const { data, error } = await supabase
     .from("afc_users")
-    .select("id, full_name, email, role, team, office, committee, is_active, must_change_password, pin_updated_at, signature_path")
+    .select("id, full_name, email, role, team, office, committee, is_active, must_change_password, pin_updated_at, signature_path, avatar_path")
     .eq("id", userId)
     .maybeSingle();
 

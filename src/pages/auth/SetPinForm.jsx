@@ -17,7 +17,9 @@ const PIN_PATTERN = /^\d{4}$/;
 // captcha-gated through the anon key once Turnstile is enabled; the edge
 // function checks server-side with the service role key instead, which is
 // exempt), then call set-own-pin with just the new PIN.
-export default function SetPinForm({ hasPin }) {
+// `variant`: "login" (standalone auth-style card) or "section" (a regular
+// in-app card, as on My Profile) — same fields and behavior either way.
+export default function SetPinForm({ hasPin, variant = "login" }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
@@ -60,64 +62,86 @@ export default function SetPinForm({ hasPin }) {
     }
   }
 
+  const isSection = variant === "section";
+  const heading = hasPin ? "Change Action PIN" : "Set Action PIN";
+  const subheading =
+    "A 4-digit PIN used to confirm decisions on leads (accept, approve, decline, escalate, forward, withdraw) — separate from your login password, and known only to you.";
+
+  const alerts = (
+    <>
+      {success && <Alert variant="success">PIN {hasPin ? "updated" : "set"} successfully.</Alert>}
+      {error && <Alert variant="danger">{error}</Alert>}
+    </>
+  );
+
+  const pinInputs = (
+    <>
+      <PinInput label={hasPin ? "New PIN" : "PIN"} value={pin} onChange={setPin} required disabled={loading} />
+      <PinInput label="Confirm PIN" value={confirmPin} onChange={setConfirmPin} required disabled={loading} />
+    </>
+  );
+
+  const fields = (
+    <div className={isSection ? "mp-fields" : "login-fields"}>
+      <div style={{ position: "relative" }}>
+        <Input
+          label="Current password"
+          type={show ? "text" : "password"}
+          placeholder="Enter your current password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          icon={<LockIcon />}
+          autoComplete="current-password"
+          required
+          disabled={loading}
+        />
+        <div style={{ position: "absolute", right: 10, top: "52%", transform: "translateY(10%)" }}>
+          <ShowHideButton show={show} onToggle={() => setShow((p) => !p)} />
+        </div>
+      </div>
+      {isSection ? <div className="mp-pin-row">{pinInputs}</div> : pinInputs}
+    </div>
+  );
+
+  const submitButton = (
+    <Button
+      type="submit"
+      variant="primary"
+      block={!isSection}
+      loading={loading}
+      disabled={loading || pin.length !== 4 || confirmPin.length !== 4 || !currentPassword}
+      iconRight={!loading && !isSection && <ArrowRightIcon />}
+    >
+      {loading ? "Saving…" : hasPin ? "Update PIN" : "Set PIN"}
+    </Button>
+  );
+
+  if (isSection) {
+    return (
+      <Card className="mp-section-card">
+        <form onSubmit={submit} noValidate>
+          <Card.Header title={heading} subtitle={subheading} />
+          <Card.Body>
+            {alerts}
+            {fields}
+          </Card.Body>
+          <Card.Footer className="mp-card-footer">{submitButton}</Card.Footer>
+        </form>
+      </Card>
+    );
+  }
+
   return (
     <Card className="login-card">
       <form onSubmit={submit} noValidate>
         <Card.Body className="login-card-body">
           <div className="login-form-heading">
-            <h2>{hasPin ? "Change Action PIN" : "Set Action PIN"}</h2>
-            <p>
-              A 4-digit PIN used to confirm decisions on leads (accept, approve, decline, escalate, forward, withdraw) —
-              separate from your login password, and known only to you.
-            </p>
+            <h2>{heading}</h2>
+            <p>{subheading}</p>
           </div>
-
-          {success && <Alert variant="success">PIN {hasPin ? "updated" : "set"} successfully.</Alert>}
-          {error && <Alert variant="danger">{error}</Alert>}
-
-          <div className="login-fields">
-            <div style={{ position: "relative" }}>
-              <Input
-                label="Current password"
-                type={show ? "text" : "password"}
-                placeholder="Enter your current password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                icon={<LockIcon />}
-                autoComplete="current-password"
-                required
-                disabled={loading}
-              />
-              <div style={{ position: "absolute", right: 10, top: "52%", transform: "translateY(10%)" }}>
-                <ShowHideButton show={show} onToggle={() => setShow((p) => !p)} />
-              </div>
-            </div>
-            <PinInput
-              label={hasPin ? "New PIN" : "PIN"}
-              value={pin}
-              onChange={setPin}
-              required
-              disabled={loading}
-            />
-            <PinInput
-              label="Confirm PIN"
-              value={confirmPin}
-              onChange={setConfirmPin}
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <Button
-            type="submit"
-            variant="primary"
-            block
-            loading={loading}
-            disabled={loading || pin.length !== 4 || confirmPin.length !== 4 || !currentPassword}
-            iconRight={!loading && <ArrowRightIcon />}
-          >
-            {loading ? "Saving…" : hasPin ? "Update PIN" : "Set PIN"}
-          </Button>
+          {alerts}
+          {fields}
+          {submitButton}
         </Card.Body>
       </form>
     </Card>
