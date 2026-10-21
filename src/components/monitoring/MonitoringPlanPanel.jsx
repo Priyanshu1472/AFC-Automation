@@ -122,7 +122,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
             )}
           </div>
           {item.status === "completed" && item.completion_note && <p className="mon-item-note">“{item.completion_note}”</p>}
-          {item.remarks && <p className="mon-item-note">{item.remarks}</p>}
+          {item.remarks && <p className="mon-item-note"><strong>Note/Remarks:</strong> {item.remarks}</p>}
           {documents.filter((d) => d.item_id === item.id).map((d) => (
             <button key={d.id} type="button" className="mon-link mon-item-file" onClick={() => viewFile(d)}>
               <PaperclipIcon /> {d.file_name}
