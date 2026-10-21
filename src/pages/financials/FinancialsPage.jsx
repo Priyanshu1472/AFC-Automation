@@ -24,6 +24,8 @@ import "../../styles/Monitoring.css";
 
 const VIEWS = [
   { key: "all", label: "All", match: () => true },
+  { key: "pending_cfo", label: "Awaiting CFO Approval", match: (e) => e.invoice.status === "pending_cfo" },
+  { key: "rejected", label: "Sent Back by CFO", match: (e) => e.invoice.status === "rejected" },
   { key: "awaiting_client", label: "Awaiting Client Payment", match: (e) => e.invoice.status === "raised" },
   { key: "awaiting_bp", label: "Awaiting BP Invoice", match: (e) => e.project.hasBp && e.invoice.status === "paid" && (!e.bpInvoice || e.bpInvoice.status === "requested") },
   { key: "note_due", label: "Payment Note Due", match: (e) => e.bpInvoice?.status === "received" && e.paymentNote?.status !== "sent" },
@@ -41,8 +43,9 @@ export default function FinancialsPage() {
   const [paymentNotes, setPaymentNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  // Accounts (CFO) lands on their own queue: payment notes waiting for them.
-  const [view, setView] = useState(() => (profile?.role === "cfo" ? "with_accounts" : "all"));
+  // The CFO lands on their own queue: invoices waiting for their approval
+  // and signature, ahead of the older "ready to pay a BP" queue.
+  const [view, setView] = useState(() => (profile?.role === "cfo" ? "pending_cfo" : "all"));
   const [search, setSearch] = useState("");
 
   const fetchAll = useCallback(async () => {
