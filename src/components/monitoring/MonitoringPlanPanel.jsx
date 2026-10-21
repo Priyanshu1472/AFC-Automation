@@ -103,7 +103,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
             {!isMilestone && numbers[item.id] && <span className="mon-item-kind">Deliverable {numbers[item.id]}</span>}
             <span className="mon-item-title">{item.title}</span>
           </div>
-          {item.description && <p className="mon-item-desc"><strong>Details:</strong> {item.description}</p>}
+          {item.description && <p className="mon-item-desc">{item.description}</p>}
           <div className="mon-item-meta">
             {item.status === "completed" ? (
               <span className="mon-tag is-done">Completed {fmtDate(item.completed_at)}</span>
@@ -121,7 +121,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
               <span className="mon-tag">{childrenOf(item.id).length - openKids}/{childrenOf(item.id).length} deliverables</span>
             )}
           </div>
-          {item.status === "completed" && item.completion_note && <p className="mon-item-note">“{item.completion_note}”</p>}
+          {item.status === "completed" && item.completion_note && <p className="mon-item-note"><strong>Details:</strong> “{item.completion_note}”</p>}
           {item.remarks && <p className="mon-item-note"><strong>Note/Remarks:</strong> {item.remarks}</p>}
           {documents.filter((d) => d.item_id === item.id).map((d) => (
             <button key={d.id} type="button" className="mon-link mon-item-file" onClick={() => viewFile(d)}>
