@@ -52,9 +52,9 @@
   border-radius: var(--radius-lg); box-shadow: var(--card-shadow);
 }
 .mon-htab {
-  display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; gap: var(--space-2); flex: 1; min-width: max-content;
   padding: 10px 16px; border: none; border-radius: var(--radius-md);
-  background: none; color: var(--text-secondary); text-align: left;
+  background: none; color: var(--text-secondary); text-align: center;
   font: inherit; font-size: var(--text-sm); font-weight: 500; cursor: pointer; white-space: nowrap;
   transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
