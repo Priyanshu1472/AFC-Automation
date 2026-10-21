@@ -1,7 +1,10 @@
 // Milestones & Deliverables, as set in the client MoU. Milestones are
-// listed by due date with their deliverables nested under them; anything
-// not tied to a milestone sits in its own group. Each item shows how close
-// its due date is, and billable items show their invoice state — a
+// listed by due date; their deliverables nest underneath in ascending
+// "Deliverable N" order (creation order, same as their number) rather than
+// by due date, so the number on screen always matches its position in the
+// list. Anything not tied to a milestone sits in its own group, same
+// ordering. Each item shows how close its due date is, and billable items
+// show their invoice state — a
 // completed billable item with no client invoice yet gets a "Raise
 // Invoice" shortcut. Writes are direct RLS (can_edit_monitoring_project);
 // completion stamping and the invoice alert happen in DB triggers.
@@ -23,6 +26,13 @@ function byDue(a, b) {
   return new Date(a.created_at) - new Date(b.created_at);
 }
 
+// Deliverables list in ascending "Deliverable N" order — the same creation
+// order deliverableNumbers() numbers them in — rather than by due date, so
+// the number on screen always matches its position in the list.
+function byCreated(a, b) {
+  return new Date(a.created_at) - new Date(b.created_at);
+}
+
 export default function MonitoringPlanPanel({ projectId, items, documents = [], clientInvoices, canEdit, onRaiseInvoice, onChanged }) {
   const [dialog, setDialog] = useState(null); // { type, item?, kind?, parentId? }
   const [busy, setBusy] = useState(false);
@@ -34,8 +44,8 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
   }
 
   const milestones = items.filter((i) => i.kind === "milestone").sort(byDue);
-  const childrenOf = (id) => items.filter((i) => i.parent_id === id).sort(byDue);
-  const loose = items.filter((i) => i.kind === "deliverable" && !i.parent_id).sort(byDue);
+  const childrenOf = (id) => items.filter((i) => i.parent_id === id).sort(byCreated);
+  const loose = items.filter((i) => i.kind === "deliverable" && !i.parent_id).sort(byCreated);
   const done = items.filter((i) => i.status === "completed").length;
   const pct = items.length ? Math.round((done / items.length) * 100) : 0;
   const numbers = deliverableNumbers(items);
