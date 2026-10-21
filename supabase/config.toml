@@ -591,6 +591,12 @@ verify_jwt = true
 import_map = "./functions/decide-fee-note-md/deno.json"
 entrypoint = "./functions/decide-fee-note-md/index.ts"
 
+[functions.decide-client-invoice]
+enabled = true
+verify_jwt = true
+import_map = "./functions/decide-client-invoice/deno.json"
+entrypoint = "./functions/decide-client-invoice/index.ts"
+
 [functions.set-own-pin]
 enabled = true
 verify_jwt = true

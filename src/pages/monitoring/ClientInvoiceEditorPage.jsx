@@ -224,6 +224,7 @@ export default function ClientInvoiceEditorPage() {
   if (!project) return shell(<><BackButton to="/monitoring" label="Back to Monitoring" /><Alert variant="danger">This project isn&rsquo;t in Monitoring, or you don&rsquo;t have access to it.</Alert></>);
   if (!canEdit) return shell(<><BackButton to={backTo} label="Back" /><Alert variant="danger">You can&rsquo;t raise invoices on this project.</Alert></>);
   if (editingInvoice?.status === "paid") return shell(<><BackButton to={backTo} label="Back" /><Alert variant="warning">This invoice has been paid and can no longer be changed.</Alert></>);
+  if (editingInvoice?.status === "raised") return shell(<><BackButton to={backTo} label="Back" /><Alert variant="warning">This invoice has already been approved and signed by the CFO and can no longer be changed.</Alert></>);
 
   const off = saving;
   const addressLines = form.client_address.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -375,7 +376,7 @@ export default function ClientInvoiceEditorPage() {
           </Card>
 
           <div className="lf-actions">
-            <Button type="submit" variant="primary" loading={saving} disabled={!items.length}>{invoiceId ? "Save Changes" : "Raise Invoice"}</Button>
+            <Button type="submit" variant="primary" loading={saving} disabled={!items.length}>{invoiceId ? "Save Changes" : "Submit for CFO Approval"}</Button>
             <Button type="button" variant="secondary" disabled={off} onClick={() => navigate(backTo)}>Cancel</Button>
           </div>
         </div>

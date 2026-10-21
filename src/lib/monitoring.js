@@ -17,8 +17,8 @@ export const DOCUMENT_CATEGORY_LABELS = Object.fromEntries(DOCUMENT_CATEGORIES.m
 export const PROJECT_STATUS_LABELS = { active: "Active", on_hold: "On Hold", completed: "Completed" };
 export const PROJECT_STATUS_VARIANTS = { active: "success", on_hold: "warning", completed: "neutral" };
 
-export const CLIENT_INVOICE_STATUS_LABELS = { raised: "Awaiting Payment", paid: "Payment Received" };
-export const CLIENT_INVOICE_STATUS_VARIANTS = { raised: "warning", paid: "success" };
+export const CLIENT_INVOICE_STATUS_LABELS = { pending_cfo: "Awaiting CFO Approval", rejected: "Sent Back by CFO", raised: "Awaiting Payment", paid: "Payment Received" };
+export const CLIENT_INVOICE_STATUS_VARIANTS = { pending_cfo: "info", rejected: "danger", raised: "warning", paid: "success" };
 
 export const BP_INVOICE_STATUS_LABELS = { requested: "Awaiting BP Invoice", received: "Payment Due to BP", paid: "Paid to BP" };
 export const BP_INVOICE_STATUS_VARIANTS = { requested: "warning", received: "info", paid: "success" };

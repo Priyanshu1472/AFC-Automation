@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../hooks/useAuth";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import Alert from "../ui/Alert";
@@ -21,11 +22,14 @@ import {
   BP_INVOICE_STATUS_LABELS, BP_INVOICE_STATUS_VARIANTS, PAYMENT_NOTE_STATUS_LABELS,
 } from "../../lib/monitoring";
 import { ClientPaymentModal, RequestBpInvoiceModal, BpInvoiceUploadModal, BpPaymentModal, PaymentNoteModal } from "./InvoiceModals";
+import { CfoInvoiceDecisionModal } from "./CfoInvoiceDecisionModal";
 
 const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export default function InvoiceList({ entries, showProject = false, emptyText = "No invoices yet.", onChanged }) {
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const isCfo = profile?.role === "cfo";
   const [dialog, setDialog] = useState(null); // { type, entry }
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -122,6 +126,9 @@ export default function InvoiceList({ entries, showProject = false, emptyText = 
                     {inv.status === "paid" && (
                       <div className="pp-td-sub">{formatINR(inv.payment_amount)} on {fmtDate(inv.payment_received_on)}{inv.payment_reference ? ` · ${inv.payment_reference}` : ""}</div>
                     )}
+                    {inv.status === "rejected" && inv.cfo_remark && (
+                      <div className="pp-td-sub">CFO: “{inv.cfo_remark}”</div>
+                    )}
                   </td>
                   <td>
                     {!project.hasBp ? (
@@ -159,9 +166,17 @@ export default function InvoiceList({ entries, showProject = false, emptyText = 
                   </td>
                   <td className="mon-actions-col">
                     <div className="mon-row-actions">
-                      {canEdit && inv.status === "raised" && (
+                      {isCfo && inv.status === "pending_cfo" && (
                         <>
-                          <Button size="sm" onClick={() => setDialog({ type: "client_payment", entry })}>Record Payment</Button>
+                          <Button size="sm" onClick={() => setDialog({ type: "cfo_decide", entry, decision: "approved" })}>Approve &amp; Sign</Button>
+                          <Button variant="secondary" size="sm" onClick={() => setDialog({ type: "cfo_decide", entry, decision: "rejected" })}>Reject</Button>
+                        </>
+                      )}
+                      {canEdit && inv.status === "raised" && (
+                        <Button size="sm" onClick={() => setDialog({ type: "client_payment", entry })}>Record Payment</Button>
+                      )}
+                      {canEdit && (inv.status === "pending_cfo" || inv.status === "rejected") && (
+                        <>
                           <button type="button" className="pp-icon-btn" title="Edit" aria-label="Edit invoice" onClick={() => navigate(`/monitoring/${project.id}/invoice/${inv.id}${showProject ? "?back=financials" : ""}`)}><PencilIcon /></button>
                           <button type="button" className="pp-icon-btn pp-icon-danger" title="Delete" aria-label="Delete invoice" onClick={() => setDialog({ type: "delete", entry })}><TrashIcon /></button>
                         </>
@@ -206,6 +221,9 @@ export default function InvoiceList({ entries, showProject = false, emptyText = 
           onConfirm={confirmDelete}
           onCancel={close}
         />
+      )}
+      {dialog?.type === "cfo_decide" && (
+        <CfoInvoiceDecisionModal invoice={dialog.entry.invoice} decision={dialog.decision} onClose={close} onSaved={done} />
       )}
       {dialog?.type === "client_payment" && <ClientPaymentModal invoice={dialog.entry.invoice} onClose={close} onSaved={done} />}
       {dialog?.type === "request_bp" && (

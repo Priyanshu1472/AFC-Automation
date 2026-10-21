@@ -10,11 +10,17 @@
 //            (IGST, or CGST + SGST for a Delhi GSTIN), total in words, AFC's
 //            PAN / GST / HSN / MSME, the RTGS bank details, signature block.
 //
-// The CFO signs the printed copy — no signature image is embedded.
+// Once the CFO has approved the invoice (decide-client-invoice), their
+// uploaded signature is embedded on both the covering letter and the tax
+// invoice's signature block — looked up live from cfo_decided_by, same
+// pattern as the MD's signature on fee notes (feeNotePdf.ts). Before that
+// (status still pending_cfo/rejected), the signature lines print blank, same
+// as before this feature existed.
 
 import {
   PageEngine, plain, bold, newPdfDoc, formatDateDDMMYYYY,
   sdLine, sdPara, sdGap, sd, drawGridTable, drawKeyValueTable,
+  fetchSignatureBytes, embedImageAuto,
 } from "./letterPdf.ts";
 import { amountToIndianWords, formatRupees, fetchLogoBytes } from "./feeNotePdf.ts";
 
@@ -114,13 +120,17 @@ export async function buildClientInvoicePdf(
   const [{ data: projectRow }, { data: lineRows }, { data: cfoRow }, logoBytes] = await Promise.all([
     admin.from("monitoring_projects").select("*, lead:lead_id(title, client_name)").eq("id", inv.project_id).maybeSingle(),
     admin.from("client_invoice_lines").select("description, amount, position, item:item_id(kind, title)").eq("invoice_id", invoiceId).order("position"),
-    admin.from("afc_users").select("full_name").eq("role", "cfo").eq("is_active", true).order("created_at").limit(1).maybeSingle(),
+    inv.cfo_decided_by
+      ? admin.from("afc_users").select("full_name, signature_path").eq("id", inv.cfo_decided_by).maybeSingle()
+      : admin.from("afc_users").select("full_name, signature_path").eq("role", "cfo").eq("is_active", true).order("created_at").limit(1).maybeSingle(),
     fetchLogoBytes(),
   ]);
   if (!projectRow) return { ok: false, error: "Project not found." };
   const project = deepSafe(projectRow);
   const cfo = deepSafe(cfoRow);
   if (!logoBytes) return { ok: false, error: "Could not load the AFC letterhead logo. Please try again." };
+
+  const cfoSigBytes = inv.cfo_decided_at ? await fetchSignatureBytes(admin, cfo?.signature_path) : null;
 
   const lines: Line[] = deepSafe(lineRows || []).map((l: { description: string | null; amount: number; item: { kind: string; title: string } | null }) => ({
     description: l.description, amount: Number(l.amount), item: l.item,
@@ -143,6 +153,7 @@ export async function buildClientInvoicePdf(
 
   const { pdf, fonts } = await newPdfDoc();
   const e = new PageEngine(pdf, fonts, logoBytes, { footerSafe: 96 });
+  const cfoImg = cfoSigBytes ? await embedImageAuto(pdf, cfoSigBytes).catch(() => null) : null;
 
   // ── Page 1: covering letter ──
   await e.newPage();
@@ -170,7 +181,16 @@ export async function buildClientInvoicePdf(
   await sdGap(e, 12);
   await sdLine(e, "Thanking you,", SIZE, false);
   await sdLine(e, "Yours faithfully,", SIZE, false);
-  await sdGap(e, 36);
+  if (cfoImg) {
+    if (e.y - 36 < e.FOOTER_SAFE) await e.newPage();
+    const dims = cfoImg.scale(1);
+    const scale = Math.min(140 / dims.width, 32 / dims.height, 1);
+    const w = dims.width * scale, h = dims.height * scale;
+    e.currentPage.drawImage(cfoImg, { x: e.LEFT, y: e.y - 36 + 4, width: w, height: h });
+    e.gap(36);
+  } else {
+    await sdGap(e, 36);
+  }
   await sdLine(e, "Chief Financial Officer", SIZE, true);
   await sdLine(e, "Encl: as above", SIZE, false);
 
@@ -229,7 +249,19 @@ export async function buildClientInvoicePdf(
   await sdGap(e, 18);
 
   if (e.y - 70 < e.FOOTER_SAFE) await e.newPage();
-  for (const [label, value] of [["Signature", ""], ["Name", cfoName || "—"], ["Designation", "CHIEF FINANCIAL OFFICER"], ["Dated", dateStr]]) {
+  await sd(e, () => {
+    e.drawTextAt("Signature", e.LEFT, 9.5, true);
+    if (cfoImg) {
+      const dims = cfoImg.scale(1);
+      const scale = Math.min(110 / dims.width, 26 / dims.height, 1);
+      const w = dims.width * scale, h = dims.height * scale;
+      e.currentPage.drawImage(cfoImg, { x: e.LEFT + 80, y: e.y - h + 6, width: w, height: h });
+    } else {
+      e.drawTextAt(":  ", e.LEFT + 80, 9.5, false);
+    }
+    e.gap(12);
+  });
+  for (const [label, value] of [["Name", cfoName || "—"], ["Designation", "CHIEF FINANCIAL OFFICER"], ["Dated", dateStr]]) {
     await sd(e, () => { e.drawTextAt(label, e.LEFT, 9.5, true); e.drawTextAt(`:  ${value}`, e.LEFT + 80, 9.5, false); e.gap(12); });
   }
   await sdGap(e, 8);
