@@ -24,7 +24,6 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
     description: item?.description || "",
     due_date: item?.due_date || "",
     parent_id: item?.parent_id || defaultParentId || "",
-    invoice_on_completion: item?.invoice_on_completion ?? kind === "milestone",
     invoice_amount: item?.invoice_amount != null ? String(item.invoice_amount) : "",
     invoice_pct: item?.invoice_pct != null ? String(item.invoice_pct) : "",
   });
@@ -57,9 +56,10 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
     : null;
   const kidsTotal = kind === "milestone" && item ? roundMoney(others.filter((i) => i.parent_id === item.id).reduce((s, i) => s + Number(i.invoice_amount || 0), 0)) : 0;
 
-  // A deliverable always alerts the team to invoice on completion — no
-  // more per-item checkbox for it; its amount comes from a % of the
-  // contract value instead of a raw rupee figure.
+  // Every milestone and deliverable now always alerts the team to invoice
+  // on completion — no more per-item checkbox for either. A deliverable's
+  // amount comes from a % of the contract value; a milestone still enters
+  // a raw rupee figure.
   const pctAmount = contract != null && form.invoice_pct !== "" && Number.isFinite(Number(form.invoice_pct))
     ? roundMoney(contract * Number(form.invoice_pct) / 100)
     : null;
@@ -68,7 +68,7 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
     if (!form.title.trim()) { setError(`Give the ${noun.toLowerCase()} a title.`); return; }
     let amount = null;
     let pct = null;
-    const billable = isDeliverable || form.invoice_on_completion;
+    const billable = true;
     if (isDeliverable) {
       if (form.invoice_pct !== "") {
         pct = Number(form.invoice_pct);
@@ -76,7 +76,7 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
         if (contract == null) { setError("Set the project's contract value first (Edit Details) before entering a percentage."); return; }
         amount = pctAmount;
       }
-    } else if (form.invoice_on_completion && form.invoice_amount !== "") {
+    } else if (form.invoice_amount !== "") {
       amount = Number(form.invoice_amount);
       if (!Number.isFinite(amount) || amount < 0) { setError("Enter a valid invoice amount, or leave it blank."); return; }
     }
@@ -192,27 +192,16 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
               </Field>
             </>
           ) : (
-            <>
-              <label className="mon-check">
-                <input type="checkbox" checked={form.invoice_on_completion} onChange={(e) => set("invoice_on_completion", e.target.checked)} disabled={saving} />
-                <span>
-                  <strong>Raise a client invoice when this is completed</strong>
-                  <small>The team gets an alert to invoice the client the moment it’s marked complete.</small>
-                </span>
-              </label>
-              {form.invoice_on_completion && (
-                <Field
-                  label="Invoice amount (before GST)"
-                  hint={parentLeft != null
-                    ? `Optional. Part of “${parent.title}” — ${formatINR(parentLeft)} of its ${formatINR(parent.invoice_amount)} is still unallocated.`
-                    : left != null
-                      ? `Optional. ${formatINR(left)} of the ${formatINR(contract)} contract value is still unallocated.`
-                      : "Optional — e.g. the MoU's payment for this milestone."}
-                >
-                  <AmountInput value={form.invoice_amount} onChange={(v) => set("invoice_amount", v)} disabled={saving} ariaLabel="Invoice amount" />
-                </Field>
-              )}
-            </>
+            <Field
+              label="Invoice amount (before GST)"
+              hint={parentLeft != null
+                ? `Optional. Part of “${parent.title}” — ${formatINR(parentLeft)} of its ${formatINR(parent.invoice_amount)} is still unallocated.`
+                : left != null
+                  ? `Optional. ${formatINR(left)} of the ${formatINR(contract)} contract value is still unallocated.`
+                  : "Optional — e.g. the MoU's payment for this milestone."}
+            >
+              <AmountInput value={form.invoice_amount} onChange={(v) => set("invoice_amount", v)} disabled={saving} ariaLabel="Invoice amount" />
+            </Field>
           )}
         </div>
       </Modal.Body>
