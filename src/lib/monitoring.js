@@ -9,6 +9,7 @@ export const DOCUMENT_CATEGORIES = [
   { key: "mou_bp", label: "MoU — Business Partner" },
   { key: "work_order", label: "Work Order" },
   { key: "client_document", label: "Client Document / Proof" },
+  { key: "deliverable", label: "Deliverable Attachment" },
   { key: "other", label: "Other" },
 ];
 export const DOCUMENT_CATEGORY_LABELS = Object.fromEntries(DOCUMENT_CATEGORIES.map((c) => [c.key, c.label]));
@@ -116,6 +117,14 @@ export function isItemInvoiced(item, invoices, items) {
 // A billable item that's done but not invoiced yet.
 export function needsInvoice(item, invoices, items) {
   return item.status === "completed" && item.invoice_on_completion && !isItemInvoiced(item, invoices, items);
+}
+
+// item.id -> "Deliverable N" sequence, across the whole project in the
+// order they were added — not reset per milestone, so a deliverable keeps
+// its number whether it's loose or under a milestone.
+export function deliverableNumbers(items) {
+  const deliverables = items.filter((i) => i.kind === "deliverable").sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  return Object.fromEntries(deliverables.map((d, i) => [d.id, i + 1]));
 }
 
 // Opens a generated PDF (monitoring-pdf edge function) in a new tab.

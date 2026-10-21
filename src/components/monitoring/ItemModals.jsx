@@ -1,16 +1,24 @@
-// Add/edit a milestone or deliverable, and mark one complete.
-import { useEffect, useState } from "react";
+// Add/edit a milestone or deliverable, mark one complete, and edit its
+// remarks.
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import Modal from "../ui/Modal";
 import Button from "../ui/Button";
 import Alert from "../ui/Alert";
 import Select from "../ui/Select";
 import DatePickerCalendar from "../ui/DatePickerCalendar";
-import { Field, AmountInput } from "../financials/InvoiceModals";
-import { formatINR, roundMoney, fetchProjectMoney, allocatedAmount, itemBilled } from "../../lib/monitoring";
+import { Field, AmountInput, PercentInput } from "../financials/InvoiceModals";
+import { PaperclipIcon } from "../icons";
+import {
+  formatINR, roundMoney, fetchProjectMoney, allocatedAmount, itemBilled,
+  MONITORING_BUCKET, safeFileName, uploadMonitoringFile,
+} from "../../lib/monitoring";
+
+const FILE_ACCEPT = ".pdf,.doc,.docx";
 
 export function ItemModal({ projectId, kind, item, milestones, defaultParentId = "", onClose, onSaved }) {
   const editing = !!item;
+  const isDeliverable = kind === "deliverable";
   const [form, setForm] = useState({
     title: item?.title || "",
     description: item?.description || "",
@@ -18,7 +26,10 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
     parent_id: item?.parent_id || defaultParentId || "",
     invoice_on_completion: item?.invoice_on_completion ?? kind === "milestone",
     invoice_amount: item?.invoice_amount != null ? String(item.invoice_amount) : "",
+    invoice_pct: item?.invoice_pct != null ? String(item.invoice_pct) : "",
   });
+  const [file, setFile] = useState(null);
+  const fileInputRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -46,12 +57,30 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
     : null;
   const kidsTotal = kind === "milestone" && item ? roundMoney(others.filter((i) => i.parent_id === item.id).reduce((s, i) => s + Number(i.invoice_amount || 0), 0)) : 0;
 
+  // A deliverable always alerts the team to invoice on completion — no
+  // more per-item checkbox for it; its amount comes from a % of the
+  // contract value instead of a raw rupee figure.
+  const pctAmount = contract != null && form.invoice_pct !== "" && Number.isFinite(Number(form.invoice_pct))
+    ? roundMoney(contract * Number(form.invoice_pct) / 100)
+    : null;
+
   async function save() {
     if (!form.title.trim()) { setError(`Give the ${noun.toLowerCase()} a title.`); return; }
     let amount = null;
-    if (form.invoice_on_completion && form.invoice_amount !== "") {
+    let pct = null;
+    const billable = isDeliverable || form.invoice_on_completion;
+    if (isDeliverable) {
+      if (form.invoice_pct !== "") {
+        pct = Number(form.invoice_pct);
+        if (!Number.isFinite(pct) || pct < 0 || pct > 100) { setError("Enter a valid percentage between 0 and 100, or leave it blank."); return; }
+        if (contract == null) { setError("Set the project's contract value first (Edit Details) before entering a percentage."); return; }
+        amount = pctAmount;
+      }
+    } else if (form.invoice_on_completion && form.invoice_amount !== "") {
       amount = Number(form.invoice_amount);
       if (!Number.isFinite(amount) || amount < 0) { setError("Enter a valid invoice amount, or leave it blank."); return; }
+    }
+    if (amount != null) {
       if (contract != null && projected(amount) > contract) {
         setError(`Only ${formatINR(left)} of the ${formatINR(contract)} contract value is left to allocate to milestones and deliverables.`);
         return;
@@ -73,13 +102,40 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
       description: form.description.trim() || null,
       due_date: form.due_date || null,
       parent_id: kind === "deliverable" ? form.parent_id || null : null,
-      invoice_on_completion: form.invoice_on_completion,
-      invoice_amount: form.invoice_on_completion ? amount : null,
+      invoice_on_completion: billable,
+      invoice_amount: billable ? amount : null,
+      invoice_pct: isDeliverable ? pct : null,
     };
-    const { error: dbErr } = editing
-      ? await supabase.from("monitoring_items").update(row).eq("id", item.id)
-      : await supabase.from("monitoring_items").insert({ project_id: projectId, kind, ...row });
-    if (dbErr) { setError(dbErr.message); setSaving(false); return; }
+    let savedId = item?.id;
+    if (editing) {
+      const { error: dbErr } = await supabase.from("monitoring_items").update(row).eq("id", item.id);
+      if (dbErr) { setError(dbErr.message); setSaving(false); return; }
+    } else {
+      const { data, error: dbErr } = await supabase.from("monitoring_items").insert({ project_id: projectId, kind, ...row }).select("id").single();
+      if (dbErr) { setError(dbErr.message); setSaving(false); return; }
+      savedId = data.id;
+    }
+
+    if (file && savedId) {
+      try {
+        const meta = await uploadMonitoringFile(`${projectId}/docs/${Date.now()}_${safeFileName(file.name)}`, file);
+        const { error: insErr } = await supabase.from("monitoring_documents").insert({
+          project_id: projectId, item_id: savedId, category: "deliverable", title: form.title.trim(), ...meta,
+        });
+        if (insErr) {
+          await supabase.storage.from(MONITORING_BUCKET).remove([meta.file_path]);
+          setError(`${noun} saved, but the file failed to attach: ${insErr.message}`);
+          setSaving(false);
+          onSaved();
+          return;
+        }
+      } catch (err) {
+        setError(`${noun} saved, but the file failed to attach: ${err.message}`);
+        setSaving(false);
+        onSaved();
+        return;
+      }
+    }
     onSaved();
   }
 
@@ -109,24 +165,54 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
           <Field label="Details">
             <textarea className="input" rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} disabled={saving} placeholder="Scope / acceptance criteria as per the MoU" />
           </Field>
-          <label className="mon-check">
-            <input type="checkbox" checked={form.invoice_on_completion} onChange={(e) => set("invoice_on_completion", e.target.checked)} disabled={saving} />
-            <span>
-              <strong>Raise a client invoice when this is completed</strong>
-              <small>The team gets an alert to invoice the client the moment it’s marked complete.</small>
-            </span>
-          </label>
-          {form.invoice_on_completion && (
-            <Field
-              label="Invoice amount (before GST)"
-              hint={parentLeft != null
-                ? `Optional. Part of “${parent.title}” — ${formatINR(parentLeft)} of its ${formatINR(parent.invoice_amount)} is still unallocated.`
-                : left != null
-                  ? `Optional. ${formatINR(left)} of the ${formatINR(contract)} contract value is still unallocated.`
-                  : "Optional — e.g. the MoU's payment for this milestone."}
-            >
-              <AmountInput value={form.invoice_amount} onChange={(v) => set("invoice_amount", v)} disabled={saving} ariaLabel="Invoice amount" />
-            </Field>
+
+          {isDeliverable ? (
+            <>
+              <Field label="Attach a file" hint="PDF or Word document — optional.">
+                <input ref={fileInputRef} type="file" accept={FILE_ACCEPT} style={{ display: "none" }} onChange={(e) => { setFile(e.target.files?.[0] || null); e.target.value = ""; }} />
+                <div className="mon-file-pick">
+                  <Button type="button" variant="secondary" size="sm" icon={<PaperclipIcon />} disabled={saving} onClick={() => fileInputRef.current?.click()}>
+                    {file ? "Choose a different file" : "Choose file"}
+                  </Button>
+                  {file && <span className="mon-file-pick-name">{file.name}</span>}
+                </div>
+              </Field>
+              <Field
+                label="Amount (% of contract value)"
+                hint={contract == null
+                  ? "Set the project's contract value first (Edit Details) to calculate an amount."
+                  : parentLeft != null
+                    ? `Optional. Part of “${parent.title}” — ${formatINR(parentLeft)} of its ${formatINR(parent.invoice_amount)} is still unallocated.`
+                    : left != null
+                      ? `Optional. ${formatINR(left)} of the ${formatINR(contract)} contract value is still unallocated.`
+                      : "Optional."}
+              >
+                <PercentInput value={form.invoice_pct} onChange={(v) => set("invoice_pct", v)} disabled={saving || contract == null} ariaLabel="Amount, percent of contract value" />
+                {pctAmount != null && <span className="field-hint">{form.invoice_pct}% of {formatINR(contract)} = <strong>{formatINR(pctAmount)}</strong></span>}
+              </Field>
+            </>
+          ) : (
+            <>
+              <label className="mon-check">
+                <input type="checkbox" checked={form.invoice_on_completion} onChange={(e) => set("invoice_on_completion", e.target.checked)} disabled={saving} />
+                <span>
+                  <strong>Raise a client invoice when this is completed</strong>
+                  <small>The team gets an alert to invoice the client the moment it’s marked complete.</small>
+                </span>
+              </label>
+              {form.invoice_on_completion && (
+                <Field
+                  label="Invoice amount (before GST)"
+                  hint={parentLeft != null
+                    ? `Optional. Part of “${parent.title}” — ${formatINR(parentLeft)} of its ${formatINR(parent.invoice_amount)} is still unallocated.`
+                    : left != null
+                      ? `Optional. ${formatINR(left)} of the ${formatINR(contract)} contract value is still unallocated.`
+                      : "Optional — e.g. the MoU's payment for this milestone."}
+                >
+                  <AmountInput value={form.invoice_amount} onChange={(v) => set("invoice_amount", v)} disabled={saving} ariaLabel="Invoice amount" />
+                </Field>
+              )}
+            </>
           )}
         </div>
       </Modal.Body>
@@ -173,6 +259,38 @@ export function CompleteItemModal({ item, openChildren = 0, onClose, onSaved }) 
       <Modal.Footer>
         <Button variant="secondary" disabled={saving} onClick={onClose}>Cancel</Button>
         <Button loading={saving} onClick={save}>Mark Complete</Button>
+      </Modal.Footer>
+    </Modal>
+  );
+}
+
+// Notes/remarks on a deliverable — editable any time, not just when it's
+// marked complete (that's completion_note, a separate field).
+export function NoteModal({ item, onClose, onSaved }) {
+  const [remarks, setRemarks] = useState(item.remarks || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    const { error: dbErr } = await supabase.from("monitoring_items").update({ remarks: remarks.trim() || null }).eq("id", item.id);
+    if (dbErr) { setError(dbErr.message); setSaving(false); return; }
+    onSaved();
+  }
+
+  return (
+    <Modal onClose={saving ? undefined : onClose} size="sm" closeOnBackdrop={!saving}>
+      <Modal.Header title="Notes & Remarks" subtitle={item.title} onClose={saving ? undefined : onClose} />
+      <Modal.Body>
+        {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
+        <Field label="Notes">
+          <textarea className="input" rows={5} value={remarks} onChange={(e) => setRemarks(e.target.value)} disabled={saving} placeholder="Anything worth tracking against this deliverable — client feedback, internal status, follow-ups…" autoFocus />
+        </Field>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" disabled={saving} onClick={onClose}>Cancel</Button>
+        <Button loading={saving} onClick={save}>Save</Button>
       </Modal.Footer>
     </Modal>
   );

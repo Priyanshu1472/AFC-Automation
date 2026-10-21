@@ -366,6 +366,7 @@ export default function MonitoringProjectPage() {
                 <MonitoringPlanPanel
                   projectId={project.id}
                   items={items}
+                  documents={documents}
                   clientInvoices={invoices}
                   canEdit={canEdit}
                   onRaiseInvoice={(item) => raiseInvoice(item.id)}

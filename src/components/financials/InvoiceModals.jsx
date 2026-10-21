@@ -62,6 +62,27 @@ export function AmountInput({ value, onChange, disabled, placeholder = "0.00", a
   );
 }
 
+export function PercentInput({ value, onChange, disabled, placeholder = "0", ariaLabel }) {
+  return (
+    <div className="mon-percent-input">
+      <input
+        className="input"
+        type="number"
+        min="0"
+        max="100"
+        step="0.01"
+        inputMode="decimal"
+        placeholder={placeholder}
+        value={value}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+      />
+      <span aria-hidden="true">%</span>
+    </div>
+  );
+}
+
 function SingleFilePicker({ file, existingName, onPick, disabled }) {
   const ref = useRef(null);
   return (

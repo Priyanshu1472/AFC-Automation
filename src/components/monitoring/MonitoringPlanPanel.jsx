@@ -12,9 +12,9 @@ import Collapsible from "../ui/Collapsible";
 import Button from "../ui/Button";
 import Alert from "../ui/Alert";
 import ConfirmDialog from "../ui/ConfirmDialog";
-import { ListChecksIcon, PencilIcon, TrashIcon, CheckCircleIcon, ReceiptIcon } from "../icons";
-import { ItemModal, CompleteItemModal } from "./ItemModals";
-import { fmtDate, formatINR, itemTiming, dueLabel, needsInvoice, isItemInvoiced, itemBilled } from "../../lib/monitoring";
+import { ListChecksIcon, PencilIcon, TrashIcon, CheckCircleIcon, ReceiptIcon, ClipboardListIcon, PaperclipIcon } from "../icons";
+import { ItemModal, CompleteItemModal, NoteModal } from "./ItemModals";
+import { fmtDate, formatINR, itemTiming, dueLabel, needsInvoice, isItemInvoiced, itemBilled, deliverableNumbers, openMonitoringFile } from "../../lib/monitoring";
 
 function byDue(a, b) {
   if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
@@ -23,16 +23,22 @@ function byDue(a, b) {
   return new Date(a.created_at) - new Date(b.created_at);
 }
 
-export default function MonitoringPlanPanel({ projectId, items, clientInvoices, canEdit, onRaiseInvoice, onChanged }) {
+export default function MonitoringPlanPanel({ projectId, items, documents = [], clientInvoices, canEdit, onRaiseInvoice, onChanged }) {
   const [dialog, setDialog] = useState(null); // { type, item?, kind?, parentId? }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  async function viewFile(doc) {
+    setError("");
+    try { await openMonitoringFile(doc.file_path); } catch (err) { setError(err.message); }
+  }
 
   const milestones = items.filter((i) => i.kind === "milestone").sort(byDue);
   const childrenOf = (id) => items.filter((i) => i.parent_id === id).sort(byDue);
   const loose = items.filter((i) => i.kind === "deliverable" && !i.parent_id).sort(byDue);
   const done = items.filter((i) => i.status === "completed").length;
   const pct = items.length ? Math.round((done / items.length) * 100) : 0;
+  const numbers = deliverableNumbers(items);
 
   function close() { setDialog(null); }
   function saved() { setDialog(null); onChanged(); }
@@ -84,6 +90,7 @@ export default function MonitoringPlanPanel({ projectId, items, clientInvoices, 
         <div className="mon-item-main">
           <div className="mon-item-title-row">
             {isMilestone && <span className="mon-item-kind">Milestone</span>}
+            {!isMilestone && numbers[item.id] && <span className="mon-item-kind">Deliverable {numbers[item.id]}</span>}
             <span className="mon-item-title">{item.title}</span>
           </div>
           {item.description && <p className="mon-item-desc">{item.description}</p>}
@@ -97,7 +104,7 @@ export default function MonitoringPlanPanel({ projectId, items, clientInvoices, 
               <span className={`mon-tag ${invoiced ? "is-done" : pendingInvoice ? "is-overdue" : "is-billable"}`}>
                 <ReceiptIcon />{" "}
                 {invoiced ? "Invoiced" : billed > 0 ? `Invoiced ${formatINR(billed)}` : pendingInvoice ? "Invoice to raise" : "Billable"}
-                {Number(item.invoice_amount) > 0 ? `${billed > 0 && !invoiced ? " of " : " · "}${formatINR(item.invoice_amount)}` : ""}
+                {Number(item.invoice_amount) > 0 ? `${billed > 0 && !invoiced ? " of " : " · "}${item.invoice_pct != null ? `${item.invoice_pct}% · ` : ""}${formatINR(item.invoice_amount)}` : ""}
               </span>
             )}
             {isMilestone && childrenOf(item.id).length > 0 && (
@@ -105,6 +112,12 @@ export default function MonitoringPlanPanel({ projectId, items, clientInvoices, 
             )}
           </div>
           {item.status === "completed" && item.completion_note && <p className="mon-item-note">“{item.completion_note}”</p>}
+          {item.remarks && <p className="mon-item-note">{item.remarks}</p>}
+          {documents.filter((d) => d.item_id === item.id).map((d) => (
+            <button key={d.id} type="button" className="mon-link mon-item-file" onClick={() => viewFile(d)}>
+              <PaperclipIcon /> {d.file_name}
+            </button>
+          ))}
         </div>
 
         <div className="mon-item-actions">
@@ -113,6 +126,9 @@ export default function MonitoringPlanPanel({ projectId, items, clientInvoices, 
           )}
           {canEdit && (
             <>
+              {!isMilestone && (
+                <button type="button" className="pp-icon-btn" title={item.remarks ? "Edit notes" : "Add note"} aria-label={`${item.remarks ? "Edit" : "Add"} notes for ${item.title}`} onClick={() => setDialog({ type: "note", item })}><ClipboardListIcon /></button>
+              )}
               <button type="button" className="pp-icon-btn" title="Edit" aria-label={`Edit ${item.title}`} onClick={() => setDialog({ type: "edit", item })}><PencilIcon /></button>
               <button
                 type="button"
@@ -202,6 +218,7 @@ export default function MonitoringPlanPanel({ projectId, items, clientInvoices, 
         />
       )}
       {dialog?.type === "complete" && <CompleteItemModal item={dialog.item} openChildren={dialog.openKids} onClose={close} onSaved={saved} />}
+      {dialog?.type === "note" && <NoteModal item={dialog.item} onClose={close} onSaved={saved} />}
       {dialog?.type === "reopen" && (
         <ConfirmDialog
           title="Reopen this item?"
