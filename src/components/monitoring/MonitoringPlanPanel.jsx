@@ -103,7 +103,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
             {!isMilestone && numbers[item.id] && <span className="mon-item-kind">Deliverable {numbers[item.id]}</span>}
             <span className="mon-item-title">{item.title}</span>
           </div>
-          {item.description && <p className="mon-item-desc">{item.description}</p>}
+          {item.description && <p className="mon-item-desc"><strong>Details:</strong> {item.description}</p>}
           <div className="mon-item-meta">
             {item.status === "completed" ? (
               <span className="mon-tag is-done">Completed {fmtDate(item.completed_at)}</span>
