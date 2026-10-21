@@ -26,7 +26,7 @@ import BackButton from "../../components/ui/BackButton";
 import DatePickerCalendar from "../../components/ui/DatePickerCalendar";
 import { AmountInput } from "../../components/financials/InvoiceModals";
 import {
-  formatINR, roundMoney, itemBilled, itemBaseAmount, gstTypeForGstin, GST_RATES, canEditProject, fetchInvoiceContext,
+  formatINR, roundMoney, itemBilled, gstTypeForGstin, GST_RATES, canEditProject, fetchInvoiceContext,
 } from "../../lib/monitoring";
 import {
   AFC_TAX_DETAILS, AFC_ACCOUNT_HOLDER, AFC_BANK, ordinal, rs, amountInWords, formatDDMMYYYY, dueOnPhrase,
@@ -120,17 +120,11 @@ export default function ClientInvoiceEditorPage() {
   const kidsOf = (mid) => items.filter((i) => i.parent_id === mid);
 
   // Still billable on an item: its own cap and, for a deliverable, what's
-  // left on its milestone — counting other invoices only. A "GST included"
-  // item's cap is converted to its pre-GST equivalent first, same as the
-  // line amount itself (see lineAmounts below) — both sides stay in the
-  // same (pre-GST) units this way, so the cap still reads as "fully billed"
-  // once that pre-GST portion is invoiced, instead of looking perpetually
-  // short by the GST that's already baked into the agreed figure.
+  // left on its milestone — counting other invoices only.
   const leftOn = (item) => {
-    const rate = Number(form.gst_rate);
-    const own = item.invoice_amount == null ? null : roundMoney(itemBaseAmount(item, rate) - itemBilled(item, invoices, items, invoiceId));
+    const own = item.invoice_amount == null ? null : roundMoney(Number(item.invoice_amount) - itemBilled(item, invoices, items, invoiceId));
     const parent = item.parent_id ? byId[item.parent_id] : null;
-    const fam = parent?.invoice_amount == null ? null : roundMoney(itemBaseAmount(parent, rate) - itemBilled(parent, invoices, items, invoiceId));
+    const fam = parent?.invoice_amount == null ? null : roundMoney(Number(parent.invoice_amount) - itemBilled(parent, invoices, items, invoiceId));
     const vals = [own, fam].filter((v) => v != null);
     return vals.length ? Math.max(Math.min(...vals), 0) : null;
   };

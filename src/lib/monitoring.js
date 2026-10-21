@@ -127,18 +127,6 @@ export function deliverableNumbers(items) {
   return Object.fromEntries(deliverables.map((d, i) => [d.id, i + 1]));
 }
 
-// An item's invoice_amount, converted to its pre-GST equivalent when it's
-// marked "GST included" — so that adding GST back on top at invoice-raise
-// time reconstructs the original client-facing figure instead of taxing it
-// twice. A "GST excluded" item (the default) is already pre-GST, unchanged.
-export function itemBaseAmount(item, gstRatePct) {
-  if (item?.invoice_amount == null) return null;
-  const amt = Number(item.invoice_amount);
-  if (!item.gst_inclusive) return amt;
-  const rate = Number(gstRatePct) || 0;
-  return roundMoney(amt / (1 + rate / 100));
-}
-
 // Opens a generated PDF (monitoring-pdf edge function) in a new tab.
 export async function openMonitoringPdf(kind, id) {
   const { data, error } = await supabase.functions.invoke("monitoring-pdf", { body: { kind, id } });
