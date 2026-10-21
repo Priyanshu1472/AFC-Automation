@@ -104,7 +104,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
               <span className={`mon-tag ${invoiced ? "is-done" : pendingInvoice ? "is-overdue" : "is-billable"}`}>
                 <ReceiptIcon />{" "}
                 {invoiced ? "Invoiced" : billed > 0 ? `Invoiced ${formatINR(billed)}` : pendingInvoice ? "Invoice to raise" : "Billable"}
-                {Number(item.invoice_amount) > 0 ? `${billed > 0 && !invoiced ? " of " : " · "}${item.invoice_pct != null ? `${item.invoice_pct}% · ` : ""}${formatINR(item.invoice_amount)}` : ""}
+                {Number(item.invoice_amount) > 0 ? `${billed > 0 && !invoiced ? " of " : " · "}${item.invoice_pct != null ? `${item.invoice_pct}% · ` : ""}${formatINR(item.invoice_amount)}${item.gst_inclusive ? " (GST incl.)" : ""}` : ""}
               </span>
             )}
             {isMilestone && childrenOf(item.id).length > 0 && (

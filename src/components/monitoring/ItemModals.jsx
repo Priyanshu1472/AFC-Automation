@@ -26,6 +26,7 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
     parent_id: item?.parent_id || defaultParentId || "",
     invoice_amount: item?.invoice_amount != null ? String(item.invoice_amount) : "",
     invoice_pct: item?.invoice_pct != null ? String(item.invoice_pct) : "",
+    gst_inclusive: item?.gst_inclusive ?? false,
   });
   const [file, setFile] = useState(null);
   const fileInputRef = useRef(null);
@@ -105,6 +106,7 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
       invoice_on_completion: billable,
       invoice_amount: billable ? amount : null,
       invoice_pct: isDeliverable ? pct : null,
+      gst_inclusive: isDeliverable ? form.gst_inclusive : false,
     };
     let savedId = item?.id;
     if (editing) {
@@ -189,6 +191,12 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
               >
                 <PercentInput value={form.invoice_pct} onChange={(v) => set("invoice_pct", v)} disabled={saving || contract == null} ariaLabel="Amount, percent of contract value" />
                 {pctAmount != null && <span className="field-hint">{form.invoice_pct}% of {formatINR(contract)} = <strong>{formatINR(pctAmount)}</strong></span>}
+              </Field>
+              <Field label="GST" hint={form.gst_inclusive ? "GST is already baked into the amount above — it won't be added again when the invoice is raised." : "GST isn't in the amount above — it'll be added on top when the invoice is raised."}>
+                <div className="mon-seg" role="radiogroup" aria-label="GST treatment">
+                  <button type="button" role="radio" aria-checked={!form.gst_inclusive} className={`mon-seg-btn${!form.gst_inclusive ? " mon-seg-active" : ""}`} disabled={saving} onClick={() => set("gst_inclusive", false)}>GST Excluded</button>
+                  <button type="button" role="radio" aria-checked={form.gst_inclusive} className={`mon-seg-btn${form.gst_inclusive ? " mon-seg-active" : ""}`} disabled={saving} onClick={() => set("gst_inclusive", true)}>GST Included</button>
+                </div>
               </Field>
             </>
           ) : (
