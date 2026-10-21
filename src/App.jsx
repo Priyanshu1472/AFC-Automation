@@ -46,7 +46,10 @@ const LeadReportsPage = lazy(() => import("./pages/leads/LeadReportsPage"));
 const ProposalsListPage = lazy(() => import("./pages/proposals/ProposalsListPage"));
 const ProposalPreparationPage = lazy(() => import("./pages/proposals/ProposalPreparationPage"));
 const FeeNoteEditPage = lazy(() => import("./pages/proposals/FeeNoteEditPage"));
-const ComingSoonPage = lazy(() => import("./pages/ComingSoonPage"));
+const MonitoringListPage = lazy(() => import("./pages/monitoring/MonitoringListPage"));
+const MonitoringProjectPage = lazy(() => import("./pages/monitoring/MonitoringProjectPage"));
+const ClientInvoiceEditorPage = lazy(() => import("./pages/monitoring/ClientInvoiceEditorPage"));
+const FinancialsPage = lazy(() => import("./pages/financials/FinancialsPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
 import "./App.css";
@@ -261,7 +264,31 @@ export default function App() {
                   path="/monitoring"
                   element={
                     <ProtectedRoute allowedRoles={MONITORING_ROLES}>
-                      <ComingSoonPage title="Monitoring" description="Project monitoring will be available here soon." />
+                      <MonitoringListPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/monitoring/:id"
+                  element={
+                    <ProtectedRoute allowedRoles={MONITORING_ROLES}>
+                      <MonitoringProjectPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/monitoring/:id/invoice"
+                  element={
+                    <ProtectedRoute allowedRoles={MONITORING_ROLES}>
+                      <ClientInvoiceEditorPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/monitoring/:id/invoice/:invoiceId"
+                  element={
+                    <ProtectedRoute allowedRoles={MONITORING_ROLES}>
+                      <ClientInvoiceEditorPage />
                     </ProtectedRoute>
                   }
                 />
@@ -269,7 +296,7 @@ export default function App() {
                   path="/financials"
                   element={
                     <ProtectedRoute allowedRoles={FINANCIALS_ROLES}>
-                      <ComingSoonPage title="Financials" description="Financials will be available here soon." />
+                      <FinancialsPage />
                     </ProtectedRoute>
                   }
                 />

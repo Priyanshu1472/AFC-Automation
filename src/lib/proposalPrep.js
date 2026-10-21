@@ -47,12 +47,6 @@ export function needsPayeeDetails(paymentMode) {
   return DD_LIKE_MODES.has(paymentMode);
 }
 
-export const PROPOSAL_DOCUMENT_TYPES = [
-  { key: "technical", label: "Technical Proposal" },
-  { key: "financial", label: "Financial Proposal" },
-  { key: "proposal_3", label: "Proposal 3" },
-];
-
 export const CLIENT_RESPONSE_LABELS = {
   pending: "Pending",
   awarded: "Awarded",

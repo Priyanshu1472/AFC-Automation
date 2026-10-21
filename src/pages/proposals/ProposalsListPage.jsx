@@ -17,7 +17,7 @@ import Select from "../../components/ui/Select";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
-import { ChatIcon, ArrowRightIcon } from "../../components/icons";
+import { ChatIcon, ArrowRightIcon, ActivityIcon } from "../../components/icons";
 import { CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS, canOpenProposal } from "../../lib/proposalPrep";
 import "../../styles/ProposalPreparationPage.css";
 
@@ -56,6 +56,7 @@ export default function ProposalsListPage() {
 
   const [leads, setLeads] = useState([]);
   const [proposalByLead, setProposalByLead] = useState({});
+  const [monitoringByProposal, setMonitoringByProposal] = useState({});
   const [unreadCounts, setUnreadCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -86,6 +87,12 @@ export default function ProposalsListPage() {
 
     const propByLead = Object.fromEntries((proposalRows || []).map((p) => [p.lead_id, p]));
     setProposalByLead(propByLead);
+
+    const awardedIds = (proposalRows || []).filter((p) => p.client_response === "awarded").map((p) => p.id);
+    const { data: monitoringRows } = awardedIds.length
+      ? await supabase.from("monitoring_projects").select("id, proposal_id").in("proposal_id", awardedIds)
+      : { data: [] };
+    setMonitoringByProposal(Object.fromEntries((monitoringRows || []).map((m) => [m.proposal_id, m.id])));
 
     setLoading(false);
   }, []);
@@ -257,6 +264,11 @@ export default function ProposalsListPage() {
                                   {unreadCounts[proposal.id] > 0 && (
                                     <span className="pp-icon-badge">{unreadCounts[proposal.id] > 9 ? "9+" : unreadCounts[proposal.id]}</span>
                                   )}
+                                </button>
+                              )}
+                              {proposal && monitoringByProposal[proposal.id] && (
+                                <button type="button" className="pp-icon-btn pp-icon-monitoring" title="Open Monitoring" aria-label="Open monitoring" onClick={() => navigate(`/monitoring/${monitoringByProposal[proposal.id]}`)}>
+                                  <ActivityIcon />
                                 </button>
                               )}
                               {canOpen ? (

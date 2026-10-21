@@ -1,10 +1,10 @@
 // Proposal Preparation for an MD-approved lead — fee notes, BP document
-// requests, an internal AFC checklist, the three proposal document slots,
-// and the lock + client-outcome step. Reached from "Open Proposal" once a
-// lead's status is 'md_approved'. Attaches directly to the existing `leads`
-// row (see 20260820040000_proposal_preparation_schema.sql) rather than a
-// separate "project" entity, since nothing downstream of an approved lead
-// exists yet.
+// requests, the proposal files, the proposed value (Financial), and the
+// lock + client-outcome step. Reached from "Open Proposal" once a lead's
+// status is 'md_approved'. Attaches directly to the existing `leads` row
+// (see 20260820040000_proposal_preparation_schema.sql). An awarded
+// proposal continues in Monitoring (monitoring_projects, opened by a DB
+// trigger the moment the outcome is recorded).
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
@@ -17,13 +17,12 @@ import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import FeeNotesPanel from "../../components/proposals/FeeNotesPanel";
 import BaDocumentRequestsPanel from "../../components/proposals/BaDocumentRequestsPanel";
-import AfcChecklistPanel from "../../components/proposals/AfcChecklistPanel";
 import ProposalDocumentsPanel from "../../components/proposals/ProposalDocumentsPanel";
 import ProposalLockPanel from "../../components/proposals/ProposalLockPanel";
-import ClientResponseBanner from "../../components/proposals/ClientResponseBanner";
+import ProposalValuePanel from "../../components/proposals/ProposalValuePanel";
 import ProposalChatPanel from "../../components/proposals/ProposalChatPanel";
-import { FileTextIcon, UsersIcon, CheckCircleIcon } from "../../components/icons";
-import { isProposalLocked, CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS } from "../../lib/proposalPrep";
+import { FileTextIcon, UsersIcon } from "../../components/icons";
+import { isProposalLocked } from "../../lib/proposalPrep";
 import "../../styles/ApplicationReviewPage.css";
 import "../../styles/ProposalPreparationPage.css";
 import BackButton from "../../components/ui/BackButton";
@@ -42,7 +41,7 @@ export default function ProposalPreparationPage() {
   const [proposal, setProposal] = useState(null);
   const [feeNotes, setFeeNotes] = useState([]);
   const [baItems, setBaItems] = useState([]);
-  const [checklistItems, setChecklistItems] = useState([]);
+  const [monitoringProjectId, setMonitoringProjectId] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -66,13 +65,13 @@ export default function ProposalPreparationPage() {
       { data: proposalRow, error: proposalErr },
       { data: feeNoteRows },
       { data: baItemRows },
-      { data: checklistRows },
+      { data: monitoringRow },
       { data: docRows },
     ] = await Promise.all([
       supabase.from("proposal_preparations").select("*, locker:locked_by(full_name), responder:client_response_by(full_name)").eq("id", proposalId).maybeSingle(),
       supabase.from("fee_notes").select("*").eq("proposal_id", proposalId),
       supabase.from("proposal_document_requests").select("*").eq("proposal_id", proposalId).order("created_at"),
-      supabase.from("proposal_afc_checklist_items").select("*").eq("proposal_id", proposalId).order("created_at"),
+      supabase.from("monitoring_projects").select("id").eq("proposal_id", proposalId).maybeSingle(),
       supabase.from("proposal_documents").select("*").eq("proposal_id", proposalId),
     ]);
     if (proposalErr || !proposalRow) {
@@ -84,7 +83,7 @@ export default function ProposalPreparationPage() {
     setProposal(proposalRow);
     setFeeNotes(feeNoteRows || []);
     setBaItems(baItemRows || []);
-    setChecklistItems(checklistRows || []);
+    setMonitoringProjectId(monitoringRow?.id || null);
     setDocuments(docRows || []);
     setLoading(false);
   }, [leadId]);
@@ -123,8 +122,8 @@ export default function ProposalPreparationPage() {
   // md_decided_by prints under "Managing Director" on the note itself, so
   // whoever approves must actually hold that role.
   const isMd = profile && profile.role === "md";
-  // The BP-requests and AFC checklist lists are day-to-day working
-  // documents for the lead's own team (Person Responsible, Reviewer,
+  // The BP-requests list is a day-to-day working document for the lead's
+  // own team (Person Responsible, Reviewer,
   // Recommending Authority) — MD/Admin can see them but never add/edit/
   // delete, unlike the rest of this page where MD/Admin get the usual
   // override.
@@ -165,34 +164,9 @@ export default function ProposalPreparationPage() {
 
           {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
-          {proposal.locked && proposal.client_response === "pending" && canManage && (
-            <ClientResponseBanner proposalId={proposal.id} onChanged={fetchAll} />
-          )}
-
-          {proposal.locked && proposal.client_response !== "pending" && (
-            <div className="pp-outcome-banner">
-              <div className="pp-outcome-banner-main">
-                <CheckCircleIcon />
-                <span>Client Response:</span>
-                <Badge variant={CLIENT_RESPONSE_VARIANTS[proposal.client_response]}>{CLIENT_RESPONSE_LABELS[proposal.client_response]}</Badge>
-              </div>
-              {proposal.client_response_at && (
-                <span className="pp-outcome-banner-meta">
-                  Recorded on {fmtDate(proposal.client_response_at)}{proposal.responder?.full_name ? ` by ${proposal.responder.full_name}` : ""}
-                </span>
-              )}
-            </div>
-          )}
-
-          {proposal.locked && proposal.client_response === "pending" && !canManage && (
-            <Alert variant="warning">
-              This proposal is locked and waiting for its Person Responsible, Reviewer, or Recommending Authority to record the client's response.
-            </Alert>
-          )}
-
           {!proposal.locked && pastDeadline && (
             <Alert variant="warning">
-              The submission deadline ({fmtDate(lead.submission_deadline)}) has passed, so this proposal is now read-only — that's why Fee Notes, BP Documents, the AFC Checklist, and Proposal Documents show no add/edit options for anyone. Lock it in "Lock &amp; Client Response" below to record the client's outcome.
+              The submission deadline ({fmtDate(lead.submission_deadline)}) has passed, so Fee Notes, BP Documents and Proposal Documents are now read-only. Lock the proposal below to record the client's response.
             </Alert>
           )}
 
@@ -223,6 +197,14 @@ export default function ProposalPreparationPage() {
             </Card>
           </div>
 
+          <ProposalLockPanel
+            proposal={proposal}
+            pastDeadline={pastDeadline}
+            canManage={canManage}
+            monitoringProjectId={monitoringProjectId}
+            onChanged={fetchAll}
+          />
+
           <FeeNotesPanel
             proposalId={proposal.id}
             feeNotes={feeNotes}
@@ -244,15 +226,6 @@ export default function ProposalPreparationPage() {
             onChanged={fetchAll}
           />
 
-          <AfcChecklistPanel
-            proposalId={proposal.id}
-            items={checklistItems}
-            profile={profile}
-            canManage={canManageDocs}
-            locked={locked}
-            onChanged={fetchAll}
-          />
-
           <ProposalDocumentsPanel
             proposalId={proposal.id}
             documents={documents}
@@ -261,13 +234,7 @@ export default function ProposalPreparationPage() {
             onChanged={fetchAll}
           />
 
-          <ProposalLockPanel
-            proposalId={proposal.id}
-            proposal={proposal}
-            pastDeadline={pastDeadline}
-            canManage={canManage}
-            onChanged={fetchAll}
-          />
+          <ProposalValuePanel proposal={proposal} canManage={canManage} onChanged={fetchAll} />
         </div>
       </div>
     </div>

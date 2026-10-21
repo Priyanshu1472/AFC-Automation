@@ -2,7 +2,9 @@
 // JWT must be ON. Person Responsible / Reviewer / Recommending Authority
 // manually records the client's answer (Awarded / Rejected) after the
 // proposal has been locked — there is no automated feed for this, staff
-// enter it once they hear back.
+// enter it once they hear back. Recorded once only. An "awarded" answer
+// opens the project in Monitoring (DB trigger open_monitoring_on_award, see
+// 20261008020000_monitoring_and_financials.sql); a rejected one never does.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -34,11 +36,12 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   try {
     const { data: proposal, error: propErr } = await adminClient
       .from("proposal_preparations")
-      .select("id, lead_id, locked")
+      .select("id, lead_id, locked, client_response")
       .eq("id", proposalId)
       .maybeSingle();
     if (propErr || !proposal) return jsonRes(req, 404, { error: "Proposal not found." });
     if (!proposal.locked) return jsonRes(req, 400, { error: "Lock the proposal before recording the client's response." });
+    if (proposal.client_response !== "pending") return jsonRes(req, 400, { error: "The client's response has already been recorded for this proposal." });
 
     const { data: lead } = await adminClient
       .from("leads")

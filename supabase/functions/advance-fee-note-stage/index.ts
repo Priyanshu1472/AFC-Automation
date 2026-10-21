@@ -24,8 +24,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
-import { notifyRole, notifyUsers, emailRole } from "../_shared/notify.ts";
-import { wrapEmailBody, escapeHtml } from "../_shared/email.ts";
+import { notifyRole, notifyUsers } from "../_shared/notify.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -159,14 +158,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         sub_text: `${noteLabel} for "${lead.title}" needs your approval.`,
         type: "action_required",
         link: `/proposals/${proposal.lead_id}`,
-      });
-      await emailRole(adminClient, "md", {
-        subject: "Fee Note Awaiting Your Approval — AFC India Limited",
-        html: wrapEmailBody(`
-          <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.7;">
-            ${escapeHtml(noteLabel)} for <strong>${escapeHtml(lead.title)}</strong> has been submitted for your approval.
-          </p>
-        `),
       });
 
       return jsonRes(req, 200, { success: true });

@@ -4,8 +4,8 @@
 // bucket — see KnowledgeFormParts.jsx's DocumentUpload/openProjectDocument,
 // whose exact bucket/path convention this reuses directly via
 // supabase.storage.from(BUCKET).download(), the same client-side read
-// pattern already used elsewhere for this bucket, e.g. AfcChecklistPanel's
-// Knowledge Repository picker). No new storage mechanism, no new table.
+// pattern KnowledgeFormParts.jsx itself uses for this bucket). No new
+// storage mechanism, no new table.
 //
 // By-file-type strategy mirrors the Proposal module's merge feature
 // (src/utils/proposalMergeBuilder.js) for the DOCX side — image embeds

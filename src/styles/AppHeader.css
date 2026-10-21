@@ -17,7 +17,7 @@
   bottom: 0;
   width: var(--sidebar-nav-w);
   z-index: var(--z-sticky);
-  /* Visible so the collapse handle can straddle the right border; the
+  /* Visible so rail popovers aren't clipped; the
      spacing below is sized so the whole rail fits a laptop screen without
      scrolling (.app-header-nav only scrolls as a last resort on very
      short windows). */
@@ -241,55 +241,16 @@
   color: var(--text-tertiary);
 }
 
-/* ── Collapse handle (desktop rail only) ───────────────────── */
-/* A small round button straddling the rail's right border, level with
-   the logo. Its Tooltip wrapper is what gets positioned, so the wrapper
-   doesn't take a slot in the rail's vertical stack. */
-.app-header > .tt-wrapper {
-  position: absolute;
-  top: 30px;
-  right: -12px;
-  z-index: 1;
-}
-
-.app-header-collapse-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  color: var(--text-tertiary);
-  background: var(--card-bg);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-full);
-  box-shadow: var(--shadow-sm, var(--shadow-xs));
-  cursor: pointer;
-  opacity: 0.85;
-  transition: color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out),
-    opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
-}
-
-.app-header:hover .app-header-collapse-btn,
-.app-header-collapse-btn:focus-visible {
-  opacity: 1;
-}
-
-.app-header-collapse-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-  transform: scale(1.08);
-}
-
-.app-header-collapse-btn:focus-visible {
-  outline: none;
-  box-shadow: var(--input-shadow-focus);
-}
-
-.app-header-collapse-btn svg {
-  width: 14px;
-  height: 14px;
-  transition: transform var(--duration-slow) var(--ease-out);
+/* ── Hover-to-unfold (desktop rail only) ───────────────────── */
+/* The page is always offset by the folded width (App.css), so the unfolded
+   rail overlays the content instead of pushing it. Redefining the width
+   token here also moves the bell / Support / profile popovers, which
+   position themselves off --sidebar-nav-w. */
+@media (min-width: 721px) {
+  .app-header:not(.collapsed) {
+    --sidebar-nav-w: 240px;
+    box-shadow: var(--shadow-lg);
+  }
 }
 
 /* ── Folded rail: icons only ───────────────────────────────── */
@@ -311,10 +272,6 @@
 
 .app-header.collapsed .user-menu-text {
   display: none;
-}
-
-.app-header.collapsed .app-header-collapse-btn svg {
-  transform: rotate(180deg);
 }
 
 .app-header.collapsed .app-header-logo {

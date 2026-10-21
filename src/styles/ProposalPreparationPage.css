@@ -7,46 +7,6 @@
   padding-bottom: var(--space-12);
 }
 
-/* Translucent red cue for recording the client's outcome once a proposal
-   is locked. Deliberately NOT a hard-blocking modal: the backdrop is
-   pointer-events:none so the navbar, "Back to Leads", folding a section,
-   and normal scrolling all keep working underneath it — only the small
-   floating card is actually interactive (it opts back in with
-   pointer-events:auto). No close affordance on the card itself, since
-   recording the outcome is the one thing that still needs doing, but
-   nothing else on the page is blocked while it's up. */
-.pp-locked-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(220, 38, 38, 0.22);
-  z-index: var(--z-modal);
-  display: flex;
-  justify-content: center;
-  padding: var(--space-4);
-  padding-top: 96px;
-  pointer-events: none;
-  animation: fadeIn var(--duration-normal) var(--ease-out);
-}
-
-.pp-locked-modal {
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--card-shadow-hover);
-  padding: var(--space-6);
-  max-width: 420px;
-  width: 100%;
-  height: fit-content;
-  pointer-events: auto;
-}
-
-.pp-locked-modal-title {
-  margin: 0 0 var(--space-4);
-  font-weight: 600;
-  font-size: var(--text-md);
-  color: var(--text-primary);
-}
-
 /* Lead Details and Responsibles are both compact summary cards, now that
    Lead Details no longer repeats the title already shown as the page's
    own h1 — side by side on wide screens instead of two full-width cards
@@ -301,52 +261,6 @@
 .pp-fnp-sig-md { grid-column: 2; text-align: right; }
 .pp-fnp-encl { margin-bottom: 8px; }
 
-/* Client-response banner at the top of the page, once recorded */
-.pp-outcome-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-  padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--success) 12%, var(--card-bg));
-  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
-}
-.pp-outcome-banner-main {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--success-dark, var(--success));
-}
-.pp-outcome-banner-meta {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-}
-
-/* Lock & outcome */
-.pp-lock-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-6);
-}
-@media (max-width: 640px) {
-  .pp-lock-grid { grid-template-columns: 1fr; }
-}
-
-.pp-outcome { margin-top: var(--space-2); }
-.pp-outcome-status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-.pp-outcome-form { margin-top: var(--space-4); }
-.pp-outcome-buttons { display: flex; gap: var(--space-2); }
-
 /* Proposals list page — quick-filter tiles, same convention as
    LeadListPage's .ll-stat-* / EmpanelmentListPage's .bl-stat-*. */
 .pp-stats-grid {
@@ -543,103 +457,163 @@
 }
 .pp-add-row .input { flex: 1; min-width: 160px; }
 
-/* Knowledge Repository picker modal */
-.pp-picker-row {
-  width: 100%;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-}
-.pp-picker-row:hover .pp-list-row-title { color: var(--brand-600); }
-.pp-picker-back {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--brand-600);
-  font-size: var(--text-sm);
-  padding: 0 0 var(--space-3);
-}
 
-.pp-picker-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--card-border);
-  background: var(--bg-surface-2);
-}
-.pp-picker-tab {
-  flex: 1;
-  padding: var(--space-3) var(--space-2);
+/* Shared by the BP-requests rows */
+.pp-doc-card-meta { color: var(--text-tertiary); font-size: var(--text-xs); margin-top: 2px; }
+
+.pp-icon-btn.pp-icon-danger:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.pp-icon-btn.pp-icon-monitoring { color: var(--success-dark, var(--success)); }
+
+/* ── Proposal documents — one multi-file list ───────────────────────── */
+.pp-docs-empty { margin: 0; color: var(--text-tertiary); font-size: var(--text-sm); }
+.pp-docs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.pp-docs-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  color: var(--text-tertiary);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  white-space: nowrap;
-}
-.pp-picker-tab:hover { color: var(--text-primary); background: var(--bg-surface-3); }
-.pp-picker-tab.pp-picker-tab-active {
-  color: var(--text-brand);
-  border-bottom-color: var(--brand-600);
-  font-weight: 600;
-  background: var(--card-bg);
-}
-.pp-picker-tab-icon { display: flex; align-items: center; }
-@media (max-width: 480px) {
-  .pp-picker-tab-text { display: none; }
-  .pp-picker-tab { padding: var(--space-3) var(--space-1); }
-}
-
-/* Proposal documents (Technical / Financial / Proposal 3 slots) */
-.pp-doc-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-4);
-}
-
-.pp-doc-card {
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+.pp-docs-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--brand-50); color: var(--brand-600);
+}
+.pp-docs-icon svg { width: 16px; height: 16px; }
+.pp-docs-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pp-docs-name { font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-docs-meta { font-size: var(--text-xs); color: var(--text-tertiary); }
+.pp-docs-actions { display: flex; gap: var(--space-1); flex-shrink: 0; }
+
+/* ── Financial (proposed value) ─────────────────────────────────────── */
+.pp-value-form { display: flex; flex-direction: column; gap: var(--space-2); max-width: 520px; }
+.pp-value-form-row { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+.pp-value-input { position: relative; flex: 1; min-width: 180px; }
+.pp-value-input > span {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--text-tertiary); font-weight: 600; pointer-events: none;
+}
+.pp-value-input .input { padding-left: 28px; }
+.pp-value-display { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.pp-value-amount { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+.pp-value-meta { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: 2px; }
+
+/* ── Lock & Client Response — stepper + inline action ───────────────── */
+.pp-flow-card { padding: 0; overflow: hidden; }
+.pp-flow-head {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-5) var(--space-6) var(--space-4);
+}
+.pp-flow-head h2 { font-size: var(--text-md); margin: 0; }
+.pp-flow-head p { margin: 2px 0 0; font-size: var(--text-sm); color: var(--text-secondary); }
+.pp-flow-head-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: var(--radius-md); background: var(--brand-50); color: var(--brand-600);
+}
+.pp-flow-head-icon svg { width: 18px; height: 18px; }
+
+.pp-flow-steps {
+  list-style: none; margin: 0; padding: var(--space-2) var(--space-6) var(--space-5);
+  display: grid; grid-template-columns: repeat(4, 1fr);
+}
+.pp-flow-step {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px;
+}
+/* Connector line to the next step */
+.pp-flow-step:not(:last-child)::after {
+  content: "";
+  position: absolute; top: 15px; left: calc(50% + 22px); right: calc(-50% + 22px);
+  height: 2px; border-radius: 2px;
+  background: var(--border-default);
+}
+.pp-flow-step.is-done:not(:last-child)::after { background: var(--success); }
+.pp-flow-dot {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--text-sm); font-weight: 700;
+  border: 2px solid var(--border-strong); color: var(--text-tertiary); background: var(--card-bg);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+.pp-flow-dot svg { width: 18px; height: 18px; }
+.pp-flow-label { font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); }
+.pp-flow-sub { font-size: var(--text-xs); color: var(--text-tertiary); }
+.pp-flow-step.is-done .pp-flow-dot { background: var(--success); border-color: var(--success); color: #fff; }
+.pp-flow-step.is-done .pp-flow-label { color: var(--text-primary); }
+.pp-flow-step.is-current .pp-flow-dot {
+  border-color: var(--brand-600); color: var(--brand-600);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-600) 18%, transparent);
+}
+.pp-flow-step.is-current .pp-flow-label { color: var(--brand-600); }
+.pp-flow-step.is-failed .pp-flow-dot { background: var(--danger); border-color: var(--danger); color: #fff; }
+.pp-flow-step.is-failed .pp-flow-label { color: var(--danger); }
+.pp-flow-step.is-skipped { opacity: 0.5; }
+
+.pp-flow-body {
+  border-top: 1px solid var(--card-border);
+  background: var(--bg-surface-2);
+  padding: var(--space-4) var(--space-6) var(--space-5);
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+.pp-flow-action { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.pp-flow-action-text { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-sm); }
+.pp-flow-action-text strong { color: var(--text-primary); }
+.pp-flow-action-text span { color: var(--text-secondary); }
+.pp-flow-note { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); }
+
+.pp-flow-respond-title { display: block; font-size: var(--text-sm); color: var(--text-primary); margin-bottom: var(--space-3); }
+.pp-flow-choices { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.pp-flow-choice {
+  display: flex; align-items: center; gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
+  border: 1.5px solid var(--border-default); border-radius: var(--radius-lg);
+  background: var(--card-bg); color: var(--text-secondary);
+  text-align: left; cursor: pointer; font: inherit;
+  transition: border-color var(--duration-fast), background var(--duration-fast), box-shadow var(--duration-fast);
 }
-
-.pp-doc-card-title { font-weight: 600; color: var(--text-primary); font-size: var(--text-sm); }
-
-.pp-doc-card-file { margin-top: var(--space-2); }
-.pp-doc-card-filename {
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.pp-flow-choice svg { width: 22px; height: 22px; flex-shrink: 0; }
+.pp-flow-choice span { display: flex; flex-direction: column; }
+.pp-flow-choice strong { color: var(--text-primary); font-size: var(--text-sm); }
+.pp-flow-choice small { font-size: var(--text-xs); color: var(--text-tertiary); }
+.pp-flow-choice:hover:not(:disabled) { border-color: var(--border-strong); }
+.pp-flow-choice.is-awarded svg { color: var(--success); }
+.pp-flow-choice.is-rejected svg { color: var(--danger); }
+.pp-flow-choice.is-awarded.is-selected {
+  border-color: var(--success); background: color-mix(in srgb, var(--success) 8%, var(--card-bg));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent);
 }
-.pp-doc-card-meta { color: var(--text-tertiary); font-size: var(--text-xs); margin-top: 2px; }
-.pp-doc-card-actions { margin-top: var(--space-2); }
-
-.pp-doc-file-wrap { display: block; }
-.pp-doc-file-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+.pp-flow-choice.is-rejected.is-selected {
+  border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--card-bg));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent);
 }
-.pp-doc-file-label {
-  display: inline-block;
-  font-size: var(--text-sm);
-  color: var(--color-primary, #2563eb);
-  cursor: pointer;
-  text-decoration: underline;
+.pp-flow-remark { display: flex; gap: var(--space-3); align-items: flex-end; margin-top: var(--space-3); }
+.pp-flow-remark .input { flex: 1; resize: vertical; }
+
+.pp-flow-result {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid;
+}
+.pp-flow-result.is-awarded { background: color-mix(in srgb, var(--success) 9%, var(--card-bg)); border-color: color-mix(in srgb, var(--success) 35%, transparent); }
+.pp-flow-result.is-rejected { background: var(--card-bg); border-color: var(--border-default); }
+.pp-flow-result-icon { display: inline-flex; }
+.pp-flow-result-icon svg { width: 24px; height: 24px; }
+.pp-flow-result.is-awarded .pp-flow-result-icon { color: var(--success); }
+.pp-flow-result.is-rejected .pp-flow-result-icon { color: var(--danger); }
+.pp-flow-result-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; font-size: var(--text-sm); }
+.pp-flow-result-text strong { color: var(--text-primary); }
+.pp-flow-result-text span { color: var(--text-secondary); }
+
+@media (max-width: 640px) {
+  .pp-flow-head, .pp-flow-body { padding-left: var(--space-4); padding-right: var(--space-4); }
+  .pp-flow-steps { padding-left: var(--space-2); padding-right: var(--space-2); }
+  .pp-flow-label { font-size: var(--text-xs); }
+  .pp-flow-sub { display: none; }
+  .pp-flow-choices { grid-template-columns: 1fr; }
+  .pp-flow-remark { flex-direction: column; align-items: stretch; }
 }

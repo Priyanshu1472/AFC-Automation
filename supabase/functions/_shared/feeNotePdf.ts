@@ -104,7 +104,7 @@ async function fetchPublicAsset(filename: string): Promise<Uint8Array | null> {
   }
 }
 
-const fetchLogoBytes = () => fetchPublicAsset("Logo.png");
+export const fetchLogoBytes = () => fetchPublicAsset("Logo.png");
 
 // ── Number-to-words (Indian numbering: crore/lakh/thousand) ────────
 const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",

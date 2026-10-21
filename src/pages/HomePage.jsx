@@ -9,6 +9,8 @@ import { supabase } from "../lib/supabase";
 import { EMPANELMENT_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES } from "../lib/roles";
 import { fetchPendingActionNotifications, subscribeToNotifications, markNotificationRead } from "../lib/notifications";
 import { TargetIcon, ActivityIcon, RupeeIcon } from "../components/icons";
+import BpInvoiceRequestsCard from "../components/financials/BpInvoiceRequestsCard";
+import { syncDueAlerts } from "../lib/monitoring";
 import "../styles/HomePage.css";
 
 const STATUS_MAP = {
@@ -248,7 +250,10 @@ function PendingActionsPanel() {
     if (!profile?.id) return;
     let cancelled = false;
 
-    fetchPendingActionNotifications(profile.id, 200)
+    // Due-date alerts for Monitoring are generated lazily (and only once per
+    // item/date), so make sure they exist before the boxes are counted.
+    syncDueAlerts()
+      .then(() => fetchPendingActionNotifications(profile.id, 200))
       .then((rows) => {
         if (!cancelled) setItems(rows);
       })
@@ -400,6 +405,7 @@ export default function HomePage() {
           <h1>Welcome, {profile?.full_name}</h1>
         </div>
         {isBa && <BaStatusCard />}
+        {isBa && <BpInvoiceRequestsCard />}
         {!isBa && <PendingActionsPanel />}
       </div>
     </div>

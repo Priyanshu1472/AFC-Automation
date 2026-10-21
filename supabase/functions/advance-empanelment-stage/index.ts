@@ -9,7 +9,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
-import { notifyUser, notifyRole, notifyTeam, emailRole, emailUser } from "../_shared/notify.ts";
+import { notifyUser, notifyRole, notifyTeam, emailRole } from "../_shared/notify.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { bytesToBase64 } from "../_shared/letterPdf.ts";
 import { buildEmpanelmentLetter } from "../_shared/empanelmentLetterPdf.ts";
@@ -35,23 +35,6 @@ function advisorLabel(role: string): string {
 // CFO/CS previously only got the in-app bell notification when an
 // application reached their stage — this adds an actual email so it isn't
 // missed if they haven't opened the app.
-// Generic "your action is needed" email — used for every stage handoff
-// besides the CFO/CS one above (which has its own copy), so the PO/DGM/MD
-// get a real email (not just the in-app bell) whenever the application
-// lands in their queue.
-function actionRequiredEmailHtml(orgName: string, applicationId: string, actionPhrase: string): string {
-  const siteUrl = Deno.env.get("SITE_URL") || "http://localhost:5173";
-  return wrapEmailBody(`
-    <p style="margin:0 0 16px;font-size:14px;color:#374151;">Dear Sir / Ma'am,</p>
-    <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
-      The empanelment application submitted by <strong>${escapeHtml(orgName)}</strong> needs you to ${escapeHtml(actionPhrase)}.
-    </p>
-    <p style="margin:0 0 8px;">
-      <a href="${siteUrl}/empanelment/${applicationId}" style="display:inline-block;background:#1a5fd4;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:8px;font-weight:600;font-size:13px;">Review Application &rarr;</a>
-    </p>
-  `);
-}
-
 function cfoCsReviewEmailHtml(orgName: string, applicationId: string): string {
   const siteUrl = Deno.env.get("SITE_URL") || "http://localhost:5173";
   return wrapEmailBody(`
@@ -342,10 +325,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
             type: "action_required",
             link: `/empanelment/${app.id}`,
           });
-          await emailUser(adminClient, app.project_officer_id, {
-            subject: "Empanelment Application Awaiting Your Final Review — AFC India Limited",
-            html: actionRequiredEmailHtml(orgName, app.id, `give it a final look before forwarding to the ${advLabel}, now that CS and CFO review is complete`),
-          });
         }
         return jsonRes(req, 200, { success: true, status: otherDone ? "po_final_review" : "cfo_cs_review", forwarded: !!otherDone });
       }
@@ -385,16 +364,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         };
         if (app.dgm_id) {
           await notifyUser(adminClient, app.dgm_id, dgmPayload);
-          await emailUser(adminClient, app.dgm_id, {
-            subject: "Empanelment Application Awaiting Your Review — AFC India Limited",
-            html: actionRequiredEmailHtml(orgName, app.id, "review it"),
-          });
         } else {
           await notifyRole(adminClient, "dgm", dgmPayload, app.team);
-          await emailRole(adminClient, "dgm", {
-            subject: "Empanelment Application Awaiting Your Review — AFC India Limited",
-            html: actionRequiredEmailHtml(orgName, app.id, "review it"),
-          }, app.team);
         }
         return jsonRes(req, 200, { success: true, status: "dgm_review" });
       }
@@ -411,10 +382,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           type: "action_required",
           link: `/empanelment/${app.id}`,
         });
-        await emailRole(adminClient, "md", {
-          subject: "Empanelment Application Awaiting Your Decision — AFC India Limited",
-          html: actionRequiredEmailHtml(orgName, app.id, `make a final decision — the ${advisorLabel(caller.role)} has recommended this application`),
-        });
         return jsonRes(req, 200, { success: true, status: "md_review" });
       }
 
@@ -429,10 +396,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           sub_text: `${orgName}'s application was sent back by the ${advisorLabel(caller.role)} for another look.`,
           type: "action_required",
           link: `/empanelment/${app.id}`,
-        });
-        await emailUser(adminClient, app.project_officer_id, {
-          subject: "Empanelment Application Sent Back — AFC India Limited",
-          html: actionRequiredEmailHtml(orgName, app.id, `take another look — it was sent back by the ${advisorLabel(caller.role)}`),
         });
         return jsonRes(req, 200, { success: true, status: "po_final_review" });
       }
@@ -449,16 +412,10 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           type: "action_required",
           link: `/empanelment/${app.id}`,
         };
-        const sendBackMail = {
-          subject: "Empanelment Application Sent Back — AFC India Limited",
-          html: actionRequiredEmailHtml(orgName, app.id, "take another look — it was sent back by the MD"),
-        };
         if (app.dgm_id) {
           await notifyUser(adminClient, app.dgm_id, sendBackPayload);
-          await emailUser(adminClient, app.dgm_id, sendBackMail);
         } else {
           await notifyRole(adminClient, "dgm", sendBackPayload, app.team);
-          await emailRole(adminClient, "dgm", sendBackMail, app.team);
         }
         return jsonRes(req, 200, { success: true, status: "dgm_review" });
       }

@@ -94,7 +94,7 @@
   --input-shadow-focus: 0 0 0 3px rgba(31, 111, 82, 0.14);
 
   /* ── Navigation ────────────────────────────────────── */
-  --nav-bg:         rgba(244, 247, 245, 0.82);
+  --nav-bg:         #f4f7f5; /* solid — the rail unfolds over page content */
   --nav-border:     #dde7e1;
   --nav-text:       #667a6f;
   --nav-text-active:#16402f;
@@ -358,8 +358,8 @@ h1,h2,h3,h4,h5,h6 { font-family: var(--font-display); font-weight: 600; line-hei
   transition: padding-left var(--duration-slow) var(--ease-out);
 }
 
-/* Rail folded to icons only (AppHeader's collapse toggle sets this on
-   <html>) — desktop only, the mobile top bar has no rail to fold. */
+/* Rail folded to icons only (AppHeader always sets this on <html> and
+   unfolds the rail over the page on hover) — desktop only. */
 @media (min-width: 721px) {
   :root[data-nav="collapsed"] {
     --sidebar-nav-w: 72px;

@@ -32,11 +32,12 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   try {
     const { data: proposal, error: propErr } = await adminClient
       .from("proposal_preparations")
-      .select("id, lead_id, locked")
+      .select("id, lead_id, locked, proposed_value")
       .eq("id", proposalId)
       .maybeSingle();
     if (propErr || !proposal) return jsonRes(req, 404, { error: "Proposal not found." });
     if (proposal.locked) return jsonRes(req, 400, { error: "This proposal is already locked." });
+    if (proposal.proposed_value == null) return jsonRes(req, 400, { error: "Enter the proposed value (Financial) before locking the proposal." });
 
     const { data: lead } = await adminClient
       .from("leads")

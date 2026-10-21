@@ -647,3 +647,15 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/send-empanelment-chat-message/deno.json"
 entrypoint = "./functions/send-empanelment-chat-message/index.ts"
+
+[functions.request-bp-invoice]
+enabled = true
+verify_jwt = true
+import_map = "./functions/request-bp-invoice/deno.json"
+entrypoint = "./functions/request-bp-invoice/index.ts"
+
+[functions.monitoring-pdf]
+enabled = true
+verify_jwt = true
+import_map = "./functions/monitoring-pdf/deno.json"
+entrypoint = "./functions/monitoring-pdf/index.ts"

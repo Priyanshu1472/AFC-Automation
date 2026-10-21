@@ -1,34 +1,27 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
 import SupportWidget from "./SupportWidget";
 import NavDropdown from "./NavDropdown";
 import UserMenu from "./UserMenu";
-import Tooltip from "../ui/Tooltip";
 import ProfileAvatar from "./ProfileAvatar";
 import { useAuth } from "../../hooks/useAuth";
 import { USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, ROLE_LABELS } from "../../lib/roles";
 import {
   MenuIcon, CloseIcon, HomeIcon, BookIcon, UsersIcon, TargetIcon, FileTextIcon, ActivityIcon, RupeeIcon,
-  UserCogIcon, ClipboardListIcon, LayoutGridIcon, BarChartIcon, ChevronLeftIcon,
+  UserCogIcon, ClipboardListIcon, LayoutGridIcon, BarChartIcon,
 } from "../icons";
 import logo from "../../images/Logo.png";
 import "../../styles/AppHeader.css";
 
-// Desktop rail folded to icons only — remembered per browser. Applied as
-// data-nav="collapsed" on <html>, which narrows --sidebar-nav-w (App.css),
-// so the page offset and the rail's own popovers all follow it.
-const NAV_COLLAPSED_KEY = "afc-nav-collapsed";
+// Desktop rail sits folded to icons and unfolds over the page while the
+// pointer (or keyboard focus) is on it. data-nav="collapsed" on <html> keeps
+// the page offset at the folded width (App.css), so content never shifts;
+// the unfolded rail just overlays it (AppHeader.css).
 const MOBILE_QUERY = "(max-width: 720px)";
-
-function readCollapsed() {
-  try {
-    return localStorage.getItem(NAV_COLLAPSED_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
+// Grace period before folding back, so brushing past the edge doesn't flicker.
+const COLLAPSE_DELAY_MS = 150;
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_QUERY).matches);
@@ -41,47 +34,59 @@ function useIsMobile() {
   return isMobile;
 }
 
-// A rail link: icon + label. When folded, the label is hidden and shown as
-// a tooltip instead (portaled, so the narrow rail can't clip it).
+// A rail link: icon + label. When folded only the icon shows — hovering
+// unfolds the rail, so the label never needs a tooltip.
 function NavItem({ to, label, icon, collapsed, onClick }) {
-  const link = (
+  return (
     <NavLink to={to} className={({ isActive }) => (isActive ? "active" : "")} onClick={onClick} aria-label={collapsed ? label : undefined}>
       <span className="app-header-nav-icon" aria-hidden="true">{icon}</span>
       <span className="app-header-nav-label">{label}</span>
     </NavLink>
   );
-  return collapsed ? <Tooltip text={label} position="right" delay={150}>{link}</Tooltip> : link;
 }
 
 export default function AppHeader() {
   const { profile, activeTeam, setActiveTeam, signOut } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [collapsedPref, setCollapsedPref] = useState(readCollapsed);
+  const [hovered, setHovered] = useState(false);
+  const [focusInside, setFocusInside] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const isMobile = useIsMobile();
-  // The mobile drawer always shows full labels, whatever the desktop choice.
-  const collapsed = collapsedPref && !isMobile;
+  const collapseTimer = useRef(null);
+  // The mobile drawer always shows full labels.
+  const collapsed = !isMobile && !hovered && !focusInside;
 
   useLayoutEffect(() => {
-    if (collapsedPref) document.documentElement.dataset.nav = "collapsed";
-    else delete document.documentElement.dataset.nav;
-  }, [collapsedPref]);
+    document.documentElement.dataset.nav = "collapsed";
+    return () => {
+      delete document.documentElement.dataset.nav;
+    };
+  }, []);
 
-  function toggleCollapsed() {
-    setCollapsedPref((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(NAV_COLLAPSED_KEY, next ? "1" : "0");
-      } catch {
-        // Storage blocked — the choice just won't survive a reload.
-      }
-      return next;
-    });
+  useEffect(() => () => clearTimeout(collapseTimer.current), []);
+
+  function handleMouseEnter() {
+    clearTimeout(collapseTimer.current);
+    setHovered(true);
+  }
+
+  function handleMouseLeave() {
+    clearTimeout(collapseTimer.current);
+    collapseTimer.current = setTimeout(() => setHovered(false), COLLAPSE_DELAY_MS);
+  }
+
+  // Focus keeps the rail open (keyboard users, and an open bell/profile
+  // popover whose trigger holds focus) until it moves outside the rail.
+  function handleBlur(e) {
+    if (!e.currentTarget.contains(e.relatedTarget)) setFocusInside(false);
   }
 
   function closeMenu() {
     setMenuOpen(false);
+    // Drop focus from the clicked link so the rail can fold once the
+    // pointer leaves, instead of staying open on the new page.
+    document.activeElement?.blur?.();
   }
 
   // Mobile-drawer-only: Users tapping Sign out here shouldn't need to open
@@ -137,24 +142,18 @@ export default function AppHeader() {
   const teams = profile.teams || [];
 
   return (
-    <header className={`app-header${collapsed ? " collapsed" : ""}`}>
+    <header
+      className={`app-header${collapsed ? " collapsed" : ""}`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onFocus={() => setFocusInside(true)}
+      onBlur={handleBlur}
+    >
       <Link to="/home" className="app-header-brand">
         <img src={logo} className="app-header-logo" alt="AFC India Limited" />
         <span className="font-display font-semibold text-primary">AFC India Limited</span>
       </Link>
 
-      {/* Desktop-only fold/unfold handle, sitting on the rail's right edge. */}
-      <Tooltip text={collapsed ? "Expand sidebar" : "Collapse sidebar"} position="right" delay={300}>
-        <button
-          type="button"
-          className="app-header-collapse-btn"
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-pressed={collapsed}
-        >
-          <ChevronLeftIcon />
-        </button>
-      </Tooltip>
 
       {/* Mobile-only — mirrors the desktop utilities row's Notifications
           button but sits in the top bar itself, not inside the off-canvas

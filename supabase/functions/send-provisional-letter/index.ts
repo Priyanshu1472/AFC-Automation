@@ -17,7 +17,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { sendResendEmail } from "../_shared/email.ts";
-import { emailRole, notifyRole, notifyUser, notifyUsers } from "../_shared/notify.ts";
+import { notifyRole, notifyUser, notifyUsers } from "../_shared/notify.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { bytesToBase64 } from "../_shared/letterPdf.ts";
 import { buildProvisionalLetter, isProvisionalLetterOpen } from "../_shared/provisionalLetterPdf.ts";
@@ -138,10 +138,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       sub_text: `The ${advisorLabel(caller.role)} has requested approval to send ${orgName}'s provisional empanelment letter.`,
       type: "action_required",
       link: `/empanelment/${application_id}`,
-    });
-    await emailRole(adminClient, "md", {
-      subject: `Approval needed: Provisional Empanelment Letter — ${orgName}`,
-      html: `<p>Dear Sir / Ma'am,</p><p>The ${advisorLabel(caller.role)} has requested your approval to send the provisional empanelment letter to <strong>${orgName}</strong> (Application ${app.application_code || ""}).</p>${noteText ? `<p><em>Note: ${noteText}</em></p>` : ""}<p>Please log in to review the letter and approve or decline it.</p>`,
     });
     return jsonRes(req, 200, { success: true, requested: true });
   }
