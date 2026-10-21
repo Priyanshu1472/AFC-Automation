@@ -40,43 +40,37 @@
 @media (max-width: 1100px) { .mon-kpis-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 800px) { .mon-kpis, .mon-kpis-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
-/* ── Project page: vertical section tabs ─────────────────────────────── */
-/* Same idea as the app's own sidebar: a sticky list of sections on the
-   left, the open section on the right. Collapses to a scrollable row on
-   narrow screens. */
-.mon-detail { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: var(--space-5); align-items: start; }
-.mon-vtabs {
-  position: sticky; top: var(--space-4);
-  display: flex; flex-direction: column; gap: 2px;
+/* ── Project page: horizontal section tabs ────────────────────────────── */
+/* A single row of section tabs, sitting just below the Needs Attention
+   card (or the KPIs, if there's nothing to flag) — the open section
+   renders full-width beneath it. Scrolls horizontally rather than wrapping
+   on narrow screens, same as every other tab row in the app. */
+.mon-hbar {
+  display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
   padding: var(--space-2);
   background: var(--card-bg); border: 1px solid var(--card-border);
   border-radius: var(--radius-lg); box-shadow: var(--card-shadow);
 }
-.mon-vtab {
-  display: flex; align-items: center; gap: var(--space-3); width: 100%;
-  padding: 10px 12px; border: none; border-radius: var(--radius-md);
+.mon-htab {
+  display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0;
+  padding: 10px 16px; border: none; border-radius: var(--radius-md);
   background: none; color: var(--text-secondary); text-align: left;
-  font: inherit; font-size: var(--text-sm); font-weight: 500; cursor: pointer;
+  font: inherit; font-size: var(--text-sm); font-weight: 500; cursor: pointer; white-space: nowrap;
   transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
-.mon-vtab:hover { background: var(--btn-ghost-bg-hover, var(--bg-surface-2)); color: var(--text-primary); }
-.mon-vtab.is-active { background: var(--bg-surface-3); color: var(--text-primary); font-weight: 600; }
-.mon-vtab:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
-.mon-vtab-icon { display: inline-flex; flex-shrink: 0; color: var(--text-tertiary); }
-.mon-vtab-icon svg { width: 18px; height: 18px; }
-.mon-vtab.is-active .mon-vtab-icon { color: var(--brand-600); }
-.mon-vtab-label { flex: 1; min-width: 0; line-height: 1.3; }
+.mon-htab:hover { background: var(--btn-ghost-bg-hover, var(--bg-surface-2)); color: var(--text-primary); }
+.mon-htab.is-active { background: var(--bg-surface-3); color: var(--text-primary); font-weight: 600; }
+.mon-htab:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+.mon-htab-icon { display: inline-flex; flex-shrink: 0; color: var(--text-tertiary); }
+.mon-htab-icon svg { width: 18px; height: 18px; }
+.mon-htab.is-active .mon-htab-icon { color: var(--brand-600); }
+.mon-htab-label { line-height: 1.3; }
 .mon-tab-count {
   min-width: 20px; padding: 1px 6px; border-radius: var(--radius-full);
   background: var(--bg-surface-3); color: var(--text-secondary); font-size: 11px; text-align: center;
 }
-.mon-vtab.is-active .mon-tab-count { background: var(--brand-600); color: #fff; }
+.mon-htab.is-active .mon-tab-count { background: var(--brand-600); color: #fff; }
 .mon-tab-panel { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
-@media (max-width: 900px) {
-  .mon-detail { grid-template-columns: 1fr; }
-  .mon-vtabs { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; }
-  .mon-vtab { width: auto; flex-shrink: 0; }
-}
 
 /* ── Needs-attention list ───────────────────────────────────────────── */
 .mon-alerts-card { border-left: 3px solid var(--warning); }

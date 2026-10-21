@@ -342,27 +342,26 @@ export default function MonitoringProjectPage() {
             </Card>
           )}
 
-          <div className="mon-detail">
-            <nav className="mon-vtabs" role="tablist" aria-orientation="vertical" aria-label="Project sections">
-              {TABS.map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  role="tab"
-                  id={`mon-tab-${t.key}`}
-                  aria-selected={tab === t.key}
-                  aria-controls={`mon-panel-${t.key}`}
-                  className={`mon-vtab${tab === t.key ? " is-active" : ""}`}
-                  onClick={() => selectTab(t.key)}
-                >
-                  <span className="mon-vtab-icon" aria-hidden="true">{t.icon}</span>
-                  <span className="mon-vtab-label">{t.label}</span>
-                  {counts[t.key] != null && <span className="mon-tab-count">{counts[t.key]}</span>}
-                </button>
-              ))}
-            </nav>
+          <nav className="mon-hbar" role="tablist" aria-label="Project sections">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                id={`mon-tab-${t.key}`}
+                aria-selected={tab === t.key}
+                aria-controls={`mon-panel-${t.key}`}
+                className={`mon-htab${tab === t.key ? " is-active" : ""}`}
+                onClick={() => selectTab(t.key)}
+              >
+                <span className="mon-htab-icon" aria-hidden="true">{t.icon}</span>
+                <span className="mon-htab-label">{t.label}</span>
+                {counts[t.key] != null && <span className="mon-tab-count">{counts[t.key]}</span>}
+              </button>
+            ))}
+          </nav>
 
-            <div role="tabpanel" id={`mon-panel-${tab}`} aria-labelledby={`mon-tab-${tab}`} className="mon-tab-panel">
+          <div role="tabpanel" id={`mon-panel-${tab}`} aria-labelledby={`mon-tab-${tab}`} className="mon-tab-panel">
               {tab === "plan" && (
                 <MonitoringPlanPanel
                   projectId={project.id}
@@ -420,7 +419,6 @@ export default function MonitoringProjectPage() {
                 </div>
               )}
             </div>
-          </div>
         </div>
       </div>
 
