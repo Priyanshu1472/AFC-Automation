@@ -64,6 +64,16 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
     onChanged();
   }
 
+  async function detachFromMilestone(item) {
+    setBusy(true);
+    setError("");
+    const { error: dbErr } = await supabase.from("monitoring_items").update({ parent_id: null }).eq("id", item.id);
+    setBusy(false);
+    setDialog(null);
+    if (dbErr) setError(dbErr.message);
+    onChanged();
+  }
+
   async function remove(item) {
     setBusy(true);
     setError("");
@@ -258,14 +268,13 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
           <Modal.Header title="Remove this deliverable?" onClose={!busy ? close : undefined} />
           <Modal.Body>
             <p style={{ margin: 0, color: "var(--text-secondary)" }}>
-              “{dialog.item.title}” is under the milestone “{dialog.parent.title}”. You can remove just this deliverable, or delete the whole milestone
-              {childrenOf(dialog.parent.id).length > 1 ? ` and all ${childrenOf(dialog.parent.id).length} of its deliverables` : ""}.
+              “{dialog.item.title}” is under the milestone “{dialog.parent.title}”. Remove it from the milestone (it stays on as a standalone deliverable), or delete it outright.
             </p>
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" disabled={busy} onClick={close}>Cancel</Button>
-            <Button variant="primary" loading={busy} onClick={() => remove(dialog.item)}>Remove from Milestone</Button>
-            <Button variant="danger" loading={busy} onClick={() => remove(dialog.parent)}>Delete Milestone</Button>
+            <Button variant="primary" loading={busy} onClick={() => detachFromMilestone(dialog.item)}>Remove from Milestone</Button>
+            <Button variant="danger" loading={busy} onClick={() => remove(dialog.item)}>Delete Deliverable</Button>
           </Modal.Footer>
         </Modal>
       )}
