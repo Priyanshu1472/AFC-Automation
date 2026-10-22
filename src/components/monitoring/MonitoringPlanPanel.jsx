@@ -271,10 +271,10 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
               “{dialog.item.title}” is under the milestone “{dialog.parent.title}”. Remove it from the milestone (it stays on as a standalone deliverable), or delete it outright.
             </p>
           </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" disabled={busy} onClick={close}>Cancel</Button>
+          <Modal.Footer className="is-centered">
             <Button variant="primary" loading={busy} onClick={() => detachFromMilestone(dialog.item)}>Remove from Milestone</Button>
             <Button variant="danger" loading={busy} onClick={() => remove(dialog.item)}>Delete Deliverable</Button>
+            <Button variant="secondary" disabled={busy} onClick={close}>Cancel</Button>
           </Modal.Footer>
         </Modal>
       )}

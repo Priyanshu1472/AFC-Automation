@@ -44,8 +44,8 @@ Modal.Body = function ModalBody({ children, className = "" }) {
   return <div className={`modal-body ${className}`.trim()}>{children}</div>;
 };
 
-Modal.Footer = function ModalFooter({ children }) {
-  return <div className="modal-footer">{children}</div>;
+Modal.Footer = function ModalFooter({ children, className = "" }) {
+  return <div className={`modal-footer ${className}`.trim()}>{children}</div>;
 };
 
 export default Modal;

@@ -989,6 +989,7 @@ select.input {
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-surface-2);
 }
+.modal-footer.is-centered { justify-content: center; }
 
 /* ============================================================
    13. ALERT / TOAST
