@@ -127,13 +127,13 @@
    overdue) — see itemUrgencyLevel(). "done" (completed) stays green. Kept
    wide (8px/6px) so it reads at a glance, not just on close inspection. */
 .mon-milestone.is-urg-green  { border-left-color: var(--success); }
-.mon-milestone.is-urg-yellow { border-left-color: var(--warning); background: color-mix(in srgb, var(--warning) 20%, var(--card-bg)); }
-.mon-milestone.is-urg-red    { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 18%, var(--card-bg)); }
+.mon-milestone.is-urg-yellow { border-left-color: var(--warning); background: color-mix(in srgb, var(--warning) 45%, var(--card-bg)); }
+.mon-milestone.is-urg-red    { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 35%, var(--card-bg)); }
 .mon-milestone.is-urg-done   { border-left-color: var(--success); }
 
 .mon-item:not(.is-milestone).is-urg-green  { border-left: 6px solid var(--success); }
-.mon-item:not(.is-milestone).is-urg-yellow { border-left: 6px solid var(--warning); background: color-mix(in srgb, var(--warning) 20%, var(--card-bg)); }
-.mon-item:not(.is-milestone).is-urg-red    { border-left: 6px solid var(--danger); background: color-mix(in srgb, var(--danger) 18%, var(--card-bg)); }
+.mon-item:not(.is-milestone).is-urg-yellow { border-left: 6px solid var(--warning); background: color-mix(in srgb, var(--warning) 45%, var(--card-bg)); }
+.mon-item:not(.is-milestone).is-urg-red    { border-left: 6px solid var(--danger); background: color-mix(in srgb, var(--danger) 35%, var(--card-bg)); }
 .mon-item:not(.is-milestone).is-urg-done   { border-left: 6px solid var(--success); }
 .mon-group-label {
   padding: var(--space-2) var(--space-4) var(--space-1);
