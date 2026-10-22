@@ -264,7 +264,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
         />
       )}
       {dialog?.type === "delete_nested" && (
-        <Modal onClose={!busy ? close : undefined} size="sm" closeOnBackdrop={!busy}>
+        <Modal onClose={!busy ? close : undefined} closeOnBackdrop={!busy}>
           <Modal.Header title="Remove this deliverable?" onClose={!busy ? close : undefined} />
           <Modal.Body>
             <p style={{ margin: 0, color: "var(--text-secondary)" }}>
