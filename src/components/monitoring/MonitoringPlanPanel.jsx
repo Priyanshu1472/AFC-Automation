@@ -17,7 +17,7 @@ import Alert from "../ui/Alert";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import { ListChecksIcon, PencilIcon, TrashIcon, CheckCircleIcon, ReceiptIcon, ClipboardListIcon, PaperclipIcon } from "../icons";
 import { ItemModal, CompleteItemModal, NoteModal } from "./ItemModals";
-import { fmtDate, formatINR, itemTiming, dueLabel, needsInvoice, isItemInvoiced, itemBilled, deliverableNumbers, openMonitoringFile } from "../../lib/monitoring";
+import { fmtDate, formatINR, itemTiming, itemUrgencyLevel, dueLabel, needsInvoice, isItemInvoiced, itemBilled, deliverableNumbers, openMonitoringFile } from "../../lib/monitoring";
 
 function byDue(a, b) {
   if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
@@ -82,7 +82,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
     const openKids = isMilestone ? childrenOf(item.id).filter((c) => c.status !== "completed").length : 0;
 
     return (
-      <div className={`mon-item is-${timing}${isMilestone ? " is-milestone" : ""}${nested ? " is-nested" : ""}`}>
+      <div className={`mon-item is-${timing} is-urg-${itemUrgencyLevel(item)}${isMilestone ? " is-milestone" : ""}${nested ? " is-nested" : ""}`}>
         <button
           type="button"
           className="mon-item-check"
@@ -188,7 +188,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
               {milestones.map((m) => {
                 const kids = childrenOf(m.id);
                 return (
-                  <section key={m.id} className={`mon-milestone is-${itemTiming(m)}`}>
+                  <section key={m.id} className={`mon-milestone is-${itemTiming(m)} is-urg-${itemUrgencyLevel(m)}`}>
                     {renderItem(m)}
                     {(kids.length > 0 || (canEdit && m.status !== "completed")) && (
                       <div className="mon-tree">
