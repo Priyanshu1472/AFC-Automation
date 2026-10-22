@@ -15,6 +15,7 @@ import Collapsible from "../ui/Collapsible";
 import Button from "../ui/Button";
 import Alert from "../ui/Alert";
 import ConfirmDialog from "../ui/ConfirmDialog";
+import Modal from "../ui/Modal";
 import { ListChecksIcon, PencilIcon, TrashIcon, CheckCircleIcon, ReceiptIcon, ClipboardListIcon, PaperclipIcon } from "../icons";
 import { ItemModal, CompleteItemModal, NoteModal } from "./ItemModals";
 import { fmtDate, formatINR, itemTiming, itemUrgencyLevel, dueLabel, needsInvoice, isItemInvoiced, itemBilled, deliverableNumbers, openMonitoringFile } from "../../lib/monitoring";
@@ -73,7 +74,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
     onChanged();
   }
 
-  function renderItem(item, nested = false) {
+  function renderItem(item, nested = false, parent = null) {
     const timing = itemTiming(item);
     const billed = itemBilled(item, clientInvoices, items);
     const invoiced = isItemInvoiced(item, clientInvoices, items);
@@ -146,7 +147,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
                 title={billed > 0 ? "Invoiced — can't be deleted" : "Delete"}
                 aria-label={`Delete ${item.title}`}
                 disabled={billed > 0}
-                onClick={() => setDialog({ type: "delete", item })}
+                onClick={() => (parent ? setDialog({ type: "delete_nested", item, parent }) : setDialog({ type: "delete", item }))}
               >
                 <TrashIcon />
               </button>
@@ -192,7 +193,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
                     {renderItem(m)}
                     {(kids.length > 0 || (canEdit && m.status !== "completed")) && (
                       <div className="mon-tree">
-                        {kids.map((d) => <div key={d.id} className="mon-tree-node">{renderItem(d, true)}</div>)}
+                        {kids.map((d) => <div key={d.id} className="mon-tree-node">{renderItem(d, true, m)}</div>)}
                         {canEdit && m.status !== "completed" && (
                           <div className="mon-tree-node mon-tree-add">
                             <button type="button" className="mon-add-link" onClick={() => setDialog({ type: "add", kind: "deliverable", parentId: m.id })}>
@@ -251,6 +252,22 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
           onConfirm={() => remove(dialog.item)}
           onCancel={close}
         />
+      )}
+      {dialog?.type === "delete_nested" && (
+        <Modal onClose={!busy ? close : undefined} size="sm" closeOnBackdrop={!busy}>
+          <Modal.Header title="Remove this deliverable?" onClose={!busy ? close : undefined} />
+          <Modal.Body>
+            <p style={{ margin: 0, color: "var(--text-secondary)" }}>
+              “{dialog.item.title}” is under the milestone “{dialog.parent.title}”. You can remove just this deliverable, or delete the whole milestone
+              {childrenOf(dialog.parent.id).length > 1 ? ` and all ${childrenOf(dialog.parent.id).length} of its deliverables` : ""}.
+            </p>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" disabled={busy} onClick={close}>Cancel</Button>
+            <Button variant="primary" loading={busy} onClick={() => remove(dialog.item)}>Remove from Milestone</Button>
+            <Button variant="danger" loading={busy} onClick={() => remove(dialog.parent)}>Delete Milestone</Button>
+          </Modal.Footer>
+        </Modal>
       )}
     </Card>
   );
