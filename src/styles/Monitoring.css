@@ -8,6 +8,10 @@
   --deliverable-red-border:  #FF4D4F;
   --deliverable-red-text:    #FFFFFF;
 
+  --deliverable-amber-bg:     #C2410C;
+  --deliverable-amber-border: #FB923C;
+  --deliverable-amber-text:   #FFFFFF;
+
   --deliverable-yellow-bg:     #B45309;
   --deliverable-yellow-border: #FFC857;
   --deliverable-yellow-text:   #FFFFFF;
@@ -20,6 +24,10 @@
   --deliverable-red-bg:      #7F1D1D;
   --deliverable-red-border:  #FF4D4F;
   --deliverable-red-text:    #FEE2E2;
+
+  --deliverable-amber-bg:     #7C2D12;
+  --deliverable-amber-border: #FB923C;
+  --deliverable-amber-text:   #FFEDD5;
 
   --deliverable-yellow-bg:     #713F12;
   --deliverable-yellow-border: #FFC857;
@@ -153,17 +161,20 @@
 }
 .mon-milestone.is-loose { border-left-color: var(--border-default); }
 /* Urgency, by how much of the item's own creation-to-due window has
-   elapsed: green first half, yellow next quarter, red last quarter (and
-   overdue) — see itemUrgencyLevel(). "done" (completed) stays green. Kept
-   wide (8px/6px) so it reads at a glance, not just on close inspection. */
-/* Green/done is deliberately left off milestones — only their red/yellow
-   states get colored; milestones otherwise keep the plain card look. */
+   elapsed: green up to 50%, yellow 50-70%, amber 70-100%, red once the due
+   date has actually passed — see itemUrgencyLevel(). "done" (completed)
+   stays green. Kept wide (8px/6px) so it reads at a glance. */
+/* Green/done is deliberately left off milestones — only their yellow/
+   amber/red states get colored; milestones otherwise keep the plain card
+   look. */
 .mon-milestone.is-urg-yellow { border-left-color: var(--deliverable-yellow-border); background: var(--deliverable-yellow-bg); }
+.mon-milestone.is-urg-amber  { border-left-color: var(--deliverable-amber-border);  background: var(--deliverable-amber-bg); }
 .mon-milestone.is-urg-red    { border-left-color: var(--deliverable-red-border);    background: var(--deliverable-red-bg); }
 
 .mon-item:not(.is-milestone).is-urg-green,
 .mon-item:not(.is-milestone).is-urg-done   { border-left: 6px solid var(--deliverable-green-border);  background: var(--deliverable-green-bg); }
 .mon-item:not(.is-milestone).is-urg-yellow { border-left: 6px solid var(--deliverable-yellow-border); background: var(--deliverable-yellow-bg); }
+.mon-item:not(.is-milestone).is-urg-amber  { border-left: 6px solid var(--deliverable-amber-border);  background: var(--deliverable-amber-bg); }
 .mon-item:not(.is-milestone).is-urg-red    { border-left: 6px solid var(--deliverable-red-border);    background: var(--deliverable-red-bg); }
 
 /* Each state's own text color (per-theme, see the --deliverable-* tokens
@@ -178,6 +189,9 @@
 :is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-title,
 :is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-desc,
 :is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-note { color: var(--deliverable-yellow-text); }
+:is(.mon-milestone, .mon-item).is-urg-amber .mon-item-title,
+:is(.mon-milestone, .mon-item).is-urg-amber .mon-item-desc,
+:is(.mon-milestone, .mon-item).is-urg-amber .mon-item-note { color: var(--deliverable-amber-text); }
 :is(.mon-milestone, .mon-item).is-urg-red .mon-item-title,
 :is(.mon-milestone, .mon-item).is-urg-red .mon-item-desc,
 :is(.mon-milestone, .mon-item).is-urg-red .mon-item-note { color: var(--deliverable-red-text); }

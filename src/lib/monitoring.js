@@ -85,22 +85,24 @@ export function dueLabel(item) {
 
 // Color-codes a milestone/deliverable by how much of its own window — from
 // when it was added to its due date — has elapsed: green up to 50%,
-// yellow from 50-70%, red from 70% onward (and anything overdue).
-// Relative to the item's own timeline rather than a fixed day count, so a
-// 6-month milestone and a 2-week deliverable each get their own 50/20/30
-// split instead of sharing one absolute threshold.
+// yellow 50-70%, amber 70-100%, and red once the due date has actually
+// passed (overdue, not just close). Relative to the item's own timeline
+// rather than a fixed day count, so a 6-month milestone and a 2-week
+// deliverable each get their own split instead of sharing one absolute
+// threshold.
 export function itemUrgencyLevel(item) {
   if (item.status === "completed") return "done";
   if (!item.due_date || !item.created_at) return "none";
   const due = new Date(`${item.due_date}T00:00:00`);
   const created = new Date(item.created_at);
-  const totalMs = due - created;
-  if (totalMs <= 0) return daysUntil(item.due_date) < 0 ? "red" : "green";
   const today = new Date(`${todayISO()}T00:00:00`);
+  if (today > due) return "red";
+  const totalMs = due - created;
+  if (totalMs <= 0) return "amber";
   const frac = (today - created) / totalMs;
   if (frac < 0.5) return "green";
   if (frac < 0.7) return "yellow";
-  return "red";
+  return "amber";
 }
 
 // Client invoices are always loaded with their lines — one per milestone /
