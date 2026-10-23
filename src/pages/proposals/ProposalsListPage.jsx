@@ -170,7 +170,6 @@ export default function ProposalsListPage() {
             <div className="page-title-row">
               <div>
                 <h1>Proposal Preparation</h1>
-                <p>MD-approved leads ready for fee notes, documents, and submission.</p>
               </div>
             </div>
           </div>

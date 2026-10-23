@@ -125,7 +125,6 @@ export default function FinancialsPage() {
             <div className="page-title-row">
               <div>
                 <h1>Financials</h1>
-                <p>Client invoices, payments received, and Business Partner invoices and payouts.</p>
               </div>
             </div>
           </div>

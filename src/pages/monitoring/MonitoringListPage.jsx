@@ -108,7 +108,6 @@ export default function MonitoringListPage() {
             <div className="page-title-row">
               <div>
                 <h1>Monitoring</h1>
-                <p>Awarded projects — MoUs, milestones, deliverables and their deadlines.</p>
               </div>
             </div>
           </div>
