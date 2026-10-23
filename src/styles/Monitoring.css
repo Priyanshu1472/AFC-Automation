@@ -156,8 +156,8 @@
    elapsed: green first half, yellow next quarter, red last quarter (and
    overdue) — see itemUrgencyLevel(). "done" (completed) stays green. Kept
    wide (8px/6px) so it reads at a glance, not just on close inspection. */
-.mon-milestone.is-urg-green,
-.mon-milestone.is-urg-done   { border-left-color: var(--deliverable-green-border);  background: var(--deliverable-green-bg); }
+/* Green/done is deliberately left off milestones — only their red/yellow
+   states get colored; milestones otherwise keep the plain card look. */
 .mon-milestone.is-urg-yellow { border-left-color: var(--deliverable-yellow-border); background: var(--deliverable-yellow-bg); }
 .mon-milestone.is-urg-red    { border-left-color: var(--deliverable-red-border);    background: var(--deliverable-red-bg); }
 
@@ -169,12 +169,12 @@
 /* Each state's own text color (per-theme, see the --deliverable-* tokens
    above) instead of inheriting --text-primary, which is white in dark
    mode and unreadable against these backgrounds. */
-:is(.mon-milestone, .mon-item).is-urg-green .mon-item-title,
-:is(.mon-milestone, .mon-item).is-urg-green .mon-item-desc,
-:is(.mon-milestone, .mon-item).is-urg-green .mon-item-note,
-:is(.mon-milestone, .mon-item).is-urg-done .mon-item-title,
-:is(.mon-milestone, .mon-item).is-urg-done .mon-item-desc,
-:is(.mon-milestone, .mon-item).is-urg-done .mon-item-note { color: var(--deliverable-green-text); }
+.mon-item:not(.is-milestone).is-urg-green .mon-item-title,
+.mon-item:not(.is-milestone).is-urg-green .mon-item-desc,
+.mon-item:not(.is-milestone).is-urg-green .mon-item-note,
+.mon-item:not(.is-milestone).is-urg-done .mon-item-title,
+.mon-item:not(.is-milestone).is-urg-done .mon-item-desc,
+.mon-item:not(.is-milestone).is-urg-done .mon-item-note { color: var(--deliverable-green-text); }
 :is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-title,
 :is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-desc,
 :is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-note { color: var(--deliverable-yellow-text); }
