@@ -4,17 +4,17 @@
    (not derived from the brand tokens) so red/yellow/green stay visibly
    distinct and legible in both light and dark mode. */
 :root {
-  --deliverable-red-bg:      #FFB3B3;
-  --deliverable-red-border:  #D50000;
-  --deliverable-red-text:    #7F0000;
+  --deliverable-red-bg:      #B91C1C;
+  --deliverable-red-border:  #FF4D4F;
+  --deliverable-red-text:    #FFFFFF;
 
-  --deliverable-yellow-bg:     #FFD166;
-  --deliverable-yellow-border: #B45309;
-  --deliverable-yellow-text:   #713F12;
+  --deliverable-yellow-bg:     #B45309;
+  --deliverable-yellow-border: #FFC857;
+  --deliverable-yellow-text:   #FFFFFF;
 
-  --deliverable-green-bg:     #86D9A5;
-  --deliverable-green-border: #087A3E;
-  --deliverable-green-text:   #064E2B;
+  --deliverable-green-bg:     #087A3E;
+  --deliverable-green-border: #39E079;
+  --deliverable-green-text:   #FFFFFF;
 }
 [data-theme="dark"] {
   --deliverable-red-bg:      #7F1D1D;
@@ -161,29 +161,26 @@
 .mon-milestone.is-urg-yellow { border-left-color: var(--deliverable-yellow-border); background: var(--deliverable-yellow-bg); }
 .mon-milestone.is-urg-red    { border-left-color: var(--deliverable-red-border);    background: var(--deliverable-red-bg); }
 
-/* Deliverables: the whole card outline (not just the left edge) in the
-   urgency color, no fill — brightening further on hover so the state
-   stands out when you're looking right at that row (mixed toward white,
-   which reads as "brighter" in both themes). */
 .mon-item:not(.is-milestone).is-urg-green,
-.mon-item:not(.is-milestone).is-urg-done   { border: 2px solid var(--deliverable-green-border); border-radius: var(--radius-md); transition: border-color var(--duration-fast) var(--ease-out); }
-.mon-item:not(.is-milestone).is-urg-yellow { border: 2px solid var(--deliverable-yellow-border); border-radius: var(--radius-md); transition: border-color var(--duration-fast) var(--ease-out); }
-.mon-item:not(.is-milestone).is-urg-red    { border: 2px solid var(--deliverable-red-border); border-radius: var(--radius-md); transition: border-color var(--duration-fast) var(--ease-out); }
+.mon-item:not(.is-milestone).is-urg-done   { border-left: 6px solid var(--deliverable-green-border);  background: var(--deliverable-green-bg); }
+.mon-item:not(.is-milestone).is-urg-yellow { border-left: 6px solid var(--deliverable-yellow-border); background: var(--deliverable-yellow-bg); }
+.mon-item:not(.is-milestone).is-urg-red    { border-left: 6px solid var(--deliverable-red-border);    background: var(--deliverable-red-bg); }
 
-.mon-item:not(.is-milestone).is-urg-green:hover,
-.mon-item:not(.is-milestone).is-urg-done:hover   { border-color: color-mix(in srgb, var(--deliverable-green-border) 65%, white); }
-.mon-item:not(.is-milestone).is-urg-yellow:hover { border-color: color-mix(in srgb, var(--deliverable-yellow-border) 65%, white); }
-.mon-item:not(.is-milestone).is-urg-red:hover    { border-color: color-mix(in srgb, var(--deliverable-red-border) 65%, white); }
-
-/* Milestones keep their full fill (see above), so they still need each
-   state's own text color for contrast, per-theme (see --deliverable-*
-   tokens above) instead of inheriting --text-primary (white in dark mode). */
-.mon-milestone.is-urg-yellow .mon-item-title,
-.mon-milestone.is-urg-yellow .mon-item-desc,
-.mon-milestone.is-urg-yellow .mon-item-note { color: var(--deliverable-yellow-text); }
-.mon-milestone.is-urg-red .mon-item-title,
-.mon-milestone.is-urg-red .mon-item-desc,
-.mon-milestone.is-urg-red .mon-item-note { color: var(--deliverable-red-text); }
+/* Each state's own text color (per-theme, see the --deliverable-* tokens
+   above) instead of inheriting --text-primary, which is white in dark
+   mode and unreadable against these backgrounds. */
+.mon-item:not(.is-milestone).is-urg-green .mon-item-title,
+.mon-item:not(.is-milestone).is-urg-green .mon-item-desc,
+.mon-item:not(.is-milestone).is-urg-green .mon-item-note,
+.mon-item:not(.is-milestone).is-urg-done .mon-item-title,
+.mon-item:not(.is-milestone).is-urg-done .mon-item-desc,
+.mon-item:not(.is-milestone).is-urg-done .mon-item-note { color: var(--deliverable-green-text); }
+:is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-title,
+:is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-desc,
+:is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-note { color: var(--deliverable-yellow-text); }
+:is(.mon-milestone, .mon-item).is-urg-red .mon-item-title,
+:is(.mon-milestone, .mon-item).is-urg-red .mon-item-desc,
+:is(.mon-milestone, .mon-item).is-urg-red .mon-item-note { color: var(--deliverable-red-text); }
 .mon-group-label {
   padding: var(--space-2) var(--space-4) var(--space-1);
   font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary);
@@ -194,8 +191,6 @@
   padding: var(--space-3) var(--space-4);
 }
 .mon-loose-node + .mon-loose-node .mon-item { border-top: 1px solid var(--border-subtle); }
-.mon-loose-node { margin-bottom: var(--space-2); }
-.mon-loose-node:last-child { margin-bottom: 0; }
 
 /* The tree: starts under the milestone's check circle (16px pad + 13px =
    circle centre) and indents every deliverable past it. */
