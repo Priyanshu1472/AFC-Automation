@@ -179,7 +179,6 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
     <Card>
       <Collapsible
         title="Milestones & Deliverables"
-        subtitle="As per the MoU — tracked against their due dates."
         icon={<ListChecksIcon />}
         expandable={false}
         action={canEdit ? (
