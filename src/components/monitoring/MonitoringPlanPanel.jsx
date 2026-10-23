@@ -122,7 +122,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
               <span className={`mon-tag is-${timing}`}>{item.due_date ? `${fmtDate(item.due_date)} · ${dueLabel(item)}` : "No due date"}</span>
             )}
             {(item.invoice_on_completion || billed > 0) && (
-              <span className={`mon-tag ${invoiced ? "is-done" : pendingInvoice ? "is-overdue" : "is-billable"}`}>
+              <span className={`mon-tag ${invoiced ? "is-billable" : pendingInvoice ? "is-overdue" : "is-billable"}`}>
                 <ReceiptIcon />{" "}
                 {invoiced ? "Invoiced" : billed > 0 ? `Invoiced ${formatINR(billed)}` : pendingInvoice ? "Invoice to raise" : "Billable"}
                 {Number(item.invoice_amount) > 0 ? `${billed > 0 && !invoiced ? " of " : " · "}${item.invoice_pct != null ? `${item.invoice_pct}% · ` : ""}${formatINR(item.invoice_amount)}` : ""}
