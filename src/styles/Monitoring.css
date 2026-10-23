@@ -161,18 +161,19 @@
 .mon-milestone.is-urg-yellow { border-left-color: var(--deliverable-yellow-border); background: var(--deliverable-yellow-bg); }
 .mon-milestone.is-urg-red    { border-left-color: var(--deliverable-red-border);    background: var(--deliverable-red-bg); }
 
-/* Deliverables: border only (no full-card fill), brightening further on
-   hover so the state stands out when you're looking right at that row —
-   mixed toward white, which reads as "brighter" in both themes. */
+/* Deliverables: the whole card outline (not just the left edge) in the
+   urgency color, no fill — brightening further on hover so the state
+   stands out when you're looking right at that row (mixed toward white,
+   which reads as "brighter" in both themes). */
 .mon-item:not(.is-milestone).is-urg-green,
-.mon-item:not(.is-milestone).is-urg-done   { border-left: 6px solid var(--deliverable-green-border); transition: border-left-color var(--duration-fast) var(--ease-out); }
-.mon-item:not(.is-milestone).is-urg-yellow { border-left: 6px solid var(--deliverable-yellow-border); transition: border-left-color var(--duration-fast) var(--ease-out); }
-.mon-item:not(.is-milestone).is-urg-red    { border-left: 6px solid var(--deliverable-red-border); transition: border-left-color var(--duration-fast) var(--ease-out); }
+.mon-item:not(.is-milestone).is-urg-done   { border: 2px solid var(--deliverable-green-border); border-radius: var(--radius-md); transition: border-color var(--duration-fast) var(--ease-out); }
+.mon-item:not(.is-milestone).is-urg-yellow { border: 2px solid var(--deliverable-yellow-border); border-radius: var(--radius-md); transition: border-color var(--duration-fast) var(--ease-out); }
+.mon-item:not(.is-milestone).is-urg-red    { border: 2px solid var(--deliverable-red-border); border-radius: var(--radius-md); transition: border-color var(--duration-fast) var(--ease-out); }
 
 .mon-item:not(.is-milestone).is-urg-green:hover,
-.mon-item:not(.is-milestone).is-urg-done:hover   { border-left-color: color-mix(in srgb, var(--deliverable-green-border) 65%, white); }
-.mon-item:not(.is-milestone).is-urg-yellow:hover { border-left-color: color-mix(in srgb, var(--deliverable-yellow-border) 65%, white); }
-.mon-item:not(.is-milestone).is-urg-red:hover    { border-left-color: color-mix(in srgb, var(--deliverable-red-border) 65%, white); }
+.mon-item:not(.is-milestone).is-urg-done:hover   { border-color: color-mix(in srgb, var(--deliverable-green-border) 65%, white); }
+.mon-item:not(.is-milestone).is-urg-yellow:hover { border-color: color-mix(in srgb, var(--deliverable-yellow-border) 65%, white); }
+.mon-item:not(.is-milestone).is-urg-red:hover    { border-color: color-mix(in srgb, var(--deliverable-red-border) 65%, white); }
 
 /* Milestones keep their full fill (see above), so they still need each
    state's own text color for contrast, per-theme (see --deliverable-*
@@ -193,6 +194,8 @@
   padding: var(--space-3) var(--space-4);
 }
 .mon-loose-node + .mon-loose-node .mon-item { border-top: 1px solid var(--border-subtle); }
+.mon-loose-node { margin-bottom: var(--space-2); }
+.mon-loose-node:last-child { margin-bottom: 0; }
 
 /* The tree: starts under the milestone's check circle (16px pad + 13px =
    circle centre) and indents every deliverable past it. */
