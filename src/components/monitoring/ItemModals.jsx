@@ -8,13 +8,15 @@ import Alert from "../ui/Alert";
 import Select from "../ui/Select";
 import DatePickerCalendar from "../ui/DatePickerCalendar";
 import { Field, AmountInput, PercentInput } from "../financials/InvoiceModals";
-import { PaperclipIcon } from "../icons";
+import { PaperclipIcon, ImageIcon, TrashIcon } from "../icons";
 import {
   formatINR, roundMoney, fetchProjectMoney, allocatedAmount, itemBilled,
-  MONITORING_BUCKET, safeFileName, uploadMonitoringFile,
+  MONITORING_BUCKET, safeFileName, uploadMonitoringFile, openMonitoringFile,
 } from "../../lib/monitoring";
 
 const FILE_ACCEPT = ".pdf,.doc,.docx";
+const IMAGE_ACCEPT = "image/*";
+const isImageFile = (name) => /\.(png|jpe?g|gif|webp|bmp|heic|heif)$/i.test(name || "");
 
 export function ItemModal({ projectId, kind, item, milestones, defaultParentId = "", onClose, onSaved }) {
   const editing = !!item;
@@ -280,6 +282,113 @@ export function NoteModal({ item, onClose, onSaved }) {
       <Modal.Footer>
         <Button variant="secondary" disabled={saving} onClick={onClose}>Cancel</Button>
         <Button loading={saving} onClick={save}>Save</Button>
+      </Modal.Footer>
+    </Modal>
+  );
+}
+
+// Photos attached to a deliverable — any number, uploaded any time (not
+// just when the deliverable is created), with signed-URL thumbnails and a
+// per-image remove. Stays open across uploads/removes (onUploaded only
+// refetches — the caller closes it separately) so adding several photos
+// doesn't mean reopening the dialog each time.
+export function ImagesModal({ projectId, item, documents, onClose, onUploaded }) {
+  const images = documents.filter((d) => d.item_id === item.id && isImageFile(d.file_name));
+  const [previews, setPreviews] = useState({});
+  const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [error, setError] = useState("");
+  const fileInputRef = useRef(null);
+  const imageIds = images.map((d) => d.id).join(",");
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const entries = await Promise.all(images.map(async (d) => {
+        try {
+          const { data } = await supabase.storage.from(MONITORING_BUCKET).createSignedUrl(d.file_path, 300);
+          return [d.id, data?.signedUrl || null];
+        } catch {
+          return [d.id, null];
+        }
+      }));
+      if (live) setPreviews(Object.fromEntries(entries));
+    })();
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageIds]);
+
+  async function handleFiles(files) {
+    if (!files.length) return;
+    setUploading(true);
+    setError("");
+    for (const file of files) {
+      try {
+        const meta = await uploadMonitoringFile(`${projectId}/docs/${Date.now()}_${safeFileName(file.name)}`, file);
+        const { error: insErr } = await supabase.from("monitoring_documents").insert({
+          project_id: projectId, item_id: item.id, category: "deliverable", title: item.title, ...meta,
+        });
+        if (insErr) {
+          await supabase.storage.from(MONITORING_BUCKET).remove([meta.file_path]);
+          setError(insErr.message);
+        }
+      } catch (err) {
+        setError(err.message);
+      }
+    }
+    setUploading(false);
+    onUploaded();
+  }
+
+  async function removeImage(doc) {
+    setDeletingId(doc.id);
+    setError("");
+    const { error: delErr } = await supabase.from("monitoring_documents").delete().eq("id", doc.id);
+    if (delErr) { setError(delErr.message); setDeletingId(null); return; }
+    await supabase.storage.from(MONITORING_BUCKET).remove([doc.file_path]);
+    setDeletingId(null);
+    onUploaded();
+  }
+
+  return (
+    <Modal onClose={onClose} closeOnBackdrop>
+      <Modal.Header title="Photos" subtitle={item.title} onClose={onClose} />
+      <Modal.Body>
+        {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
+        <input
+          ref={fileInputRef} type="file" accept={IMAGE_ACCEPT} multiple style={{ display: "none" }}
+          onChange={(e) => { handleFiles([...(e.target.files || [])]); e.target.value = ""; }}
+        />
+        <Button type="button" variant="secondary" size="sm" icon={<ImageIcon />} loading={uploading} onClick={() => fileInputRef.current?.click()}>
+          {uploading ? "Uploading…" : "Add Images"}
+        </Button>
+
+        {images.length === 0 ? (
+          <p className="mon-empty" style={{ marginTop: "var(--space-3)" }}>No images uploaded yet.</p>
+        ) : (
+          <div className="mon-image-grid">
+            {images.map((d) => (
+              <div key={d.id} className="mon-image-tile">
+                {previews[d.id] ? (
+                  <button type="button" className="mon-image-tile-view" onClick={() => openMonitoringFile(d.file_path)} title={d.file_name}>
+                    <img src={previews[d.id]} alt={d.file_name} />
+                  </button>
+                ) : (
+                  <div className="mon-image-tile-loading" aria-hidden="true" />
+                )}
+                <button
+                  type="button" className="mon-image-tile-remove" title="Remove" aria-label={`Remove ${d.file_name}`}
+                  disabled={deletingId === d.id} onClick={() => removeImage(d)}
+                >
+                  <TrashIcon />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onClose}>Close</Button>
       </Modal.Footer>
     </Modal>
   );

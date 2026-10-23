@@ -16,8 +16,8 @@ import Button from "../ui/Button";
 import Alert from "../ui/Alert";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import Modal from "../ui/Modal";
-import { ListChecksIcon, PencilIcon, TrashIcon, CheckCircleIcon, ReceiptIcon, ClipboardListIcon, PaperclipIcon } from "../icons";
-import { ItemModal, CompleteItemModal, NoteModal } from "./ItemModals";
+import { ListChecksIcon, PencilIcon, TrashIcon, CheckCircleIcon, ReceiptIcon, ClipboardListIcon, PaperclipIcon, ImageIcon } from "../icons";
+import { ItemModal, CompleteItemModal, NoteModal, ImagesModal } from "./ItemModals";
 import { fmtDate, formatINR, itemTiming, itemUrgencyLevel, dueLabel, needsInvoice, isItemInvoiced, itemBilled, deliverableNumbers, openMonitoringFile } from "../../lib/monitoring";
 
 function byDue(a, b) {
@@ -150,6 +150,9 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
               {!isMilestone && (
                 <button type="button" className="pp-icon-btn" title={item.remarks ? "Edit notes" : "Add note"} aria-label={`${item.remarks ? "Edit" : "Add"} notes for ${item.title}`} onClick={() => setDialog({ type: "note", item })}><ClipboardListIcon /></button>
               )}
+              {!isMilestone && (
+                <button type="button" className="pp-icon-btn" title="Photos" aria-label={`Photos for ${item.title}`} onClick={() => setDialog({ type: "images", item })}><ImageIcon /></button>
+              )}
               <button type="button" className="pp-icon-btn" title="Edit" aria-label={`Edit ${item.title}`} onClick={() => setDialog({ type: "edit", item })}><PencilIcon /></button>
               <button
                 type="button"
@@ -240,6 +243,9 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
       )}
       {dialog?.type === "complete" && <CompleteItemModal item={dialog.item} openChildren={dialog.openKids} onClose={close} onSaved={saved} />}
       {dialog?.type === "note" && <NoteModal item={dialog.item} onClose={close} onSaved={saved} />}
+      {dialog?.type === "images" && (
+        <ImagesModal projectId={projectId} item={dialog.item} documents={documents} onClose={close} onUploaded={onChanged} />
+      )}
       {dialog?.type === "reopen" && (
         <ConfirmDialog
           title="Reopen this item?"

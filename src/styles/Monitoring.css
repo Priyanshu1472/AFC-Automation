@@ -394,6 +394,30 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .mon-file-pick-name svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* ── Deliverable photo gallery (ImagesModal) ───────────────────────────── */
+.mon-image-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.mon-image-tile { position: relative; aspect-ratio: 1; border-radius: var(--radius-md); overflow: hidden; }
+.mon-image-tile-view {
+  display: block; width: 100%; height: 100%; padding: 0; border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md); background: var(--bg-surface-2); cursor: pointer; overflow: hidden;
+}
+.mon-image-tile-view img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mon-image-tile-loading {
+  width: 100%; height: 100%; border-radius: var(--radius-md); background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+}
+.mon-image-tile-remove {
+  position: absolute; top: 4px; right: 4px; width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: 50%; cursor: pointer;
+  background: rgba(0, 0, 0, 0.55); color: #fff;
+}
+.mon-image-tile-remove:hover { background: var(--danger); }
+.mon-image-tile-remove svg { width: 13px; height: 13px; }
 .mon-modal-lead { margin: 0 0 var(--space-4); font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.6; }
 .mon-request-note {
   margin: 0 0 var(--space-4); padding: var(--space-2) var(--space-3);
