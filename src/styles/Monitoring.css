@@ -1,5 +1,35 @@
 /* Monitoring + Financials (and the BP's invoice card on Home). */
 
+/* Deliverable/milestone urgency traffic-light colors — fixed per theme
+   (not derived from the brand tokens) so red/yellow/green stay visibly
+   distinct and legible in both light and dark mode. */
+:root {
+  --deliverable-red-bg:      #FFB3B3;
+  --deliverable-red-border:  #D50000;
+  --deliverable-red-text:    #7F0000;
+
+  --deliverable-yellow-bg:     #FFD166;
+  --deliverable-yellow-border: #B45309;
+  --deliverable-yellow-text:   #713F12;
+
+  --deliverable-green-bg:     #86D9A5;
+  --deliverable-green-border: #087A3E;
+  --deliverable-green-text:   #064E2B;
+}
+[data-theme="dark"] {
+  --deliverable-red-bg:      #7F1D1D;
+  --deliverable-red-border:  #FF4D4F;
+  --deliverable-red-text:    #FEE2E2;
+
+  --deliverable-yellow-bg:     #713F12;
+  --deliverable-yellow-border: #FFC857;
+  --deliverable-yellow-text:   #FEF3C7;
+
+  --deliverable-green-bg:     #064E2B;
+  --deliverable-green-border: #39E079;
+  --deliverable-green-text:   #DCFCE7;
+}
+
 .mon-empty { margin: 0; color: var(--text-tertiary); font-size: var(--text-sm); }
 .mon-link {
   display: inline-flex; align-items: center; gap: 4px;
@@ -126,25 +156,28 @@
    elapsed: green first half, yellow next quarter, red last quarter (and
    overdue) — see itemUrgencyLevel(). "done" (completed) stays green. Kept
    wide (8px/6px) so it reads at a glance, not just on close inspection. */
-.mon-milestone.is-urg-green  { border-left-color: #087A3E; background: #86D9A5; }
-.mon-milestone.is-urg-yellow { border-left-color: #B45309; background: #FFD166; }
-.mon-milestone.is-urg-red    { border-left-color: #D50000; background: #FFB3B3; }
+.mon-milestone.is-urg-green  { border-left-color: var(--deliverable-green-border);  background: var(--deliverable-green-bg); }
+.mon-milestone.is-urg-yellow { border-left-color: var(--deliverable-yellow-border); background: var(--deliverable-yellow-bg); }
+.mon-milestone.is-urg-red    { border-left-color: var(--deliverable-red-border);    background: var(--deliverable-red-bg); }
 .mon-milestone.is-urg-done   { border-left-color: var(--success); }
 
-.mon-item:not(.is-milestone).is-urg-green  { border-left: 6px solid #087A3E; background: #86D9A5; }
-.mon-item:not(.is-milestone).is-urg-yellow { border-left: 6px solid #B45309; background: #FFD166; }
-.mon-item:not(.is-milestone).is-urg-red    { border-left: 6px solid #D50000; background: #FFB3B3; }
+.mon-item:not(.is-milestone).is-urg-green  { border-left: 6px solid var(--deliverable-green-border);  background: var(--deliverable-green-bg); }
+.mon-item:not(.is-milestone).is-urg-yellow { border-left: 6px solid var(--deliverable-yellow-border); background: var(--deliverable-yellow-bg); }
+.mon-item:not(.is-milestone).is-urg-red    { border-left: 6px solid var(--deliverable-red-border);    background: var(--deliverable-red-bg); }
 .mon-item:not(.is-milestone).is-urg-done   { border-left: 6px solid var(--success); }
 
-/* These are fixed, deliberately bright traffic-light colors (not the
-   theme's usual tokens) so they stay legible, their text is pinned to a
-   dark gray in both themes rather than inheriting --text-primary (white
-   in dark mode, which would be unreadable here). */
-:is(.mon-milestone, .mon-item):is(.is-urg-green, .is-urg-yellow, .is-urg-red) .mon-item-title,
-:is(.mon-milestone, .mon-item):is(.is-urg-green, .is-urg-yellow, .is-urg-red) .mon-item-desc,
-:is(.mon-milestone, .mon-item):is(.is-urg-green, .is-urg-yellow, .is-urg-red) .mon-item-note {
-  color: #1F2937;
-}
+/* Each state's own text color (per-theme, see the --deliverable-* tokens
+   above) instead of inheriting --text-primary, which is white in dark
+   mode and unreadable against these backgrounds. */
+:is(.mon-milestone, .mon-item).is-urg-green .mon-item-title,
+:is(.mon-milestone, .mon-item).is-urg-green .mon-item-desc,
+:is(.mon-milestone, .mon-item).is-urg-green .mon-item-note { color: var(--deliverable-green-text); }
+:is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-title,
+:is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-desc,
+:is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-note { color: var(--deliverable-yellow-text); }
+:is(.mon-milestone, .mon-item).is-urg-red .mon-item-title,
+:is(.mon-milestone, .mon-item).is-urg-red .mon-item-desc,
+:is(.mon-milestone, .mon-item).is-urg-red .mon-item-note { color: var(--deliverable-red-text); }
 .mon-group-label {
   padding: var(--space-2) var(--space-4) var(--space-1);
   font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary);
