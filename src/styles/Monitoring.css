@@ -195,6 +195,38 @@
 :is(.mon-milestone, .mon-item).is-urg-red .mon-item-title,
 :is(.mon-milestone, .mon-item).is-urg-red .mon-item-desc,
 :is(.mon-milestone, .mon-item).is-urg-red .mon-item-note { color: var(--deliverable-red-text); }
+
+/* The corner icon buttons (note/edit/delete) and the "View Images" link
+   were barely visible against these saturated light-theme backgrounds —
+   each state's own text color (same tokens as above) gives them real
+   contrast instead of the default muted --text-secondary. Dark theme's
+   --text-secondary is already light enough to read fine here, so this is
+   light-theme only. */
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-green .pp-icon-btn,
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-done .pp-icon-btn,
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-green .mon-link,
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-done .mon-link {
+  color: var(--deliverable-green-text); border-color: color-mix(in srgb, var(--deliverable-green-text) 50%, transparent); background: color-mix(in srgb, var(--deliverable-green-text) 15%, transparent);
+}
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-yellow .pp-icon-btn,
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-yellow .mon-link {
+  color: var(--deliverable-yellow-text); border-color: color-mix(in srgb, var(--deliverable-yellow-text) 40%, transparent); background: color-mix(in srgb, var(--deliverable-yellow-text) 10%, transparent);
+}
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-amber .pp-icon-btn,
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-amber .mon-link {
+  color: var(--deliverable-amber-text); border-color: color-mix(in srgb, var(--deliverable-amber-text) 50%, transparent); background: color-mix(in srgb, var(--deliverable-amber-text) 15%, transparent);
+}
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-red .pp-icon-btn,
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-red .mon-link {
+  color: var(--deliverable-red-text); border-color: color-mix(in srgb, var(--deliverable-red-text) 50%, transparent); background: color-mix(in srgb, var(--deliverable-red-text) 15%, transparent);
+}
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-green .pp-icon-btn:hover,
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-done .pp-icon-btn:hover,
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-yellow .pp-icon-btn:hover,
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-amber .pp-icon-btn:hover,
+:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-red .pp-icon-btn:hover {
+  background: color-mix(in srgb, currentColor 25%, transparent);
+}
 .mon-group-label {
   padding: var(--space-2) var(--space-4) var(--space-1);
   font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary);
