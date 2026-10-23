@@ -139,6 +139,13 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
               <PaperclipIcon /> {d.file_name}
             </button>
           ))}
+          {canEdit && !isMilestone && (
+            <div className="mon-item-images-row">
+              <button type="button" className="mon-link" onClick={() => setDialog({ type: "images", item })}>
+                <ImageIcon /> View Images
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="mon-item-actions">
@@ -149,9 +156,6 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
             <>
               {!isMilestone && (
                 <button type="button" className="pp-icon-btn" title={item.remarks ? "Edit notes" : "Add note"} aria-label={`${item.remarks ? "Edit" : "Add"} notes for ${item.title}`} onClick={() => setDialog({ type: "note", item })}><ClipboardListIcon /></button>
-              )}
-              {!isMilestone && (
-                <button type="button" className="pp-icon-btn" title="Photos" aria-label={`Photos for ${item.title}`} onClick={() => setDialog({ type: "images", item })}><ImageIcon /></button>
               )}
               <button type="button" className="pp-icon-btn" title="Edit" aria-label={`Edit ${item.title}`} onClick={() => setDialog({ type: "edit", item })}><PencilIcon /></button>
               <button

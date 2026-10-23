@@ -248,6 +248,9 @@
 .mon-item-desc { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); white-space: pre-wrap; }
 .mon-item-note { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); font-style: italic; }
 .mon-item-file { margin-top: 4px; font-size: var(--text-xs); }
+.mon-item-images-row { display: flex; justify-content: flex-end; margin-top: var(--space-2); }
+.mon-item-images-row .mon-link { font-size: var(--text-xs); font-weight: 600; }
+.mon-item-images-row svg { width: 13px; height: 13px; }
 .mon-item-meta { display: flex; flex-wrap: wrap; gap: 6px; }
 .mon-item-actions { display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 
