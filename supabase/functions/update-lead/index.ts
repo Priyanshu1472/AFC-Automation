@@ -33,6 +33,7 @@ const MAGIC: Record<string, number[]> = {
   "application/pdf": [0x25, 0x50, 0x44, 0x46],
   "application/msword": [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1],
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [0x50, 0x4b, 0x03, 0x04],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [0x50, 0x4b, 0x03, 0x04],
 };
 
 function clean(val: FormDataEntryValue | null): string {
@@ -43,7 +44,7 @@ function clean(val: FormDataEntryValue | null): string {
 
 async function validateDocument(file: File): Promise<string> {
   const magic = MAGIC[file.type];
-  if (!magic) return `"${file.name}" must be a PDF or Word document.`;
+  if (!magic) return `"${file.name}" must be a PDF, Word, or Excel document.`;
   if (file.size > MAX_FILE_SIZE) return `"${file.name}" exceeds the 10 MB limit.`;
   if (file.size === 0) return `"${file.name}" is empty.`;
   const bytes = new Uint8Array(await file.slice(0, magic.length).arrayBuffer());

@@ -33,7 +33,7 @@ const SOURCE_CHOICES = [
   { value: "ba", label: "BP Source", desc: "Brought in by a Business Partner" },
   { value: "suo_moto", label: "Suo Moto", desc: "Our own unsolicited proposal" },
 ];
-const ACCEPTED_DOC_RE = /\.(pdf|docx?)$/i;
+const ACCEPTED_DOC_RE = /\.(pdf|docx?|xlsx)$/i;
 
 function fmtSize(bytes) {
   if (!bytes) return "";
@@ -647,7 +647,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
               >
                 <input
                   type="file"
-                  accept=".pdf,.doc,.docx"
+                  accept=".pdf,.doc,.docx,.xlsx"
                   multiple
                   onChange={(e) => {
                     addFiles(e.target.files);
@@ -659,7 +659,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
                 />
                 <span className="lf-drop-icon" aria-hidden="true"><UploadIcon /></span>
                 <span className="lf-drop-title">{files.length ? "Add more files" : "Drop files here or click to browse"}</span>
-                <span className="lf-drop-sub">PDF, DOC or DOCX · you can select several at once</span>
+                <span className="lf-drop-sub">PDF, DOC, DOCX or XLSX, up to 10 MB each · you can select several at once</span>
               </label>
               {files.length > 0 && (
                 <ul className="lf-file-list">
