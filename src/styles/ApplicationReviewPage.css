@@ -840,33 +840,40 @@
   border: 2px solid var(--bg-page);
 }
 
-/* Fixed total height for the popup — the input row (below) grows a little
-   as you type, but ar-chat-messages (flex: 1) shrinks to absorb that, so
-   the popup as a whole never resizes. */
+/* Docked to the right edge of the whole viewport, full height, rather than
+   a small box floating above the FAB — the input row still grows a little
+   as you type, and ar-chat-messages (flex: 1) still absorbs that so the
+   panel itself never resizes. */
 .ar-chat-popup {
-  width: 360px;
-  max-width: calc(100vw - var(--space-8));
-  height: 440px;
-  max-height: calc(100vh - 140px);
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  max-width: 100vw;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  border: none;
+  border-left: 1px solid var(--border-subtle);
+  border-radius: 0;
   box-shadow: var(--shadow-lg);
   padding: var(--space-4);
-  animation: ar-chat-pop-in var(--duration-fast) var(--ease-out);
+  padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  animation: ar-chat-slide-in var(--duration-fast) var(--ease-out);
 }
 
-@keyframes ar-chat-pop-in {
+@keyframes ar-chat-slide-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: translateX(16px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateX(0);
   }
 }
 
@@ -908,7 +915,7 @@
   }
 
   .ar-chat-popup {
-    width: calc(100vw - var(--space-8));
+    width: 100vw;
   }
 }
 
