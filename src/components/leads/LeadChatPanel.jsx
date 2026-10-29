@@ -3,10 +3,9 @@ import { createPortal } from "react-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
-import Button from "../ui/Button";
 import MentionInput from "../shared/MentionInput";
 import { renderWithMentions } from "../../lib/mentions";
-import { ChatIcon, CloseIcon } from "../icons";
+import { ChatIcon, CloseIcon, SendIcon } from "../icons";
 // Reuses the generic ar-* card/field styles already defined for the Lead/
 // Empanelment review pages, plus a handful of chat-bubble-specific classes
 // added alongside them in the same file.
@@ -155,9 +154,6 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
         <div className="ar-chat-popup" role="dialog" aria-label="Lead discussion">
           <div className="ar-chat-popup-header">
             <span className="ar-chat-popup-title">Discussion</span>
-            <button type="button" className="ar-chat-popup-close" aria-label="Close chat" onClick={() => setOpen(false)}>
-              <CloseIcon />
-            </button>
           </div>
 
           <div className="ar-chat-messages">
@@ -197,25 +193,29 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
                 placeholder="Type a message… use @ to tag someone"
                 disabled={sending}
               />
-              <Button variant="primary" size="sm" loading={sending} disabled={!draft.trim()} onClick={send}>
-                Send
-              </Button>
+              <button
+                type="button"
+                className="ar-chat-send-btn"
+                aria-label="Send message"
+                disabled={sending || !draft.trim()}
+                onClick={send}
+              >
+                <SendIcon />
+              </button>
             </div>
           )}
         </div>
       )}
 
-      {!open && (
-        <button
-          type="button"
-          className="ar-chat-fab"
-          aria-label={unreadCount > 0 ? `Open chat, ${unreadCount} unread` : "Open chat"}
-          onClick={toggleOpen}
-        >
-          <ChatIcon />
-          {unreadCount > 0 && <span className="ar-chat-fab-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>}
-        </button>
-      )}
+      <button
+        type="button"
+        className="ar-chat-fab"
+        aria-label={open ? "Close chat" : unreadCount > 0 ? `Open chat, ${unreadCount} unread` : "Open chat"}
+        onClick={toggleOpen}
+      >
+        {open ? <CloseIcon /> : <ChatIcon />}
+        {!open && unreadCount > 0 && <span className="ar-chat-fab-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+      </button>
     </div>,
     document.body
   );

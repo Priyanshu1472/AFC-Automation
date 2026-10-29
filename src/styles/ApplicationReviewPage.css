@@ -890,24 +890,6 @@
   color: var(--text-primary);
 }
 
-.ar-chat-popup-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-md);
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-}
-
-.ar-chat-popup-close:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
 @media (max-width: 480px) {
   .ar-chat-widget {
     right: var(--space-4);
@@ -989,7 +971,40 @@
 .ar-chat-input-row {
   display: flex;
   gap: var(--space-2);
-  align-items: flex-end;
+  align-items: center;
+}
+
+/* Round, icon-only send button (WhatsApp-style) instead of a labelled
+   button — sized to match the input's own resting height (MIN_HEIGHT in
+   the chat panels) so it sits flush with it on the same row regardless of
+   how tall the textarea has grown. */
+.ar-chat-send-btn {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: var(--brand-600);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+}
+
+.ar-chat-send-btn svg {
+  margin-left: 2px;
+}
+
+.ar-chat-send-btn:hover:not(:disabled) {
+  transform: scale(1.06);
+}
+
+.ar-chat-send-btn:disabled {
+  background: var(--bg-surface-3);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
 }
 
 .ar-chat-input {
