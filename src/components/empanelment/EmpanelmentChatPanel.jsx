@@ -5,6 +5,8 @@ import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { ROLE_LABELS } from "../../lib/roles";
 import Button from "../ui/Button";
+import MentionInput from "../shared/MentionInput";
+import { renderWithMentions } from "../../lib/mentions";
 import { ChatIcon, CloseIcon } from "../icons";
 // Same floating-bubble widget as LeadChatPanel / ProposalChatPanel, pointed
 // at empanelment_chat_messages.
@@ -36,7 +38,7 @@ export default function EmpanelmentChatPanel({ app }) {
 
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
-  const [senders, setSenders] = useState({});
+  const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [draft, setDraft] = useState("");
@@ -45,25 +47,20 @@ export default function EmpanelmentChatPanel({ app }) {
   const inputRef = useRef(null);
   const widgetRef = useRef(null);
 
-  const MIN_INPUT_HEIGHT = 40;
-  const MAX_INPUT_HEIGHT = 120;
-
-  function resizeInput(el) {
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT)}px`;
-  }
+  const senders = Object.fromEntries(participants.map((p) => [p.user_id, p]));
 
   const fetchMessages = useCallback(async () => {
     if (!applicationId || !canRead) return;
     // Sender names via RPC — the advisor/PO/CFO/CS/MD are often on another
     // team, and an embedded afc_users join would come back null for them.
-    const [{ data }, { data: names }] = await Promise.all([
+    // The same RPC also doubles as the @mention roster (role + avatar_path),
+    // widened to the full mentionable set, not just past senders.
+    const [{ data }, { data: participantRows }] = await Promise.all([
       supabase.from("empanelment_chat_messages").select("*").eq("application_id", applicationId).order("created_at", { ascending: true }),
       supabase.rpc("get_empanelment_chat_participant_names", { p_application_id: applicationId }),
     ]);
     setMessages(data || []);
-    setSenders(Object.fromEntries((names || []).map((n) => [n.user_id, n])));
+    setParticipants(participantRows || []);
     setLoading(false);
     setUnreadCount(0);
     if (isParticipant) supabase.rpc("mark_empanelment_chat_read", { p_application_id: applicationId }).then(() => {}, () => {});
@@ -116,9 +113,12 @@ export default function EmpanelmentChatPanel({ app }) {
   async function send() {
     const message = draft.trim();
     if (!message) return;
+    const mentionedUserIds = inputRef.current?.getMentionedIds(message) || [];
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("send-empanelment-chat-message", { body: { application_id: applicationId, message } });
+      const { data, error } = await supabase.functions.invoke("send-empanelment-chat-message", {
+        body: { application_id: applicationId, message, mentioned_user_ids: mentionedUserIds },
+      });
       if (error) {
         showToast(await extractFunctionErrorMessage(error, "Failed to send message."), "danger");
         return;
@@ -128,19 +128,13 @@ export default function EmpanelmentChatPanel({ app }) {
         return;
       }
       setDraft("");
-      if (inputRef.current) inputRef.current.style.height = `${MIN_INPUT_HEIGHT}px`;
+      inputRef.current?.clearMentions();
+      inputRef.current?.resetHeight();
       fetchMessages();
     } catch (err) {
       showToast(err.message || "Something went wrong.", "danger");
     } finally {
       setSending(false);
-    }
-  }
-
-  function onKeyDown(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      send();
     }
   }
 
@@ -171,7 +165,7 @@ export default function EmpanelmentChatPanel({ app }) {
                         {sender?.full_name || (m.sender_id ? "Unknown" : "Deleted user")}
                         {sender?.role ? ` · ${ROLE_LABELS[sender.role] || sender.role}` : ""}
                       </span>
-                      <p className="ar-chat-text">{m.message}</p>
+                      <p className="ar-chat-text">{renderWithMentions(m.message, participants)}</p>
                       <span className="ar-chat-time">{fmtTime(m.created_at)}</span>
                     </div>
                   </div>
@@ -187,17 +181,15 @@ export default function EmpanelmentChatPanel({ app }) {
             <p className="ar-chat-locked">View only.</p>
           ) : (
             <div className="ar-chat-input-row">
-              <textarea
+              <MentionInput
                 ref={inputRef}
-                rows={1}
                 className="ar-chat-input"
                 value={draft}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  resizeInput(e.target);
-                }}
-                onKeyDown={onKeyDown}
-                placeholder="Type a message…"
+                onChange={setDraft}
+                onEnterSend={send}
+                participants={participants}
+                selfId={profile?.id}
+                placeholder="Type a message… use @ to tag someone"
                 disabled={sending}
               />
               <Button variant="primary" size="sm" loading={sending} disabled={!draft.trim()} onClick={send}>

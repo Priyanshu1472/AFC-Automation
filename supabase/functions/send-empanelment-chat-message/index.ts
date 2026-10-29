@@ -43,6 +43,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!message) return jsonRes(req, 400, { error: "Message cannot be empty." });
   if (message.length > MAX_MESSAGE_LENGTH) return jsonRes(req, 400, { error: `Message is too long (max ${MAX_MESSAGE_LENGTH} characters).` });
 
+  const mentionedUserIds = Array.isArray(body.mentioned_user_ids) ? body.mentioned_user_ids.filter((id): id is string => typeof id === "string") : [];
+
   const { data: app, error: appErr } = await adminClient
     .from("empanelment_applications")
     .select("id, status, sent_by, project_officer_id, dgm_id, ba_email")
@@ -71,15 +73,32 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       adminClient.from("afc_users").select("full_name").eq("id", caller.id).maybeSingle(),
     ]);
     const orgName = baData?.org_name || app.ba_email || "an application";
-    const recipients = [app.sent_by, app.project_officer_id, app.dgm_id, ...(orgWide || []).map((u: { id: string }) => u.id)]
-      .filter((id): id is string => !!id && id !== caller.id);
+    const recipients = [
+      ...new Set(
+        [app.sent_by, app.project_officer_id, app.dgm_id, ...(orgWide || []).map((u: { id: string }) => u.id)].filter(
+          (id): id is string => !!id && id !== caller.id
+        )
+      ),
+    ];
     const preview = message.length > 140 ? `${message.slice(0, 140)}…` : message;
-    await notifyUsers(adminClient, recipients, {
-      title: `New message on ${orgName}'s empanelment application`,
-      sub_text: `${sender?.full_name || "Someone"}: "${preview}"`,
-      type: "action_required",
-      link: `/empanelment/${application_id}`,
-    });
+    const senderName = sender?.full_name || "Someone";
+    const mentioned = recipients.filter((id) => mentionedUserIds.includes(id));
+    const rest = recipients.filter((id) => !mentioned.includes(id));
+
+    await Promise.all([
+      notifyUsers(adminClient, mentioned, {
+        title: `${senderName} tagged you on ${orgName}'s empanelment application`,
+        sub_text: `"${preview}"`,
+        type: "action_required",
+        link: `/empanelment/${application_id}`,
+      }),
+      notifyUsers(adminClient, rest, {
+        title: `New message on ${orgName}'s empanelment application`,
+        sub_text: `${senderName}: "${preview}"`,
+        type: "action_required",
+        link: `/empanelment/${application_id}`,
+      }),
+    ]);
   } catch (err) {
     console.error("empanelment chat notify failed:", (err as Error).message);
   }

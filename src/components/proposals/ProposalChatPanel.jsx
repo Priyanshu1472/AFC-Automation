@@ -4,6 +4,8 @@ import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import Button from "../ui/Button";
+import MentionInput from "../shared/MentionInput";
+import { renderWithMentions } from "../../lib/mentions";
 import { ChatIcon, CloseIcon } from "../icons";
 // Reuses the generic ar-* card/field styles already defined for the Lead/
 // Empanelment review pages — same styles LeadChatPanel reuses, this is
@@ -29,7 +31,7 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
 
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
-  const [participantNames, setParticipantNames] = useState({});
+  const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [draft, setDraft] = useState("");
@@ -38,14 +40,7 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
   const inputRef = useRef(null);
   const widgetRef = useRef(null);
 
-  const MIN_INPUT_HEIGHT = 40;
-  const MAX_INPUT_HEIGHT = 120;
-
-  function resizeInput(el) {
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT)}px`;
-  }
+  const participantNames = Object.fromEntries(participants.map((p) => [p.user_id, p.full_name]));
 
   const fetchMessages = useCallback(async () => {
     if (!chatOpenedAt) return;
@@ -53,8 +48,9 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
     // LeadChatPanel.jsx / get_proposal_chat_participant_names for why an
     // embedded `sender:sender_id(full_name)` join silently comes back null
     // for a cross-team chat participant the viewer's own afc_users RLS
-    // doesn't otherwise let them read.
-    const [{ data }, { data: participants }] = await Promise.all([
+    // doesn't otherwise let them read. The same RPC also doubles as the
+    // @mention roster (role + avatar_path).
+    const [{ data }, { data: participantRows }] = await Promise.all([
       supabase
         .from("proposal_chat_messages")
         .select("*")
@@ -63,7 +59,7 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
       supabase.rpc("get_proposal_chat_participant_names", { p_proposal_id: proposalId }),
     ]);
     setMessages(data || []);
-    setParticipantNames(Object.fromEntries((participants || []).map((p) => [p.user_id, p.full_name])));
+    setParticipants(participantRows || []);
     setLoading(false);
     setUnreadCount(0);
     supabase.rpc("mark_proposal_chat_read", { p_proposal_id: proposalId }).then(() => {}, () => {});
@@ -118,9 +114,12 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
   async function send() {
     const message = draft.trim();
     if (!message) return;
+    const mentionedUserIds = inputRef.current?.getMentionedIds(message) || [];
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("send-proposal-chat-message", { body: { proposal_id: proposalId, message } });
+      const { data, error } = await supabase.functions.invoke("send-proposal-chat-message", {
+        body: { proposal_id: proposalId, message, mentioned_user_ids: mentionedUserIds },
+      });
       if (error) {
         showToast(await extractFunctionErrorMessage(error, "Failed to send message."), "danger");
         return;
@@ -130,19 +129,13 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
         return;
       }
       setDraft("");
-      if (inputRef.current) inputRef.current.style.height = `${MIN_INPUT_HEIGHT}px`;
+      inputRef.current?.clearMentions();
+      inputRef.current?.resetHeight();
       fetchMessages();
     } catch (err) {
       showToast(err.message || "Something went wrong.", "danger");
     } finally {
       setSending(false);
-    }
-  }
-
-  function onKeyDown(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      send();
     }
   }
 
@@ -169,7 +162,7 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
                   <div key={m.id} className={`ar-chat-msg${isOwn ? " ar-chat-msg-own" : ""}`}>
                     <div className="ar-chat-bubble">
                       <span className="ar-chat-sender">{participantNames[m.sender_id] || "Unknown"}</span>
-                      <p className="ar-chat-text">{m.message}</p>
+                      <p className="ar-chat-text">{renderWithMentions(m.message, participants)}</p>
                       <span className="ar-chat-time">{fmtTime(m.created_at)}</span>
                     </div>
                   </div>
@@ -183,17 +176,15 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
             <p className="ar-chat-locked">Chat closed — this proposal has been locked.</p>
           ) : (
             <div className="ar-chat-input-row">
-              <textarea
+              <MentionInput
                 ref={inputRef}
-                rows={1}
                 className="ar-chat-input"
                 value={draft}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  resizeInput(e.target);
-                }}
-                onKeyDown={onKeyDown}
-                placeholder="Type a message…"
+                onChange={setDraft}
+                onEnterSend={send}
+                participants={participants}
+                selfId={profile?.id}
+                placeholder="Type a message… use @ to tag someone"
                 disabled={sending}
               />
               <Button variant="primary" size="sm" loading={sending} disabled={!draft.trim()} onClick={send}>

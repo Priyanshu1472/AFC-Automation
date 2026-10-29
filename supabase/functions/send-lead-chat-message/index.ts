@@ -38,6 +38,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!message) return jsonRes(req, 400, { error: "Message cannot be empty." });
   if (message.length > MAX_MESSAGE_LENGTH) return jsonRes(req, 400, { error: `Message is too long (max ${MAX_MESSAGE_LENGTH} characters).` });
 
+  const mentionedUserIds = Array.isArray(body.mentioned_user_ids) ? body.mentioned_user_ids.filter((id): id is string => typeof id === "string") : [];
+
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
     .select("id, status, chat_opened_at, lead_number, title")
@@ -69,12 +71,29 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       adminClient.from("afc_users").select("full_name").eq("id", caller.id).maybeSingle(),
     ]);
     const preview = message.length > 140 ? `${message.slice(0, 140)}…` : message;
-    await notifyUsers(adminClient, (others || []).map((p: { user_id: string }) => p.user_id), {
-      title: `New message on ${lead.lead_number} — "${lead.title}"`,
-      sub_text: `${sender?.full_name || "Someone"}: "${preview}"`,
-      type: "action_required",
-      link: `/leads/${lead_id}`,
-    });
+    const senderName = sender?.full_name || "Someone";
+    const leadLabel = `${lead.lead_number} — "${lead.title}"`;
+    const otherIds = (others || []).map((p: { user_id: string }) => p.user_id);
+    // Only someone actually on this lead's chat roster can be meaningfully
+    // tagged — mentioned_user_ids is client-supplied, so it's intersected
+    // against the real recipient set rather than trusted outright.
+    const mentioned = otherIds.filter((id) => mentionedUserIds.includes(id));
+    const rest = otherIds.filter((id) => !mentioned.includes(id));
+
+    await Promise.all([
+      notifyUsers(adminClient, mentioned, {
+        title: `${senderName} tagged you on ${leadLabel}`,
+        sub_text: `"${preview}"`,
+        type: "action_required",
+        link: `/leads/${lead_id}`,
+      }),
+      notifyUsers(adminClient, rest, {
+        title: `New message on ${leadLabel}`,
+        sub_text: `${senderName}: "${preview}"`,
+        type: "action_required",
+        link: `/leads/${lead_id}`,
+      }),
+    ]);
   } catch (err) {
     console.error("lead chat notify failed:", (err as Error).message);
   }

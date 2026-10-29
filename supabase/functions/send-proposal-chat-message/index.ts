@@ -45,6 +45,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!message) return jsonRes(req, 400, { error: "Message cannot be empty." });
   if (message.length > MAX_MESSAGE_LENGTH) return jsonRes(req, 400, { error: `Message is too long (max ${MAX_MESSAGE_LENGTH} characters).` });
 
+  const mentionedUserIds = Array.isArray(body.mentioned_user_ids) ? body.mentioned_user_ids.filter((id): id is string => typeof id === "string") : [];
+
   const { data: proposal, error: proposalErr } = await adminClient
     .from("proposal_preparations")
     .select("id, lead_id, locked, chat_opened_at, lead:lead_id(submission_deadline, lead_number, title)")
@@ -80,13 +82,26 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       adminClient.from("afc_users").select("full_name").eq("id", caller.id).maybeSingle(),
     ]);
     const preview = message.length > 140 ? `${message.slice(0, 140)}…` : message;
+    const senderName = sender?.full_name || "Someone";
     const leadLabel = lead ? `${lead.lead_number} — "${lead.title}"` : "a proposal";
-    await notifyUsers(adminClient, (others || []).map((p: { user_id: string }) => p.user_id), {
-      title: `New message on proposal for ${leadLabel}`,
-      sub_text: `${sender?.full_name || "Someone"}: "${preview}"`,
-      type: "action_required",
-      link: `/proposals/${proposal.lead_id}`,
-    });
+    const otherIds = (others || []).map((p: { user_id: string }) => p.user_id);
+    const mentioned = otherIds.filter((id) => mentionedUserIds.includes(id));
+    const rest = otherIds.filter((id) => !mentioned.includes(id));
+
+    await Promise.all([
+      notifyUsers(adminClient, mentioned, {
+        title: `${senderName} tagged you on proposal for ${leadLabel}`,
+        sub_text: `"${preview}"`,
+        type: "action_required",
+        link: `/proposals/${proposal.lead_id}`,
+      }),
+      notifyUsers(adminClient, rest, {
+        title: `New message on proposal for ${leadLabel}`,
+        sub_text: `${senderName}: "${preview}"`,
+        type: "action_required",
+        link: `/proposals/${proposal.lead_id}`,
+      }),
+    ]);
   } catch (err) {
     console.error("proposal chat notify failed:", (err as Error).message);
   }

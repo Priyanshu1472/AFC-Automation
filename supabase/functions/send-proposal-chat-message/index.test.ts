@@ -126,6 +126,20 @@ Deno.test("notifies the other participants, excluding the sender, as action_requ
   assertEquals(insertArgs.every((r) => r.link === `/proposals/${LEAD_ID}`), true);
 });
 
+Deno.test("a mentioned participant gets a tag notification instead of the generic one", async () => {
+  const client = buildClient({ others: [{ user_id: "other-1" }, { user_id: "other-2" }] });
+  const res = await handleRequest(req({ proposal_id: PROPOSAL_ID, message: "hi @other-1", mentioned_user_ids: ["other-1"] }), client as never);
+  assertEquals(res.status, 200);
+  const insertCalls = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter(
+    (e) => e.table === "notifications" && e.calls.some((c) => c[0] === "insert")
+  );
+  const allRows = insertCalls.flatMap((e) => JSON.parse(e.calls.find((c) => c[0] === "insert")![1]) as { user_id: string; title: string }[]);
+  const tagged = allRows.find((r) => r.user_id === "other-1");
+  const untagged = allRows.find((r) => r.user_id === "other-2");
+  assertEquals(tagged!.title.includes("tagged you"), true);
+  assertEquals(untagged!.title.includes("tagged you"), false);
+});
+
 Deno.test("insert failure -> 500", async () => {
   const client = buildClient({ insertResult: { data: null, error: { message: "boom" } } });
   const res = await handleRequest(req({ proposal_id: PROPOSAL_ID, message: "hi" }), client as never);

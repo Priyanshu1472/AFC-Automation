@@ -965,6 +965,14 @@
   word-break: break-word;
 }
 
+.ar-chat-mention {
+  font-weight: 600;
+  color: var(--brand-600);
+  background: color-mix(in srgb, var(--brand-600) 14%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 0 2px;
+}
+
 .ar-chat-time {
   font-size: 10px;
   color: var(--text-tertiary);
