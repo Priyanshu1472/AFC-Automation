@@ -98,31 +98,34 @@ Deno.test("success - a direct participant can post while the chat is open", asyn
   assertEquals(await res.json(), { success: true });
 });
 
-Deno.test("notifies sent_by/PO/DGM plus org-wide roles, excluding the sender, as action_required", async () => {
+type RpcCall = { name: string; args: Record<string, unknown> | undefined };
+
+Deno.test("bumps a grouped chat_message notification for sent_by/PO/DGM plus org-wide roles, excluding the sender", async () => {
   const client = buildClient({ orgWide: [{ id: "cfo-1" }, { id: "cs-1" }] });
   const res = await handleRequest(req({ application_id: APPLICATION_ID, message: "Looks good to me." }), client as never);
   assertEquals(res.status, 200);
-  const notifyCall = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.find(
-    (e) => e.table === "notifications" && e.calls.some((c) => c[0] === "insert")
+  const bumpCalls = (client as unknown as { __rpcCalls: RpcCall[] }).__rpcCalls.filter((c) => c.name === "bump_chat_notification");
+  assertEquals(
+    bumpCalls.map((c) => c.args?.p_user_id).sort(),
+    ["cfo-1", "cs-1", "dgm-1", "po-1"]
   );
-  const insertArgs = JSON.parse(notifyCall!.calls.find((c) => c[0] === "insert")![1]) as { user_id: string; type: string; link: string }[];
-  assertEquals(insertArgs.map((r) => r.user_id).sort(), ["cfo-1", "cs-1", "dgm-1", "po-1"]);
-  assertEquals(insertArgs.every((r) => r.type === "action_required"), true);
-  assertEquals(insertArgs.every((r) => r.link === `/empanelment/${APPLICATION_ID}`), true);
+  assertEquals(bumpCalls.every((c) => c.args?.p_link === `/empanelment/${APPLICATION_ID}`), true);
 });
 
-Deno.test("a mentioned participant gets a tag notification instead of the generic one", async () => {
+Deno.test("a mentioned participant gets a separate tag notification instead of the grouped one", async () => {
   const client = buildClient({ orgWide: [{ id: "cfo-1" }] });
   const res = await handleRequest(req({ application_id: APPLICATION_ID, message: "hi @po-1", mentioned_user_ids: ["po-1"] }), client as never);
   assertEquals(res.status, 200);
-  const insertCalls = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter(
+  const insertCall = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.find(
     (e) => e.table === "notifications" && e.calls.some((c) => c[0] === "insert")
   );
-  const allRows = insertCalls.flatMap((e) => JSON.parse(e.calls.find((c) => c[0] === "insert")![1]) as { user_id: string; title: string }[]);
-  const tagged = allRows.find((r) => r.user_id === "po-1");
-  const untagged = allRows.find((r) => r.user_id === "cfo-1");
-  assertEquals(tagged!.title.includes("tagged you"), true);
-  assertEquals(untagged!.title.includes("tagged you"), false);
+  const insertRows = JSON.parse(insertCall!.calls.find((c) => c[0] === "insert")![1]) as { user_id: string; title: string; kind: string }[];
+  assertEquals(insertRows.map((r) => r.user_id), ["po-1"]);
+  assertEquals(insertRows[0].title.includes("tagged you"), true);
+  assertEquals(insertRows[0].kind, "chat_mention");
+
+  const bumpCalls = (client as unknown as { __rpcCalls: RpcCall[] }).__rpcCalls.filter((c) => c.name === "bump_chat_notification");
+  assertEquals(bumpCalls.map((c) => c.args?.p_user_id).sort(), ["cfo-1", "dgm-1"]);
 });
 
 Deno.test("insert failure -> 500", async () => {

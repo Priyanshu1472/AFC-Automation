@@ -15,6 +15,12 @@ export type NotifyPayload = {
   // list; anything else (e.g. "info") is bell-only.
   type: string;
   link?: string | null;
+  // Distinguishes a chat @mention ("chat_mention") from every other
+  // action_required notification, so mark_*_chat_read can clear it
+  // specifically without touching unrelated pipeline notifications that
+  // happen to share the same link. Omit for anything that isn't a chat
+  // mention.
+  kind?: string | null;
 };
 
 export async function notifyUsers(admin: AdminClient, userIds: (string | null | undefined)[], payload: NotifyPayload) {
@@ -28,10 +34,28 @@ export async function notifyUsers(admin: AdminClient, userIds: (string | null | 
         sub_text: payload.sub_text || null,
         type: payload.type,
         link: payload.link || null,
+        kind: payload.kind || null,
       }))
     );
   } catch (err) {
     console.error("notifyUsers failed:", (err as Error).message);
+  }
+}
+
+// Groups ordinary (non-mention) chat-message notifications per record
+// instead of one row per message: the first unread message for a given
+// user+link inserts a "You have 1 unread message" row; every later one
+// before it's read just bumps that same row's count (see
+// bump_chat_notification — a SECURITY DEFINER RPC because this writes an
+// arbitrary recipient's notification row, same reasoning as notifyUsers'
+// direct insert but via RPC since the increment has to be atomic).
+export async function bumpChatNotifications(admin: AdminClient, userIds: (string | null | undefined)[], link: string, title: string) {
+  const ids = [...new Set(userIds.filter((id): id is string => !!id))];
+  if (ids.length === 0) return;
+  try {
+    await Promise.all(ids.map((id) => admin.rpc("bump_chat_notification", { p_user_id: id, p_link: link, p_title: title })));
+  } catch (err) {
+    console.error("bumpChatNotifications failed:", (err as Error).message);
   }
 }
 

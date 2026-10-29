@@ -263,7 +263,20 @@ function PendingActionsPanel() {
       });
 
     const unsubscribe = subscribeToNotifications(profile.id, (row) => {
-      if (row.type === "action_required") setItems((prev) => [row, ...prev]);
+      if (row.type !== "action_required") return;
+      setItems((prev) => {
+        const idx = prev.findIndex((it) => it.id === row.id);
+        // A grouped chat-message notification's 2nd+ message arrives as an
+        // UPDATE to a row already in the list (bumped count) rather than a
+        // new INSERT — replace it in place instead of duplicating it. If
+        // it's been marked read (e.g. the user opened the chat elsewhere),
+        // drop it instead of showing a stale unread row.
+        if (row.is_read) return idx === -1 ? prev : prev.filter((it) => it.id !== row.id);
+        if (idx === -1) return [row, ...prev];
+        const next = [...prev];
+        next[idx] = row;
+        return next;
+      });
     });
 
     return () => {

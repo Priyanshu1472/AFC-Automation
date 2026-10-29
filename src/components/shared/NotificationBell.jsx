@@ -42,7 +42,11 @@ export default function NotificationBell() {
       .catch(() => {});
 
     const unsubscribe = subscribeToNotifications(profile.id, (row) => {
-      setItems((prev) => [row, ...prev].slice(0, 20));
+      // A grouped chat-message notification's later messages arrive as an
+      // UPDATE to a row already in the list (bumped count) — replace it in
+      // place and float it back to the top, rather than showing a
+      // duplicate stale entry alongside the fresh one.
+      setItems((prev) => [row, ...prev.filter((it) => it.id !== row.id)].slice(0, 20));
     });
 
     return () => {

@@ -52,6 +52,7 @@ export function createFakeAdminClient(routes: Record<string, FakeResult[]> = {},
   const cursors: Record<string, number> = {};
   const log: FakeCallLog = [];
   const authCalls: { method: string; args: unknown[] }[] = [];
+  const rpcCalls: { name: string; args: Record<string, unknown> | undefined }[] = [];
 
   const client = {
     from(table: string) {
@@ -62,7 +63,8 @@ export function createFakeAdminClient(routes: Record<string, FakeResult[]> = {},
       log.push({ table, calls });
       return makeQueryBuilder(queue[idx], calls);
     },
-    rpc(name: string, _args?: Record<string, unknown>) {
+    rpc(name: string, args?: Record<string, unknown>) {
+      rpcCalls.push({ name, args });
       const result = opts.rpc?.[name] ?? { data: null, error: null };
       return Promise.resolve(result);
     },
@@ -100,6 +102,7 @@ export function createFakeAdminClient(routes: Record<string, FakeResult[]> = {},
     },
     __log: log,
     __authCalls: authCalls,
+    __rpcCalls: rpcCalls,
   };
   return client;
 }

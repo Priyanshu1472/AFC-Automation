@@ -37,29 +37,34 @@ export async function fetchPendingActionNotifications(userId, limit = 10) {
 // unsubscribes.
 const notificationChannels = new Map(); // userId -> { channel, listeners: Set }
 
-// Subscribes to INSERT events for this user only. Returns an unsubscribe
-// function for cleanup in a useEffect.
-export function subscribeToNotifications(userId, onInsert) {
+// Subscribes to INSERT and UPDATE events for this user only — UPDATE
+// matters because a grouped chat-message notification (see
+// bump_chat_notification) doesn't insert a new row for the 2nd+ message in
+// a batch, it updates the existing unread one's count in place, and
+// mark_*_chat_read also flips existing rows to is_read via UPDATE rather
+// than deleting them. Both event types hand the listener the same shape
+// (the row as it now stands), so callers can treat every call as "here's
+// this notification's current state" and upsert-by-id rather than caring
+// which kind of change produced it.
+export function subscribeToNotifications(userId, onChange) {
   let entry = notificationChannels.get(userId);
 
   if (!entry) {
     const listeners = new Set();
+    const notify = (payload) => listeners.forEach((fn) => fn(payload.new));
     const channel = supabase
       .channel(`notifications-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-        (payload) => listeners.forEach((fn) => fn(payload.new))
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, notify)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, notify)
       .subscribe();
     entry = { channel, listeners };
     notificationChannels.set(userId, entry);
   }
 
-  entry.listeners.add(onInsert);
+  entry.listeners.add(onChange);
 
   return () => {
-    entry.listeners.delete(onInsert);
+    entry.listeners.delete(onChange);
     if (entry.listeners.size === 0) {
       notificationChannels.delete(userId);
       supabase.removeChannel(entry.channel);

@@ -10,7 +10,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
-import { notifyUsers } from "../_shared/notify.ts";
+import { notifyUsers, bumpChatNotifications } from "../_shared/notify.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -86,13 +86,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         sub_text: `"${preview}"`,
         type: "action_required",
         link: `/leads/${lead_id}`,
+        kind: "chat_mention",
       }),
-      notifyUsers(adminClient, rest, {
-        title: `New message on ${leadLabel}`,
-        sub_text: `${senderName}: "${preview}"`,
-        type: "action_required",
-        link: `/leads/${lead_id}`,
-      }),
+      bumpChatNotifications(adminClient, rest, `/leads/${lead_id}`, `New messages on ${leadLabel}`),
     ]);
   } catch (err) {
     console.error("lead chat notify failed:", (err as Error).message);

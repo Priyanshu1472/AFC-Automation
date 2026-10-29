@@ -104,30 +104,34 @@ Deno.test("success - a participant can post while the chat is open", async () =>
   assertEquals(await res.json(), { success: true });
 });
 
-Deno.test("notifies the other participants, excluding the sender, as action_required", async () => {
+type RpcCall = { name: string; args: Record<string, unknown> | undefined };
+
+Deno.test("bumps a grouped chat_message notification for the other participants, excluding the sender", async () => {
   const client = buildClient({ others: [{ user_id: "other-1" }, { user_id: "other-2" }] });
   const res = await handleRequest(req({ lead_id: LEAD_ID, message: "Looks good to me." }), client as never);
   assertEquals(res.status, 200);
-  const notifyCall = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.find(
-    (e) => e.table === "notifications" && e.calls.some((c) => c[0] === "insert")
+  const bumpCalls = (client as unknown as { __rpcCalls: RpcCall[] }).__rpcCalls.filter((c) => c.name === "bump_chat_notification");
+  assertEquals(
+    bumpCalls.map((c) => c.args?.p_user_id).sort(),
+    ["other-1", "other-2"]
   );
-  const insertArgs = JSON.parse(notifyCall!.calls.find((c) => c[0] === "insert")![1]) as { user_id: string; type: string }[];
-  assertEquals(insertArgs.map((r) => r.user_id).sort(), ["other-1", "other-2"]);
-  assertEquals(insertArgs.every((r) => r.type === "action_required"), true);
+  assertEquals(bumpCalls.every((c) => c.args?.p_link === `/leads/${LEAD_ID}`), true);
 });
 
-Deno.test("a mentioned participant gets a tag notification instead of the generic one", async () => {
+Deno.test("a mentioned participant gets a separate tag notification instead of the grouped one", async () => {
   const client = buildClient({ others: [{ user_id: "other-1" }, { user_id: "other-2" }] });
   const res = await handleRequest(req({ lead_id: LEAD_ID, message: "hi @other-1", mentioned_user_ids: ["other-1"] }), client as never);
   assertEquals(res.status, 200);
-  const insertCalls = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter(
+  const insertCall = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.find(
     (e) => e.table === "notifications" && e.calls.some((c) => c[0] === "insert")
   );
-  const allRows = insertCalls.flatMap((e) => JSON.parse(e.calls.find((c) => c[0] === "insert")![1]) as { user_id: string; title: string }[]);
-  const tagged = allRows.find((r) => r.user_id === "other-1");
-  const untagged = allRows.find((r) => r.user_id === "other-2");
-  assertEquals(tagged!.title.includes("tagged you"), true);
-  assertEquals(untagged!.title.includes("tagged you"), false);
+  const insertRows = JSON.parse(insertCall!.calls.find((c) => c[0] === "insert")![1]) as { user_id: string; title: string; kind: string }[];
+  assertEquals(insertRows.map((r) => r.user_id), ["other-1"]);
+  assertEquals(insertRows[0].title.includes("tagged you"), true);
+  assertEquals(insertRows[0].kind, "chat_mention");
+
+  const bumpCalls = (client as unknown as { __rpcCalls: RpcCall[] }).__rpcCalls.filter((c) => c.name === "bump_chat_notification");
+  assertEquals(bumpCalls.map((c) => c.args?.p_user_id), ["other-2"]);
 });
 
 Deno.test("a mentioned_user_ids entry for someone outside the roster is ignored", async () => {
@@ -137,9 +141,9 @@ Deno.test("a mentioned_user_ids entry for someone outside the roster is ignored"
   const insertCalls = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter(
     (e) => e.table === "notifications" && e.calls.some((c) => c[0] === "insert")
   );
-  const allRows = insertCalls.flatMap((e) => JSON.parse(e.calls.find((c) => c[0] === "insert")![1]) as { user_id: string; title: string }[]);
-  assertEquals(allRows.length, 1);
-  assertEquals(allRows[0].title.includes("tagged you"), false);
+  assertEquals(insertCalls.length, 0);
+  const bumpCalls = (client as unknown as { __rpcCalls: RpcCall[] }).__rpcCalls.filter((c) => c.name === "bump_chat_notification");
+  assertEquals(bumpCalls.map((c) => c.args?.p_user_id), ["other-1"]);
 });
 
 Deno.test("insert failure -> 500", async () => {
