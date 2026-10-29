@@ -132,8 +132,13 @@ const MentionInput = forwardRef(function MentionInput(
 
   return (
     <div className="mention-input-wrap">
+      {/* Stopped here, not just prevented: the chat popup closes itself on
+          any mousedown outside its own DOM subtree (see each chat panel's
+          click-outside effect) via a plain document listener, which this
+          dropdown's own button clicks would otherwise still reach and
+          trigger, since preventDefault alone doesn't stop propagation. */}
       {query !== null && candidates.length > 0 && (
-        <div className="mention-dropdown" role="listbox">
+        <div className="mention-dropdown" role="listbox" onMouseDown={(e) => e.stopPropagation()}>
           {candidates.map((p, i) => (
             <button
               type="button"
