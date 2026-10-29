@@ -34,6 +34,12 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  // Hidden by default — the bubble itself (not just sending) must wait for
+  // an explicit "yes, you're on this lead's chat roster" rather than
+  // assuming it while the check is in flight, since whoever can see the
+  // lead page at all (org-wide for DGM/AGM/GM/SRM) is not necessarily on
+  // its chat roster — see is_lead_chat_participant / can_view_lead_chat.
+  const [isParticipant, setIsParticipant] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const widgetRef = useRef(null);
@@ -79,12 +85,26 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
   }, [leadId, chatOpenedAt]);
 
   useEffect(() => {
+    if (!chatOpenedAt) {
+      setIsParticipant(false);
+      return;
+    }
+    let cancelled = false;
+    supabase.rpc("is_lead_chat_participant", { p_lead_id: leadId }).then(({ data }) => {
+      if (!cancelled) setIsParticipant(!!data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [leadId, chatOpenedAt]);
+
+  useEffect(() => {
     if (!chatOpenedAt) return;
     fetchUnreadCount();
   }, [chatOpenedAt, fetchUnreadCount]);
 
   useEffect(() => {
-    if (!chatOpenedAt) return undefined;
+    if (!chatOpenedAt || !isParticipant) return undefined;
     const channel = supabase
       .channel(`lead-chat-${leadId}`)
       .on(
@@ -94,7 +114,7 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
       )
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [leadId, chatOpenedAt, open, fetchMessages, fetchUnreadCount]);
+  }, [leadId, chatOpenedAt, isParticipant, open, fetchMessages, fetchUnreadCount]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView?.({ block: "nearest" });
@@ -112,7 +132,7 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  if (!chatOpenedAt) return null;
+  if (!chatOpenedAt || !isParticipant) return null;
 
   function toggleOpen() {
     const next = !open;
