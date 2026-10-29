@@ -13,6 +13,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { notifyUsers } from "../_shared/notify.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -44,7 +45,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: app, error: appErr } = await adminClient
     .from("empanelment_applications")
-    .select("id, status, sent_by, project_officer_id, dgm_id")
+    .select("id, status, sent_by, project_officer_id, dgm_id, ba_email")
     .eq("id", application_id)
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
@@ -62,6 +63,26 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     message,
   });
   if (insertErr) return jsonRes(req, 500, { error: "Failed to send message." });
+
+  try {
+    const [{ data: baData }, { data: orgWide }, { data: sender }] = await Promise.all([
+      adminClient.from("ba_registrations").select("org_name").eq("application_id", application_id).maybeSingle(),
+      adminClient.from("afc_users").select("id").in("role", ORG_WIDE_PARTICIPANT_ROLES).eq("is_active", true),
+      adminClient.from("afc_users").select("full_name").eq("id", caller.id).maybeSingle(),
+    ]);
+    const orgName = baData?.org_name || app.ba_email || "an application";
+    const recipients = [app.sent_by, app.project_officer_id, app.dgm_id, ...(orgWide || []).map((u: { id: string }) => u.id)]
+      .filter((id): id is string => !!id && id !== caller.id);
+    const preview = message.length > 140 ? `${message.slice(0, 140)}…` : message;
+    await notifyUsers(adminClient, recipients, {
+      title: `New message on ${orgName}'s empanelment application`,
+      sub_text: `${sender?.full_name || "Someone"}: "${preview}"`,
+      type: "action_required",
+      link: `/empanelment/${application_id}`,
+    });
+  } catch (err) {
+    console.error("empanelment chat notify failed:", (err as Error).message);
+  }
 
   return jsonRes(req, 200, { success: true });
 }

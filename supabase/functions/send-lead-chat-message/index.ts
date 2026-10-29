@@ -10,6 +10,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { notifyUsers } from "../_shared/notify.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -39,7 +40,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, status, chat_opened_at")
+    .select("id, status, chat_opened_at, lead_number, title")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -61,6 +62,22 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     message,
   });
   if (insertErr) return jsonRes(req, 500, { error: "Failed to send message." });
+
+  try {
+    const [{ data: others }, { data: sender }] = await Promise.all([
+      adminClient.from("lead_chat_participants").select("user_id").eq("lead_id", lead_id).neq("user_id", caller.id),
+      adminClient.from("afc_users").select("full_name").eq("id", caller.id).maybeSingle(),
+    ]);
+    const preview = message.length > 140 ? `${message.slice(0, 140)}…` : message;
+    await notifyUsers(adminClient, (others || []).map((p: { user_id: string }) => p.user_id), {
+      title: `New message on ${lead.lead_number} — "${lead.title}"`,
+      sub_text: `${sender?.full_name || "Someone"}: "${preview}"`,
+      type: "action_required",
+      link: `/leads/${lead_id}`,
+    });
+  } catch (err) {
+    console.error("lead chat notify failed:", (err as Error).message);
+  }
 
   return jsonRes(req, 200, { success: true });
 }

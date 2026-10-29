@@ -5,23 +5,29 @@ import { authedReq, createFakeAdminClient, fakeJwt } from "../_shared/testHelper
 const CALLER_ID = "caller-1";
 const PROPOSAL_ID = "proposal-1";
 
+const LEAD_ID = "lead-1";
+
 function callerRow(overrides: Record<string, unknown> = {}) {
-  return { id: CALLER_ID, role: "project_officer", team: "BPDD", office: "delhi", committee: null, is_active: true, email: "caller@afc.com", pin_hash: null, ...overrides };
+  return { id: CALLER_ID, role: "project_officer", team: "BPDD", office: "delhi", committee: null, is_active: true, email: "caller@afc.com", pin_hash: null, full_name: "Caller One", ...overrides };
 }
 
 function proposalRow(overrides: Record<string, unknown> = {}) {
-  return { id: PROPOSAL_ID, locked: false, chat_opened_at: "2026-09-01T00:00:00Z", lead: { submission_deadline: null }, ...overrides };
+  return { id: PROPOSAL_ID, lead_id: LEAD_ID, locked: false, chat_opened_at: "2026-09-01T00:00:00Z", lead: { submission_deadline: null, lead_number: "L-1", title: "Test Lead" }, ...overrides };
 }
 
 function buildClient(opts: {
   proposal?: Record<string, unknown>;
   participant?: Record<string, unknown> | null;
+  others?: { user_id: string }[];
   insertResult?: { data?: unknown; error?: unknown };
 }) {
   return createFakeAdminClient({
     afc_users: [{ data: callerRow(), error: null }],
     proposal_preparations: [{ data: opts.proposal ?? proposalRow(), error: null }],
-    proposal_chat_participants: [{ data: opts.participant === undefined ? { id: "p-1" } : opts.participant, error: null }],
+    proposal_chat_participants: [
+      { data: opts.participant === undefined ? { id: "p-1" } : opts.participant, error: null },
+      { data: opts.others ?? [], error: null },
+    ],
     proposal_chat_messages: [opts.insertResult ?? { data: { id: "msg-1" }, error: null }],
   });
 }
@@ -105,6 +111,19 @@ Deno.test("success - a participant can post while the chat is open", async () =>
   const res = await handleRequest(req({ proposal_id: PROPOSAL_ID, message: "Looks good to me." }), client as never);
   assertEquals(res.status, 200);
   assertEquals(await res.json(), { success: true });
+});
+
+Deno.test("notifies the other participants, excluding the sender, as action_required", async () => {
+  const client = buildClient({ others: [{ user_id: "other-1" }, { user_id: "other-2" }] });
+  const res = await handleRequest(req({ proposal_id: PROPOSAL_ID, message: "Looks good to me." }), client as never);
+  assertEquals(res.status, 200);
+  const notifyCall = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.find(
+    (e) => e.table === "notifications" && e.calls.some((c) => c[0] === "insert")
+  );
+  const insertArgs = JSON.parse(notifyCall!.calls.find((c) => c[0] === "insert")![1]) as { user_id: string; type: string; link: string }[];
+  assertEquals(insertArgs.map((r) => r.user_id).sort(), ["other-1", "other-2"]);
+  assertEquals(insertArgs.every((r) => r.type === "action_required"), true);
+  assertEquals(insertArgs.every((r) => r.link === `/proposals/${LEAD_ID}`), true);
 });
 
 Deno.test("insert failure -> 500", async () => {

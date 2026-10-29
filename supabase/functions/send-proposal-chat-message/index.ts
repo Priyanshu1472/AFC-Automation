@@ -17,6 +17,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { notifyUsers } from "../_shared/notify.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -46,13 +47,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: proposal, error: proposalErr } = await adminClient
     .from("proposal_preparations")
-    .select("id, locked, chat_opened_at, lead:lead_id(submission_deadline)")
+    .select("id, lead_id, locked, chat_opened_at, lead:lead_id(submission_deadline, lead_number, title)")
     .eq("id", proposal_id)
     .maybeSingle();
   if (proposalErr || !proposal) return jsonRes(req, 404, { error: "Proposal not found." });
 
   if (!proposal.chat_opened_at) return jsonRes(req, 400, { error: "Chat isn't open for this proposal yet." });
-  const lead = proposal.lead as { submission_deadline: string | null } | null;
+  const lead = proposal.lead as { submission_deadline: string | null; lead_number: string | null; title: string | null } | null;
   const deadlinePassed = !!lead?.submission_deadline && new Date(lead.submission_deadline) < new Date();
   if (proposal.locked || deadlinePassed) {
     return jsonRes(req, 400, { error: "This proposal is locked — the chat is closed." });
@@ -72,6 +73,23 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     message,
   });
   if (insertErr) return jsonRes(req, 500, { error: "Failed to send message." });
+
+  try {
+    const [{ data: others }, { data: sender }] = await Promise.all([
+      adminClient.from("proposal_chat_participants").select("user_id").eq("proposal_id", proposal_id).neq("user_id", caller.id),
+      adminClient.from("afc_users").select("full_name").eq("id", caller.id).maybeSingle(),
+    ]);
+    const preview = message.length > 140 ? `${message.slice(0, 140)}…` : message;
+    const leadLabel = lead ? `${lead.lead_number} — "${lead.title}"` : "a proposal";
+    await notifyUsers(adminClient, (others || []).map((p: { user_id: string }) => p.user_id), {
+      title: `New message on proposal for ${leadLabel}`,
+      sub_text: `${sender?.full_name || "Someone"}: "${preview}"`,
+      type: "action_required",
+      link: `/proposals/${proposal.lead_id}`,
+    });
+  } catch (err) {
+    console.error("proposal chat notify failed:", (err as Error).message);
+  }
 
   return jsonRes(req, 200, { success: true });
 }
