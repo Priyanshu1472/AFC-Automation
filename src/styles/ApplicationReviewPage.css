@@ -790,7 +790,7 @@
 .ar-chat-widget {
   position: fixed;
   right: var(--space-6);
-  bottom: var(--space-6);
+  top: calc(var(--space-6) + env(safe-area-inset-top, 0px));
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -911,7 +911,7 @@
 @media (max-width: 480px) {
   .ar-chat-widget {
     right: var(--space-4);
-    bottom: var(--space-4);
+    top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
   }
 
   .ar-chat-popup {

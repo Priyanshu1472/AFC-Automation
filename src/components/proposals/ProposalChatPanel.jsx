@@ -195,15 +195,17 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked }) 
         </div>
       )}
 
-      <button
-        type="button"
-        className="ar-chat-fab"
-        aria-label={open ? "Close chat" : unreadCount > 0 ? `Open chat, ${unreadCount} unread` : "Open chat"}
-        onClick={toggleOpen}
-      >
-        {open ? <CloseIcon /> : <ChatIcon />}
-        {!open && unreadCount > 0 && <span className="ar-chat-fab-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>}
-      </button>
+      {!open && (
+        <button
+          type="button"
+          className="ar-chat-fab"
+          aria-label={unreadCount > 0 ? `Open chat, ${unreadCount} unread` : "Open chat"}
+          onClick={toggleOpen}
+        >
+          <ChatIcon />
+          {unreadCount > 0 && <span className="ar-chat-fab-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+        </button>
+      )}
     </div>,
     document.body
   );
