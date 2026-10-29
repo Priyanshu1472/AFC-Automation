@@ -105,6 +105,21 @@ export function itemUrgencyLevel(item) {
   return "amber";
 }
 
+// Days elapsed of the same window itemUrgencyLevel() measures (added → due
+// date), for the "Elapsed 50 / 60 days" readout. pct is capped at 100 once
+// overdue. null when there's no window to measure.
+export function itemElapsed(item) {
+  if (!item.due_date || !item.created_at) return null;
+  const created = new Date(item.created_at);
+  const start = new Date(created.getFullYear(), created.getMonth(), created.getDate());
+  const due = new Date(`${item.due_date}T00:00:00`);
+  const today = new Date(`${todayISO()}T00:00:00`);
+  const total = Math.max(0, Math.round((due - start) / 86400000));
+  const elapsed = Math.max(0, Math.round((today - start) / 86400000));
+  const pct = total > 0 ? Math.min(100, Math.round((elapsed / total) * 100)) : 100;
+  return { elapsed, total, pct };
+}
+
 // Client invoices are always loaded with their lines — one per milestone /
 // deliverable billed (client_invoice_lines).
 export const CLIENT_INVOICE_SELECT = "*, lines:client_invoice_lines(item_id, amount, description, position)";

@@ -16,9 +16,23 @@ import Button from "../ui/Button";
 import Alert from "../ui/Alert";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import Modal from "../ui/Modal";
-import { ListChecksIcon, PencilIcon, TrashIcon, CheckCircleIcon, ReceiptIcon, ClipboardListIcon, PaperclipIcon, ImageIcon } from "../icons";
+import {
+  ListChecksIcon, PencilIcon, TrashIcon, CheckCircleIcon, ReceiptIcon, PaperclipIcon, ImageIcon, FileTextIcon,
+  TargetIcon, CalendarIcon, ClockIcon, ExclamationIcon, CheckIcon, TagIcon, RotateCcwIcon, ArrowRightIcon,
+} from "../icons";
 import { ItemModal, CompleteItemModal, NoteModal, ImagesModal } from "./ItemModals";
-import { fmtDate, formatINR, itemTiming, itemUrgencyLevel, dueLabel, needsInvoice, isItemInvoiced, itemBilled, deliverableNumbers, openMonitoringFile } from "../../lib/monitoring";
+import { fmtDate, formatINR, itemTiming, itemUrgencyLevel, itemElapsed, dueLabel, needsInvoice, isItemInvoiced, itemBilled, deliverableNumbers, openMonitoringFile } from "../../lib/monitoring";
+
+// Status icon + badge per urgency level (see itemUrgencyLevel()).
+const URGENCY = {
+  red: { label: "Overdue", icon: <ExclamationIcon /> },
+  amber: { label: "Amber", icon: <ClockIcon /> },
+  yellow: { label: "Yellow", icon: <CalendarIcon /> },
+  green: { label: "Green", icon: <CheckIcon /> },
+  done: { label: "Completed", icon: <CheckIcon /> },
+  none: { label: "No due date", icon: <CalendarIcon /> },
+};
+const LEGEND = [["green", "Green", "<50%"], ["yellow", "Yellow", "50–70%"], ["amber", "Amber", "70–100%"], ["red", "Red", "Overdue"]];
 
 function byDue(a, b) {
   if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
@@ -34,7 +48,7 @@ function byCreated(a, b) {
   return new Date(a.created_at) - new Date(b.created_at);
 }
 
-export default function MonitoringPlanPanel({ projectId, items, documents = [], clientInvoices, canEdit, onRaiseInvoice, onChanged }) {
+export default function MonitoringPlanPanel({ projectId, project, items, documents = [], clientInvoices, canEdit, onRaiseInvoice, onChanged }) {
   const [dialog, setDialog] = useState(null); // { type, item?, kind?, parentId? }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -86,81 +100,89 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
 
   function renderItem(item, nested = false, parent = null) {
     const timing = itemTiming(item);
+    const urgency = itemUrgencyLevel(item);
+    const status = URGENCY[urgency];
+    const elapsed = itemElapsed(item);
     const billed = itemBilled(item, clientInvoices, items);
     const invoiced = isItemInvoiced(item, clientInvoices, items);
     const pendingInvoice = needsInvoice(item, clientInvoices, items);
     const isMilestone = item.kind === "milestone";
-    const openKids = isMilestone ? childrenOf(item.id).filter((c) => c.status !== "completed").length : 0;
+    const isDone = item.status === "completed";
+    const kids = isMilestone ? childrenOf(item.id) : [];
+    const openKids = kids.filter((c) => c.status !== "completed").length;
+    const files = documents.filter((d) => d.item_id === item.id);
 
     return (
-      <div className={`mon-item is-${timing} is-urg-${itemUrgencyLevel(item)}${isMilestone ? " is-milestone" : ""}${nested ? " is-nested" : ""}`}>
-        <button
-          type="button"
-          className="mon-item-check"
-          disabled={!canEdit || busy}
-          title={item.status === "completed" ? (billed > 0 ? "Invoiced — can't reopen" : "Reopen") : "Mark complete"}
-          aria-label={item.status === "completed" ? `Reopen ${item.title}` : `Mark ${item.title} complete`}
-          onClick={() => {
-            if (item.status === "completed") { if (billed === 0) setDialog({ type: "reopen", item }); }
-            else setDialog({ type: "complete", item, openKids });
-          }}
-        >
-          {item.status === "completed" ? <CheckCircleIcon /> : <span className="mon-item-ring" />}
-        </button>
+      <div className={`mon-card is-${timing} is-urg-${urgency}${isMilestone ? " is-milestone" : ""}${nested ? " is-nested" : ""}`}>
+        <span className="mon-card-status" aria-hidden="true">{status.icon}</span>
 
-        <div className="mon-item-main">
-          <div className="mon-item-title-row">
+        <div className="mon-card-main">
+          <div className="mon-card-title-row">
+            <span className="mon-card-badge">{status.label}</span>
             {isMilestone && <span className="mon-item-kind">Milestone</span>}
             {!isMilestone && numbers[item.id] && <span className="mon-item-kind">Deliverable {numbers[item.id]}</span>}
-            <span className="mon-item-title">{item.title}</span>
+            <span className="mon-card-title">{item.title}</span>
           </div>
-          {item.description && <p className="mon-item-desc">{item.description}</p>}
-          <div className="mon-item-meta">
-            {item.status === "completed" ? (
-              <span className="mon-tag is-done">Completed {fmtDate(item.completed_at)}</span>
-            ) : (
-              <span className={`mon-tag is-${timing}`}>{item.due_date ? `${fmtDate(item.due_date)} · ${dueLabel(item)}` : "No due date"}</span>
-            )}
+          {item.description && <p className="mon-card-desc">{item.description}</p>}
+          <div className="mon-card-meta">
+            <span className="mon-card-due">
+              <CalendarIcon />
+              {isDone ? (
+                <>Completed <strong>{fmtDate(item.completed_at)}</strong></>
+              ) : item.due_date ? (
+                <>{fmtDate(item.due_date)} <ArrowRightIcon /> <strong>{dueLabel(item)}</strong></>
+              ) : "No due date"}
+            </span>
             {(item.invoice_on_completion || billed > 0) && (
-              <span className={`mon-tag ${invoiced ? "is-billable" : pendingInvoice ? "is-overdue" : "is-billable"}`}>
-                <ReceiptIcon />{" "}
+              <span className={`mon-chip${pendingInvoice ? " is-alert" : ""}`}>
+                <FileTextIcon />
                 {invoiced ? "Invoiced" : billed > 0 ? `Invoiced ${formatINR(billed)}` : pendingInvoice ? "Invoice to raise" : "Billable"}
                 {Number(item.invoice_amount) > 0 ? `${billed > 0 && !invoiced ? " of " : " · "}${item.invoice_pct != null ? `${item.invoice_pct}% · ` : ""}${formatINR(item.invoice_amount)}` : ""}
               </span>
             )}
-            {isMilestone && childrenOf(item.id).length > 0 && (
-              <span className="mon-tag">{childrenOf(item.id).length - openKids}/{childrenOf(item.id).length} deliverables</span>
+            {kids.length > 0 && (
+              <span className="mon-chip"><ListChecksIcon /> {kids.length - openKids}/{kids.length} deliverables</span>
             )}
           </div>
-          {item.status === "completed" && item.completion_note && <p className="mon-item-note"><strong>Details:</strong> “{item.completion_note}”</p>}
-          {item.remarks && <p className="mon-item-note"><strong>Note/Remarks:</strong> {item.remarks}</p>}
-          {documents.filter((d) => d.item_id === item.id).map((d) => (
-            <button key={d.id} type="button" className="mon-link mon-item-file" onClick={() => viewFile(d)}>
-              <PaperclipIcon /> {d.file_name}
-            </button>
-          ))}
-          {canEdit && !isMilestone && (
-            <div className="mon-item-images-row">
-              <button type="button" className="mon-link" onClick={() => setDialog({ type: "images", item })}>
-                <ImageIcon /> View Images
-              </button>
+          {isDone && item.completion_note && <p className="mon-card-note"><strong>Details:</strong> “{item.completion_note}”</p>}
+          {item.remarks && <p className="mon-card-note"><strong>Note/Remarks:</strong> {item.remarks}</p>}
+          {files.length > 0 && (
+            <div className="mon-card-files">
+              {files.map((d) => (
+                <button key={d.id} type="button" className="mon-link" onClick={() => viewFile(d)}>
+                  <PaperclipIcon /> {d.file_name}
+                </button>
+              ))}
             </div>
           )}
         </div>
 
-        <div className="mon-item-actions">
-          {pendingInvoice && canEdit && (
-            <Button size="sm" icon={<ReceiptIcon />} onClick={() => onRaiseInvoice(item)}>Raise Invoice</Button>
-          )}
-          {canEdit && (
-            <>
-              {!isMilestone && (
-                <button type="button" className="pp-icon-btn" title={item.remarks ? "Edit notes" : "Add note"} aria-label={`${item.remarks ? "Edit" : "Add"} notes for ${item.title}`} onClick={() => setDialog({ type: "note", item })}><ClipboardListIcon /></button>
+        <div className="mon-card-elapsed">
+          <div className="mon-card-bar-row">
+            <div className="mon-card-bar"><span style={{ width: `${isDone ? 100 : elapsed ? elapsed.pct : 0}%` }} /></div>
+            <span className="mon-card-pct">{isDone ? "Done" : elapsed ? `${elapsed.pct}%` : "—"}</span>
+          </div>
+          <span className="mon-card-elapsed-label">{isDone ? "Completed" : "Elapsed"}</span>
+          <span className="mon-card-elapsed-value">
+            {isDone ? fmtDate(item.completed_at) : elapsed ? `${elapsed.elapsed} / ${elapsed.total} days` : "No due date"}
+          </span>
+        </div>
+
+        {canEdit && (
+          <div className="mon-card-side">
+            <div className="mon-card-icons">
+              {isDone ? (
+                <button type="button" className="mon-icon-btn" disabled={busy || billed > 0} title={billed > 0 ? "Invoiced — can't reopen" : "Reopen"} aria-label={`Reopen ${item.title}`} onClick={() => setDialog({ type: "reopen", item })}><RotateCcwIcon /></button>
+              ) : (
+                <button type="button" className="mon-icon-btn is-success" disabled={busy} title="Mark complete" aria-label={`Mark ${item.title} complete`} onClick={() => setDialog({ type: "complete", item, openKids })}><CheckCircleIcon /></button>
               )}
-              <button type="button" className="pp-icon-btn" title="Edit" aria-label={`Edit ${item.title}`} onClick={() => setDialog({ type: "edit", item })}><PencilIcon /></button>
+              {!isMilestone && (
+                <button type="button" className="mon-icon-btn" title={item.remarks ? "Edit notes" : "Add note"} aria-label={`${item.remarks ? "Edit" : "Add"} notes for ${item.title}`} onClick={() => setDialog({ type: "note", item })}><FileTextIcon /></button>
+              )}
+              <button type="button" className="mon-icon-btn" title="Edit" aria-label={`Edit ${item.title}`} onClick={() => setDialog({ type: "edit", item })}><PencilIcon /></button>
               <button
                 type="button"
-                className="pp-icon-btn pp-icon-danger"
+                className="mon-icon-btn is-danger"
                 title={billed > 0 ? "Invoiced — can't be deleted" : "Delete"}
                 aria-label={`Delete ${item.title}`}
                 disabled={billed > 0}
@@ -168,9 +190,17 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
               >
                 <TrashIcon />
               </button>
-            </>
-          )}
-        </div>
+            </div>
+            {!isMilestone && (
+              <button type="button" className="mon-card-images" onClick={() => setDialog({ type: "images", item })}>
+                <ImageIcon /> View Images
+              </button>
+            )}
+            {pendingInvoice && (
+              <Button size="sm" icon={<ReceiptIcon />} onClick={() => onRaiseInvoice(item)}>Raise Invoice</Button>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -179,7 +209,7 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
     <Card>
       <Collapsible
         title="Milestones & Deliverables"
-        icon={<ListChecksIcon />}
+        icon={<TargetIcon />}
         expandable={false}
         action={canEdit ? (
           <div className="mon-header-actions">
@@ -196,16 +226,30 @@ export default function MonitoringPlanPanel({ projectId, items, documents = [], 
           </p>
         ) : (
           <>
-            <div className="mon-progress" aria-label={`${done} of ${items.length} complete`}>
-              <div className="mon-progress-bar"><span style={{ width: `${pct}%` }} /></div>
-              <span className="mon-progress-text"><strong>{done}</strong> of {items.length} complete · {pct}%</span>
+            <div className="mon-plan-summary">
+              <div className="mon-plan-pills">
+                {(project?.start_date || project?.end_date) && (
+                  <span className="mon-chip is-lg"><CalendarIcon /> {fmtDate(project.start_date)} – {fmtDate(project.end_date)}</span>
+                )}
+                <span className="mon-chip is-lg"><TargetIcon /> Total Milestones <span className="mon-chip-count">{milestones.length}</span></span>
+                <span className="mon-chip is-lg"><TagIcon /> Deliverables <span className="mon-chip-count">{items.length - milestones.length}</span></span>
+                <span className="mon-chip is-lg" aria-label={`${done} of ${items.length} complete`}><CheckCircleIcon /> Completed <span className="mon-chip-count">{done}/{items.length} · {pct}%</span></span>
+              </div>
+              <div className="mon-legend" aria-label="Color key">
+                {LEGEND.map(([key, label, hint]) => (
+                  <span key={key} className={`mon-legend-item is-urg-${key}`}>
+                    <span className="mon-legend-dot" />
+                    <span><strong>{label}</strong><small>({hint})</small></span>
+                  </span>
+                ))}
+              </div>
             </div>
 
             <div className="mon-plan">
               {milestones.map((m) => {
                 const kids = childrenOf(m.id);
                 return (
-                  <section key={m.id} className={`mon-milestone is-${itemTiming(m)} is-urg-${itemUrgencyLevel(m)}`}>
+                  <section key={m.id} className="mon-milestone">
                     {renderItem(m)}
                     {(kids.length > 0 || (canEdit && m.status !== "completed")) && (
                       <div className="mon-tree">

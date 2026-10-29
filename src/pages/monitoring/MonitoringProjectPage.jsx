@@ -364,6 +364,7 @@ export default function MonitoringProjectPage() {
           <div role="tabpanel" id={`mon-panel-${tab}`} aria-labelledby={`mon-tab-${tab}`} className="mon-tab-panel">
               {tab === "plan" && (
                 <MonitoringPlanPanel
+                  project={project}
                   projectId={project.id}
                   items={items}
                   documents={documents}

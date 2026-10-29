@@ -1,41 +1,22 @@
 /* Monitoring + Financials (and the BP's invoice card on Home). */
 
 /* Deliverable/milestone urgency traffic-light colors — fixed per theme
-   (not derived from the brand tokens) so red/yellow/green stay visibly
-   distinct and legible in both light and dark mode. */
+   (not derived from the brand tokens) so red/amber/yellow/green stay
+   visibly distinct. --urg-* is the accent (stripe, status dot, bar);
+   --urg-*-text is the same hue tuned to read as text on the card. */
 :root {
-  --deliverable-red-bg:      #B91C1C;
-  --deliverable-red-border:  #FF4D4F;
-  --deliverable-red-text:    #FFFFFF;
-
-  --deliverable-amber-bg:     #EA580C;
-  --deliverable-amber-border: #FDBA74;
-  --deliverable-amber-text:   #FFFFFF;
-
-  --deliverable-yellow-bg:     #FDE68A;
-  --deliverable-yellow-border: #CA8A04;
-  --deliverable-yellow-text:   #713F12;
-
-  --deliverable-green-bg:     #087A3E;
-  --deliverable-green-border: #39E079;
-  --deliverable-green-text:   #FFFFFF;
+  --urg-red: #E5484D;    --urg-red-text: #B91C1C;
+  --urg-amber: #EA7A2B;  --urg-amber-text: #C2410C;
+  --urg-yellow: #E8B820; --urg-yellow-text: #A16207;
+  --urg-green: #22A35A;  --urg-green-text: #15803D;
+  --urg-on: #FFFFFF;     /* glyph on the status circle */
 }
 [data-theme="dark"] {
-  --deliverable-red-bg:      #7F1D1D;
-  --deliverable-red-border:  #FF4D4F;
-  --deliverable-red-text:    #FEE2E2;
-
-  --deliverable-amber-bg:     #9A3412;
-  --deliverable-amber-border: #FDBA74;
-  --deliverable-amber-text:   #FFF7ED;
-
-  --deliverable-yellow-bg:     #92720C;
-  --deliverable-yellow-border: #FDE68A;
-  --deliverable-yellow-text:   #FEFCE8;
-
-  --deliverable-green-bg:     #064E2B;
-  --deliverable-green-border: #39E079;
-  --deliverable-green-text:   #DCFCE7;
+  --urg-red: #EF4E5C;    --urg-red-text: #F87171;
+  --urg-amber: #F0954A;  --urg-amber-text: #F5A762;
+  --urg-yellow: #F5CF4B; --urg-yellow-text: #F5CF4B;
+  --urg-green: #3CC27A;  --urg-green-text: #4ADE80;
+  --urg-on: #12161C;
 }
 
 .mon-empty { margin: 0; color: var(--text-tertiary); font-size: var(--text-sm); }
@@ -149,114 +130,179 @@
 .mon-cell-sub { font-size: var(--text-xs); }
 
 /* ── Milestones & deliverables ──────────────────────────────────────── */
-/* Each milestone is a card; its deliverables hang off it as an indented
-   tree (a vertical rail + an elbow into each row), so what belongs to
-   which milestone reads at a glance. */
+/* Each item is a card: urgency stripe + tint, a status circle, the
+   details, an "Elapsed" readout and the action icons. A milestone's
+   deliverables hang off it as an indented tree (a vertical rail + an
+   elbow into each card), so what belongs to which milestone reads at a
+   glance. Urgency is by how much of the item's own creation-to-due window
+   has elapsed — see itemUrgencyLevel(). */
+
+/* Summary strip: count pills on the left, the color key on the right. */
+.mon-plan-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  flex-wrap: wrap; margin-bottom: var(--space-4);
+}
+.mon-plan-pills { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.mon-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: var(--radius-full);
+  font-size: var(--text-xs); font-weight: 500; white-space: nowrap;
+  background: var(--bg-surface-2); color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+.mon-chip svg { width: 13px; height: 13px; flex-shrink: 0; }
+.mon-chip.is-lg { padding: 6px 12px; font-size: var(--text-sm); }
+.mon-chip.is-lg svg { width: 15px; height: 15px; }
+.mon-chip.is-alert { color: var(--urg-red-text); border-color: color-mix(in srgb, var(--urg-red) 40%, transparent); }
+.mon-chip-count {
+  padding: 0 7px; border-radius: var(--radius-full); font-weight: 700;
+  background: var(--bg-surface-3); color: var(--text-primary);
+}
+
+.mon-legend {
+  display: flex; flex-wrap: wrap; align-items: center;
+  padding: 6px 4px; border-radius: var(--radius-lg);
+  background: var(--bg-surface-2); border: 1px solid var(--border-subtle);
+}
+.mon-legend-item { display: inline-flex; align-items: center; gap: 8px; padding: 2px 12px; line-height: 1.2; }
+.mon-legend-item + .mon-legend-item { border-left: 1px solid var(--border-default); }
+.mon-legend-item strong { display: block; font-size: var(--text-xs); font-weight: 600; color: var(--text-primary); }
+.mon-legend-item small { display: block; font-size: 11px; color: var(--text-tertiary); }
+.mon-legend-dot {
+  width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+  background: var(--urg);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--urg) 22%, transparent);
+}
+
+/* Each urgency level sets the accent the card / legend pieces read from. */
+.is-urg-red    { --urg: var(--urg-red);    --urg-text: var(--urg-red-text); }
+.is-urg-amber  { --urg: var(--urg-amber);  --urg-text: var(--urg-amber-text); }
+.is-urg-yellow { --urg: var(--urg-yellow); --urg-text: var(--urg-yellow-text); }
+.is-urg-green,
+.is-urg-done   { --urg: var(--urg-green);  --urg-text: var(--urg-green-text); }
+.is-urg-none   { --urg: var(--border-strong); --urg-text: var(--text-secondary); }
+
 .mon-plan { display: flex; flex-direction: column; gap: var(--space-4); }
-.mon-milestone {
-  position: relative;
-  border: 1px solid var(--card-border); border-left: 8px solid var(--border-strong);
-  border-radius: var(--radius-lg); background: var(--card-bg);
-  padding: var(--space-1) 0 var(--space-2);
-}
-.mon-milestone.is-loose { border-left-color: var(--border-default); }
-/* Urgency, by how much of the item's own creation-to-due window has
-   elapsed: green up to 50%, yellow 50-70%, amber 70-100%, red once the due
-   date has actually passed — see itemUrgencyLevel(). "done" (completed)
-   stays green. Kept wide (8px/6px) so it reads at a glance. */
-/* Green/done is deliberately left off milestones — only their yellow/
-   amber/red states get colored; milestones otherwise keep the plain card
-   look. */
-.mon-milestone.is-urg-yellow { border-left-color: var(--deliverable-yellow-border); background: var(--deliverable-yellow-bg); }
-.mon-milestone.is-urg-amber  { border-left-color: var(--deliverable-amber-border);  background: var(--deliverable-amber-bg); }
-.mon-milestone.is-urg-red    { border-left-color: var(--deliverable-red-border);    background: var(--deliverable-red-bg); }
-
-.mon-item:not(.is-milestone).is-urg-green,
-.mon-item:not(.is-milestone).is-urg-done   { border-left: 6px solid var(--deliverable-green-border);  background: var(--deliverable-green-bg); }
-.mon-item:not(.is-milestone).is-urg-yellow { border-left: 6px solid var(--deliverable-yellow-border); background: var(--deliverable-yellow-bg); }
-.mon-item:not(.is-milestone).is-urg-amber  { border-left: 6px solid var(--deliverable-amber-border);  background: var(--deliverable-amber-bg); }
-.mon-item:not(.is-milestone).is-urg-red    { border-left: 6px solid var(--deliverable-red-border);    background: var(--deliverable-red-bg); }
-
-/* Each state's own text color (per-theme, see the --deliverable-* tokens
-   above) instead of inheriting --text-primary, which is white in dark
-   mode and unreadable against these backgrounds. */
-.mon-item:not(.is-milestone).is-urg-green .mon-item-title,
-.mon-item:not(.is-milestone).is-urg-green .mon-item-desc,
-.mon-item:not(.is-milestone).is-urg-green .mon-item-note,
-.mon-item:not(.is-milestone).is-urg-done .mon-item-title,
-.mon-item:not(.is-milestone).is-urg-done .mon-item-desc,
-.mon-item:not(.is-milestone).is-urg-done .mon-item-note { color: var(--deliverable-green-text); }
-:is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-title,
-:is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-desc,
-:is(.mon-milestone, .mon-item).is-urg-yellow .mon-item-note { color: var(--deliverable-yellow-text); }
-:is(.mon-milestone, .mon-item).is-urg-amber .mon-item-title,
-:is(.mon-milestone, .mon-item).is-urg-amber .mon-item-desc,
-:is(.mon-milestone, .mon-item).is-urg-amber .mon-item-note { color: var(--deliverable-amber-text); }
-:is(.mon-milestone, .mon-item).is-urg-red .mon-item-title,
-:is(.mon-milestone, .mon-item).is-urg-red .mon-item-desc,
-:is(.mon-milestone, .mon-item).is-urg-red .mon-item-note { color: var(--deliverable-red-text); }
-
-/* The corner icon buttons (note/edit/delete) and the "View Images" link
-   were barely visible against these saturated light-theme backgrounds —
-   each state's own text color (same tokens as above) gives them real
-   contrast instead of the default muted --text-secondary. Dark theme's
-   --text-secondary is already light enough to read fine here, so this is
-   light-theme only. */
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-green .pp-icon-btn,
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-done .pp-icon-btn,
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-green .mon-link,
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-done .mon-link {
-  color: var(--deliverable-green-text); border-color: color-mix(in srgb, var(--deliverable-green-text) 50%, transparent); background: color-mix(in srgb, var(--deliverable-green-text) 15%, transparent);
-}
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-yellow .pp-icon-btn,
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-yellow .mon-link {
-  color: var(--deliverable-yellow-text); border-color: color-mix(in srgb, var(--deliverable-yellow-text) 40%, transparent); background: color-mix(in srgb, var(--deliverable-yellow-text) 10%, transparent);
-}
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-amber .pp-icon-btn,
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-amber .mon-link {
-  color: var(--deliverable-amber-text); border-color: color-mix(in srgb, var(--deliverable-amber-text) 50%, transparent); background: color-mix(in srgb, var(--deliverable-amber-text) 15%, transparent);
-}
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-red .pp-icon-btn,
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-red .mon-link {
-  color: var(--deliverable-red-text); border-color: color-mix(in srgb, var(--deliverable-red-text) 50%, transparent); background: color-mix(in srgb, var(--deliverable-red-text) 15%, transparent);
-}
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-green .pp-icon-btn:hover,
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-done .pp-icon-btn:hover,
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-yellow .pp-icon-btn:hover,
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-amber .pp-icon-btn:hover,
-:root:not([data-theme="dark"]) .mon-item:not(.is-milestone).is-urg-red .pp-icon-btn:hover {
-  background: color-mix(in srgb, currentColor 25%, transparent);
-}
+.mon-milestone { position: relative; }
 .mon-group-label {
-  padding: var(--space-2) var(--space-4) var(--space-1);
+  padding: 0 0 var(--space-2);
   font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary);
 }
+.mon-loose-node + .mon-loose-node { margin-top: var(--space-3); }
 
-.mon-item {
-  display: flex; align-items: flex-start; gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+.mon-card {
+  /* --card-accent drives the stripe + tint; milestones keep a plain card
+     while green/done (only their yellow/amber/red states get colored). */
+  --card-accent: var(--urg);
+  display: flex; align-items: flex-start; gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--card-accent) 28%, var(--border-subtle));
+  border-left: 6px solid var(--card-accent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--card-accent) 7%, var(--card-bg));
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
 }
-.mon-loose-node + .mon-loose-node .mon-item { border-top: 1px solid var(--border-subtle); }
+.mon-card:hover { border-color: color-mix(in srgb, var(--card-accent) 55%, var(--border-subtle)); border-left-color: var(--card-accent); }
+.mon-card.is-milestone:is(.is-urg-green, .is-urg-done, .is-urg-none) { --card-accent: var(--border-strong); }
 
-/* The tree: starts under the milestone's check circle (16px pad + 13px =
-   circle centre) and indents every deliverable past it. */
-.mon-tree { position: relative; margin: 0 var(--space-4) 0 29px; padding-left: 26px; }
+.mon-card-status {
+  flex-shrink: 0; width: 40px; height: 40px; margin-top: 2px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--urg); color: var(--urg-on);
+}
+.mon-card-status svg { width: 22px; height: 22px; }
+.mon-card.is-urg-none .mon-card-status { background: var(--bg-surface-3); color: var(--text-secondary); }
+
+.mon-card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.mon-card-title-row { display: flex; align-items: center; gap: var(--space-2) var(--space-3); flex-wrap: wrap; }
+.mon-card-badge {
+  padding: 3px 10px; border-radius: var(--radius-md);
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--urg) 20%, transparent); color: var(--urg-text);
+}
+.mon-item-kind {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-secondary); background: var(--bg-surface-3); padding: 2px 7px; border-radius: var(--radius-sm);
+}
+.mon-card-title { font-size: var(--text-base); font-weight: 700; color: var(--text-primary); }
+.mon-card.is-nested .mon-card-title { font-size: var(--text-sm); }
+.mon-card-desc { margin: 0; font-size: var(--text-sm); line-height: 1.55; color: var(--text-secondary); white-space: pre-wrap; max-width: 72ch; }
+.mon-card-note { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); font-style: italic; }
+.mon-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: 2px; }
+.mon-card-due {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--text-sm); color: var(--text-secondary);
+}
+.mon-card-due svg { width: 14px; height: 14px; flex-shrink: 0; }
+.mon-card-due strong { font-weight: 500; color: var(--urg-text); }
+.mon-card-due + .mon-chip { position: relative; margin-left: var(--space-3); }
+.mon-card-due + .mon-chip::before {
+  content: ""; position: absolute; left: calc(-1 * var(--space-3) - 1px); top: 4px; bottom: 4px;
+  border-left: 1px solid var(--border-default);
+}
+.mon-card-files { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-size: var(--text-xs); }
+
+/* "Elapsed" readout. */
+.mon-card-elapsed {
+  flex-shrink: 0; width: 240px; align-self: center;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-surface) 70%, transparent);
+  border: 1px solid var(--border-subtle);
+}
+.mon-card-bar-row { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
+.mon-card-bar { flex: 1; height: 8px; border-radius: var(--radius-full); background: var(--bg-surface-3); overflow: hidden; }
+.mon-card-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--urg); transition: width var(--duration-slow) var(--ease-out); }
+.mon-card-pct { font-size: var(--text-xs); font-weight: 600; color: var(--text-primary); min-width: 34px; text-align: right; }
+.mon-card-elapsed-label { font-size: var(--text-xs); color: var(--text-tertiary); }
+.mon-card-elapsed-value { font-size: var(--text-sm); font-weight: 500; color: var(--urg-text); }
+
+/* Action icons + View Images, behind a divider. */
+.mon-card-side {
+  flex-shrink: 0; align-self: stretch;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2);
+  padding-left: var(--space-4); border-left: 1px solid var(--border-default);
+}
+.mon-card-icons { display: flex; align-items: center; gap: 2px; }
+.mon-icon-btn {
+  width: 36px; height: 36px; border-radius: var(--radius-md);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer; color: var(--text-secondary);
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.mon-icon-btn svg { width: 19px; height: 19px; }
+.mon-icon-btn:not(:disabled):hover { background: var(--bg-surface-2); color: var(--text-primary); }
+.mon-icon-btn.is-success:not(:disabled):hover { color: var(--urg-green-text); }
+.mon-icon-btn.is-danger:not(:disabled):hover { color: var(--urg-red-text); }
+.mon-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.mon-icon-btn:focus-visible, .mon-card-images:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+.mon-card-images {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: none; border: none; padding: 4px 8px; border-radius: var(--radius-md); cursor: pointer;
+  font: inherit; font-size: var(--text-sm); font-weight: 500; color: var(--text-secondary);
+}
+.mon-card-images svg { width: 18px; height: 18px; }
+.mon-card-images:hover { background: var(--bg-surface-2); color: var(--text-primary); }
+
+/* The tree: the rail starts under the milestone's status circle
+   (6px stripe + 20px pad + 20px = circle centre) and indents every
+   deliverable past it. */
+.mon-tree { position: relative; margin: var(--space-3) 0 0 45px; padding-left: 26px; }
 .mon-tree::before {
-  content: ""; position: absolute; left: 0; top: -6px; bottom: 22px;
+  content: ""; position: absolute; left: 0; top: -12px; bottom: 22px;
   border-left: 2px solid var(--border-default);
 }
 .mon-tree-node { position: relative; }
+.mon-tree-node + .mon-tree-node { margin-top: var(--space-3); }
 .mon-tree-node::before {
-  content: ""; position: absolute; left: -26px; top: 24px; width: 20px;
+  content: ""; position: absolute; left: -26px; top: 36px; width: 20px;
   border-top: 2px solid var(--border-default);
 }
-.mon-tree-node .mon-item {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  margin-bottom: var(--space-2);
-}
 .mon-tree-add::before { top: 50%; }
+.mon-card.is-nested { padding: var(--space-3) var(--space-4); gap: var(--space-3); }
+.mon-card.is-nested .mon-card-status { width: 34px; height: 34px; }
+.mon-card.is-nested .mon-card-status svg { width: 18px; height: 18px; }
+.mon-card.is-nested .mon-card-elapsed { width: 210px; }
 .mon-add-link {
   background: none; border: none; border-radius: var(--radius-sm);
   padding: 4px 6px; margin: 0 0 var(--space-1) -6px;
@@ -264,47 +310,21 @@
 }
 .mon-add-link:hover { background: var(--bg-surface-2); text-decoration: underline; }
 
-.mon-item-check {
-  flex-shrink: 0; width: 26px; height: 26px; margin-top: 1px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: none; border: none; padding: 0; cursor: pointer; color: var(--success);
-  border-radius: 50%;
+@media (max-width: 1100px) {
+  .mon-card { flex-wrap: wrap; }
+  .mon-card-main { flex-basis: calc(100% - 64px); }
+  .mon-card-elapsed, .mon-card.is-nested .mon-card-elapsed { width: auto; flex: 1 1 220px; margin-left: 56px; }
+  .mon-card-side { border-left: none; padding-left: 0; flex-direction: row; align-self: center; }
 }
-.mon-item-check:disabled { cursor: default; }
-.mon-item-check svg { width: 24px; height: 24px; }
-.mon-item-ring {
-  width: 20px; height: 20px; border-radius: 50%;
-  border: 2px solid var(--border-strong); background: var(--card-bg);
-  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
-}
-.mon-item-check:not(:disabled):hover .mon-item-ring { border-color: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent); }
-.mon-item-check:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
-
-.mon-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.mon-item-title-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
-.mon-item-kind {
-  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--brand-600); background: var(--brand-50); padding: 1px 6px; border-radius: var(--radius-sm);
-}
-.mon-item-title { font-size: var(--text-sm); font-weight: 700; color: var(--text-primary); }
-.mon-item.is-milestone .mon-item-title { font-size: var(--text-base); }
-.mon-item.is-nested .mon-item-check { width: 22px; height: 22px; }
-.mon-item.is-nested .mon-item-check svg { width: 20px; height: 20px; }
-.mon-item.is-nested .mon-item-ring { width: 17px; height: 17px; }
-.mon-item-desc { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); white-space: pre-wrap; }
-.mon-item-note { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); font-style: italic; }
-.mon-item-file { margin-top: 4px; font-size: var(--text-xs); }
-.mon-item-images-row { display: flex; justify-content: flex-end; margin-top: var(--space-2); }
-.mon-item-images-row .mon-link { font-size: var(--text-xs); font-weight: 600; }
-.mon-item-images-row svg { width: 13px; height: 13px; }
-.mon-item-meta { display: flex; flex-wrap: wrap; gap: 6px; }
-.mon-item-actions { display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
-
 @media (max-width: 640px) {
-  .mon-item { flex-wrap: wrap; }
-  .mon-item-actions { width: 100%; justify-content: flex-start; padding-left: 38px; }
-  .mon-tree { margin-left: 20px; padding-left: 18px; }
-  .mon-tree-node::before { left: -18px; width: 14px; }
+  .mon-card { padding: var(--space-3); gap: var(--space-3); }
+  .mon-card-main { flex-basis: calc(100% - 52px); }
+  .mon-card-elapsed, .mon-card.is-nested .mon-card-elapsed { margin-left: 0; flex-basis: 100%; }
+  .mon-card-side { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .mon-legend { width: 100%; }
+  .mon-legend-item { padding: 2px 8px; }
+  .mon-tree { margin-left: 18px; padding-left: 16px; }
+  .mon-tree-node::before { left: -16px; width: 12px; }
 }
 
 /* ── Documents ──────────────────────────────────────────────────────── */
