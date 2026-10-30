@@ -46,6 +46,18 @@ function fmtDate(v) {
   return new Date(v).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// Mirrors LeadForm's own review-summary "Type" line (lead_type doesn't
+// apply to a Suo Moto lead — the form just leaves it at its default, so a
+// Suo Moto source always wins regardless of what's stored there).
+const SOURCE_LABELS = { in_house: "In-House", ba: "BP Source", suo_moto: "Suo Moto" };
+function leadTypeLabel(l) {
+  if (l.source === "suo_moto") return "Suo Moto";
+  const source = SOURCE_LABELS[l.source];
+  const type = l.lead_type ? l.lead_type.toUpperCase() : null;
+  if (type && source) return `${type} · ${source}`;
+  return type || source || "—";
+}
+
 // Restores search/filter/page state after a trip out to a lead's detail
 // page and back — sessionStorage rather than the URL, since "Back to
 // Leads" pushes a bare /leads (see LeadDetailPage's back button), and this
@@ -362,7 +374,7 @@ export default function LeadListPage() {
                 <thead>
                   <tr>
                     <th>Lead Number</th><th>Title</th>{canFilterTeam && <th>Team</th>}
-                    <th>Person Responsible</th><th>Status</th><th>Last Date</th><th className="ll-col-actions">Actions</th>
+                    <th>Person Responsible</th><th>Lead Type</th><th>Status</th><th>Last Date</th><th className="ll-col-actions">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -372,6 +384,7 @@ export default function LeadListPage() {
                       <td className="ll-title" title={l.title}>{fmt(l.title)}</td>
                       {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>}
                       <td className="ll-name-cell" title={l.assignee?.full_name || ""}>{fmt(l.assignee?.full_name)}</td>
+                      <td>{leadTypeLabel(l)}</td>
                       <td><StatusBadge status={l.status} /></td>
                       <td className="ll-date">{fmtDate(l.submission_deadline)}</td>
                       <td className="ll-col-actions" onClick={(e) => e.stopPropagation()}>
