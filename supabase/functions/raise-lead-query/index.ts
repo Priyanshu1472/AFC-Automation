@@ -3,7 +3,8 @@
 // org-wide visible — see 20260928000200_lead_org_wide_visibility.sql) and
 // believes their own team could run it better raises a query here, with a
 // justification. PMT triages it (see respond-lead-query): add the raiser
-// to the lead's chat, decline it, or transfer the lead outright — this is
+// to the lead's chat, decline it, or request a transfer MD then approves
+// (MD can also transfer outright) — this is
 // the only way a lead ever gets transferred, there's no standalone/free
 // transfer button. The raiser can edit/withdraw/remind on their own open
 // query (see update-lead-query) — only one open query per lead at a time
@@ -66,7 +67,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .from("lead_queries")
       .select("id, raised_by_id, raised_by_team")
       .eq("lead_id", leadId)
-      .eq("status", "open")
+      .in("status", ["open", "transfer_pending"])
+      .limit(1)
       .maybeSingle();
     if (existingOpen) {
       return jsonRes(req, 400, {

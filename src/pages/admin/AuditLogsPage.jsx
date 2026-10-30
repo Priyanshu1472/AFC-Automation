@@ -87,6 +87,8 @@ const LEAD_ACTION_META = {
   md_decline:                { label: "MD Declined",                  variant: "danger" },
   withdraw_submission:       { label: "Submission Withdrawn",         variant: "warning" },
   team_transfer:             { label: "Transferred to Another Team",  variant: "warning" },
+  lead_transfer_requested:   { label: "Transfer Requested (Awaiting MD)", variant: "warning" },
+  lead_transfer_rejected:    { label: "Transfer Rejected by MD",      variant: "danger" },
   workflow_simplified:       { label: "Auto-Moved (Workflow Simplified)", variant: "info" },
   cross_team_query_raised:   { label: "Cross-Team Query Raised",     variant: "warning" },
   reopened_to_pmt:           { label: "Reopened to PMT (Query on Approved Lead)", variant: "warning" },
