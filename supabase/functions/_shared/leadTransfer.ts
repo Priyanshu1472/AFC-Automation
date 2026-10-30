@@ -1,8 +1,9 @@
 // supabase/functions/_shared/leadTransfer.ts
-// Moves a lead to a different team, PMT-initiated — used by
-// respond-lead-query's "transfer" action, the only way a lead gets
-// transferred (there is no standalone/free-transfer entry point; PMT can
-// only act once another team has raised a cross-team query on the lead).
+// Moves a lead to a different team — used by respond-lead-query, the only
+// way a lead gets transferred (there is no standalone/free-transfer entry
+// point; it only happens once another team has raised a cross-team query
+// on the lead). Only ever runs on MD's say-so: MD transferring directly,
+// or MD approving a transfer PMT requested.
 // Works at any lead status, including
 // terminal ones (md_approved/md_declined/pa_dropped) — a lead can be
 // transferred even after MD approval, per product decision; any downstream
@@ -113,7 +114,7 @@ export async function performLeadTransfer(
   const { error: notifClearErr } = await admin.from("notifications").update({ is_read: true }).eq("link", `/leads/${leadId}`).eq("is_read", false);
   if (notifClearErr) console.error("Clearing stale notifications after transfer failed:", notifClearErr.message);
 
-  await logLeadActivity(admin, leadId, actorId, "pmt", "team_transfer", lead.status as string, "po_assignment", `${fromTeam} → ${targetTeam}. New number: ${newLeadNumber}. ${justification}`);
+  await logLeadActivity(admin, leadId, actorId, "md", "team_transfer", lead.status as string, "po_assignment", `${fromTeam} → ${targetTeam}. New number: ${newLeadNumber}. ${justification}`);
 
   // The specific person PMT forwarded this lead to (actionable — same
   // wording as create-lead's isPoRouted notification, since this is now the

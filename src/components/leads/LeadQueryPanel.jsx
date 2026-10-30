@@ -1,8 +1,8 @@
 // Cross-team query card on the lead detail page — lets a DGM/AGM/SRM who
 // isn't on this lead's team raise a query with a justification (see
 // raise-lead-query), and lets PMT triage any open queries: add the raiser
-// to the chat, decline, or transfer the lead outright (see
-// respond-lead-query). The raiser can also edit, withdraw, or send PMT a
+// to the chat, decline, or request a transfer that MD then approves or
+// rejects — MD transfers outright (see respond-lead-query). The raiser can also edit, withdraw, or send PMT a
 // reminder on their own still-open query (see update-lead-query) — only
 // one open query per raiser per lead is allowed, so once it's sent, "Raise
 // a Query" gives way to managing the existing one instead. Point of
@@ -28,6 +28,7 @@ const QUERY_RAISER_ROLES = ["dgm", "general_manager", "agm", "srm"];
 const STATUS_BADGE = {
   open: { label: "Open", variant: "warning" },
   added_to_chat: { label: "Added to Chat", variant: "info" },
+  transfer_pending: { label: "Transfer Awaiting MD", variant: "warning" },
   transferred: { label: "Transferred", variant: "success" },
   declined: { label: "Declined", variant: "danger" },
   withdrawn: { label: "Withdrawn", variant: "neutral" },
@@ -36,8 +37,14 @@ const STATUS_BADGE = {
 const RESPOND_LABEL = {
   add_to_chat: "Add to chat",
   transfer: "Transfer lead",
+  request_transfer: "Request transfer (MD approval)",
   decline: "Decline",
+  approve_transfer: "Approve transfer",
+  reject_transfer: "Reject transfer",
 };
+
+const PIN_ACTIONS = ["transfer", "approve_transfer"];
+const OPTIONAL_REMARK_ACTIONS = ["add_to_chat", "approve_transfer"];
 
 function fmtTime(v) {
   return new Date(v).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -115,9 +122,11 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
   // Only one open query per lead at a time, from anyone — matches
   // raise-lead-query's own existingOpen check, which is lead-wide, not
   // scoped to just this viewer.
-  const anyOpenQuery = queries.find((q) => q.status === "open");
+  const anyOpenQuery = queries.find((q) => q.status === "open" || q.status === "transfer_pending");
   const canRaise = QUERY_RAISER_ROLES.includes(profile?.role) && !profile?.teams?.includes(leadTeam) && !anyOpenQuery;
   const isPmt = profile?.committee === "PMT" || ["md", "admin"].includes(profile?.role);
+  // MD transfers outright; everyone else on the PMT side only requests it.
+  const isMd = profile?.role === "md";
 
   async function submitQuery() {
     if (!justification.trim()) {
@@ -149,7 +158,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
   }
 
   async function respond(queryId, action) {
-    if (action !== "add_to_chat" && !responseText.trim()) {
+    if (!OPTIONAL_REMARK_ACTIONS.includes(action) && !responseText.trim()) {
       showToast("A response is required.", "danger");
       return;
     }
@@ -162,10 +171,10 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
         showToast("Select who to forward the lead to.", "danger");
         return;
       }
-      if (!/^\d{4}$/.test(transferPin)) {
-        showToast("Enter your 4-digit PIN.", "danger");
-        return;
-      }
+    }
+    if (PIN_ACTIONS.includes(action) && !/^\d{4}$/.test(transferPin)) {
+      showToast("Enter your 4-digit PIN.", "danger");
+      return;
     }
     setBusy(true);
     try {
@@ -174,7 +183,8 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
           query_id: queryId,
           action,
           response: responseText.trim(),
-          ...(action === "transfer" ? { pin: transferPin, target_team: transferTeam, forwarded_to_id: transferForwardToId } : {}),
+          ...(PIN_ACTIONS.includes(action) ? { pin: transferPin } : {}),
+          ...(action === "transfer" ? { target_team: transferTeam, forwarded_to_id: transferForwardToId } : {}),
         },
       });
       if (error) {
@@ -185,17 +195,21 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
         showToast(data?.error || "Action failed.", "danger");
         return;
       }
-      showToast(
-        action === "add_to_chat" ? "Raiser added to the lead discussion." : action === "decline" ? "Query declined." : "Lead transferred.",
-        "success"
-      );
+      const toast = {
+        add_to_chat: "Raiser added to the lead discussion.",
+        decline: "Query declined.",
+        transfer: data.pending ? "Transfer request sent to MD for approval." : "Lead transferred.",
+        approve_transfer: "Transfer approved — lead transferred.",
+        reject_transfer: "Transfer request rejected.",
+      };
+      showToast(toast[action], "success");
       setRespondingId(null);
       setResponseText("");
       setTransferPin("");
       setTransferTeam("");
       setTransferForwardToId("");
       fetchQueries();
-      if (action === "transfer" && onLeadTransferred) onLeadTransferred();
+      if (((action === "transfer" && !data.pending) || action === "approve_transfer") && onLeadTransferred) onLeadTransferred();
     } catch (err) {
       showToast(err.message || "Something went wrong.", "danger");
     } finally {
@@ -327,8 +341,28 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
 
                   {q.pmt_response && (
                     <div className="lq-item-response">
-                      <span className="lq-item-response-label">PMT:</span>
+                      <span className="lq-item-response-label">{q.resolved_by_role === "md" ? "MD:" : "PMT:"}</span>
                       <span>{q.pmt_response}</span>
+                    </div>
+                  )}
+
+                  {q.status === "transfer_pending" && (
+                    <div className="lq-item-response">
+                      <span className="lq-item-response-label">Requested:</span>
+                      <span>
+                        Transfer to {q.transfer_target_team}, forward to {queryNames[q.transfer_forwarded_to_id] || "—"}
+                        {queryNames[q.resolved_by_id] && ` (by ${queryNames[q.resolved_by_id]})`} — awaiting MD approval
+                      </span>
+                    </div>
+                  )}
+
+                  {q.md_decided_at && (
+                    <div className="lq-item-response">
+                      <span className="lq-item-response-label">MD:</span>
+                      <span>
+                        {q.status === "transferred" ? "Approved" : "Transfer rejected"}
+                        {q.md_response && ` — ${q.md_response}`}
+                      </span>
                     </div>
                   )}
 
@@ -358,12 +392,14 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                     )
                   )}
 
-                  {isPmt && (q.status === "open" || q.status === "added_to_chat") && (
+                  {((isPmt && (q.status === "open" || q.status === "added_to_chat")) || (isMd && q.status === "transfer_pending")) && (
                     respondingId?.queryId === q.id ? (
                       <div className="lq-respond-form">
                         {respondingId.action !== "add_to_chat" && (
                           <>
-                            <label className="ar-label">Remarks <span className="ar-required">*</span></label>
+                            <label className="ar-label">
+                              Remarks {!OPTIONAL_REMARK_ACTIONS.includes(respondingId.action) && <span className="ar-required">*</span>}
+                            </label>
                             <textarea
                               className="input"
                               rows={2}
@@ -393,19 +429,21 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                               disabled={busy || !transferTeam}
                               searchable
                             />
-                            <PinInput
-                              label="Your Action PIN"
-                              required
-                              value={transferPin}
-                              onChange={setTransferPin}
-                              disabled={busy}
-                              hint="Confirms it's really you"
-                            />
                           </>
+                        )}
+                        {PIN_ACTIONS.includes(respondingId.action) && (
+                          <PinInput
+                            label="Your Action PIN"
+                            required
+                            value={transferPin}
+                            onChange={setTransferPin}
+                            disabled={busy}
+                            hint="Confirms it's really you"
+                          />
                         )}
                         <div className="lq-form-actions">
                           <Button variant="primary" size="sm" loading={busy} disabled={busy} onClick={() => respond(q.id, respondingId.action)}>
-                            Confirm: {RESPOND_LABEL[respondingId.action]}
+                            Confirm: {RESPOND_LABEL[respondingId.action === "transfer" && !isMd ? "request_transfer" : respondingId.action]}
                           </Button>
                           <Button
                             variant="secondary"
@@ -423,6 +461,15 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                           </Button>
                         </div>
                       </div>
+                    ) : q.status === "transfer_pending" ? (
+                      <div className="lq-item-actions">
+                        <Button variant="primary" size="sm" onClick={() => setRespondingId({ queryId: q.id, action: "approve_transfer" })}>
+                          Approve Transfer
+                        </Button>
+                        <Button variant="danger" size="sm" onClick={() => setRespondingId({ queryId: q.id, action: "reject_transfer" })}>
+                          Reject
+                        </Button>
+                      </div>
                     ) : (
                       <div className="lq-item-actions">
                         {q.status === "open" && (
@@ -438,7 +485,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                             setTransferTeam(q.raised_by_team);
                           }}
                         >
-                          Transfer Lead
+                          {isMd ? "Transfer Lead" : "Request Transfer"}
                         </Button>
                         <Button variant="danger" size="sm" onClick={() => setRespondingId({ queryId: q.id, action: "decline" })}>
                           Decline
