@@ -32,7 +32,7 @@ const RESUME_AFTER_DECLINE_LABEL = {
 
 export function raApproveLabel(declinedFromStatus) {
   const target = declinedFromStatus ? RESUME_AFTER_DECLINE_LABEL[declinedFromStatus] : undefined;
-  return `Approve → ${target || "PMT"}`;
+  return `Recommend to ${target || "PMT"}`;
 }
 
 // PMT's own actionable stage — used to scope LeadListPage's committee tab

@@ -193,7 +193,7 @@ export default function LeadApprovalNotePreviewPage() {
                           />
                         </div>
                         <Button variant="primary" block loading={submitting} disabled={submitting} onClick={submitForDgmApproval}>
-                          {isResubmit ? "Resubmit for Approval" : "Submit for Approval"}
+                          {isResubmit ? "Resubmit for Approval" : "Forward to Recommending Authority"}
                         </Button>
                       </>
                     )}

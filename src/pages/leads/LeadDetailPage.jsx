@@ -78,8 +78,8 @@ const ACTIONS_BY_STATUS = {
   ],
   pa_dropped: [{ key: "claim", label: "Claim Lead", variant: "primary" }],
   recommending_authority_review: [
-    { key: "ra_approve", label: "Approve → PMT", variant: "primary", requiresReason: true, requiresPin: true },
-    { key: "ra_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true },
+    { key: "ra_approve", label: "Recommend to PMT", variant: "primary", requiresReason: true, requiresPin: true },
+    { key: "ra_decline", label: "Clarification Request", variant: "danger", requiresReason: true },
     { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
     { key: "withdraw_submission", label: "Withdraw Submission (edit BA)", variant: "secondary", requiresReason: true, requiresPin: true },
   ],
@@ -88,12 +88,12 @@ const ACTIONS_BY_STATUS = {
   // there's no way back once PMT is reviewing it, only forward (approve) or
   // back to the creator/PR for rework (decline).
   pmt_review: [
-    { key: "pmt_approve", label: "Approve → MD", variant: "primary", requiresReason: true, requiresPin: true },
-    { key: "pmt_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
+    { key: "pmt_approve", label: "Recommend to MD", variant: "primary", requiresReason: true, requiresPin: true },
+    { key: "pmt_decline", label: "Clarification Request", variant: "danger", requiresReason: true, requiresPin: true },
   ],
   md_review: [
     { key: "md_approve", label: "Approve", variant: "primary", requiresPin: true },
-    { key: "md_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
+    { key: "md_decline", label: "Clarification Request", variant: "danger", requiresReason: true, requiresPin: true },
   ],
   // Drop only reappears here as an escape hatch for the Person Responsible
   // when PMT or MD sent the lead back (declined_from_status) — a lead the

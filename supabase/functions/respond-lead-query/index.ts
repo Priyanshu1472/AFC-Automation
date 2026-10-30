@@ -27,7 +27,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { addLeadChatParticipants, getOrgWideHolders } from "../_shared/leadAuth.ts";
-import { notifyUser, notifyUsers } from "../_shared/notify.ts";
+import { notifyUser, notifyUsers, bumpChatNotifications } from "../_shared/notify.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { performLeadTransfer } from "../_shared/leadTransfer.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
@@ -86,7 +86,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, lead_number, title, team")
+      .select("id, lead_number, title, team, chat_opened_at")
       .eq("id", query.lead_id)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -106,6 +106,34 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         type: "info",
         link: `/leads/${lead.id}`,
       });
+      // Drop a visible line into the chat itself so everyone already in it
+      // sees who just joined and why — not just a toast/notification the
+      // raiser alone gets above. Skipped if the chat hasn't opened yet
+      // (lead_chat_messages requires it, same guard as send-lead-chat-
+      // message) — the roster row from addLeadChatParticipants above still
+      // takes effect whenever it does.
+      if (lead.chat_opened_at) {
+        const { data: raiser } = await adminClient.from("afc_users").select("full_name").eq("id", query.raised_by_id).maybeSingle();
+        const raiserName = raiser?.full_name || "A team member";
+        const { error: msgErr } = await adminClient.from("lead_chat_messages").insert({
+          lead_id: query.lead_id,
+          sender_id: caller.id,
+          message: `${raiserName} (${query.raised_by_team}) was added to this chat via a cross-team query.`,
+        });
+        if (!msgErr) {
+          const { data: others } = await adminClient
+            .from("lead_chat_participants")
+            .select("user_id")
+            .eq("lead_id", query.lead_id)
+            .not("user_id", "in", `(${[caller.id, query.raised_by_id].join(",")})`);
+          const otherIds = (others || []).map((p: { user_id: string }) => p.user_id);
+          if (otherIds.length) {
+            await bumpChatNotifications(adminClient, otherIds, `/leads/${lead.id}`, `New messages on ${lead.lead_number} — "${lead.title}"`);
+          }
+        } else {
+          console.error("cross-team-query chat announcement failed:", msgErr.message);
+        }
+      }
       return jsonRes(req, 200, { success: true });
     }
 

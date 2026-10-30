@@ -37,7 +37,7 @@ const STATUS_BADGE = {
 const RESPOND_LABEL = {
   add_to_chat: "Add to chat",
   transfer: "Transfer lead",
-  request_transfer: "Request transfer (MD approval)",
+  request_transfer: "Forward to MD",
   decline: "Decline",
   approve_transfer: "Approve transfer",
   reject_transfer: "Reject transfer",
@@ -97,8 +97,13 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
   }, [fetchQueries]);
 
   // Forward-to options reload whenever the target team changes — a person
-  // valid for one team isn't necessarily on another.
+  // valid for one team isn't necessarily on another. Skipped for a non-MD
+  // "Forward to MD" request — there the team/forward-to picker is hidden
+  // and both are set implicitly to the raiser's own team/id (see the
+  // "transfer" button's onClick below), so this effect must not wipe that
+  // default out from under it.
   useEffect(() => {
+    if (respondingId?.action === "transfer" && profile?.role !== "md") return;
     if (!transferTeam) {
       setTransferForwardOptions([]);
       return;
@@ -109,7 +114,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
       .then(({ data }) =>
         setTransferForwardOptions((data || []).map((u) => ({ value: u.user_id, label: u.full_name, hint: ROLE_LABELS[u.role] || u.role })))
       );
-  }, [transferTeam]);
+  }, [transferTeam, respondingId, profile?.role]);
 
   useEffect(() => {
     const channel = supabase
@@ -410,7 +415,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                             />
                           </>
                         )}
-                        {respondingId.action === "transfer" && (
+                        {respondingId.action === "transfer" && isMd && (
                           <>
                             <label className="ar-label">Team <span className="ar-required">*</span></label>
                             <Select
@@ -443,7 +448,9 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                         )}
                         <div className="lq-form-actions">
                           <Button variant="primary" size="sm" loading={busy} disabled={busy} onClick={() => respond(q.id, respondingId.action)}>
-                            Confirm: {RESPOND_LABEL[respondingId.action === "transfer" && !isMd ? "request_transfer" : respondingId.action]}
+                            {respondingId.action === "transfer" && !isMd
+                              ? RESPOND_LABEL.request_transfer
+                              : `Confirm: ${RESPOND_LABEL[respondingId.action]}`}
                           </Button>
                           <Button
                             variant="secondary"
@@ -483,12 +490,14 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                           onClick={() => {
                             setRespondingId({ queryId: q.id, action: "transfer" });
                             setTransferTeam(q.raised_by_team);
+                            // Non-MD "Forward to MD" has no visible team/
+                            // forward-to picker — default both to the
+                            // raiser's own team/id (always a valid
+                            // forwarded-to per validateForwardedTo).
+                            if (!isMd) setTransferForwardToId(q.raised_by_id);
                           }}
                         >
-                          {isMd ? "Transfer Lead" : "Request Transfer"}
-                        </Button>
-                        <Button variant="danger" size="sm" onClick={() => setRespondingId({ queryId: q.id, action: "decline" })}>
-                          Decline
+                          {isMd ? "Transfer Lead" : "Forward to MD"}
                         </Button>
                       </div>
                     )
