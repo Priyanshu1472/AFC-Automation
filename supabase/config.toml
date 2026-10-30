@@ -519,6 +519,12 @@ verify_jwt = true
 import_map = "./functions/send-lead-chat-message/deno.json"
 entrypoint = "./functions/send-lead-chat-message/index.ts"
 
+[functions.add-lead-chat-member]
+enabled = true
+verify_jwt = true
+import_map = "./functions/add-lead-chat-member/deno.json"
+entrypoint = "./functions/add-lead-chat-member/index.ts"
+
 [functions.raise-lead-query]
 enabled = true
 verify_jwt = true

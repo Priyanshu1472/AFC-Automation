@@ -5,7 +5,8 @@ import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import MentionInput from "../shared/MentionInput";
 import { renderWithMentions } from "../../lib/mentions";
-import { ChatIcon, CloseIcon, SendIcon } from "../icons";
+import { ChatIcon, CloseIcon, SendIcon, UserPlusIcon } from "../icons";
+import { ROLE_LABELS } from "../../lib/roles";
 // Reuses the generic ar-* card/field styles already defined for the Lead/
 // Empanelment review pages, plus a handful of chat-bubble-specific classes
 // added alongside them in the same file.
@@ -40,6 +41,12 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
   // lead page at all (org-wide for DGM/AGM/GM/SRM) is not necessarily on
   // its chat roster — see is_lead_chat_participant / can_view_lead_chat.
   const [isParticipant, setIsParticipant] = useState(false);
+  // "Add member" picker (PMT only) — shown in place of the message list.
+  const [adding, setAdding] = useState(false);
+  const [candidates, setCandidates] = useState(null);
+  const [candidateQuery, setCandidateQuery] = useState("");
+  const [addingId, setAddingId] = useState(null);
+  const canAddMembers = profile?.committee === "PMT" && !locked;
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const widgetRef = useRef(null);
@@ -137,8 +144,51 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
   function toggleOpen() {
     const next = !open;
     setOpen(next);
+    setAdding(false);
     if (next) fetchMessages();
   }
+
+  async function openAddMember() {
+    setAdding(true);
+    setCandidateQuery("");
+    setCandidates(null);
+    const { data, error } = await supabase.rpc("get_lead_chat_add_candidates", { p_lead_id: leadId });
+    if (error) {
+      showToast("Couldn't load people to add.", "danger");
+      setAdding(false);
+      return;
+    }
+    setCandidates(data || []);
+  }
+
+  async function addMember(user) {
+    setAddingId(user.user_id);
+    try {
+      const { data, error } = await supabase.functions.invoke("add-lead-chat-member", {
+        body: { lead_id: leadId, user_id: user.user_id },
+      });
+      if (error) {
+        showToast(await extractFunctionErrorMessage(error, "Failed to add member."), "danger");
+        return;
+      }
+      if (!data?.success) {
+        showToast(data?.error || "Failed to add member.", "danger");
+        return;
+      }
+      showToast(`${user.full_name} added to the discussion.`, "success");
+      setAdding(false);
+      fetchMessages();
+    } catch (err) {
+      showToast(err.message || "Something went wrong.", "danger");
+    } finally {
+      setAddingId(null);
+    }
+  }
+
+  const q = candidateQuery.trim().toLowerCase();
+  const filteredCandidates = (candidates || []).filter(
+    (c) => !q || [c.full_name, c.team, ROLE_LABELS[c.role] || c.role].some((v) => v?.toLowerCase().includes(q))
+  );
 
   async function send() {
     const message = draft.trim();
@@ -173,9 +223,55 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
       {open && (
         <div className="ar-chat-popup" role="dialog" aria-label="Lead discussion">
           <div className="ar-chat-popup-header">
-            <span className="ar-chat-popup-title">Discussion</span>
+            <span className="ar-chat-popup-title">{adding ? "Add to Discussion" : "Discussion"}</span>
+            <div className="ar-chat-popup-actions">
+              {canAddMembers && !adding && (
+                <button type="button" className="ar-chat-icon-btn" aria-label="Add member" title="Add member" onClick={openAddMember}>
+                  <UserPlusIcon />
+                </button>
+              )}
+              <button
+                type="button"
+                className="ar-chat-icon-btn"
+                aria-label={adding ? "Back to discussion" : "Close chat"}
+                title={adding ? "Back to discussion" : "Close"}
+                onClick={() => (adding ? setAdding(false) : setOpen(false))}
+              >
+                <CloseIcon />
+              </button>
+            </div>
           </div>
 
+          {adding ? (
+            <div className="ar-chat-add">
+              <input
+                type="search"
+                className="ar-chat-input ar-chat-add-search"
+                placeholder="Search by name, team or role"
+                value={candidateQuery}
+                onChange={(e) => setCandidateQuery(e.target.value)}
+                autoFocus
+              />
+              <div className="ar-chat-add-list">
+                {candidates === null ? (
+                  <p className="ar-empty-text">Loading people…</p>
+                ) : filteredCandidates.length === 0 ? (
+                  <p className="ar-empty-text">{candidates.length ? "No one matches." : "Everyone is already in this chat."}</p>
+                ) : (
+                  filteredCandidates.map((c) => (
+                    <button key={c.user_id} type="button" className="ar-chat-add-row" disabled={!!addingId} onClick={() => addMember(c)}>
+                      <span className="ar-chat-add-name">{c.full_name}</span>
+                      <span className="ar-chat-add-meta">
+                        {ROLE_LABELS[c.role] || c.role}
+                        {c.team && ` · ${c.team}`}
+                      </span>
+                      {addingId === c.user_id && <span className="ar-chat-add-busy">Adding…</span>}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
           <div className="ar-chat-messages">
             {loading ? (
               <p className="ar-empty-text">Loading messages…</p>
@@ -197,8 +293,9 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
             )}
             <div ref={bottomRef} />
           </div>
+          )}
 
-          {locked ? (
+          {adding ? null : locked ? (
             <p className="ar-chat-locked">Chat closed — this lead has been approved.</p>
           ) : (
             <div className="ar-chat-input-row">
@@ -227,15 +324,18 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
         </div>
       )}
 
-      <button
-        type="button"
-        className="ar-chat-fab"
-        aria-label={open ? "Close chat" : unreadCount > 0 ? `Open chat, ${unreadCount} unread` : "Open chat"}
-        onClick={toggleOpen}
-      >
-        {open ? <CloseIcon /> : <ChatIcon />}
-        {!open && unreadCount > 0 && <span className="ar-chat-fab-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>}
-      </button>
+      {/* Hidden while open — the panel header has its own close button. */}
+      {!open && (
+        <button
+          type="button"
+          className="ar-chat-fab"
+          aria-label={unreadCount > 0 ? `Open chat, ${unreadCount} unread` : "Open chat"}
+          onClick={toggleOpen}
+        >
+          <ChatIcon />
+          {unreadCount > 0 && <span className="ar-chat-fab-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>}
+        </button>
+      )}
     </div>,
     document.body
   );

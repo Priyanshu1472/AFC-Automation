@@ -88,6 +88,7 @@ const LEAD_ACTION_META = {
   withdraw_submission:       { label: "Submission Withdrawn",         variant: "warning" },
   team_transfer:             { label: "Transferred to Another Team",  variant: "warning" },
   lead_transfer_requested:   { label: "Transfer Requested (Awaiting MD)", variant: "warning" },
+  chat_member_added:         { label: "Added to Discussion",          variant: "info" },
   lead_transfer_rejected:    { label: "Transfer Rejected by MD",      variant: "danger" },
   workflow_simplified:       { label: "Auto-Moved (Workflow Simplified)", variant: "info" },
   cross_team_query_raised:   { label: "Cross-Team Query Raised",     variant: "warning" },
