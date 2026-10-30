@@ -138,17 +138,15 @@ export default function LeadApprovalNotePreviewPage() {
                     {pdfLoading && <p className="ar-empty-text">Loading PDF…</p>}
                     {!pdfLoading && !pdfUrl && <Alert variant="danger">The Approval Note PDF couldn&apos;t be loaded — try generating it again.</Alert>}
                     {!pdfLoading && pdfUrl && (
-                      <a href={pdfUrl} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
-                        <iframe
-                          src={pdfUrl}
-                          title="Lead Approval Note"
-                          style={{ width: "100%", height: "70vh", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-md)", pointerEvents: "none" }}
-                        />
-                      </a>
+                      <iframe
+                        src={pdfUrl}
+                        title="Lead Approval Note"
+                        style={{ display: "block", width: "100%", height: "70vh", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-md)" }}
+                      />
                     )}
                     {!pdfLoading && pdfUrl && (
                       <p className="field-hint" style={{ marginTop: "var(--space-2)" }}>
-                        Click the preview or <a href={pdfUrl} target="_blank" rel="noopener noreferrer">open it in a new tab</a>.
+                        Scroll through the note above, or <a href={pdfUrl} target="_blank" rel="noopener noreferrer">open it in a new tab</a>.
                       </p>
                     )}
                   </Card.Body>
