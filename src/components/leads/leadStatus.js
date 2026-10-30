@@ -6,7 +6,7 @@ export const STATUS_MAP = {
   pa_review: { label: "PR Review", variant: "warning" },
   recommending_authority_review: { label: "Recommending Authority", variant: "warning" },
   pmt_review: { label: "PMT", variant: "info" },
-  md_review: { label: "Pending", variant: "neutral" },
+  md_review: { label: "MD Approval Pending", variant: "neutral" },
   pa_action_required: { label: "Action Required", variant: "danger" },
   pa_dropped: { label: "Dropped", variant: "danger" },
   md_approved: { label: "Approved", variant: "success" },
