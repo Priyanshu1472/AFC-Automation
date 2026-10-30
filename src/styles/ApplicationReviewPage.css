@@ -48,6 +48,22 @@
   overflow-wrap: anywhere;
 }
 
+.ld-dup-flag {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.ld-dup-flag a {
+  color: var(--text-link);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .ar-header-meta {
   font-size: var(--text-sm);
   color: var(--text-secondary);

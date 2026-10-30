@@ -198,6 +198,11 @@
   margin: var(--space-1) 0;
 }
 
+.lf-dup-intro {
+  margin: 0 0 var(--space-2);
+  color: var(--text-secondary);
+}
+
 .lf-dup-reason {
   opacity: 0.75;
   font-style: italic;

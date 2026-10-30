@@ -11,6 +11,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { notifyUser, notifyRole } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
+import { findPossibleDuplicateIds } from "../_shared/leadDuplicates.ts";
 import { addLeadChatParticipants, getOrgWideHolders } from "../_shared/leadAuth.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
@@ -199,6 +200,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       return jsonRes(req, 500, { error: "Failed to generate a lead number. Please try again." });
     }
 
+    const possibleDuplicateIds = await findPossibleDuplicateIds(adminClient, {
+      title: input.title.trim(),
+      bidNumber: clampText(get("bid_number"), 200),
+      documents,
+    });
+
     const { data: lead, error: insertErr } = await adminClient
       .from("leads")
       .insert({
@@ -220,6 +227,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         followup_date: get("followup_date") || null,
         remark: clampText(get("remark")),
         documents,
+        possible_duplicate_ids: possibleDuplicateIds,
         team,
         created_by: caller.id,
         person_responsible_id: isPoRouted ? null : input.person_responsible_id,

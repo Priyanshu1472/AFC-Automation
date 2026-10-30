@@ -9,6 +9,7 @@ import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
+import Modal from "../../components/ui/Modal";
 import DatePickerCalendar from "../../components/ui/DatePickerCalendar";
 import { DELIVERY_TYPE_LABELS } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
@@ -125,6 +126,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
   const [baOptions, setBaOptions] = useState([]);
   const [forwardToOptions, setForwardToOptions] = useState([]);
   const [duplicates, setDuplicates] = useState([]);
+  const [dupConfirm, setDupConfirm] = useState(null); // matches awaiting "save anyway?" before submit
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -212,30 +214,28 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
   const selectedPortal = PORTALS.find((p) => p.name === form.portal_name);
   const bidNumberLabel = selectedPortal ? selectedPortal.identifier : "Bid / Reference No.";
 
-  // Live duplicate hint — debounced, client-side preview only (the real
-  // score is computed server-side by find_similar_leads; this is just a UX
-  // nudge near Name of Assignment, never a hard block).
+  // Org-wide (same team and every other team) — find_similar_leads scores
+  // by bid number, document, and title. Only the first selected file is
+  // compared here; create-lead/update-lead re-check every file when saving
+  // and record the matches on the lead.
+  const fetchDuplicates = useCallback(async () => {
+    if (!form.title.trim()) return [];
+    const first = files[0];
+    const { data } = await supabase.rpc("find_similar_leads", {
+      p_title: form.title.trim(),
+      p_bid_number: form.bid_number.trim() || null,
+      p_document_name: first?.name || null,
+      p_document_size: first?.size || null,
+      p_exclude_id: lead?.id || null,
+    });
+    return data || [];
+  }, [form.title, form.bid_number, files, lead?.id]);
+
+  // Live hint under Name of Assignment, debounced.
   const checkDuplicates = useCallback(() => {
     if (dupTimer.current) clearTimeout(dupTimer.current);
-    dupTimer.current = setTimeout(async () => {
-      if (!team || !form.title.trim()) {
-        setDuplicates([]);
-        return;
-      }
-      // Duplicate detection only ever compares one document — with multiple
-      // files selected, the first is as good a signal as any for this
-      // client-side nudge (the real, exhaustive check is server-side).
-      const first = files[0];
-      const { data } = await supabase.rpc("find_similar_leads", {
-        p_title: form.title.trim(),
-        p_team: team,
-        p_bid_number: form.bid_number.trim() || null,
-        p_document_name: first?.name || null,
-        p_document_size: first?.size || null,
-      });
-      setDuplicates((data || []).filter((d) => d.id !== lead?.id));
-    }, 400);
-  }, [team, form.title, form.bid_number, files, lead?.id]);
+    dupTimer.current = setTimeout(async () => setDuplicates(await fetchDuplicates()), 400);
+  }, [fetchDuplicates]);
 
   useEffect(() => {
     checkDuplicates();
@@ -280,6 +280,24 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
     e.preventDefault();
     if (!validate()) return;
 
+    // Duplicates are a warning, not a block: show the matches and let the
+    // user save anyway (the lead is then flagged as a possible duplicate).
+    // On edit, only matches the lead isn't already flagged with re-prompt.
+    setSubmitting(true);
+    const matches = await fetchDuplicates();
+    const alreadyFlagged = new Set(lead?.possible_duplicate_ids || []);
+    const fresh = matches.filter((d) => !alreadyFlagged.has(d.id));
+    setSubmitting(false);
+    if (fresh.length) {
+      setDuplicates(matches);
+      setDupConfirm(fresh);
+      return;
+    }
+    await saveLead();
+  }
+
+  async function saveLead() {
+    setDupConfirm(null);
     setSubmitting(true);
     try {
       const fd = new FormData();
@@ -424,7 +442,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
               <Alert variant="warning" title="Possible duplicate lead(s)">
                 {duplicates.map((d) => (
                   <p key={d.id} className="lf-dup-row">
-                    <strong>{d.lead_number}</strong> — {d.title} ({d.status.replace(/_/g, " ")})
+                    <strong>{d.lead_number}</strong> ({d.team}) — {d.title} ({d.status.replace(/_/g, " ")})
                     {d.match_reason && <span className="lf-dup-reason"> · {d.match_reason}</span>}
                   </p>
                 ))}
@@ -762,6 +780,25 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
           </div>
         </div>
       </aside>
+      {dupConfirm && (
+        <Modal onClose={() => setDupConfirm(null)} size="sm">
+          <Modal.Header title="Possible duplicate lead" onClose={() => setDupConfirm(null)} />
+          <Modal.Body>
+            <p className="lf-dup-intro">This lead looks like one that already exists:</p>
+            {dupConfirm.map((d) => (
+              <p key={d.id} className="lf-dup-row">
+                <strong>{d.lead_number}</strong> ({d.team}) — {d.title}
+                {d.match_reason && <span className="lf-dup-reason"> · {d.match_reason}</span>}
+              </p>
+            ))}
+            <p className="lf-dup-intro">If you save anyway, it will be marked as a possible duplicate of the lead(s) above.</p>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button type="button" variant="secondary" onClick={() => setDupConfirm(null)}>Go Back</Button>
+            <Button type="button" variant="primary" onClick={saveLead}>Save Anyway</Button>
+          </Modal.Footer>
+        </Modal>
+      )}
     </form>
   );
 }

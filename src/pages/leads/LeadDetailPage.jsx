@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
@@ -177,6 +177,7 @@ export default function LeadDetailPage() {
   // the Bid Payment Requisition Note during Proposal Preparation, not on the
   // lead itself — surfaced read-only here once that note exists.
   const [clientContact, setClientContact] = useState(null);
+  const [duplicateRefs, setDuplicateRefs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);
   const [reason, setReason] = useState("");
@@ -215,6 +216,15 @@ export default function LeadDetailPage() {
       .eq("id", id)
       .maybeSingle();
     setLead(data);
+    // Leads this one was saved as a possible duplicate of — can_view says
+    // whether the viewer may open that lead (DGM etc. org-wide); otherwise
+    // only its number and team are shown, unlinked.
+    if (data?.possible_duplicate_ids?.length) {
+      const { data: refs } = await supabase.rpc("get_lead_duplicate_refs", { p_lead_id: id });
+      setDuplicateRefs(refs || []);
+    } else {
+      setDuplicateRefs([]);
+    }
     const { data: activity } = await supabase
       .from("lead_activity_log")
       .select("*, actor:actor_id(full_name)")
@@ -568,6 +578,25 @@ export default function LeadDetailPage() {
                   {overdue && <Badge variant="danger" dot>Submission Overdue</Badge>}
                 </div>
                 <h1 className="ar-header-email">{lead.title}</h1>
+                {duplicateRefs.length > 0 && (
+                  <p className="ld-dup-flag">
+                    <Badge variant="warning" dot>Possible Duplicate</Badge>
+                    <span>
+                      of{" "}
+                      {duplicateRefs.map((d, i) => (
+                        <span key={d.id}>
+                          {i > 0 && ", "}
+                          {d.can_view ? (
+                            <Link to={`/leads/${d.id}`} title={d.title || undefined}>{d.lead_number}</Link>
+                          ) : (
+                            <strong>{d.lead_number}</strong>
+                          )}{" "}
+                          ({d.team})
+                        </span>
+                      ))}
+                    </span>
+                  </p>
+                )}
                 <p className="ar-header-meta">
                   {lead.lead_number}
                   {can.viewAllTeams(profile?.role) && <> · Team: <strong>{lead.team}</strong></>}

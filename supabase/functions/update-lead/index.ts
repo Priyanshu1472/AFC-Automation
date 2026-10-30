@@ -14,6 +14,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
+import { findPossibleDuplicateIds } from "../_shared/leadDuplicates.ts";
 import { notifyUser } from "../_shared/notify.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
@@ -200,6 +201,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       uploadedPaths.push(uploaded.path);
     }
 
+    const possibleDuplicateIds = await findPossibleDuplicateIds(adminClient, {
+      title: input.title.trim(),
+      bidNumber: clampText(get("bid_number"), 200),
+      documents,
+      excludeId: lead.id,
+    });
+
     const { error: updateErr } = await adminClient
       .from("leads")
       .update({
@@ -214,6 +222,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         followup_date: get("followup_date") || null,
         remark: clampText(get("remark")),
         documents,
+        possible_duplicate_ids: possibleDuplicateIds,
         team,
         person_responsible_id: finalPersonResponsibleId,
         reviewer_id: finalReviewerId,
