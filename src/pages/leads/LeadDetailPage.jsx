@@ -578,30 +578,40 @@ export default function LeadDetailPage() {
                   {overdue && <Badge variant="danger" dot>Submission Overdue</Badge>}
                 </div>
                 <h1 className="ar-header-email">{lead.title}</h1>
-                {duplicateRefs.length > 0 && (
-                  <p className="ld-dup-flag">
-                    <Badge variant="warning" dot>Possible Duplicate</Badge>
-                    <span>
-                      of{" "}
-                      {duplicateRefs.map((d, i) => (
-                        <span key={d.id}>
-                          {i > 0 && ", "}
-                          {d.can_view ? (
-                            <Link to={`/leads/${d.id}`} title={d.title || undefined}>{d.lead_number}</Link>
-                          ) : (
-                            <strong>{d.lead_number}</strong>
-                          )}{" "}
-                          ({d.team})
-                        </span>
-                      ))}
-                    </span>
-                  </p>
-                )}
                 <p className="ar-header-meta">
                   {lead.lead_number}
                   {can.viewAllTeams(profile?.role) && <> · Team: <strong>{lead.team}</strong></>}
                   {" "}· Created: <strong>{fmtDate(lead.created_at)}</strong>
                 </p>
+                {duplicateRefs.length > 0 && (
+                  <div className="ld-dup-box">
+                    <div className="ld-dup-head">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                        <line x1="12" x2="12" y1="9" y2="13" />
+                        <line x1="12" x2="12.01" y1="17" y2="17" />
+                      </svg>
+                      <span>
+                        Possible duplicate of {duplicateRefs.length === 1 ? "1 existing lead" : `${duplicateRefs.length} existing leads`}
+                      </span>
+                    </div>
+                    <div className="ld-dup-chips">
+                      {duplicateRefs.map((d) =>
+                        d.can_view ? (
+                          <Link key={d.id} to={`/leads/${d.id}`} className="ld-dup-chip is-link" title={d.title || undefined}>
+                            <span className="ld-dup-num">{d.lead_number}</span>
+                            <span className="ld-dup-team">{d.team}</span>
+                          </Link>
+                        ) : (
+                          <span key={d.id} className="ld-dup-chip">
+                            <span className="ld-dup-num">{d.lead_number}</span>
+                            <span className="ld-dup-team">{d.team}</span>
+                          </span>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </Card.Body>
           </Card>

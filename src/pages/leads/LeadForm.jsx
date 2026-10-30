@@ -625,11 +625,6 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
                     />
                     {errors.forwarded_to_id && <span className="field-error">{errors.forwarded_to_id}</span>}
                   </div>
-                  <Alert variant="info">
-                    As an Associate Consultant/Project Assistant, you can't assign Person Responsible, Reviewer, or Recommending
-                    Authority directly. Once saved, this lead will be forwarded to the person you select above to make these
-                    assignments.
-                  </Alert>
                 </>
               ) : (
                 <>
@@ -782,20 +777,28 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
       </aside>
       {dupConfirm && (
         <Modal onClose={() => setDupConfirm(null)} size="sm">
-          <Modal.Header title="Possible duplicate lead" onClose={() => setDupConfirm(null)} />
+          <Modal.Header title="This lead may be a duplicate" onClose={() => setDupConfirm(null)} />
           <Modal.Body>
-            <p className="lf-dup-intro">This lead looks like one that already exists:</p>
-            {dupConfirm.map((d) => (
-              <p key={d.id} className="lf-dup-row">
-                <strong>{d.lead_number}</strong> ({d.team}) — {d.title}
-                {d.match_reason && <span className="lf-dup-reason"> · {d.match_reason}</span>}
-              </p>
-            ))}
-            <p className="lf-dup-intro">If you save anyway, it will be marked as a possible duplicate of the lead(s) above.</p>
+            <Alert variant="warning">
+              {dupConfirm.length === 1 ? "1 existing lead matches" : `${dupConfirm.length} existing leads match`} what you've entered.
+              If you save it, this lead will be flagged as a possible duplicate.
+            </Alert>
+            <ul className="lf-dup-list">
+              {dupConfirm.map((d) => (
+                <li key={d.id} className="lf-dup-item">
+                  <div className="lf-dup-item-top">
+                    <strong>{d.lead_number}</strong>
+                    <span className="lf-dup-team">{d.team}</span>
+                  </div>
+                  <div className="lf-dup-item-title">{d.title}</div>
+                  {d.match_reason && <div className="lf-dup-reason">{d.match_reason}</div>}
+                </li>
+              ))}
+            </ul>
           </Modal.Body>
           <Modal.Footer>
             <Button type="button" variant="secondary" onClick={() => setDupConfirm(null)}>Go Back</Button>
-            <Button type="button" variant="primary" onClick={saveLead}>Save Anyway</Button>
+            <Button type="button" variant="primary" onClick={saveLead}>Save the Lead</Button>
           </Modal.Footer>
         </Modal>
       )}
