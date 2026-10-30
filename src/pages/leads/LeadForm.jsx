@@ -246,6 +246,15 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
   function validate() {
     const errs = {};
     if (!form.title.trim()) errs.title = "Name of Assignment is required.";
+    if (!isSuoMoto) {
+      if (!form.portal_name) errs.portal_name = "Portal / Source of Information is required.";
+      if (!form.bid_number.trim()) errs.bid_number = `${bidNumberLabel} is required.`;
+      if (!form.client_name.trim()) errs.client_name = "Client / Department is required.";
+      if (!form.state) errs.state = "State is required.";
+      if (!form.submission_deadline) errs.submission_deadline = "Last Date of Submission is required.";
+      if (!form.delivery_type) errs.delivery_type = "Delivery Type is required.";
+      if (!form.remark.trim()) errs.remark = "Remark is required.";
+    }
     if (!isPoRouted && !isLogisticsOnlyEdit) {
       if (!form.person_responsible_id) errs.person_responsible_id = "Person Responsible is required.";
       if (!form.reviewer_id) errs.reviewer_id = "Reviewer is required.";
@@ -425,7 +434,9 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
             {!isSuoMoto && (
               <div className="grid-2 lf-grid">
                 <div className="field">
-                  <label className="field-label">Portal / Source of Information</label>
+                  <label className="field-label">
+                    Portal / Source of Information<span className="required" aria-hidden="true"> *</span>
+                  </label>
                   <Select
                     options={PORTAL_OPTIONS}
                     value={form.portal_name}
@@ -433,15 +444,19 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
                     placeholder="Select a portal"
                     disabled={submitting}
                     searchable
+                    error={errors.portal_name}
                   />
+                  {errors.portal_name && <span className="field-error">{errors.portal_name}</span>}
                 </div>
                 <Input
                   label={bidNumberLabel}
+                  required
                   value={form.bid_number}
                   onChange={(e) => set("bid_number", e.target.value)}
                   placeholder={`Enter ${bidNumberLabel}`}
                   hint="Used for duplicate detection."
                   disabled={submitting}
+                  error={errors.bid_number}
                 />
               </div>
             )}
@@ -477,39 +492,68 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
                 <div className="grid-2 lf-grid">
                   <Input
                     label="Client / Department"
+                    required
                     value={form.client_name}
                     onChange={(e) => set("client_name", e.target.value)}
                     placeholder="Enter client / department"
                     disabled={submitting}
+                    error={errors.client_name}
                   />
                   <div className="field">
-                    <label className="field-label">State</label>
-                    <Select options={STATE_OPTIONS} value={form.state} onChange={(v) => set("state", v)} placeholder="Select state" disabled={submitting} searchable />
+                    <label className="field-label">
+                      State<span className="required" aria-hidden="true"> *</span>
+                    </label>
+                    <Select
+                      options={STATE_OPTIONS}
+                      value={form.state}
+                      onChange={(v) => set("state", v)}
+                      placeholder="Select state"
+                      disabled={submitting}
+                      searchable
+                      error={errors.state}
+                    />
+                    {errors.state && <span className="field-error">{errors.state}</span>}
                   </div>
                 </div>
                 <div className="grid-2 lf-grid">
                   <div className="field">
-                    <label className="field-label">Last Date of Submission</label>
+                    <label className="field-label">
+                      Last Date of Submission<span className="required" aria-hidden="true"> *</span>
+                    </label>
                     <DatePickerCalendar value={form.submission_deadline} onChange={(v) => set("submission_deadline", v)} placeholder="Select submission date" />
+                    {errors.submission_deadline && <span className="field-error">{errors.submission_deadline}</span>}
                   </div>
                   <div className="field">
-                    <label className="field-label">Delivery Type</label>
-                    <Select options={DELIVERY_TYPE_OPTIONS} value={form.delivery_type} onChange={(v) => set("delivery_type", v)} placeholder="Select" disabled={submitting} />
+                    <label className="field-label">
+                      Delivery Type<span className="required" aria-hidden="true"> *</span>
+                    </label>
+                    <Select
+                      options={DELIVERY_TYPE_OPTIONS}
+                      value={form.delivery_type}
+                      onChange={(v) => set("delivery_type", v)}
+                      placeholder="Select"
+                      disabled={submitting}
+                      error={errors.delivery_type}
+                    />
+                    {errors.delivery_type && <span className="field-error">{errors.delivery_type}</span>}
                   </div>
                 </div>
               </>
             )}
 
             <div className="field">
-              <label className="field-label">Remark</label>
+              <label className="field-label">
+                Remark{!isSuoMoto && <span className="required" aria-hidden="true"> *</span>}
+              </label>
               <textarea
-                className="input"
+                className={`input${errors.remark ? " input-error" : ""}`}
                 rows={3}
                 value={form.remark}
                 onChange={(e) => set("remark", e.target.value)}
                 placeholder="Any additional remarks..."
                 disabled={submitting}
               />
+              {errors.remark && <span className="field-error">{errors.remark}</span>}
             </div>
           </Card.Body>
         </Card>
