@@ -221,11 +221,12 @@ Deno.test("ra_approve - consumes declined_from_status and records who handled it
   assertEquals(fields.handled_by_dgm_id, CALLER_ID);
 });
 
-Deno.test("ra_approve - bulk-adds the named trio plus every PMT holder to the chat roster", async () => {
+Deno.test("ra_approve - bulk-adds the named trio plus every PMT holder to the chat roster, plus MD since the chat is opening here", async () => {
   const client = createFakeAdminClient({
     afc_users: [
       { data: callerRow(), error: null },
       { data: [{ id: "pmt-1" }, { id: "pmt-2" }], error: null }, // getOrgWideHolders(committee: PMT)
+      { data: [{ id: "md-1" }], error: null }, // getOrgWideHolders(role: md) — chat_opened_at was null
     ],
     leads: [{ data: raLead(), error: null }, { data: { id: LEAD_ID }, error: null }],
   });
@@ -235,7 +236,7 @@ Deno.test("ra_approve - bulk-adds the named trio plus every PMT holder to the ch
   const rows = participantCalls.flatMap((l) => JSON.parse(l.calls.find((c) => c[0] === "upsert")![1]));
   assertEquals(
     rows.map((r: { user_id: string; role_at_add: string }) => `${r.user_id}:${r.role_at_add}`).sort(),
-    ["caller-1:named", "pmt-1:PMT", "pmt-2:PMT", "pr-1:named", "reviewer-1:named"],
+    ["caller-1:named", "md-1:md", "pmt-1:PMT", "pmt-2:PMT", "pr-1:named", "reviewer-1:named"],
   );
 });
 

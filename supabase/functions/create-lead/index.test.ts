@@ -255,6 +255,38 @@ Deno.test("handleRequest - success creates the lead directly into pa_review", as
   assertEquals(body.lead_number, "LH-2026-000001");
 });
 
+Deno.test("handleRequest - adds every MD holder to the chat roster on direct (non-isPoRouted) creation, alongside the named trio", async () => {
+  // buildClient's own afc_users array doesn't leave room for the extra
+  // getOrgWideHolders(role: md) lookup this adds — built directly here,
+  // same 5 entries buildClient would use, plus the MD list and a trailing
+  // empty one for the later org-wide DGM/AGM notifyRole fan-out.
+  const client = createFakeAdminClient(
+    {
+      afc_users: [
+        { data: callerRow(), error: null },
+        { data: { id: PR_ID, team: TEAM, is_active: true }, error: null },
+        { data: { id: PR_ID, role: "project_officer", team: TEAM, committee: null, is_active: true }, error: null },
+        { data: { id: REVIEWER_ID, role: "associate_consultant", team: TEAM, committee: "PMT", is_active: true }, error: null },
+        { data: { id: AUTHORITY_ID, role: "agm", team: TEAM, committee: "PMT Extended", is_active: true }, error: null },
+        { data: [{ id: "md-1" }, { id: "md-2" }], error: null },
+        { data: [], error: null },
+      ],
+      leads: [{ data: { id: "new-lead-1", lead_number: "LH-2026-000001", status: "pa_review" }, error: null }],
+    },
+    { rpc: { next_lead_number: { data: "LH-2026-000001", error: null } } }
+  );
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const participantCalls = log.filter((l) => l.table === "lead_chat_participants");
+  const rows = participantCalls.flatMap(
+    (l) => JSON.parse(l.calls.find((c) => c[0] === "upsert")![1]) as { user_id: string; role_at_add: string }[]
+  );
+  const mdRows = rows.filter((r) => r.role_at_add === "md");
+  assertEquals(mdRows.map((r) => r.user_id).sort(), ["md-1", "md-2"]);
+});
+
 Deno.test("handleRequest - notifies Person Responsible, Reviewer, and Approval Authority on creation", async () => {
   const client = buildClient({});
   const res = await handleRequest(formReq(baseFields()), client as never);

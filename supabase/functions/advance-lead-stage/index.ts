@@ -295,6 +295,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         notifyTitle = "Lead assigned to you";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" has named you as Person Responsible, Reviewer, or Recommending Authority.`;
         chatRosterSyncs.push({ userIds: [leadRow.created_by, prId, reviewerId, raId], roleAtAdd: "named" });
+        // MD is in every lead's chat from the moment it opens, not just
+        // once the lead actually reaches md_review.
+        if (!leadRow.chat_opened_at) {
+          const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
+          chatRosterSyncs.push({ userIds: mdHolders, roleAtAdd: "md" });
+        }
         break;
       }
 
@@ -508,6 +514,15 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           { userIds: [leadRow.person_responsible_id, leadRow.reviewer_id, leadRow.recommending_authority_id], roleAtAdd: "named" },
           { userIds: resumeInfo.holders, roleAtAdd: resumeInfo.roleAtAdd }
         );
+        // Same as "po_assign" — MD belongs in the chat from the moment it
+        // opens, not just once the lead actually reaches md_review. Only
+        // relevant here for the legacy/edge-case fallback above (chat
+        // normally already opened at po_assign or direct creation, both of
+        // which already add MD themselves).
+        if (!leadRow.chat_opened_at) {
+          const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
+          chatRosterSyncs.push({ userIds: mdHolders, roleAtAdd: "md" });
+        }
         break;
       }
 

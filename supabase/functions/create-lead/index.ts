@@ -11,7 +11,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { notifyUser, notifyRole } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
-import { addLeadChatParticipants } from "../_shared/leadAuth.ts";
+import { addLeadChatParticipants, getOrgWideHolders } from "../_shared/leadAuth.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
   validateRecommendingAuthority, validateBusinessAssociate, validateForwardedTo, clampText,
@@ -251,6 +251,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         [caller.id, input.person_responsible_id, input.reviewer_id, input.recommending_authority_id],
         "named"
       );
+      // MD is in every lead's chat from the moment it opens, not just once
+      // the lead actually reaches md_review — org-wide, same as every MD
+      // already gets on a proposal's chat at creation.
+      const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
+      await addLeadChatParticipants(adminClient, lead.id, mdHolders, "md");
     }
 
     await logLeadActivity(
