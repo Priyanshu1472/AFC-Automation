@@ -946,11 +946,128 @@
   }
 }
 
+/* Title, "Add member" and close on one row, with a divider underneath —
+   messages always start below that line. */
 .ar-chat-popup-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-2);
   flex: none;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ar-chat-popup-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.ar-chat-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+
+.ar-chat-icon-btn svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.ar-chat-icon-btn:hover {
+  background: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+
+.ar-chat-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-height: 0;
+}
+
+/* Reuses .ar-chat-input's look, but that class has flex: 1 (to fill the
+   send row) and is defined later in this file, so it would stretch the
+   search box vertically in this column — hence the higher specificity. */
+.ar-chat-add .ar-chat-add-search {
+  flex: none;
+  height: 36px;
+  padding-block: 0;
+  border-radius: var(--radius-md);
+}
+
+.ar-chat-add-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ar-chat-add-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "name busy" "meta busy";
+  align-items: center;
+  column-gap: var(--space-2);
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ar-chat-add-row:hover:not(:disabled) {
+  background: var(--bg-surface-2);
+}
+
+.ar-chat-member-row {
+  cursor: default;
+}
+
+.ar-chat-add-row.ar-chat-member-row:hover {
+  background: transparent;
+}
+
+.ar-chat-add-you {
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.ar-chat-add-row:disabled {
+  cursor: wait;
+}
+
+.ar-chat-add-name {
+  grid-area: name;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ar-chat-add-meta {
+  grid-area: meta;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.ar-chat-add-busy {
+  grid-area: busy;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .ar-chat-popup-title {

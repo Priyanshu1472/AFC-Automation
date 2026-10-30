@@ -40,6 +40,112 @@ function sanitizeNumericInput(raw) {
   return rest.length ? `${whole}.${rest.join("")}` : whole;
 }
 
+// Live preview of the PDF (see _shared/leadApprovalPdf.ts) — same rows,
+// labels and NA/"Yet to be decided" fallbacks, so what's on the right is
+// what generate-lead-approval-note will print.
+function NotePreview({ lead, baOrgName, form }) {
+  const scope = form.scope_of_work.split("\n").map((x) => x.trim()).filter(Boolean);
+  const rows = [
+    { label: "Nature of Lead", value: deriveNatureOfLead(lead.source, lead.lead_type) },
+    { label: "Title of Proposed Assignment*", value: lead.title },
+    { label: "Client Name with address*", value: [lead.client_name, form.client_address.trim()].filter(Boolean).join("\n") || "—" },
+    {
+      label: "Brief write-up on nature and objective of the proposed assignment*",
+      value: !form.objectives.trim() && !scope.length ? "—" : (
+        <>
+          {form.objectives.trim() && (
+            <>
+              <span className="lan-pv-sub">Objectives:</span>
+              <span className="lan-pv-pre">{form.objectives.trim()}</span>
+            </>
+          )}
+          {scope.length > 0 && (
+            <>
+              <span className="lan-pv-sub">Scope of Work:</span>
+              <ul>{scope.map((x, i) => <li key={i}>{x}</li>)}</ul>
+            </>
+          )}
+        </>
+      ),
+    },
+    { label: "Project Timeline", value: form.project_timeline.trim() || "—" },
+    { label: "Proposed Implementation Arrangements* (In-house/BP)", value: lead.assigned_ba_id ? "Business Partner" : "In-house" },
+    { label: "Name of BP*", value: lead.assigned_ba_id ? baOrgName || "—" : "Yet to be Decided" },
+    {
+      label: "Financial Requirement*",
+      value: [
+        `Document Fee/ Tender Fee: ${form.document_fee || "NA"}`,
+        `PBG: ${form.pbg || "NA"}`,
+        `EMD: ${form.emd || "NA"}`,
+        `Processing Fee: ${form.processing_fee || "NA"}`,
+      ].join("\n"),
+    },
+    { label: "Last date for submission of Proposal*", value: lead.submission_deadline ? fmtDate(lead.submission_deadline) : "—" },
+    { label: "Revenue sharing", value: form.revenue_sharing.trim() || "Yet to be decided" },
+  ];
+
+  return (
+    <div className="lan-pv-page">
+      <p className="lan-pv-title">BUSINESS LEAD APPROVAL NOTE</p>
+      <p className="lan-pv-subtitle">AFC INDIA LIMITED</p>
+      <table className="lan-pv-table lan-pv-kv">
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label}>
+              <th>{r.label}</th>
+              <td>{typeof r.value === "string" ? <span className="lan-pv-pre">{r.value}</span> : r.value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <p className="lan-pv-title lan-pv-section">Preliminary Scrutiny by Office</p>
+      <table className="lan-pv-table lan-pv-grid">
+        <thead>
+          <tr>
+            <th>S.No.</th>
+            <th>Evaluation Parameter</th>
+            <th>Yes/No</th>
+            <th>Justification / Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {SCRUTINY_PARAMETERS.map((param, i) => (
+            <tr key={param.key}>
+              <td>{i + 1}</td>
+              <td>{param.label}</td>
+              <td className={form.scrutiny[i].yes_no === "No" ? "lan-pv-no" : undefined}>{form.scrutiny[i].yes_no}</td>
+              <td>{form.scrutiny[i].remarks.trim() || param.defaultRemark}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {form.justification.trim() && (
+        <>
+          <p className="lan-pv-heading">Justification:</p>
+          <p className="lan-pv-pre lan-pv-body">{form.justification.trim()}</p>
+        </>
+      )}
+
+      <div className="lan-pv-sigs">
+        <div className="lan-pv-sig">
+          <div className="lan-pv-sig-label">Name &amp; Signature (pending)</div>
+          <div className="lan-pv-sig-name">{lead.assignee?.full_name || "—"}</div>
+          <div className="lan-pv-sig-role">Project Coordinator</div>
+          <div className="lan-pv-sig-role">{lead.team}</div>
+        </div>
+        <div className="lan-pv-sig">
+          <div className="lan-pv-sig-label">Name &amp; Signature (pending)</div>
+          <div className="lan-pv-sig-name">{lead.authority?.full_name || "—"}</div>
+          <div className="lan-pv-sig-role">Recommending Authority</div>
+          <div className="lan-pv-sig-role">{lead.team}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function emptyForm() {
   return {
     client_address: "",
@@ -72,7 +178,7 @@ export default function LeadApprovalNoteForm() {
   const fetchLead = useCallback(async () => {
     const { data } = await supabase
       .from("leads")
-      .select("*, assignee:person_responsible_id(full_name)")
+      .select("*, assignee:person_responsible_id(full_name), authority:recommending_authority_id(full_name)")
       .eq("id", id)
       .maybeSingle();
     setLead(data);
@@ -236,216 +342,226 @@ export default function LeadApprovalNoteForm() {
         {lead && !canManage && <Alert variant="danger">The Lead Approval Note can&apos;t be edited right now.</Alert>}
 
         {lead && canManage && (
-          <form onSubmit={handleGenerate} noValidate className="lan-form">
-            <Card className="lf-section">
-              <SectionHead step={1} title="From the Lead" subtitle="These details are taken from the lead and printed on the note as they are." />
-              <Card.Body className="lf-body">
-                <dl className="lan-info-grid">
-                  <div className="lan-info-item">
-                    <dt>Nature of Lead</dt>
-                    <dd>{deriveNatureOfLead(lead.source, lead.lead_type)}</dd>
-                  </div>
-                  <div className="lan-info-item">
-                    <dt>Implementation</dt>
-                    <dd>{lead.assigned_ba_id ? "Business Partner" : "In-house"}</dd>
-                  </div>
-                  <div className="lan-info-item lan-info-wide">
-                    <dt>Title of Proposed Assignment</dt>
-                    <dd>{lead.title}</dd>
-                  </div>
-                  <div className={`lan-info-item${errors.lead_client_name ? " lan-info-missing" : ""}`}>
-                    <dt>Client / Department</dt>
-                    <dd>{lead.client_name || "Not set"}</dd>
-                  </div>
-                  <div className={`lan-info-item${errors.lead_submission_deadline ? " lan-info-missing" : ""}`}>
-                    <dt>Last Date for Submission</dt>
-                    <dd>{lead.submission_deadline ? fmtDate(lead.submission_deadline) : "Not set"}</dd>
-                  </div>
-                  {lead.assigned_ba_id && (
+          <form onSubmit={handleGenerate} noValidate className="lan-layout">
+            <div className="lan-form">
+              <Card className="lf-section">
+                <SectionHead step={1} title="From the Lead" subtitle="These details are taken from the lead and printed on the note as they are." />
+                <Card.Body className="lf-body">
+                  <dl className="lan-info-grid">
+                    <div className="lan-info-item">
+                      <dt>Nature of Lead</dt>
+                      <dd>{deriveNatureOfLead(lead.source, lead.lead_type)}</dd>
+                    </div>
+                    <div className="lan-info-item">
+                      <dt>Implementation</dt>
+                      <dd>{lead.assigned_ba_id ? "Business Partner" : "In-house"}</dd>
+                    </div>
                     <div className="lan-info-item lan-info-wide">
-                      <dt>Name of BP</dt>
-                      <dd>{baOrgName || "—"}</dd>
+                      <dt>Title of Proposed Assignment</dt>
+                      <dd>{lead.title}</dd>
                     </div>
-                  )}
-                </dl>
-                {(errors.lead_client_name || errors.lead_submission_deadline) && (
-                  <Alert variant="danger">
-                    {[errors.lead_client_name, errors.lead_submission_deadline].filter(Boolean).map((m) => <p key={m}>{m}</p>)}
-                  </Alert>
-                )}
-              </Card.Body>
-            </Card>
-
-            <Card className="lf-section">
-              <SectionHead step={2} title="Assignment Details" subtitle="Client address, objectives, scope and timeline." />
-              <Card.Body className="lf-body">
-                <div className="field">
-                  <label className="field-label">Client Address <span className="required">*</span></label>
-                  <textarea
-                    className={`input${errors.client_address ? " input-error" : ""}`}
-                    rows={2}
-                    value={form.client_address}
-                    onChange={(e) => set("client_address", e.target.value)}
-                    disabled={submitting}
-                    placeholder="Registered / correspondence address of the client"
-                  />
-                  {errors.client_address && <span className="field-error">{errors.client_address}</span>}
-                </div>
-
-                <div className="field">
-                  <label className="field-label">Objectives <span className="required">*</span></label>
-                  <textarea
-                    className={`input${errors.objectives ? " input-error" : ""}`}
-                    rows={4}
-                    value={form.objectives}
-                    onChange={(e) => set("objectives", e.target.value)}
-                    disabled={submitting}
-                    placeholder="Nature and objective of the proposed assignment"
-                  />
-                  {errors.objectives && <span className="field-error">{errors.objectives}</span>}
-                </div>
-
-                <div className="field">
-                  <label className="field-label">Scope of Work <span className="required">*</span></label>
-                  <textarea
-                    className={`input${errors.scope_of_work ? " input-error" : ""}`}
-                    rows={5}
-                    value={form.scope_of_work}
-                    onChange={(e) => set("scope_of_work", e.target.value)}
-                    disabled={submitting}
-                    placeholder={"One item per line — each becomes a bullet point, e.g.\nIdentification and mobilisation of eligible beneficiaries\nAssessment of skill and livelihood needs"}
-                  />
-                  {errors.scope_of_work && <span className="field-error">{errors.scope_of_work}</span>}
-                </div>
-
-                <div className="grid-2 lf-grid">
-                  <Input
-                    label="Project Timeline"
-                    required
-                    value={form.project_timeline}
-                    onChange={(e) => set("project_timeline", e.target.value)}
-                    placeholder="e.g. 15 Months"
-                    error={errors.project_timeline}
-                    disabled={submitting}
-                  />
-                  <Input
-                    label="Revenue Sharing"
-                    value={form.revenue_sharing}
-                    onChange={(e) => set("revenue_sharing", e.target.value)}
-                    placeholder="NA"
-                    disabled={submitting}
-                  />
-                </div>
-              </Card.Body>
-            </Card>
-
-            <Card className="lf-section">
-              <SectionHead step={3} title="Financial Requirement" subtitle="Amounts in numbers only. Leave a field blank to print it as NA." />
-              <Card.Body className="lf-body">
-                <div className="grid-2 lf-grid">
-                  <Input
-                    label="Document Fee / Tender Fee"
-                    value={form.document_fee}
-                    onChange={(e) => setNumeric("document_fee", e.target.value)}
-                    placeholder="NA"
-                    inputMode="decimal"
-                    error={errors.document_fee}
-                    disabled={submitting}
-                  />
-                  <Input
-                    label="PBG"
-                    value={form.pbg}
-                    onChange={(e) => setNumeric("pbg", e.target.value)}
-                    placeholder="NA"
-                    inputMode="decimal"
-                    error={errors.pbg}
-                    disabled={submitting}
-                  />
-                </div>
-                <div className="grid-2 lf-grid">
-                  <Input
-                    label="EMD"
-                    value={form.emd}
-                    onChange={(e) => setNumeric("emd", e.target.value)}
-                    placeholder="NA"
-                    inputMode="decimal"
-                    error={errors.emd}
-                    disabled={submitting}
-                  />
-                  <Input
-                    label="Processing Fee"
-                    value={form.processing_fee}
-                    onChange={(e) => setNumeric("processing_fee", e.target.value)}
-                    placeholder="NA"
-                    inputMode="decimal"
-                    error={errors.processing_fee}
-                    disabled={submitting}
-                  />
-                </div>
-              </Card.Body>
-            </Card>
-
-            <Card className="lf-section">
-              <SectionHead step={4} title="Preliminary Scrutiny by Office" subtitle="Mark each parameter and give a remark for it." />
-              <Card.Body className="lf-body">
-                <div className="lan-scrutiny-list">
-                  {SCRUTINY_PARAMETERS.map((param, i) => (
-                    <div key={param.key} className="lan-scrutiny-row">
-                      <div className="lan-scrutiny-head">
-                        <span className="lan-scrutiny-num">{i + 1}</span>
-                        <span className="lan-scrutiny-label">{param.label}</span>
-                        <div className="lan-yesno" role="radiogroup" aria-label={`${param.label}: Yes or No`}>
-                          {YES_NO_OPTIONS.map((o) => (
-                            <button
-                              key={o.value}
-                              type="button"
-                              role="radio"
-                              aria-checked={form.scrutiny[i].yes_no === o.value}
-                              className={`lan-yesno-btn lan-yesno-${o.value.toLowerCase()}${form.scrutiny[i].yes_no === o.value ? " lan-yesno-active" : ""}`}
-                              onClick={() => setScrutinyField(i, "yes_no", o.value)}
-                              disabled={submitting}
-                            >
-                              {o.label}
-                            </button>
-                          ))}
-                        </div>
+                    <div className={`lan-info-item${errors.lead_client_name ? " lan-info-missing" : ""}`}>
+                      <dt>Client / Department</dt>
+                      <dd>{lead.client_name || "Not set"}</dd>
+                    </div>
+                    <div className={`lan-info-item${errors.lead_submission_deadline ? " lan-info-missing" : ""}`}>
+                      <dt>Last Date for Submission</dt>
+                      <dd>{lead.submission_deadline ? fmtDate(lead.submission_deadline) : "Not set"}</dd>
+                    </div>
+                    {lead.assigned_ba_id && (
+                      <div className="lan-info-item lan-info-wide">
+                        <dt>Name of BP</dt>
+                        <dd>{baOrgName || "—"}</dd>
                       </div>
-                      <textarea
-                        className={`input${errors[`scrutiny_${i}`] ? " input-error" : ""}`}
-                        rows={2}
-                        value={form.scrutiny[i].remarks}
-                        onChange={(e) => setScrutinyField(i, "remarks", e.target.value)}
-                        disabled={submitting}
-                        placeholder="Justification / remarks"
-                        aria-label={`${param.label} — justification / remarks`}
-                      />
-                      {errors[`scrutiny_${i}`] && <span className="field-error">{errors[`scrutiny_${i}`]}</span>}
-                    </div>
-                  ))}
-                </div>
+                    )}
+                  </dl>
+                  {(errors.lead_client_name || errors.lead_submission_deadline) && (
+                    <Alert variant="danger">
+                      {[errors.lead_client_name, errors.lead_submission_deadline].filter(Boolean).map((m) => <p key={m}>{m}</p>)}
+                    </Alert>
+                  )}
+                </Card.Body>
+              </Card>
 
-                <div className="field">
-                  <label className="field-label">Overall Justification <span className="required">*</span></label>
-                  <textarea
-                    className={`input${errors.justification ? " input-error" : ""}`}
-                    rows={4}
-                    value={form.justification}
-                    onChange={(e) => set("justification", e.target.value)}
-                    disabled={submitting}
-                    placeholder="Why this lead should be taken up — printed just under the scrutiny table."
-                  />
-                  {errors.justification && <span className="field-error">{errors.justification}</span>}
-                </div>
-              </Card.Body>
-            </Card>
+              <Card className="lf-section">
+                <SectionHead step={2} title="Assignment Details" subtitle="Client address, objectives, scope and timeline." />
+                <Card.Body className="lf-body">
+                  <div className="field">
+                    <label className="field-label">Client Address <span className="required">*</span></label>
+                    <textarea
+                      className={`input${errors.client_address ? " input-error" : ""}`}
+                      rows={2}
+                      value={form.client_address}
+                      onChange={(e) => set("client_address", e.target.value)}
+                      disabled={submitting}
+                      placeholder="Registered / correspondence address of the client"
+                    />
+                    {errors.client_address && <span className="field-error">{errors.client_address}</span>}
+                  </div>
 
-            <div className="lan-actions">
-              <Button type="button" variant="secondary" disabled={submitting} onClick={() => navigate(`/leads/${id}`)}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
-                {profile?.id === lead.person_responsible_id ? "Generate PDF" : "Send for Person Responsible Review"}
-              </Button>
+                  <div className="field">
+                    <label className="field-label">Objectives <span className="required">*</span></label>
+                    <textarea
+                      className={`input${errors.objectives ? " input-error" : ""}`}
+                      rows={4}
+                      value={form.objectives}
+                      onChange={(e) => set("objectives", e.target.value)}
+                      disabled={submitting}
+                      placeholder="Nature and objective of the proposed assignment"
+                    />
+                    {errors.objectives && <span className="field-error">{errors.objectives}</span>}
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">Scope of Work <span className="required">*</span></label>
+                    <textarea
+                      className={`input${errors.scope_of_work ? " input-error" : ""}`}
+                      rows={5}
+                      value={form.scope_of_work}
+                      onChange={(e) => set("scope_of_work", e.target.value)}
+                      disabled={submitting}
+                      placeholder={"One item per line — each becomes a bullet point, e.g.\nIdentification and mobilisation of eligible beneficiaries\nAssessment of skill and livelihood needs"}
+                    />
+                    {errors.scope_of_work && <span className="field-error">{errors.scope_of_work}</span>}
+                  </div>
+
+                  <div className="grid-2 lf-grid">
+                    <Input
+                      label="Project Timeline"
+                      required
+                      value={form.project_timeline}
+                      onChange={(e) => set("project_timeline", e.target.value)}
+                      placeholder="e.g. 15 Months"
+                      error={errors.project_timeline}
+                      disabled={submitting}
+                    />
+                    <Input
+                      label="Revenue Sharing"
+                      value={form.revenue_sharing}
+                      onChange={(e) => set("revenue_sharing", e.target.value)}
+                      placeholder="NA"
+                      disabled={submitting}
+                    />
+                  </div>
+                </Card.Body>
+              </Card>
+
+              <Card className="lf-section">
+                <SectionHead step={3} title="Financial Requirement" subtitle="Amounts in numbers only. Leave a field blank to print it as NA." />
+                <Card.Body className="lf-body">
+                  <div className="grid-2 lf-grid">
+                    <Input
+                      label="Document Fee / Tender Fee"
+                      value={form.document_fee}
+                      onChange={(e) => setNumeric("document_fee", e.target.value)}
+                      placeholder="NA"
+                      inputMode="decimal"
+                      error={errors.document_fee}
+                      disabled={submitting}
+                    />
+                    <Input
+                      label="PBG"
+                      value={form.pbg}
+                      onChange={(e) => setNumeric("pbg", e.target.value)}
+                      placeholder="NA"
+                      inputMode="decimal"
+                      error={errors.pbg}
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div className="grid-2 lf-grid">
+                    <Input
+                      label="EMD"
+                      value={form.emd}
+                      onChange={(e) => setNumeric("emd", e.target.value)}
+                      placeholder="NA"
+                      inputMode="decimal"
+                      error={errors.emd}
+                      disabled={submitting}
+                    />
+                    <Input
+                      label="Processing Fee"
+                      value={form.processing_fee}
+                      onChange={(e) => setNumeric("processing_fee", e.target.value)}
+                      placeholder="NA"
+                      inputMode="decimal"
+                      error={errors.processing_fee}
+                      disabled={submitting}
+                    />
+                  </div>
+                </Card.Body>
+              </Card>
+
+              <Card className="lf-section">
+                <SectionHead step={4} title="Preliminary Scrutiny by Office" subtitle="Mark each parameter and give a remark for it." />
+                <Card.Body className="lf-body">
+                  <div className="lan-scrutiny-list">
+                    {SCRUTINY_PARAMETERS.map((param, i) => (
+                      <div key={param.key} className="lan-scrutiny-row">
+                        <div className="lan-scrutiny-head">
+                          <span className="lan-scrutiny-num">{i + 1}</span>
+                          <span className="lan-scrutiny-label">{param.label}</span>
+                          <div className="lan-yesno" role="radiogroup" aria-label={`${param.label}: Yes or No`}>
+                            {YES_NO_OPTIONS.map((o) => (
+                              <button
+                                key={o.value}
+                                type="button"
+                                role="radio"
+                                aria-checked={form.scrutiny[i].yes_no === o.value}
+                                className={`lan-yesno-btn lan-yesno-${o.value.toLowerCase()}${form.scrutiny[i].yes_no === o.value ? " lan-yesno-active" : ""}`}
+                                onClick={() => setScrutinyField(i, "yes_no", o.value)}
+                                disabled={submitting}
+                              >
+                                {o.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <textarea
+                          className={`input${errors[`scrutiny_${i}`] ? " input-error" : ""}`}
+                          rows={2}
+                          value={form.scrutiny[i].remarks}
+                          onChange={(e) => setScrutinyField(i, "remarks", e.target.value)}
+                          disabled={submitting}
+                          placeholder="Justification / remarks"
+                          aria-label={`${param.label} — justification / remarks`}
+                        />
+                        {errors[`scrutiny_${i}`] && <span className="field-error">{errors[`scrutiny_${i}`]}</span>}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="field">
+                    <label className="field-label">Overall Justification <span className="required">*</span></label>
+                    <textarea
+                      className={`input${errors.justification ? " input-error" : ""}`}
+                      rows={4}
+                      value={form.justification}
+                      onChange={(e) => set("justification", e.target.value)}
+                      disabled={submitting}
+                      placeholder="Why this lead should be taken up — printed just under the scrutiny table."
+                    />
+                    {errors.justification && <span className="field-error">{errors.justification}</span>}
+                  </div>
+                </Card.Body>
+              </Card>
+
+              <div className="lan-actions">
+                <Button type="button" variant="secondary" disabled={submitting} onClick={() => navigate(`/leads/${id}`)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
+                  {profile?.id === lead.person_responsible_id ? "Generate PDF" : "Send for Person Responsible Review"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="lan-preview-col">
+              <div className="lan-preview-head">
+                <span className="lan-preview-title">As it will print</span>
+                <span className="lan-live-tag"><span className="lan-live-dot" />Live</span>
+              </div>
+              <NotePreview lead={lead} baOrgName={baOrgName} form={form} />
             </div>
           </form>
         )}

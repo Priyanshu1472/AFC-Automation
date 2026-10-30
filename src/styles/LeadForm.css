@@ -698,13 +698,78 @@
 /* ============================================================
    Lead Approval Note form (LeadApprovalNoteForm.jsx)
    ============================================================ */
+/* Form on the left, live "as it will print" preview on the right — same
+   layout as the Bid Payment Requisition Note editor (.pp-fnp-*). */
+.lan-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
+  gap: var(--space-5);
+  align-items: start;
+  padding-bottom: var(--space-12);
+}
+
 .lan-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  max-width: 920px;
-  padding-bottom: var(--space-12);
+  min-width: 0;
 }
+
+.lan-preview-col {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .lan-layout { grid-template-columns: 1fr; }
+  .lan-preview-col { position: static; }
+}
+
+.lan-preview-head { display: flex; align-items: center; justify-content: space-between; padding-inline: 2px; }
+.lan-preview-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); font-weight: 600; }
+.lan-live-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--success); }
+.lan-live-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: lan-pulse 1.8s ease-in-out infinite; }
+@keyframes lan-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .lan-live-dot { animation: none; } }
+
+/* Fixed "paper" colours, not theme tokens — like .pp-fnp-page. */
+.lan-pv-page {
+  background: #fdfcf8;
+  color: #1c1c1a;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 11.5px;
+  line-height: 1.5;
+  padding: 32px 28px 28px;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+.lan-pv-page p { margin: 0; }
+.lan-pv-title { text-align: center; font-weight: 700; font-size: 13.5px; letter-spacing: .02em; }
+.lan-pv-subtitle { text-align: center; font-weight: 700; font-size: 12px; margin-bottom: 14px !important; }
+.lan-pv-section { margin: 20px 0 6px !important; }
+.lan-pv-table { width: 100%; border-collapse: collapse; }
+.lan-pv-table th, .lan-pv-table td { border: 1px solid #1c1c1a; padding: 5px 7px; vertical-align: top; text-align: left; }
+.lan-pv-kv th { width: 38%; font-weight: 400; }
+.lan-pv-grid thead th { font-weight: 700; background: #efece3; }
+.lan-pv-grid td:first-child, .lan-pv-grid td:nth-child(3) { text-align: center; }
+.lan-pv-no { color: #a3392b; font-weight: 700; }
+.lan-pv-pre { white-space: pre-wrap; display: block; }
+.lan-pv-sub { display: block; font-weight: 700; margin-top: 4px; }
+.lan-pv-sub:first-child { margin-top: 0; }
+.lan-pv-page ul { margin: 2px 0 0; padding-left: 16px; }
+.lan-pv-heading { font-weight: 700; margin-top: 16px !important; }
+.lan-pv-body { margin-top: 4px !important; text-align: justify; }
+.lan-pv-sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 24px; }
+.lan-pv-sig { border: 1px solid #1c1c1a; padding: 8px 10px; min-height: 84px; }
+.lan-pv-sig-label { font-size: 10.5px; color: #4a4a44; margin-bottom: 18px; }
+.lan-pv-sig-name { font-weight: 700; }
+.lan-pv-sig-role { font-size: 10.5px; color: #4a4a44; }
 
 /* ── "From the Lead" read-only summary ─────────────────────── */
 .lan-info-grid {

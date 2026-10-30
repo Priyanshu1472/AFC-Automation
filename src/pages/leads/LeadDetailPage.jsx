@@ -161,11 +161,16 @@ export default function LeadDetailPage() {
   const location = useLocation();
   // Exit back to wherever the user actually came from — Home's "Needs your
   // action" panel, or a Proposal's "Lead Number" link — instead of always
-  // dropping them on the full Leads list, which loses their place.
-  const backTo = location.state?.from === "home" ? "/home"
+  // dropping them on the full Leads list, which loses their place. Opened
+  // from another lead's "Possible duplicate" chip, Back is a real history
+  // step (no `to`) so that lead comes back with its own Back target intact.
+  const fromDuplicate = location.state?.from === "duplicate";
+  const backTo = fromDuplicate ? undefined
+    : location.state?.from === "home" ? "/home"
     : location.state?.from === "proposal" ? `/proposals/${id}`
     : "/leads";
-  const backLabel = location.state?.from === "home" ? "Back to Home"
+  const backLabel = fromDuplicate ? `Back to ${location.state.leadNumber || "Lead"}`
+    : location.state?.from === "home" ? "Back to Home"
     : location.state?.from === "proposal" ? "Back to Proposal"
     : "Back to Leads";
   const { profile } = useAuth();
@@ -567,7 +572,7 @@ export default function LeadDetailPage() {
       <AppHeader />
       <div className="app-container">
         <div className="ar-page">
-          <BackButton to={backTo} label={backLabel} />
+          <BackButton to={backTo} label={backLabel} fallback={fromDuplicate ? `/leads/${location.state.leadId}` : undefined} />
 
           <Card className="ar-header-card">
             <Card.Body className="ar-header-body">
@@ -598,7 +603,13 @@ export default function LeadDetailPage() {
                     <div className="ld-dup-chips">
                       {duplicateRefs.map((d) =>
                         d.can_view ? (
-                          <Link key={d.id} to={`/leads/${d.id}`} className="ld-dup-chip is-link" title={d.title || undefined}>
+                          <Link
+                            key={d.id}
+                            to={`/leads/${d.id}`}
+                            state={{ from: "duplicate", leadId: lead.id, leadNumber: lead.lead_number }}
+                            className="ld-dup-chip is-link"
+                            title={d.title || undefined}
+                          >
                             <span className="ld-dup-num">{d.lead_number}</span>
                             <span className="ld-dup-team">{d.team}</span>
                           </Link>
