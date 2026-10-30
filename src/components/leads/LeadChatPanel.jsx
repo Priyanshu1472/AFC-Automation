@@ -5,7 +5,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import MentionInput from "../shared/MentionInput";
 import { renderWithMentions } from "../../lib/mentions";
-import { ChatIcon, CloseIcon, SendIcon, UserPlusIcon } from "../icons";
+import { ChatIcon, CloseIcon, SendIcon, UserPlusIcon, UsersIcon } from "../icons";
 import { ROLE_LABELS } from "../../lib/roles";
 // Reuses the generic ar-* card/field styles already defined for the Lead/
 // Empanelment review pages, plus a handful of chat-bubble-specific classes
@@ -41,8 +41,9 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
   // lead page at all (org-wide for DGM/AGM/GM/SRM) is not necessarily on
   // its chat roster — see is_lead_chat_participant / can_view_lead_chat.
   const [isParticipant, setIsParticipant] = useState(false);
-  // "Add member" picker (PMT only) — shown in place of the message list.
-  const [adding, setAdding] = useState(false);
+  // "chat" | "members" (who's in this chat) | "add" (PMT's Add member
+  // picker) — the latter two are shown in place of the message list.
+  const [view, setView] = useState("chat");
   const [candidates, setCandidates] = useState(null);
   const [candidateQuery, setCandidateQuery] = useState("");
   const [addingId, setAddingId] = useState(null);
@@ -144,18 +145,18 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
   function toggleOpen() {
     const next = !open;
     setOpen(next);
-    setAdding(false);
+    setView("chat");
     if (next) fetchMessages();
   }
 
   async function openAddMember() {
-    setAdding(true);
+    setView("add");
     setCandidateQuery("");
     setCandidates(null);
     const { data, error } = await supabase.rpc("get_lead_chat_add_candidates", { p_lead_id: leadId });
     if (error) {
       showToast("Couldn't load people to add.", "danger");
-      setAdding(false);
+      setView("chat");
       return;
     }
     setCandidates(data || []);
@@ -176,7 +177,7 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
         return;
       }
       showToast(`${user.full_name} added to the discussion.`, "success");
-      setAdding(false);
+      setView("chat");
       fetchMessages();
     } catch (err) {
       showToast(err.message || "Something went wrong.", "danger");
@@ -223,9 +224,16 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
       {open && (
         <div className="ar-chat-popup" role="dialog" aria-label="Lead discussion">
           <div className="ar-chat-popup-header">
-            <span className="ar-chat-popup-title">{adding ? "Add to Discussion" : "Discussion"}</span>
+            <span className="ar-chat-popup-title">
+              {view === "add" ? "Add to Discussion" : view === "members" ? `People in this Chat (${participants.length})` : "Discussion"}
+            </span>
             <div className="ar-chat-popup-actions">
-              {canAddMembers && !adding && (
+              {view === "chat" && (
+                <button type="button" className="ar-chat-icon-btn" aria-label="People in this chat" title="People in this chat" onClick={() => setView("members")}>
+                  <UsersIcon />
+                </button>
+              )}
+              {canAddMembers && view === "chat" && (
                 <button type="button" className="ar-chat-icon-btn" aria-label="Add member" title="Add member" onClick={openAddMember}>
                   <UserPlusIcon />
                 </button>
@@ -233,16 +241,16 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
               <button
                 type="button"
                 className="ar-chat-icon-btn"
-                aria-label={adding ? "Back to discussion" : "Close chat"}
-                title={adding ? "Back to discussion" : "Close"}
-                onClick={() => (adding ? setAdding(false) : setOpen(false))}
+                aria-label={view !== "chat" ? "Back to discussion" : "Close chat"}
+                title={view !== "chat" ? "Back to discussion" : "Close"}
+                onClick={() => (view !== "chat" ? setView("chat") : setOpen(false))}
               >
                 <CloseIcon />
               </button>
             </div>
           </div>
 
-          {adding ? (
+          {view === "add" ? (
             <div className="ar-chat-add">
               <input
                 type="search"
@@ -271,6 +279,21 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
                 )}
               </div>
             </div>
+          ) : view === "members" ? (
+            <div className="ar-chat-add-list">
+              {participants.map((p) => (
+                <div key={p.user_id} className="ar-chat-add-row ar-chat-member-row">
+                  <span className="ar-chat-add-name">
+                    {p.full_name}
+                    {p.user_id === profile?.id && <span className="ar-chat-add-you"> (You)</span>}
+                  </span>
+                  <span className="ar-chat-add-meta">
+                    {ROLE_LABELS[p.role] || p.role}
+                    {p.team && ` · ${p.team}`}
+                  </span>
+                </div>
+              ))}
+            </div>
           ) : (
           <div className="ar-chat-messages">
             {loading ? (
@@ -295,7 +318,7 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
           </div>
           )}
 
-          {adding ? null : locked ? (
+          {view !== "chat" ? null : locked ? (
             <p className="ar-chat-locked">Chat closed — this lead has been approved.</p>
           ) : (
             <div className="ar-chat-input-row">

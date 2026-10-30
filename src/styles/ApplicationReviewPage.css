@@ -997,8 +997,14 @@
   min-height: 0;
 }
 
-.ar-chat-add-search {
+/* Reuses .ar-chat-input's look, but that class has flex: 1 (to fill the
+   send row) and is defined later in this file, so it would stretch the
+   search box vertically in this column — hence the higher specificity. */
+.ar-chat-add .ar-chat-add-search {
   flex: none;
+  height: 36px;
+  padding-block: 0;
+  border-radius: var(--radius-md);
 }
 
 .ar-chat-add-list {
@@ -1026,6 +1032,19 @@
 
 .ar-chat-add-row:hover:not(:disabled) {
   background: var(--bg-surface-2);
+}
+
+.ar-chat-member-row {
+  cursor: default;
+}
+
+.ar-chat-add-row.ar-chat-member-row:hover {
+  background: transparent;
+}
+
+.ar-chat-add-you {
+  font-weight: 400;
+  color: var(--text-tertiary);
 }
 
 .ar-chat-add-row:disabled {
