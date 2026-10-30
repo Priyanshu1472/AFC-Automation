@@ -9,7 +9,10 @@
 // contact for the "another team spotted a duplicate" workflow — see
 // 20260928000200_lead_org_wide_visibility.sql for why a DGM/AGM/PMT member
 // can even see this lead to begin with. Sits at the top of the right
-// column, above "Your Action", so PMT can't miss it.
+// column, above "Your Action", so PMT can't miss it. Queries are visible only
+// to PMT, MD and the raiser — never the lead's own team (lead_queries_select,
+// see 20261030050000_lead_queries_private_to_pmt_md_raiser.sql) — so for
+// them this card renders nothing.
 import { useState, useEffect, useCallback } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
