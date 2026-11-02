@@ -472,7 +472,6 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
                   value={form.bid_number}
                   onChange={(e) => set("bid_number", e.target.value)}
                   placeholder={`Enter ${bidNumberLabel}`}
-                  hint="Used for duplicate detection."
                   disabled={submitting}
                   error={errors.bid_number}
                 />
