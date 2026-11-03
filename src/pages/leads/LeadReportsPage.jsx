@@ -24,7 +24,7 @@ import "../../styles/LeadReportsPage.css";
 const ALL_STATUSES = Object.keys(STATUS_MAP);
 // On-track funnel, ending at the terminal approval — mirrors Empanelment's
 // PIPELINE (also ends at its own terminal "accepted").
-const PIPELINE = ["pa_review", "recommending_authority_review", "pmt_review", "md_review", "md_approved"];
+const PIPELINE = ["pa_review", "recommending_authority_review", "pmt_review", "g3_review", "md_review", "md_approved"];
 const TERMINAL = ["md_approved", "md_declined", "pa_dropped"];
 const SOURCE_LABELS = { in_house: "In House", ba: "BP Source", suo_moto: "Suo Moto" };
 const TYPE_LABELS = { rfp: "RFP", eoi: "EOI" };

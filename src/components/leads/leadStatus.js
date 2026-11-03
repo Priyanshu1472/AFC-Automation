@@ -6,6 +6,7 @@ export const STATUS_MAP = {
   pa_review: { label: "PR Review", variant: "warning" },
   recommending_authority_review: { label: "Recommending Authority", variant: "warning" },
   pmt_review: { label: "PMT", variant: "info" },
+  g3_review: { label: "G3 Committee Review", variant: "warning" },
   md_review: { label: "MD Approval Pending", variant: "neutral" },
   pa_action_required: { label: "Action Required", variant: "danger" },
   pa_dropped: { label: "Dropped", variant: "danger" },
@@ -13,11 +14,16 @@ export const STATUS_MAP = {
   md_declined: { label: "Declined", variant: "danger" },
 };
 
-// The full possible pipeline, in order.
+// The full possible pipeline, in order. G3 is an optional waypoint — only a
+// lead PMT actually escalates (see escalate-lead-to-g3) ever sits at
+// g3_review — but it's shown here as a normal step so the stepper always
+// reflects the full chain a lead could take, the same way every other step
+// is shown regardless of which specific path a given lead follows.
 export const STATUS_FLOW = [
   { key: "pa_review", label: "PA" },
   { key: "recommending_authority_review", label: "Recommending Authority" },
   { key: "pmt_review", label: "PMT" },
+  { key: "g3_review", label: "G3" },
   { key: "md_review", label: "MD" },
 ];
 

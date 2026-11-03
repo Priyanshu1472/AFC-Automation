@@ -306,7 +306,11 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
                 return (
                   <div key={m.id} className={`ar-chat-msg${isOwn ? " ar-chat-msg-own" : ""}`}>
                     <div className="ar-chat-bubble">
-                      <span className="ar-chat-sender">{participantNames[m.sender_id] || "Unknown"}</span>
+                      {/* A null sender_id is a system/bot announcement
+                          (e.g. a G3 escalation notice) — never "Unknown",
+                          which is reserved for a real but unresolved
+                          sender. */}
+                      <span className="ar-chat-sender">{m.sender_id ? participantNames[m.sender_id] || "Unknown" : "AFC Bot"}</span>
                       <p className="ar-chat-text">{renderWithMentions(m.message, participants)}</p>
                       <span className="ar-chat-time">{fmtTime(m.created_at)}</span>
                     </div>

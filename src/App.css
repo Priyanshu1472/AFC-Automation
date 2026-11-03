@@ -1560,6 +1560,35 @@ select.input {
   flex-shrink: 0;
 }
 
+/* Optional section heading (option.group) above the first option of each
+   group — see Select.jsx. Non-interactive. */
+.csl-group-heading {
+  padding: 7px var(--space-4) 5px;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  background: var(--bg-surface-2);
+  pointer-events: none;
+}
+
+/* MultiSelect's checkbox rows (see MultiSelect.jsx) — same .csl-option
+   base as a plain Select, as a <label> wrapping an actual checkbox input
+   so the whole row is clickable and stays keyboard-accessible. */
+.csl-option-checkbox {
+  justify-content: flex-start;
+  gap: 10px;
+}
+.csl-option-checkbox input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--brand-500, var(--text-brand));
+  cursor: pointer;
+}
+
 /* Option with a hint (e.g. "Active leads: 2" under a name) — stacked,
    label at normal size, hint lines smaller/muted underneath. */
 .csl-option-text {

@@ -78,7 +78,7 @@ type LeadForNote = {
 // pipeline order) — used to pick each stage's most recent activity row.
 const STAGE_GROUPS: { key: string; label: string; actions: string[] }[] = [
   { key: "recommending_authority", label: "Recommending Authority", actions: ["ra_approve", "ra_decline"] },
-  { key: "pmt", label: "PMT", actions: ["pmt_approve", "pmt_decline"] },
+  { key: "pmt", label: "PMT", actions: ["pmt_approve", "pmt_decline", "pmt_escalate_g3"] },
   { key: "md", label: "MD", actions: ["md_approve", "md_decline"] },
 ];
 

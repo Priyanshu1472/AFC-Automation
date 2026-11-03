@@ -525,6 +525,18 @@ verify_jwt = true
 import_map = "./functions/add-lead-chat-member/deno.json"
 entrypoint = "./functions/add-lead-chat-member/index.ts"
 
+[functions.escalate-lead-to-g3]
+enabled = true
+verify_jwt = true
+import_map = "./functions/escalate-lead-to-g3/deno.json"
+entrypoint = "./functions/escalate-lead-to-g3/index.ts"
+
+[functions.resolve-g3-escalation]
+enabled = true
+verify_jwt = true
+import_map = "./functions/resolve-g3-escalation/deno.json"
+entrypoint = "./functions/resolve-g3-escalation/index.ts"
+
 [functions.raise-lead-query]
 enabled = true
 verify_jwt = true

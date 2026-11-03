@@ -217,7 +217,7 @@ export function isValidRole(role) {
 // 20260928000000_lead_committee_and_status_simplification.sql — the
 // former G3/DGM-initial gate is now the named Recommending Authority
 // instead). See leadPermissions.js for the actual can()-style predicates.
-export const COMMITTEES = ["PMT"];
+export const COMMITTEES = ["PMT", "G3"];
 
 // The tier eligible to be Person Responsible for a lead (owns its
 // PA_REVIEW accept/drop step) and to claim a dropped one. SRM has the same

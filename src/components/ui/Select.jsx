@@ -221,38 +221,61 @@ export default function Select({
 
       {open && rect && createPortal(
         <ul ref={dropdownRef} role="listbox" id="csl-listbox" className="csl-dropdown" style={dropdownStyle}>
-          {(isFilterable ? filtered : normalised).map(option => (
-            <li
-              key={option.value}
-              role="option"
-              aria-selected={option.value === value}
-              className={`csl-option${option.value === value ? " csl-option-selected" : ""}`}
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => handleSelect(option.value, option.label)}
-            >
-              {/* option.hint: extra detail shown only in the dropdown list
-                  (e.g. "Active leads: 2" under a name) — option.label stays
-                  the plain string used for the closed trigger/search input,
-                  so a searchable Select's input text never has to hold this
-                  richer content. */}
-              {option.hint ? (
-                <span className="csl-option-text">
-                  <span className="csl-option-label">{option.label}</span>
-                  <span className="csl-option-hint">{option.hint}</span>
-                </span>
-              ) : (
-                option.label
-              )}
-              {option.value === value && (
-                <span className="csl-option-check" aria-hidden="true">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                </span>
-              )}
-            </li>
-          ))}
+          {(() => {
+            let lastGroup;
+            return (isFilterable ? filtered : normalised).flatMap(option => {
+              // option.group: an optional section heading rendered right
+              // before the first option of each run with that group value —
+              // entirely opt-in (every other caller's options have no
+              // .group, so this renders nothing extra for them, and the
+              // plain <li className="csl-option"> markup below is
+              // unchanged). Options are expected to already be sorted by
+              // group.
+              const showGroupHeading = option.group && option.group !== lastGroup;
+              lastGroup = option.group;
+              const items = [];
+              if (showGroupHeading) {
+                items.push(
+                  <li key={`group-${option.group}`} role="presentation" className="csl-group-heading">
+                    {option.group}
+                  </li>
+                );
+              }
+              items.push(
+                <li
+                  key={option.value}
+                  role="option"
+                  aria-selected={option.value === value}
+                  className={`csl-option${option.value === value ? " csl-option-selected" : ""}`}
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => handleSelect(option.value, option.label)}
+                >
+                  {/* option.hint: extra detail shown only in the dropdown list
+                      (e.g. "Active leads: 2" under a name) — option.label stays
+                      the plain string used for the closed trigger/search input,
+                      so a searchable Select's input text never has to hold this
+                      richer content. */}
+                  {option.hint ? (
+                    <span className="csl-option-text">
+                      <span className="csl-option-label">{option.label}</span>
+                      <span className="csl-option-hint">{option.hint}</span>
+                    </span>
+                  ) : (
+                    option.label
+                  )}
+                  {option.value === value && (
+                    <span className="csl-option-check" aria-hidden="true">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </span>
+                  )}
+                </li>
+              );
+              return items;
+            });
+          })()}
           {showCreateOption && (
             <li
               role="option"

@@ -12,7 +12,7 @@ import { createAdminClient } from "./auth.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-export type Committee = "PMT";
+export type Committee = "PMT" | "G3";
 
 // The tier eligible to be Person Responsible for a lead (owns its
 // PA_REVIEW accept/drop step) and to claim a dropped one. SRM has the same
