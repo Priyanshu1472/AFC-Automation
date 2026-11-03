@@ -19,11 +19,11 @@ function memberRows(overrides: { acceptedPreviousStatus?: string; droppedPreviou
   return [
     {
       lead_id: ACCEPTED_ID, previous_status: overrides.acceptedPreviousStatus ?? "pmt_review",
-      leads: { id: ACCEPTED_ID, lead_number: "AFC/TEAM 1/L/26/001", title: "Primary Lead", created_by: "creator-1", person_responsible_id: "pr-1" },
+      leads: { id: ACCEPTED_ID, lead_number: "AFC/TEAM 1/L/26/001", title: "Primary Lead", created_by: "creator-1", person_responsible_id: "pr-1", reviewer_id: "rev-1", recommending_authority_id: "ra-1" },
     },
     {
       lead_id: DROPPED_ID, previous_status: overrides.droppedPreviousStatus ?? "pa_review",
-      leads: { id: DROPPED_ID, lead_number: "AFC/TEAM 2/L/26/002", title: "Conflicting Lead", created_by: "creator-2", person_responsible_id: "pr-2" },
+      leads: { id: DROPPED_ID, lead_number: "AFC/TEAM 2/L/26/002", title: "Conflicting Lead", created_by: "creator-2", person_responsible_id: "pr-2", reviewer_id: "rev-2", recommending_authority_id: "pr-2" },
     },
   ];
 }
@@ -136,4 +136,23 @@ Deno.test("success - an accepted lead that hadn't reached Recommending Authority
   const leadUpdates = log.filter((l) => l.table === "leads" && l.calls.some(([name]) => name === "update"));
   const statuses = leadUpdates.map((l) => JSON.parse(l.calls.find(([name]) => name === "update")![1]).status);
   assertEquals(statuses.sort(), ["pa_dropped", "pa_review"]);
+});
+
+Deno.test("notifications - both leads' creator, Person Responsible, Reviewer and Recommending Authority hear the outcome", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(req({}), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const batches = log
+    .filter((l) => l.table === "notifications" && l.calls.some(([name]) => name === "insert"))
+    .map((l) => JSON.parse(l.calls.find(([name]) => name === "insert")![1]) as { user_id: string; title: string }[]);
+  assertEquals(batches.length, 2);
+
+  const accepted = batches.find((b) => b[0].title.includes("accepted"))!;
+  assertEquals(accepted.map((n) => n.user_id).sort(), ["creator-1", "pr-1", "ra-1", "rev-1"]);
+
+  // pr-2 is both Person Responsible and Recommending Authority: notified once.
+  const rejected = batches.find((b) => b[0].title.includes("rejected"))!;
+  assertEquals(rejected.map((n) => n.user_id).sort(), ["creator-2", "pr-2", "rev-2"]);
 });

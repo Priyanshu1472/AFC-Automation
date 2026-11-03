@@ -23,8 +23,24 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 type MemberRow = {
   lead_id: string;
   previous_status: string | null;
-  leads: { id: string; lead_number: string; title: string; created_by: string; person_responsible_id: string };
+  leads: {
+    id: string;
+    lead_number: string;
+    title: string;
+    created_by: string;
+    person_responsible_id: string | null;
+    reviewer_id: string | null;
+    recommending_authority_id: string | null;
+  };
 };
+
+// Everyone who owns a lead hears how the MD decided it: the creator plus
+// the Person Responsible, Reviewer and Recommending Authority (any of the
+// last three may still be unassigned on an early-stage lead; notifyUsers
+// skips nulls and de-duplicates people holding more than one role).
+function leadTeam(lead: MemberRow["leads"]) {
+  return [lead.created_by, lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id];
+}
 
 // A member lead resumes straight at md_review if it had already cleared
 // Recommending Authority before joining the escalation.
@@ -62,7 +78,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
     const { data: memberRows, error: membersErr } = await adminClient
       .from("lead_g3_escalation_members")
-      .select("lead_id, previous_status, leads(id, lead_number, title, created_by, person_responsible_id)")
+      .select("lead_id, previous_status, leads(id, lead_number, title, created_by, person_responsible_id, reviewer_id, recommending_authority_id)")
       .eq("escalation_id", escalationId);
     if (membersErr || !memberRows?.length) return jsonRes(req, 500, { error: "Failed to load the escalation's leads." });
 
@@ -83,8 +99,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .eq("status", "g3_review");
     if (acceptErr) return jsonRes(req, 500, { error: "Failed to accept the lead." });
     await logLeadActivity(adminClient, accepted.id, caller.id, "md", "g3_accepted", "g3_review", acceptedFinalStatus, "Accepted after G3 committee review.");
-    await notifyUsers(adminClient, [accepted.created_by, accepted.person_responsible_id], {
-      title: "Lead accepted after G3 review",
+    await notifyUsers(adminClient, leadTeam(accepted), {
+      title: "Lead accepted by MD in conflict review",
       sub_text:
         acceptedFinalStatus === "md_review"
           ? `${accepted.lead_number} — "${accepted.title}" was accepted after G3 committee review and is proceeding to MD approval.`
@@ -101,9 +117,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         continue;
       }
       await logLeadActivity(adminClient, lead.id, caller.id, "md", "g3_dropped", "g3_review", "pa_dropped", `Dropped — ${accepted.lead_number} was accepted instead at G3 review.`);
-      await notifyUsers(adminClient, [lead.created_by, lead.person_responsible_id], {
-        title: "Lead dropped after G3 review",
-        sub_text: `${lead.lead_number} — "${lead.title}" was dropped — another team's lead was selected at G3 review.`,
+      await notifyUsers(adminClient, leadTeam(lead), {
+        title: "Lead rejected by MD in conflict review",
+        sub_text: `${lead.lead_number} — "${lead.title}" was rejected after G3 committee review: the MD accepted the conflicting lead ${accepted.lead_number} instead, so this lead has been dropped.`,
         type: "info",
         link: `/leads/${lead.id}`,
       });
