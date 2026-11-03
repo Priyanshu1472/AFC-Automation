@@ -365,3 +365,37 @@ Deno.test("handleRequest - one invalid document among several rejects the whole 
   const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
   assertEquals(log.some((l) => l.table === "leads" && l.calls.some((c) => c[0] === "insert")), false);
 });
+
+Deno.test("handleRequest - a possible duplicate back-links onto the matched lead and notifies its stakeholders", async () => {
+  const matchedLead = {
+    id: "existing-lead-1",
+    possible_duplicate_ids: [],
+    created_by: "matched-creator",
+    person_responsible_id: "matched-pr",
+    reviewer_id: "matched-reviewer",
+    recommending_authority_id: "matched-authority",
+    handled_by_dgm_id: null,
+  };
+  const client = buildClient({
+    rpc: { find_similar_leads: { data: [{ id: "existing-lead-1" }], error: null } },
+    routes: {
+      leads: [
+        { data: { id: "new-lead-1", lead_number: "LH-2026-000001", status: "pa_review" }, error: null },
+        { data: [matchedLead], error: null },
+      ],
+    },
+  });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const leadUpdate = log.find((l) => l.table === "leads" && l.calls.some(([name]) => name === "update"));
+  assertEquals(!!leadUpdate, true);
+  const updatePayload = JSON.parse(leadUpdate!.calls.find(([name]) => name === "update")![1]);
+  assertEquals(updatePayload.possible_duplicate_ids, ["new-lead-1"]);
+
+  const notificationsInsert = log.find((l) => l.table === "notifications" && l.calls.some(([name]) => name === "insert"));
+  assertEquals(!!notificationsInsert, true);
+  const notifiedIds = JSON.parse(notificationsInsert!.calls.find(([name]) => name === "insert")![1]).map((r: { user_id: string }) => r.user_id);
+  assertEquals(notifiedIds.sort(), ["matched-authority", "matched-creator", "matched-pr", "matched-reviewer"]);
+});

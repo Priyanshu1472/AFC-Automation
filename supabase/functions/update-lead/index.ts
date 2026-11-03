@@ -14,7 +14,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
-import { findPossibleDuplicateIds } from "../_shared/leadDuplicates.ts";
+import { findPossibleDuplicateIds, linkAndNotifyReciprocalDuplicates } from "../_shared/leadDuplicates.ts";
 import { notifyUser } from "../_shared/notify.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
@@ -100,7 +100,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   try {
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, forwarded_to_id, lead_number, documents, title, portal_name, bid_number, submission_deadline, assigned_ba_id")
+      .select("id, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, forwarded_to_id, lead_number, documents, title, portal_name, bid_number, submission_deadline, assigned_ba_id, possible_duplicate_ids")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -239,6 +239,19 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     }
 
     await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "edited", fromStatus, fromStatus, null);
+
+    // Only the matches that weren't already flagged before this edit — an
+    // edit that still matches the same lead(s) it already matched doesn't
+    // need to notify anyone a second time.
+    const previouslyMatchedIds = new Set(lead.possible_duplicate_ids || []);
+    const newlyMatchedIds = possibleDuplicateIds.filter((id) => !previouslyMatchedIds.has(id));
+    await linkAndNotifyReciprocalDuplicates(adminClient, {
+      newLeadId: lead.id,
+      newLeadNumber: lead.lead_number,
+      newLeadTitle: input.title.trim(),
+      newLeadTeam: team,
+      newlyMatchedIds,
+    });
 
     // Only notify a role's newly-assigned person — not every save, and not
     // someone who was already in that role before this edit. action_required

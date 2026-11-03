@@ -11,7 +11,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { notifyUser, notifyRole } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
-import { findPossibleDuplicateIds } from "../_shared/leadDuplicates.ts";
+import { findPossibleDuplicateIds, linkAndNotifyReciprocalDuplicates } from "../_shared/leadDuplicates.ts";
 import { addLeadChatParticipants, getOrgWideHolders } from "../_shared/leadAuth.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
@@ -251,6 +251,16 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       console.error("Lead insert failed:", insertErr?.message);
       return jsonRes(req, 500, { error: "Failed to create lead. Please try again." });
     }
+
+    // A brand-new lead has no prior possible_duplicate_ids — every match
+    // found is new, so every matched lead gets back-linked and notified.
+    await linkAndNotifyReciprocalDuplicates(adminClient, {
+      newLeadId: lead.id,
+      newLeadNumber: lead.lead_number,
+      newLeadTitle: input.title.trim(),
+      newLeadTeam: team,
+      newlyMatchedIds: possibleDuplicateIds,
+    });
 
     if (!isPoRouted) {
       await addLeadChatParticipants(
