@@ -212,12 +212,22 @@
 
 .home-table-title {
   font-weight: 600;
-  min-width: 200px;
+  min-width: 180px;
+  width: 26%;
 }
 
+.home-table .home-col-ref {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* Bold subject on one line + up to two lines of detail (see
+   NotificationDetail), so every row stays the same height-ish no matter
+   how long the lead title is. */
 .home-table-sub {
   color: var(--text-secondary) !important;
-  max-width: 420px;
+  min-width: 260px;
+  max-width: 520px;
 }
 
 .home-table .home-col-date {
@@ -561,6 +571,10 @@
   display: none !important;
 }
 
+.home-actions.is-list .home-table .home-col-ref {
+  margin-top: 4px;
+}
+
 .home-actions.is-list .home-table-sub {
   margin-top: 3px;
   font-size: var(--text-sm);
@@ -619,4 +633,16 @@
     animation: none !important;
     transition: none !important;
   }
+}
+
+.home-table .notif-ref {
+  font-size: 12px;
+}
+
+.home-table-sub .notif-detail {
+  max-width: 520px;
+}
+
+.home-actions.is-list .home-table-sub .notif-detail {
+  max-width: none;
 }

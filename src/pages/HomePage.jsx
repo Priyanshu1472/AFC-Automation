@@ -11,6 +11,8 @@ import { fetchPendingActionNotifications, subscribeToNotifications, markNotifica
 import { TargetIcon, ActivityIcon, RupeeIcon } from "../components/icons";
 import BpInvoiceRequestsCard from "../components/financials/BpInvoiceRequestsCard";
 import { syncDueAlerts } from "../lib/monitoring";
+import { describeNotification } from "../lib/notificationDisplay";
+import NotificationDetail from "../components/shared/NotificationDetail";
 import "../styles/HomePage.css";
 
 const STATUS_MAP = {
@@ -306,7 +308,9 @@ function PendingActionsPanel() {
   if (loading) return <PageLoader text="Loading your alerts…" />;
 
   const current = boxes.find((b) => b.key === active) || null;
-  const list = current ? grouped[current.key] : [];
+  const list = (current ? grouped[current.key] : []).map((n) => ({ n, d: describeNotification(n) }));
+  // Only modules whose alerts are about leads get the Lead Number column.
+  const showRef = list.some(({ d }) => d.ref);
 
   return (
     <section ref={sectionRef} className={`home-actions${isList ? " is-list" : ""}${current ? " has-active" : ""}`} aria-label="Needs your action">
@@ -369,13 +373,14 @@ function PendingActionsPanel() {
                   <tr>
                     <th className="home-col-num">#</th>
                     <th>Alert</th>
+                    {showRef && <th className="home-col-ref">Lead Number</th>}
                     <th>Details</th>
                     <th className="home-col-date">Received</th>
                     <th className="home-col-open" aria-label="Open" />
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map((n, i) => (
+                  {list.map(({ n, d }, i) => (
                     <tr
                       key={n.id}
                       className="home-table-row"
@@ -387,8 +392,9 @@ function PendingActionsPanel() {
                       }}
                     >
                       <td className="home-col-num">{i + 1}</td>
-                      <td className="home-table-title">{n.title}</td>
-                      <td className="home-table-sub">{n.sub_text || "—"}</td>
+                      <td className="home-table-title">{d.alert}</td>
+                      {showRef && <td className="home-col-ref">{d.ref ? <span className="notif-ref">{d.ref}</span> : "—"}</td>}
+                      <td className="home-table-sub"><NotificationDetail d={d} /></td>
                       <td className="home-col-date">
                         <span className="home-table-date">{fmtDate(n.created_at)}</span>
                         <span className="home-table-ago">{timeAgo(n.created_at)}</span>

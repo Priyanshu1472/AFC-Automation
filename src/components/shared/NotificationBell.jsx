@@ -7,6 +7,8 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from "../../lib/notifications";
+import { describeNotification } from "../../lib/notificationDisplay";
+import NotificationDetail from "./NotificationDetail";
 import { BellIcon, CloseIcon } from "../icons";
 import "../../styles/NotificationBell.css";
 
@@ -60,8 +62,15 @@ export default function NotificationBell() {
     function handleClick(e) {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
     }
+    function handleKey(e) {
+      if (e.key === "Escape") setOpen(false);
+    }
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, [open]);
 
   function handleItemClick(n) {
@@ -93,7 +102,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="notif-bell-panel" role="menu">
+        <div className="notif-bell-panel" role="dialog" aria-label="Notifications">
           <div className="notif-bell-panel-header">
             <span className="notif-bell-panel-title">Notifications</span>
             <span className="notif-bell-panel-header-actions">
@@ -117,21 +126,27 @@ export default function NotificationBell() {
             {items.length === 0 ? (
               <div className="notif-bell-empty">You're all caught up.</div>
             ) : (
-              items.map((n) => (
-                <button
-                  key={n.id}
-                  type="button"
-                  className={`notif-bell-item${!n.is_read ? " unread" : ""}`}
-                  onClick={() => handleItemClick(n)}
-                >
-                  {!n.is_read && <span className="notif-bell-dot" aria-hidden="true" />}
-                  <span className="notif-bell-item-body">
-                    <span className="notif-bell-item-title">{n.title}</span>
-                    {n.sub_text && <span className="notif-bell-item-sub">{n.sub_text}</span>}
-                    <span className="notif-bell-item-time">{timeAgo(n.created_at)}</span>
-                  </span>
-                </button>
-              ))
+              items.map((n) => {
+                const d = describeNotification(n);
+                return (
+                  <button
+                    key={n.id}
+                    type="button"
+                    className={`notif-bell-item${!n.is_read ? " unread" : ""}`}
+                    onClick={() => handleItemClick(n)}
+                  >
+                    <span className="notif-bell-dot" aria-hidden="true" />
+                    <span className="notif-bell-item-body">
+                      <span className="notif-bell-item-title">{d.alert}</span>
+                      <span className="notif-bell-item-meta">
+                        {d.ref && <span className="notif-ref">{d.ref}</span>}
+                        <span className="notif-bell-item-time">{timeAgo(n.created_at)}</span>
+                      </span>
+                      <NotificationDetail d={d} className="notif-bell-item-detail" />
+                    </span>
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
