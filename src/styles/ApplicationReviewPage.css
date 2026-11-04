@@ -48,73 +48,304 @@
   overflow-wrap: anywhere;
 }
 
-.ld-dup-box {
-  margin-top: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid rgba(138, 106, 32, 0.25);
-  border-radius: var(--radius-md);
-  background: var(--warning-light);
-}
-
-[data-theme="dark"] .ld-dup-box {
-  background: rgba(211, 172, 90, 0.08);
-  border-color: rgba(211, 172, 90, 0.22);
-}
-
-.ld-dup-head {
+/* ── Possible duplications ──────────────────────────────────
+   Red, animated button beside "Transfer Lead" in the header card; opens an
+   overlay table: lead number, team, why it matches, matching value. */
+.ld-header-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--warning-dark);
-}
-
-[data-theme="dark"] .ld-dup-head { color: #d3ac5a; }
-
-.ld-dup-chips {
-  display: flex;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  flex-shrink: 0;
 }
 
-.ld-dup-chip {
+.ld-dup-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 4px 4px 4px 10px;
-  border-radius: 999px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default, rgba(127, 127, 127, 0.25));
-  font-size: var(--text-xs);
-  color: var(--text-primary);
+  padding: 7px 8px 7px 12px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  background: var(--danger);
+  color: #fff;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
   text-decoration: none;
-}
-
-.ld-dup-chip.is-link {
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  animation: ld-dup-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) backwards,
+             ld-dup-pulse 2.4s ease-out 0.4s infinite;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.ld-dup-chip.is-link:hover {
-  border-color: var(--text-link);
+.ld-dup-btn:hover {
+  background: var(--danger-dark);
+  border-color: var(--danger-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(219, 36, 36, 0.28);
+  animation-play-state: running, paused;
 }
 
-.ld-dup-chip.is-link .ld-dup-num {
+.ld-dup-btn:active { transform: translateY(0) scale(0.98); }
+
+.ld-dup-btn:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
+[data-theme="dark"] .ld-dup-btn,
+[data-theme="dark"] .ld-dup-btn:hover {
+  background: #c43a2a;
+  border-color: #c43a2a;
+}
+
+.ld-dup-btn-icon {
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+  transform-origin: 50% 80%;
+  animation: ld-dup-wiggle 2.4s ease-in-out 0.4s infinite;
+}
+
+.ld-dup-btn-icon svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.ld-dup-btn-count {
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--danger-dark);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme="dark"] .ld-dup-btn-count { color: #c43a2a; }
+
+@keyframes ld-dup-pop {
+  from { opacity: 0; transform: translateY(4px) scale(0.92); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes ld-dup-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(219, 36, 36, 0.45); }
+  70%  { box-shadow: 0 0 0 9px rgba(219, 36, 36, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(219, 36, 36, 0); }
+}
+
+@keyframes ld-dup-wiggle {
+  0%, 70%, 100% { transform: rotate(0); }
+  76% { transform: rotate(-12deg); }
+  82% { transform: rotate(10deg); }
+  88% { transform: rotate(-6deg); }
+  94% { transform: rotate(3deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ld-dup-btn, .ld-dup-btn-icon, .ld-dup-close-btn, .ld-dup-card { animation: none; }
+}
+
+/* "Close" — takes the red button's place while the table is open. */
+.ld-dup-close-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 7px 14px 7px 12px;
+  border: 1px solid var(--border-strong, rgba(127, 127, 127, 0.35));
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  animation: ld-dup-pop 0.25s ease-out backwards;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ld-dup-close-btn:hover {
+  background: var(--bg-surface-3);
+  border-color: var(--text-tertiary);
+}
+
+.ld-dup-close-btn:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
+}
+
+.ld-dup-close-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* Inline card that replaces the stepper + records/actions grid. */
+.ld-dup-card {
+  animation: ld-dup-card-in 0.2s ease-out both;
+}
+
+@keyframes ld-dup-card-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.ld-dup-card-head {
+  padding: var(--space-5) var(--space-6) var(--space-4);
+}
+
+.ld-dup-card-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ld-dup-card-head p {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* Table */
+.ld-dup-table-wrap {
+  overflow-x: auto;
+}
+
+.ld-dup-empty {
+  margin: 0;
+  padding: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.ld-dup-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.ld-dup-table thead th {
+  padding: 10px 16px;
+  background: var(--table-header-bg);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ld-dup-table td {
+  padding: 10px 16px;
+  vertical-align: middle;
+  color: var(--text-primary);
+}
+
+/* Each matched lead is its own tbody; divider between leads only, a
+   faint dashed one between several reasons of the same lead. */
+.ld-dup-group + .ld-dup-group td,
+.ld-dup-group:first-of-type tr:first-child td {
+  border-top: 1px solid var(--border-default, rgba(127, 127, 127, 0.2));
+}
+
+.ld-dup-group tr + tr td.ld-dup-cell-reason,
+.ld-dup-group tr + tr td.ld-dup-cell-value {
+  border-top: 1px dashed var(--border-default, rgba(127, 127, 127, 0.2));
+}
+
+.ld-dup-group:hover td { background: var(--bg-surface-2, rgba(127, 127, 127, 0.04)); }
+
+.ld-dup-cell-lead { width: 30%; }
+.ld-dup-cell-team { width: 12%; }
+.ld-dup-cell-reason { width: 24%; }
+
+.ld-dup-link {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--text-link);
+  text-decoration: none;
+  white-space: nowrap;
 }
+
+.ld-dup-link:hover { text-decoration: underline; }
 
 .ld-dup-num {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ld-dup-title {
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .ld-dup-team {
-  padding: 1px 8px;
+  display: inline-block;
+  padding: 2px 9px;
   border-radius: 999px;
   background: var(--bg-surface-3);
   color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ld-dup-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--danger-light);
+  color: var(--danger-dark);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ld-dup-reason::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.ld-dup-reason.is-title { background: var(--warning-light); color: var(--warning-dark); }
+.ld-dup-reason.is-none  { background: var(--bg-surface-3); color: var(--text-tertiary); }
+
+.ld-dup-reason-detail {
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.ld-dup-reason-none {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+@media (max-width: 640px) {
+  .ar-header-body:has(.ld-header-actions) { flex-wrap: wrap; }
+  .ld-header-actions { justify-content: flex-start; }
 }
 
 .ar-header-meta {

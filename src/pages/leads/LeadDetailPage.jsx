@@ -19,6 +19,7 @@ import LeadQueryPanel from "../../components/leads/LeadQueryPanel";
 import LeadG3Panel from "../../components/leads/LeadG3Panel";
 import MdTransferLeadDialog from "../../components/leads/MdTransferLeadDialog";
 import EscalateToG3Dialog from "../../components/leads/EscalateToG3Dialog";
+import LeadDuplicatesTable from "../../components/leads/LeadDuplicatesTable";
 import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 // Reuses the ar-* detail/action/timeline/document styles already defined
@@ -194,6 +195,11 @@ export default function LeadDetailPage() {
   // lead itself — surfaced read-only here once that note exists.
   const [clientContact, setClientContact] = useState(null);
   const [duplicateRefs, setDuplicateRefs] = useState([]);
+  // "Possible duplications" opens inline: the table replaces the stepper and
+  // records/actions grid until Close. Reset whenever the lead changes (same
+  // component instance across /leads/:id hops).
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  useEffect(() => setShowDuplicates(false), [id]);
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);
   const [reason, setReason] = useState("");
@@ -615,47 +621,37 @@ export default function LeadDetailPage() {
                   {can.viewAllTeams(profile?.role) && <> · Team: <strong>{lead.team}</strong></>}
                   {" "}· Created: <strong>{fmtDate(lead.created_at)}</strong>
                 </p>
-                {duplicateRefs.length > 0 && (
-                  <div className="ld-dup-box">
-                    <div className="ld-dup-head">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                        <line x1="12" x2="12" y1="9" y2="13" />
-                        <line x1="12" x2="12.01" y1="17" y2="17" />
-                      </svg>
-                      <span>
-                        Possible duplicate of {duplicateRefs.length === 1 ? "1 existing lead" : `${duplicateRefs.length} existing leads`}
-                      </span>
-                    </div>
-                    <div className="ld-dup-chips">
-                      {duplicateRefs.map((d) =>
-                        d.can_view ? (
-                          <Link
-                            key={d.id}
-                            to={`/leads/${d.id}`}
-                            state={{ from: "duplicate", leadId: lead.id, leadNumber: lead.lead_number }}
-                            className="ld-dup-chip is-link"
-                            title={d.title || undefined}
-                          >
-                            <span className="ld-dup-num">{d.lead_number}</span>
-                            <span className="ld-dup-team">{d.team}</span>
-                          </Link>
-                        ) : (
-                          <span key={d.id} className="ld-dup-chip">
-                            <span className="ld-dup-num">{d.lead_number}</span>
-                            <span className="ld-dup-team">{d.team}</span>
-                          </span>
-                        )
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
-              {profile?.role === "md" && (
-                <div style={{ flexShrink: 0 }}>
-                  <Button variant="secondary" onClick={() => setShowMdTransfer(true)}>
-                    Transfer Lead
-                  </Button>
+              {(duplicateRefs.length > 0 || profile?.role === "md") && (
+                <div className="ld-header-actions">
+                  {duplicateRefs.length > 0 && (
+                    showDuplicates ? (
+                      <button type="button" className="ld-dup-close-btn" onClick={() => setShowDuplicates(false)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                        <span>Close</span>
+                      </button>
+                    ) : (
+                      <button type="button" className="ld-dup-btn" onClick={() => setShowDuplicates(true)}>
+                        <span className="ld-dup-btn-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                            <line x1="12" x2="12" y1="9" y2="13" />
+                            <line x1="12" x2="12.01" y1="17" y2="17" />
+                          </svg>
+                        </span>
+                        <span>Possible duplications</span>
+                        <span className="ld-dup-btn-count">{duplicateRefs.length}</span>
+                      </button>
+                    )
+                  )}
+                  {profile?.role === "md" && (
+                    <Button variant="secondary" onClick={() => setShowMdTransfer(true)}>
+                      Transfer Lead
+                    </Button>
+                  )}
                 </div>
               )}
             </Card.Body>
@@ -680,6 +676,20 @@ export default function LeadDetailPage() {
             />
           )}
 
+          {showDuplicates ? (
+            <Card className="ld-dup-card">
+              <Card.Body style={{ padding: 0 }}>
+                <div className="ld-dup-card-head">
+                  <h2>Possible duplications</h2>
+                  <p>
+                    {lead.lead_number} matches {duplicateRefs.length === 1 ? "1 existing lead" : `${duplicateRefs.length} existing leads`} — here's what's the same.
+                  </p>
+                </div>
+                <LeadDuplicatesTable refs={duplicateRefs} currentLeadId={lead.id} currentLeadNumber={lead.lead_number} />
+              </Card.Body>
+            </Card>
+          ) : (
+          <>
           {currentFlowIdx >= 0 && (
             <Card>
               <Card.Body className="ar-stepper-body">
@@ -966,6 +976,8 @@ export default function LeadDetailPage() {
               </Card>
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
 
