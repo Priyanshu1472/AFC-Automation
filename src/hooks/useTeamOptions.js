@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { TEAMS } from "../lib/roles";
 
@@ -20,6 +20,15 @@ import { TEAMS } from "../lib/roles";
 // picked first for anyone yet, so both are queried and merged here.
 export function useTeamOptions() {
   const [teams, setTeams] = useState(TEAMS);
+  // supabase.channel(topic) dedupes by topic string, returning the SAME
+  // channel object to a second caller instead of a new one — two
+  // components calling this hook on the same page at once (e.g. the
+  // Cross-Team Query panel and an MD transfer dialog, both open together)
+  // would otherwise share one channel, and the second .on() call on an
+  // already-subscribed channel throws ("cannot add postgres_changes
+  // callbacks ... after subscribe()"). A per-instance topic sidesteps the
+  // dedup entirely.
+  const topicRef = useRef(`team-options-${Math.random().toString(36).slice(2)}`);
 
   const fetchTeams = useCallback(async () => {
     const [{ data: userRows, error: userErr }, { data: teamRows, error: teamErr }] = await Promise.all([
@@ -37,7 +46,7 @@ export function useTeamOptions() {
 
   useEffect(() => {
     const channel = supabase
-      .channel("team-options")
+      .channel(topicRef.current)
       .on("postgres_changes", { event: "*", schema: "public", table: "afc_users" }, () => fetchTeams())
       .on("postgres_changes", { event: "*", schema: "public", table: "afc_user_teams" }, () => fetchTeams())
       .subscribe();
