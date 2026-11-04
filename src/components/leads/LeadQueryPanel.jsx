@@ -1,18 +1,26 @@
 // Cross-team query card on the lead detail page — lets a DGM/AGM/SRM who
 // isn't on this lead's team raise a query with a justification (see
 // raise-lead-query), and lets PMT triage any open queries: add the raiser
-// to the chat, decline, or request a transfer that MD then approves or
-// rejects — MD transfers outright (see respond-lead-query). The raiser can also edit, withdraw, or send PMT a
-// reminder on their own still-open query (see update-lead-query) — only
-// one open query per raiser per lead is allowed, so once it's sent, "Raise
-// a Query" gives way to managing the existing one instead. Point of
-// contact for the "another team spotted a duplicate" workflow — see
-// 20260928000200_lead_org_wide_visibility.sql for why a DGM/AGM/PMT member
-// can even see this lead to begin with. Sits at the top of the right
-// column, above "Your Action", so PMT can't miss it. Queries are visible only
-// to PMT, MD and the raiser — never the lead's own team (lead_queries_select,
-// see 20261030050000_lead_queries_private_to_pmt_md_raiser.sql) — so for
-// them this card renders nothing.
+// to the chat, or request a transfer that MD then approves or rejects — MD
+// transfers outright (see respond-lead-query). The raiser can also edit,
+// withdraw, or send PMT a reminder on their own still-open query (see
+// update-lead-query) — only one open query per raiser per lead is allowed,
+// so once it's sent, "Raise a Query" gives way to managing the existing
+// one instead. Point of contact for the "another team spotted a duplicate"
+// workflow — see 20260928000200_lead_org_wide_visibility.sql for why a
+// DGM/AGM/PMT member can even see this lead to begin with. Sits at the top
+// of the right column, above "Your Action", so PMT can't miss it. Queries
+// are visible only to PMT, MD and the raiser — never the lead's own team
+// (lead_queries_select, see 20261030050000_lead_queries_private_to_pmt_md_
+// raiser.sql) — so for them this card renders nothing.
+//
+// A query on a lead that's currently at pmt_review is a special case: PMT's
+// whole triage collapses to a single "Forward to G3" button (opens
+// EscalateToG3Dialog with this query's id, conflicting leads optional) —
+// Add to Chat isn't offered there at all, since the escalation itself is
+// meant to settle the conflict, not just loop the raiser into a discussion
+// about it. Every other stage keeps the normal Add to Chat / Forward to MD
+// triage.
 import { useState, useEffect, useCallback } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
@@ -35,6 +43,7 @@ const STATUS_BADGE = {
   transferred: { label: "Transferred", variant: "success" },
   declined: { label: "Declined", variant: "danger" },
   withdrawn: { label: "Withdrawn", variant: "neutral" },
+  escalated_to_g3: { label: "Escalated to G3", variant: "info" },
 };
 
 const RESPOND_LABEL = {
@@ -53,7 +62,7 @@ function fmtTime(v) {
   return new Date(v).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) {
+export default function LeadQueryPanel({ leadId, leadTeam, leadStatus, onLeadTransferred, onForwardToG3 }) {
   const { profile } = useAuth();
   const { showToast } = useToast();
   const teamOptions = useTeamOptions();
@@ -133,6 +142,10 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
   const anyOpenQuery = queries.find((q) => q.status === "open" || q.status === "transfer_pending");
   const canRaise = QUERY_RAISER_ROLES.includes(profile?.role) && !profile?.teams?.includes(leadTeam) && !anyOpenQuery;
   const isPmt = profile?.committee === "PMT" || ["md", "admin"].includes(profile?.role);
+  // The actual PMT committee tag, distinct from isPmt above (which also
+  // covers MD/admin viewing an open query) — only a true PMT member can
+  // escalate to G3.
+  const isTruePmt = profile?.committee === "PMT";
   // MD transfers outright; everyone else on the PMT side only requests it.
   const isMd = profile?.role === "md";
 
@@ -400,7 +413,13 @@ export default function LeadQueryPanel({ leadId, leadTeam, onLeadTransferred }) 
                     )
                   )}
 
-                  {((isPmt && (q.status === "open" || q.status === "added_to_chat")) || (isMd && q.status === "transfer_pending")) && (
+                  {isTruePmt && leadStatus === "pmt_review" && (q.status === "open" || q.status === "added_to_chat") ? (
+                    <div className="lq-item-actions">
+                      <Button variant="primary" size="sm" onClick={() => onForwardToG3?.(q.id)}>
+                        Forward to G3
+                      </Button>
+                    </div>
+                  ) : ((isPmt && (q.status === "open" || q.status === "added_to_chat")) || (isMd && q.status === "transfer_pending")) && (
                     respondingId?.queryId === q.id ? (
                       <div className="lq-respond-form">
                         {respondingId.action !== "add_to_chat" && (

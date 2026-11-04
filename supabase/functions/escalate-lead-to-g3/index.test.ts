@@ -33,10 +33,15 @@ function conflictLeadRow(overrides: Record<string, unknown> = {}) {
 // that call order) — the fake repeats the last entry once exhausted, which
 // also harmlessly backs regenerateApprovalNote's own best-effort internal
 // lookups.
+function queryRow(overrides: Record<string, unknown> = {}) {
+  return { id: "query-1", lead_id: LEAD_ID, raised_by_id: "raiser-1", raised_by_team: "Team 2", status: "open", ...overrides };
+}
+
 function buildClient(opts: {
   caller?: Record<string, unknown>;
   leads?: Record<string, unknown>[];
   g3Validation?: Record<string, unknown>[];
+  query?: Record<string, unknown> | null;
   routes?: Record<string, FakeResult[]>;
 }) {
   const routes: Record<string, FakeResult[]> = { ...(opts.routes || {}) };
@@ -52,6 +57,11 @@ function buildClient(opts: {
     { data: opts.leads ?? [primaryLeadRow(), conflictLeadRow()], error: null },
     { data: [{ id: LEAD_ID }], error: null },
     ...(routes.leads || []),
+  ];
+  routes.lead_queries = [
+    { data: opts.query === undefined ? queryRow() : opts.query, error: null },
+    { data: null, error: null },
+    ...(routes.lead_queries || []),
   ];
   routes.lead_g3_escalations = routes.lead_g3_escalations || [{ data: { id: "esc-1" }, error: null }];
   routes.lead_g3_escalation_members = routes.lead_g3_escalation_members || [{ data: null, error: null }];
@@ -185,4 +195,42 @@ Deno.test("success - creates the escalation, moves every member lead to g3_revie
   // PMT loses the chat it was already on for every member lead.
   const chatDeletes = log.filter((l) => l.table === "lead_chat_participants" && l.calls.some(([name]) => name === "delete"));
   assertEquals(chatDeletes.length, 2);
+});
+
+Deno.test("handleRequest - resolving a cross-team query: unknown query_id -> 404", async () => {
+  const client = buildClient({ query: null, leads: [primaryLeadRow()] });
+  const res = await handleRequest(req({ conflict_lead_ids: [], query_id: "query-1" }), client as never);
+  assertEquals(res.status, 404);
+});
+
+Deno.test("handleRequest - resolving a cross-team query: query belongs to a different lead -> 400", async () => {
+  const client = buildClient({ query: queryRow({ lead_id: "some-other-lead" }), leads: [primaryLeadRow()] });
+  const res = await handleRequest(req({ conflict_lead_ids: [], query_id: "query-1" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("handleRequest - resolving a cross-team query: already resolved -> 400", async () => {
+  const client = buildClient({ query: queryRow({ status: "transferred" }), leads: [primaryLeadRow()] });
+  const res = await handleRequest(req({ conflict_lead_ids: [], query_id: "query-1" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("success - resolving a cross-team query needs no conflicting leads, and marks the query escalated_to_g3", async () => {
+  const client = buildClient({ leads: [primaryLeadRow()] });
+  const res = await handleRequest(req({ conflict_lead_ids: [], query_id: "query-1" }), client as never);
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.success, true);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const queryUpdate = log.find((l) => l.table === "lead_queries" && l.calls.some(([name]) => name === "update"));
+  assertEquals(!!queryUpdate, true);
+  const queryUpdatePayload = JSON.parse(queryUpdate!.calls.find(([name]) => name === "update")![1]);
+  assertEquals(queryUpdatePayload.status, "escalated_to_g3");
+
+  const notificationsInserts = log.filter((l) => l.table === "notifications" && l.calls.some(([name]) => name === "insert"));
+  const raiserNotified = notificationsInserts.some((l) =>
+    JSON.parse(l.calls.find(([name]) => name === "insert")![1]).some((r: { user_id: string }) => r.user_id === "raiser-1")
+  );
+  assertEquals(raiserNotified, true);
 });

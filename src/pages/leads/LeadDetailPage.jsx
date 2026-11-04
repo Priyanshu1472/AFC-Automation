@@ -11,7 +11,6 @@ import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import Select from "../../components/ui/Select";
-import MultiSelect from "../../components/ui/MultiSelect";
 import PinInput from "../../components/ui/PinInput";
 import PageLoader from "../../components/ui/PageLoader";
 import LeadTimeline from "../../components/leads/LeadTimeline";
@@ -19,6 +18,7 @@ import LeadChatPanel from "../../components/leads/LeadChatPanel";
 import LeadQueryPanel from "../../components/leads/LeadQueryPanel";
 import LeadG3Panel from "../../components/leads/LeadG3Panel";
 import MdTransferLeadDialog from "../../components/leads/MdTransferLeadDialog";
+import EscalateToG3Dialog from "../../components/leads/EscalateToG3Dialog";
 import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 // Reuses the ar-* detail/action/timeline/document styles already defined
@@ -217,22 +217,17 @@ export default function LeadDetailPage() {
   const [poAssignPrId, setPoAssignPrId] = useState("");
   const [poAssignReviewerId, setPoAssignReviewerId] = useState("");
   const [poAssignRaId, setPoAssignRaId] = useState("");
-  // PMT's "which other pmt_review leads does this one conflict with"
-  // picker, shown only for the "Escalate to G3" action — required (at
-  // least one), same as the G3-assignee picker below (see confirmAction).
-  const [conflictLeadOptions, setConflictLeadOptions] = useState([]);
-  const [selectedConflictIds, setSelectedConflictIds] = useState([]);
-  // Which G3 committee members this escalation actually goes to — required
-  // (at least one), same as the conflicting-leads picker above. The
-  // escalation is visible ONLY to whoever's picked here (plus MD/admin),
-  // not every G3 committee member org-wide — see escalate-lead-to-g3.
-  const [g3MemberOptions, setG3MemberOptions] = useState([]);
-  const [selectedG3Ids, setSelectedG3Ids] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
   // MD's standalone "Transfer Lead" dialog — available on any lead,
   // regardless of status, not tied to a Cross-Team Query (see
   // MdTransferLeadDialog / md-transfer-lead).
   const [showMdTransfer, setShowMdTransfer] = useState(false);
+  // PMT's "Escalate to G3" dialog — shared between the direct "Your
+  // Action" button (escalateQueryId null, conflicting leads required) and
+  // the Cross-Team Query panel's "Forward to G3" (escalateQueryId set,
+  // conflicting leads optional — see EscalateToG3Dialog).
+  const [showEscalateG3, setShowEscalateG3] = useState(false);
+  const [escalateQueryId, setEscalateQueryId] = useState(null);
   // Which top-level action button is mid-flight — only PR-review Accept/
   // Edit call the backend directly from this list (every other action
   // opens the reason/PIN panel via pendingAction instead).
@@ -407,9 +402,6 @@ export default function LeadDetailPage() {
   // Responsible/Reviewer/Recommending Authority on a po_assignment lead —
   // three required pickers instead of the usual single reason/PIN panel.
   const needsPoAssignSelection = pendingAction?.key === "po_assign";
-  // PMT picking which other pmt_review leads this one conflicts with, and
-  // who at G3 it goes to — both required (see confirmAction).
-  const needsG3ConflictSelection = pendingAction?.key === "pmt_escalate_g3";
 
   // The PR taking ownership of a creator-drafted note — Accept and Edit
   // both call the exact same backend transition (they're now the reviewer
@@ -464,16 +456,17 @@ export default function LeadDetailPage() {
       runPrReviewTakeover(`/leads/${id}/approval-note`, action.key);
       return;
     }
+    if (action.key === "pmt_escalate_g3") {
+      setEscalateQueryId(null);
+      setShowEscalateG3(true);
+      return;
+    }
     setReason("");
     setPin("");
     setSelectedReassignId("");
     setPoAssignPrId("");
     setPoAssignReviewerId("");
     setPoAssignRaId("");
-    setConflictLeadOptions([]);
-    setSelectedConflictIds([]);
-    setG3MemberOptions([]);
-    setSelectedG3Ids([]);
     setPendingAction(action);
     if (action.key === "reject_reassign" && lead?.team) {
       // Rejecting hands the lead to a new Person Responsible — same
@@ -515,26 +508,6 @@ export default function LeadDetailPage() {
         .order("full_name")
         .then(({ data }) => setPoAssignRaOptions(data || []));
     }
-    if (action.key === "pmt_escalate_g3") {
-      // Any other lead org-wide, any team, any eligible stage (mirrors
-      // escalate-lead-to-g3's own INELIGIBLE_CONFLICT_STATUSES) — PMT
-      // already has org-wide can_view_lead, no new RPC needed.
-      supabase
-        .from("leads")
-        .select("id, lead_number, title, team")
-        .not("status", "in", "(po_assignment,g3_review,md_approved,md_declined,pa_dropped)")
-        .neq("id", id)
-        .order("team")
-        .order("lead_number")
-        .then(({ data }) => setConflictLeadOptions(data || []));
-      supabase
-        .from("afc_users")
-        .select("id, full_name, team")
-        .eq("committee", "G3")
-        .eq("is_active", true)
-        .order("full_name")
-        .then(({ data }) => setG3MemberOptions(data || []));
-    }
   }
 
   async function confirmAction() {
@@ -555,35 +528,20 @@ export default function LeadDetailPage() {
       showToast("Select a Person Responsible, Reviewer, and Recommending Authority.", "danger");
       return;
     }
-    if (needsG3ConflictSelection && !selectedConflictIds.length) {
-      showToast("Select at least one conflicting lead to escalate to G3.", "danger");
-      return;
-    }
-    if (needsG3ConflictSelection && !selectedG3Ids.length) {
-      showToast("Select at least one G3 committee member to escalate to.", "danger");
-      return;
-    }
     setActionLoading(true);
     try {
-      // escalate-lead-to-g3 moves multiple lead rows at once (this lead +
-      // every conflict pick) — doesn't fit advance-lead-stage's single-row
-      // dispatcher, so it's a separate function with its own body shape.
-      const { data, error } = needsG3ConflictSelection
-        ? await supabase.functions.invoke("escalate-lead-to-g3", {
-            body: { lead_id: id, conflict_lead_ids: selectedConflictIds, assigned_g3_ids: selectedG3Ids, comment: reason.trim(), pin },
-          })
-        : await supabase.functions.invoke("advance-lead-stage", {
-            body: {
-              lead_id: id,
-              action: pendingAction.key,
-              comment: reason.trim(),
-              ...(pendingAction.requiresPin ? { pin } : {}),
-              ...(needsReassignSelection ? { reassign_to_id: selectedReassignId } : {}),
-              ...(needsPoAssignSelection
-                ? { person_responsible_id: poAssignPrId, reviewer_id: poAssignReviewerId, recommending_authority_id: poAssignRaId }
-                : {}),
-            },
-          });
+      const { data, error } = await supabase.functions.invoke("advance-lead-stage", {
+        body: {
+          lead_id: id,
+          action: pendingAction.key,
+          comment: reason.trim(),
+          ...(pendingAction.requiresPin ? { pin } : {}),
+          ...(needsReassignSelection ? { reassign_to_id: selectedReassignId } : {}),
+          ...(needsPoAssignSelection
+            ? { person_responsible_id: poAssignPrId, reviewer_id: poAssignReviewerId, recommending_authority_id: poAssignRaId }
+            : {}),
+        },
+      });
       if (error) {
         showToast(await extractFunctionErrorMessage(error, "Action failed."), "danger");
         return;
@@ -593,9 +551,7 @@ export default function LeadDetailPage() {
         return;
       }
       showToast(
-        needsG3ConflictSelection
-          ? "Lead escalated to G3 for conflict review."
-          : needsReassignSelection
+        needsReassignSelection
           ? "Lead reassigned successfully."
           : pendingAction.key === "pr_review_reject"
           ? "Lead Approval Note returned to the creator."
@@ -609,10 +565,6 @@ export default function LeadDetailPage() {
       setPoAssignPrId("");
       setPoAssignReviewerId("");
       setPoAssignRaId("");
-      setConflictLeadOptions([]);
-      setSelectedConflictIds([]);
-      setG3MemberOptions([]);
-      setSelectedG3Ids([]);
       fetchLead();
     } catch (err) {
       showToast(err.message || "Something went wrong.", "danger");
@@ -715,6 +667,16 @@ export default function LeadDetailPage() {
               currentTeam={lead.team}
               onClose={() => setShowMdTransfer(false)}
               onTransferred={fetchLead}
+            />
+          )}
+
+          {showEscalateG3 && (
+            <EscalateToG3Dialog
+              leadId={lead.id}
+              queryId={escalateQueryId}
+              requireConflictLeads={!escalateQueryId}
+              onClose={() => setShowEscalateG3(false)}
+              onEscalated={fetchLead}
             />
           )}
 
@@ -832,7 +794,16 @@ export default function LeadDetailPage() {
               <LeadG3Panel leadId={lead.id} leadStatus={lead.status} onResolved={fetchLead} />
 
               {profile?.role !== "admin" && (
-                <LeadQueryPanel leadId={lead.id} leadTeam={lead.team} onLeadTransferred={fetchLead} />
+                <LeadQueryPanel
+                  leadId={lead.id}
+                  leadTeam={lead.team}
+                  leadStatus={lead.status}
+                  onLeadTransferred={fetchLead}
+                  onForwardToG3={(queryId) => {
+                    setEscalateQueryId(queryId);
+                    setShowEscalateG3(true);
+                  }}
+                />
               )}
 
               {/* md_approved has no ACTIONS_BY_STATUS entry anymore — Drop
@@ -901,36 +872,6 @@ export default function LeadDetailPage() {
                                 disabled={actionLoading}
                                 searchable
                               />
-                            </div>
-                          </>
-                        )}
-                        {needsG3ConflictSelection && (
-                          <>
-                            <div className="ar-field">
-                              <label className="ar-label">
-                                Conflicting Leads <span className="ar-required">*</span>
-                              </label>
-                              <MultiSelect
-                                options={conflictLeadOptions.map((l) => ({ value: l.id, label: `${l.lead_number} — ${l.title}`, group: l.team }))}
-                                value={selectedConflictIds}
-                                onChange={setSelectedConflictIds}
-                                placeholder={conflictLeadOptions.length ? "Search by lead number or title" : "No other leads are currently at PMT review."}
-                                disabled={actionLoading}
-                              />
-                              <span className="field-hint">Select the conflicted Leads</span>
-                            </div>
-                            <div className="ar-field">
-                              <label className="ar-label">
-                                Escalate To <span className="ar-required">*</span>
-                              </label>
-                              <MultiSelect
-                                options={g3MemberOptions.map((u) => ({ value: u.id, label: `${u.full_name} — ${u.team || "—"}` }))}
-                                value={selectedG3Ids}
-                                onChange={setSelectedG3Ids}
-                                placeholder={g3MemberOptions.length ? "Search G3 committee members" : "No active G3 committee members found."}
-                                disabled={actionLoading}
-                              />
-                              <span className="field-hint">Select the concerned G3 members to escalate the lead</span>
                             </div>
                           </>
                         )}

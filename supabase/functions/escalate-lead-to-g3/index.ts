@@ -8,9 +8,15 @@
 // per call, but this one has to move every member lead (the one PMT was
 // reviewing + every conflict pick) into g3_review at once.
 //
-// Both conflict_lead_ids and assigned_g3_ids are required (at least one
-// each) — an escalation with nothing to compare against, or nobody to
-// resolve it, isn't a real escalation.
+// assigned_g3_ids is always required (at least one) — an escalation with
+// nobody to resolve it isn't a real escalation. conflict_lead_ids is
+// normally required too, EXCEPT when this call is resolving a cross-team
+// query (optional query_id in the body, see raise-lead-query/
+// respond-lead-query): a DGM flagging another team's lead doesn't
+// necessarily know of a second, specific conflicting lead to pick, so PMT
+// can forward straight to G3 on the query alone. When query_id is given,
+// it must belong to this lead and still be open; on success the query is
+// marked escalated_to_g3 and its raiser notified.
 //
 // The primary lead (the one PMT is actually reviewing) must be pmt_review
 // — this action only ever appears on that lead's own action panel. A
@@ -76,12 +82,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const leadId = typeof body.lead_id === "string" ? body.lead_id : "";
   if (!leadId) return jsonRes(req, 400, { error: "lead_id is required." });
+  const queryId = typeof body.query_id === "string" ? body.query_id : "";
   const conflictLeadIds = [...new Set(
     Array.isArray(body.conflict_lead_ids)
       ? body.conflict_lead_ids.filter((id): id is string => typeof id === "string" && id !== leadId)
       : []
   )];
-  if (!conflictLeadIds.length) return jsonRes(req, 400, { error: "Select at least one conflicting lead to escalate to G3." });
+  if (!conflictLeadIds.length && !queryId) return jsonRes(req, 400, { error: "Select at least one conflicting lead to escalate to G3." });
   const comment = typeof body.comment === "string" ? body.comment.trim().slice(0, 2000) : "";
   if (!comment) return jsonRes(req, 400, { error: "Remarks are required to escalate a lead to G3." });
   const assignedG3Ids = [...new Set(
@@ -106,6 +113,21 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       if (INELIGIBLE_CONFLICT_STATUSES.has(row.status)) {
         return jsonRes(req, 400, { error: `${row.lead_number} isn't eligible for a G3 conflict right now — it may already be finished, unassigned, or part of another escalation.` });
       }
+    }
+
+    let query: { id: string; lead_id: string; raised_by_id: string; raised_by_team: string } | null = null;
+    if (queryId) {
+      const { data: queryRow, error: queryErr } = await adminClient
+        .from("lead_queries")
+        .select("id, lead_id, raised_by_id, raised_by_team, status")
+        .eq("id", queryId)
+        .maybeSingle();
+      if (queryErr || !queryRow) return jsonRes(req, 404, { error: "Query not found." });
+      if (queryRow.lead_id !== leadId) return jsonRes(req, 400, { error: "That query isn't on this lead." });
+      if (queryRow.status !== "open" && queryRow.status !== "added_to_chat") {
+        return jsonRes(req, 400, { error: `This query is already "${queryRow.status}".` });
+      }
+      query = queryRow;
     }
 
     const { data: g3Users, error: g3Err } = await adminClient
@@ -199,10 +221,25 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     const result = await regenerateApprovalNote(adminClient, leadId, "draft");
     if (!result.ok) console.error(`Approval Note regeneration failed for lead ${leadId}:`, result.error);
 
+    if (query) {
+      const { error: queryUpdateErr } = await adminClient
+        .from("lead_queries")
+        .update({ status: "escalated_to_g3", pmt_response: comment, resolved_by_id: caller.id, resolved_by_role: "pmt", resolved_at: new Date().toISOString() })
+        .eq("id", query.id)
+        .in("status", ["open", "added_to_chat"]);
+      if (queryUpdateErr) console.error("Failed to mark lead_queries row escalated_to_g3:", queryUpdateErr.message);
+      await notifyUsers(adminClient, [query.raised_by_id], {
+        title: "Your query was escalated to G3",
+        sub_text: `PMT forwarded ${primaryLead.lead_number} — "${primaryLead.title}" to the G3 committee for conflict review.`,
+        type: "info",
+        link: `/leads/${leadId}`,
+      });
+    }
+
     const leadLabel = `${primaryLead.lead_number} — "${primaryLead.title}"`;
     await notifyUsers(adminClient, [...assignedG3Ids, ...mdHolders], {
       title: "Lead escalated to G3 for conflict review",
-      sub_text: `PMT escalated ${leadLabel} along with ${conflictLeadIds.length} conflicting lead${conflictLeadIds.length > 1 ? "s" : ""}. ${comment}`,
+      sub_text: `PMT escalated ${leadLabel}${conflictLeadIds.length ? ` along with ${conflictLeadIds.length} conflicting lead${conflictLeadIds.length > 1 ? "s" : ""}` : ""}. ${comment}`,
       type: "action_required",
       link: `/leads/${leadId}`,
     });
