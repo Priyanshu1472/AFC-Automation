@@ -18,6 +18,7 @@ import LeadTimeline from "../../components/leads/LeadTimeline";
 import LeadChatPanel from "../../components/leads/LeadChatPanel";
 import LeadQueryPanel from "../../components/leads/LeadQueryPanel";
 import LeadG3Panel from "../../components/leads/LeadG3Panel";
+import MdTransferLeadDialog from "../../components/leads/MdTransferLeadDialog";
 import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 // Reuses the ar-* detail/action/timeline/document styles already defined
@@ -228,6 +229,10 @@ export default function LeadDetailPage() {
   const [g3MemberOptions, setG3MemberOptions] = useState([]);
   const [selectedG3Ids, setSelectedG3Ids] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
+  // MD's standalone "Transfer Lead" dialog — available on any lead,
+  // regardless of status, not tied to a Cross-Team Query (see
+  // MdTransferLeadDialog / md-transfer-lead).
+  const [showMdTransfer, setShowMdTransfer] = useState(false);
   // Which top-level action button is mid-flight — only PR-review Accept/
   // Edit call the backend directly from this list (every other action
   // opens the reason/PIN panel via pendingAction instead).
@@ -694,8 +699,24 @@ export default function LeadDetailPage() {
                   </div>
                 )}
               </div>
+              {profile?.role === "md" && (
+                <div style={{ flexShrink: 0 }}>
+                  <Button variant="secondary" onClick={() => setShowMdTransfer(true)}>
+                    Transfer Lead
+                  </Button>
+                </div>
+              )}
             </Card.Body>
           </Card>
+
+          {showMdTransfer && (
+            <MdTransferLeadDialog
+              leadId={lead.id}
+              currentTeam={lead.team}
+              onClose={() => setShowMdTransfer(false)}
+              onTransferred={fetchLead}
+            />
+          )}
 
           {currentFlowIdx >= 0 && (
             <Card>

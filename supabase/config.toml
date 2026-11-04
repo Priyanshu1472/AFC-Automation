@@ -549,6 +549,12 @@ verify_jwt = true
 import_map = "./functions/respond-lead-query/deno.json"
 entrypoint = "./functions/respond-lead-query/index.ts"
 
+[functions.md-transfer-lead]
+enabled = true
+verify_jwt = true
+import_map = "./functions/md-transfer-lead/deno.json"
+entrypoint = "./functions/md-transfer-lead/index.ts"
+
 [functions.update-lead-query]
 enabled = true
 verify_jwt = true

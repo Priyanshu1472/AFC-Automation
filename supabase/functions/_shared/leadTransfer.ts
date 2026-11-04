@@ -48,7 +48,7 @@ export async function performLeadTransfer(
 
   const { data: lead, error: leadErr } = await admin
     .from("leads")
-    .select("id, lead_number, title, team, status, transfer_count")
+    .select("id, lead_number, title, team, status, transfer_count, person_responsible_id, forwarded_to_id")
     .eq("id", leadId)
     .maybeSingle();
   if (leadErr || !lead) return { ok: false, error: "Lead not found." };
@@ -116,10 +116,17 @@ export async function performLeadTransfer(
 
   await logLeadActivity(admin, leadId, actorId, "md", "team_transfer", lead.status as string, "po_assignment", `${fromTeam} → ${targetTeam}. New number: ${newLeadNumber}. ${justification}`);
 
+  // Whoever currently "owns" the lead on the old team — its Person
+  // Responsible, or (if it was still po_assignment itself) whoever it was
+  // forwarded to there — gets a direct, personal notice on top of the
+  // team-wide one below, naming the MD as the one who moved it.
+  const oldOwnerId = (lead.status === "po_assignment" ? lead.forwarded_to_id : lead.person_responsible_id) as string | null;
+
   // The specific person PMT forwarded this lead to (actionable — same
   // wording as create-lead's isPoRouted notification, since this is now the
-  // exact same po_assignment state), the old team (informational), and MD
-  // (informational — MD/PMT effectively see everything anyway now).
+  // exact same po_assignment state), the old owner and the old team
+  // (informational), and MD (informational — MD/PMT effectively see
+  // everything anyway now).
   await Promise.all([
     notifyUser(admin, forwardedToId, {
       title: "A lead was forwarded to you",
@@ -127,6 +134,14 @@ export async function performLeadTransfer(
       type: "action_required",
       link: `/leads/${leadId}`,
     }),
+    oldOwnerId && oldOwnerId !== forwardedToId
+      ? notifyUser(admin, oldOwnerId, {
+          title: "Your lead was transferred by the MD",
+          sub_text: `${lead.lead_number} — "${lead.title}" was transferred by the MD from ${fromTeam} to ${targetTeam} (now ${newLeadNumber}).`,
+          type: "info",
+          link: `/leads/${leadId}`,
+        })
+      : Promise.resolve(),
     notifyTeam(admin, fromTeam, {
       title: "A lead was transferred out of your team",
       sub_text: `${lead.lead_number} — "${lead.title}" was transferred to ${targetTeam} (now ${newLeadNumber}).`,
