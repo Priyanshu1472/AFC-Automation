@@ -4,6 +4,8 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useShortlist } from "../../hooks/useShortlist";
 import ShortlistModal from "../../components/knowledge/ShortlistModal";
+import MissingDetailsModal from "../../components/knowledge/MissingDetailsModal";
+import { getMissingProjectFields } from "../../lib/projectCompleteness";
 import CompanyDocumentsPanel from "../../components/knowledge/CompanyDocumentsPanel";
 import FindExperiencePanel from "../../components/knowledge/FindExperiencePanel";
 import RebuildIndexPanel from "../../components/knowledge/RebuildIndexPanel";
@@ -39,6 +41,7 @@ const IconBookmark = ({ filled = false }) => (<svg width="13" height="13" viewBo
 const IconEye = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>);
 const IconBuilding = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="2" width="16" height="20" rx="1" /><line x1="9" y1="6" x2="9" y2="6.01" /><line x1="15" y1="6" x2="15" y2="6.01" /><line x1="9" y1="10" x2="9" y2="10.01" /><line x1="15" y1="10" x2="15" y2="10.01" /><line x1="9" y1="14" x2="9" y2="14.01" /><line x1="15" y1="14" x2="15" y2="14.01" /><line x1="10" y1="22" x2="10" y2="18" /><line x1="14" y1="22" x2="14" y2="18" /></svg>);
 const IconSparkle = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" /></svg>);
+const IconWarning = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>);
 
 export default function KnowledgeSearchPage() {
   const navigate = useNavigate();
@@ -85,6 +88,7 @@ export default function KnowledgeSearchPage() {
   }
 
   const [slProject, setSlProject] = useState(null);
+  const [missingDetailsProject, setMissingDetailsProject] = useState(null);
   const [showCompanyDocs, setShowCompanyDocs] = useState(false);
   const { shortlists, createShortlist, addToShortlist, isInAnyShortlist, getProjectShortlists } = useShortlist();
 
@@ -126,6 +130,7 @@ export default function KnowledgeSearchPage() {
         description: s.projectBriefDescription || null,
         kwList: projKwMap[p.id] || [],
         location: p.location || null,
+        missingFields: getMissingProjectFields(p),
       };
     });
   }, [projects, kwDetails, keywords]);
@@ -226,6 +231,25 @@ export default function KnowledgeSearchPage() {
     setSlProject({ id: p.id, title: p.title });
   }
 
+  function openMissingDetails(e, p) {
+    e.stopPropagation();
+    setMissingDetailsProject({ title: p.title, missingFields: p.missingFields });
+  }
+
+  // Rendered as a span, not a <button> — the folder and mobile views already
+  // nest this inside their own whole-card <button>, and real nested buttons
+  // are invalid HTML (the browser would silently close the outer one).
+  const MissingDetailsBtn = ({ p }) =>
+    p.missingFields.length > 0 ? (
+      <span
+        role="button" tabIndex={0} className="kr-missing-btn" title="View missing details"
+        onClick={(e) => openMissingDetails(e, p)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") openMissingDetails(e, p); }}
+      >
+        <IconWarning /> Missing Details
+      </span>
+    ) : null;
+
   const renderFolder = () => {
     if (nav.level === "years") {
       const years = Object.keys(byYear).sort((a, b) => b - a);
@@ -288,6 +312,9 @@ export default function KnowledgeSearchPage() {
                   {p.location && <span className="kr-file-loc"><IconPin /> {p.location}</span>}
                   {p.capitalCost && <span className="kr-file-cost">₹{p.capitalCost} Cr</span>}
                 </div>
+                {p.missingFields.length > 0 && (
+                  <div style={{ marginTop: 6 }}><MissingDetailsBtn p={p} /></div>
+                )}
                 {p.kwList.length > 0 && (
                   <div className="kr-tags">
                     {p.kwList.slice(0, 2).map((k) => <span key={k.name} className="kr-tag">{k.name}</span>)}
@@ -307,11 +334,11 @@ export default function KnowledgeSearchPage() {
       <div className="kr-table-wrap">
         <table className="kr-table">
           <thead>
-            <tr><th>#</th><th>Project</th><th>Client</th><th>Location</th><th>Duration</th><th>Value (Cr)</th><th style={{ width: 72 }}>Actions</th></tr>
+            <tr><th>#</th><th>Project</th><th>Client</th><th>Location</th><th>Duration</th><th>Value (Cr)</th><th>Status</th><th style={{ width: 72 }}>Actions</th></tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={7} style={{ textAlign: "center", padding: "48px 16px", color: "var(--text-secondary)" }}>No projects found.</td></tr>
+              <tr><td colSpan={8} style={{ textAlign: "center", padding: "48px 16px", color: "var(--text-secondary)" }}>No projects found.</td></tr>
             ) : filtered.map((p, i) => {
               const shortlisted = isInAnyShortlist(p.id);
               return (
@@ -322,6 +349,7 @@ export default function KnowledgeSearchPage() {
                   <td>{p.location ? <span className="kr-td-loc"><IconPin /> {p.location}</span> : <span className="kr-td-muted">—</span>}</td>
                   <td className="kr-td-date">{fmtYM(p.startDate)} – {fmtYM(p.finishDate)}</td>
                   <td className="kr-td-date">{p.capitalCost != null ? `₹${p.capitalCost} Cr` : <span className="kr-td-muted">—</span>}</td>
+                  <td><MissingDetailsBtn p={p} /></td>
                   <td>
                     <div className="kr-td-actions">
                       <button className="kr-icon-action" title="View project" onClick={() => navigate(`/knowledge/${p.id}`)}><IconEye /></button>
@@ -354,6 +382,9 @@ export default function KnowledgeSearchPage() {
                   {p.capitalCost && <span className="kr-mc-cost">₹{p.capitalCost} Cr</span>}
                 </div>
                 {(p.startDate || p.finishDate) && <div className="kr-mc-dates">{fmtYM(p.startDate)} – {fmtYM(p.finishDate)}</div>}
+                {p.missingFields.length > 0 && (
+                  <div style={{ marginTop: 6 }}><MissingDetailsBtn p={p} /></div>
+                )}
                 {p.kwList.length > 0 && (
                   <div className="kr-tags" style={{ marginTop: 6 }}>
                     {p.kwList.slice(0, 2).map((k) => <span key={k.name} className="kr-tag">{k.name}</span>)}
@@ -531,6 +562,14 @@ export default function KnowledgeSearchPage() {
 
           {showCompanyDocs && <CompanyDocumentsPanel onClose={() => setShowCompanyDocs(false)} />}
           {showRebuildIndex && <RebuildIndexPanel onClose={() => setShowRebuildIndex(false)} />}
+
+          {missingDetailsProject && (
+            <MissingDetailsModal
+              projectTitle={missingDetailsProject.title}
+              missingFields={missingDetailsProject.missingFields}
+              onClose={() => setMissingDetailsProject(null)}
+            />
+          )}
 
           {slProject && (
             <ShortlistModal
