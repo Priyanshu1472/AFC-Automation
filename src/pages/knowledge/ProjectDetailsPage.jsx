@@ -13,6 +13,7 @@ import Alert from "../../components/ui/Alert";
 import ShortlistModal from "../../components/knowledge/ShortlistModal";
 import "../../styles/ProjectDetailsPage.css";
 import BackButton from "../../components/ui/BackButton";
+import { croreToLakh } from "../../lib/projectValue";
 
 const IconWord = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" /></svg>);
 const IconPDF = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>);
@@ -385,7 +386,7 @@ export default function ProjectDetailsPage() {
               <h3 className="card-section-title">Project Timeline</h3>
               <div className="detail-row"><span className="detail-label">Start Date</span><span className="detail-value">{formatMonth(summary.startDate)}</span></div>
               <div className="detail-row"><span className="detail-label">Finish Date</span><span className="detail-value">{formatMonth(summary.finishDate)}</span></div>
-              <div className="detail-row"><span className="detail-label">Capital Cost</span><span className="detail-value">{summary.capitalCost ? `₹${summary.capitalCost} Crore` : "—"}</span></div>
+              <div className="detail-row"><span className="detail-label">Capital Cost</span><span className="detail-value">{summary.capitalCost ? `₹${croreToLakh(summary.capitalCost)} Lakh` : "—"}</span></div>
             </div>
 
             <div className="details-card full-card">

@@ -12,6 +12,7 @@ import RebuildIndexPanel from "../../components/knowledge/RebuildIndexPanel";
 import AppHeader from "../../components/shared/AppHeader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import { can } from "../../lib/roles";
+import { croreToLakh } from "../../lib/projectValue";
 import "../../styles/KnowledgeSearchPage.css";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -126,7 +127,7 @@ export default function KnowledgeSearchPage() {
         ...p,
         startDate: s.startDate || null,
         finishDate: s.finishDate || null,
-        capitalCost: s.capitalCost ? parseFloat(s.capitalCost) : null,
+        capitalCost: s.capitalCost ? croreToLakh(s.capitalCost) : null,
         description: s.projectBriefDescription || null,
         kwList: projKwMap[p.id] || [],
         location: p.location || null,
@@ -310,7 +311,7 @@ export default function KnowledgeSearchPage() {
                 {p.client && <span className="kr-file-client">{p.client.length > 45 ? p.client.slice(0, 45) + "…" : p.client}</span>}
                 <div className="kr-file-meta">
                   {p.location && <span className="kr-file-loc"><IconPin /> {p.location}</span>}
-                  {p.capitalCost && <span className="kr-file-cost">₹{p.capitalCost} Cr</span>}
+                  {p.capitalCost && <span className="kr-file-cost">₹{p.capitalCost} Lakh</span>}
                 </div>
                 {p.missingFields.length > 0 && (
                   <div style={{ marginTop: 6 }}><MissingDetailsBtn p={p} /></div>
@@ -334,7 +335,7 @@ export default function KnowledgeSearchPage() {
       <div className="kr-table-wrap">
         <table className="kr-table">
           <thead>
-            <tr><th>#</th><th>Project</th><th>Client</th><th>Location</th><th>Duration</th><th>Value (Cr)</th><th>Status</th><th style={{ width: 72 }}>Actions</th></tr>
+            <tr><th>#</th><th>Project</th><th>Client</th><th>Location</th><th>Duration</th><th>Value (Lakh)</th><th>Status</th><th style={{ width: 72 }}>Actions</th></tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
@@ -348,7 +349,7 @@ export default function KnowledgeSearchPage() {
                   <td><div className="kr-td-client">{p.client || <span className="kr-td-muted">—</span>}</div></td>
                   <td>{p.location ? <span className="kr-td-loc"><IconPin /> {p.location}</span> : <span className="kr-td-muted">—</span>}</td>
                   <td className="kr-td-date">{fmtYM(p.startDate)} – {fmtYM(p.finishDate)}</td>
-                  <td className="kr-td-date">{p.capitalCost != null ? `₹${p.capitalCost} Cr` : <span className="kr-td-muted">—</span>}</td>
+                  <td className="kr-td-date">{p.capitalCost != null ? `₹${p.capitalCost} Lakh` : <span className="kr-td-muted">—</span>}</td>
                   <td><MissingDetailsBtn p={p} /></td>
                   <td>
                     <div className="kr-td-actions">
@@ -379,7 +380,7 @@ export default function KnowledgeSearchPage() {
                 </div>
                 <div className="kr-mc-meta">
                   {p.location && <span className="kr-mc-loc"><IconPin /> {p.location}</span>}
-                  {p.capitalCost && <span className="kr-mc-cost">₹{p.capitalCost} Cr</span>}
+                  {p.capitalCost && <span className="kr-mc-cost">₹{p.capitalCost} Lakh</span>}
                 </div>
                 {(p.startDate || p.finishDate) && <div className="kr-mc-dates">{fmtYM(p.startDate)} – {fmtYM(p.finishDate)}</div>}
                 {p.missingFields.length > 0 && (
@@ -487,7 +488,7 @@ export default function KnowledgeSearchPage() {
                   {query && <span className="kr-pill">Search: {query}<button className="kr-pill-x" onClick={() => updateQuery("")}>×</button></span>}
                   {[...filterYears].sort().map((yr) => (<span key={yr} className="kr-pill">{yr}<button className="kr-pill-x" onClick={() => toggleYear(yr)}>×</button></span>))}
                   {filterLoc && <span className="kr-pill kr-pill--loc"><IconPin /> {filterLoc}<button className="kr-pill-x" onClick={() => updateFilterLoc("")}>×</button></span>}
-                  {(filterMin || filterMax) && <span className="kr-pill">₹{filterMin || "0"} – {filterMax || "∞"} Cr<button className="kr-pill-x" onClick={() => { updateFilterMin(""); updateFilterMax(""); }}>×</button></span>}
+                  {(filterMin || filterMax) && <span className="kr-pill">₹{filterMin || "0"} – {filterMax || "∞"} Lakh<button className="kr-pill-x" onClick={() => { updateFilterMin(""); updateFilterMax(""); }}>×</button></span>}
                   {[...filterKeywords].sort().map((kw) => (<span key={kw} className="kr-pill">{kw}<button className="kr-pill-x" onClick={() => toggleFilterKeyword(kw)}>×</button></span>))}
                   {filterClientType && <span className="kr-pill">{filterClientType}<button className="kr-pill-x" onClick={() => updateFilterClientType("")}>×</button></span>}
                   {filterStatus && <span className="kr-pill">{filterStatus}<button className="kr-pill-x" onClick={() => updateFilterStatus("")}>×</button></span>}
@@ -508,7 +509,7 @@ export default function KnowledgeSearchPage() {
                 {allLocations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
               </select>
             </FilterField>
-            <FilterField label="Project Value (₹ Cr)">
+            <FilterField label="Project Value (₹ Lakh)">
               <div className="kr-range-row">
                 <input type="number" className="input" placeholder="Min" value={filterMin} onChange={(e) => updateFilterMin(e.target.value)} />
                 <span style={{ color: "var(--text-tertiary)" }}>—</span>
