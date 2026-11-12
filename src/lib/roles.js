@@ -217,7 +217,12 @@ export function isValidRole(role) {
 // 20260928000000_lead_committee_and_status_simplification.sql — the
 // former G3/DGM-initial gate is now the named Recommending Authority
 // instead). See leadPermissions.js for the actual can()-style predicates.
-export const COMMITTEES = ["PMT", "G3"];
+//
+// "Accounts" is assignable here but deliberately wired to nothing yet —
+// no page, panel or server-side check anywhere treats committee ===
+// "Accounts" as special. It exists purely so it can be set on a user now
+// and given real permissions later, the same way PMT/G3 already work.
+export const COMMITTEES = ["PMT", "G3", "Accounts"];
 
 // The tier eligible to be Person Responsible for a lead (owns its
 // PA_REVIEW accept/drop step) and to claim a dropped one. SRM has the same

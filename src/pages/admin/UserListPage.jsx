@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { ROLE_LABELS, ROLE_ABBR, OFFICE_LABELS, can } from "../../lib/roles";
+import { ROLE_LABELS, ROLE_ABBR, OFFICE_LABELS, COMMITTEES, can } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
@@ -36,7 +36,10 @@ const ROLE_VARIANT = {
 
 const PAGE_SIZE = 25;
 
-const COMMITTEE_OPTIONS = ["PMT"];
+// Was its own hardcoded ["PMT"] list, which drifted out of sync the moment
+// G3 was added to lib/roles.js's COMMITTEES — sourcing from there instead
+// means this filter can never fall behind again.
+const COMMITTEE_OPTIONS = COMMITTEES;
 
 // Restores search/filter/page state after a trip out to a user's Edit page
 // and back — "Back to Users" (EditUserPage.jsx) pushes a bare /users, so
