@@ -204,7 +204,7 @@ export default function AddProjectPage() {
 
                 <div className="ap-field">
                   <label>Location within Country (State / UT)</label>
-                  <CustomSelect value={form.location} onChange={(v) => handleFormChange("location", v)} options={[{ value: "", label: "— Select State / UT —" }, ...INDIAN_STATES.map((s) => ({ value: s, label: s }))]} placeholder="— Select State / UT —" />
+                  <CustomSelect searchable value={form.location} onChange={(v) => handleFormChange("location", v)} options={[{ value: "", label: "— Select State / UT —" }, ...INDIAN_STATES.map((s) => ({ value: s, label: s }))]} placeholder="— Select State / UT —" />
                 </div>
 
                 <div className="ap-field">

@@ -20,9 +20,14 @@ const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "S
 const MONTHS_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 // ── Custom Select ─────────────────────────────────────────────
-export function CustomSelect({ value, onChange, options, placeholder = "Select…" }) {
+// `searchable` adds a filter input at the top of the dropdown — used for
+// long option lists (e.g. the State / UT picker) where scanning the whole
+// list isn't practical.
+export function CustomSelect({ value, onChange, options, placeholder = "Select…", searchable = false }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const ref = useRef(null);
+  const searchRef = useRef(null);
 
   useEffect(() => {
     function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
@@ -30,8 +35,17 @@ export function CustomSelect({ value, onChange, options, placeholder = "Select�
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  useEffect(() => {
+    if (!open) { setSearch(""); return; }
+    if (searchable) searchRef.current?.focus();
+  }, [open, searchable]);
+
   const selected = options.find((o) => (typeof o === "string" ? o : o.value) === value);
   const label = selected ? (typeof selected === "string" ? selected : selected.label) : null;
+
+  const visibleOptions = searchable && search.trim()
+    ? options.filter((opt) => (typeof opt === "string" ? opt : opt.label).toLowerCase().includes(search.trim().toLowerCase()))
+    : options;
 
   return (
     <div ref={ref} className="csl-root">
@@ -43,38 +57,65 @@ export function CustomSelect({ value, onChange, options, placeholder = "Select�
       </button>
       {open && (
         <div className="csl-dropdown">
-          {options.map((opt) => {
-            const v = typeof opt === "string" ? opt : opt.value;
-            const l = typeof opt === "string" ? opt : opt.label;
-            const isSelected = v === value;
-            return (
-              <button type="button" key={v} className={`csl-option${isSelected ? " csl-option--selected" : ""}`} onClick={() => { onChange(v); setOpen(false); }}>
-                {l}
-                {isSelected && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" width="13" height="13">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                )}
-              </button>
-            );
-          })}
+          {searchable && (
+            <div className="csl-search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13" className="csl-search-icon"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+              <input ref={searchRef} className="csl-search-input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" />
+              {search && <button type="button" className="csl-search-clear" onClick={() => setSearch("")}>×</button>}
+            </div>
+          )}
+          <div className="csl-options-list">
+            {visibleOptions.length === 0 ? (
+              <div className="csl-empty">No matches found</div>
+            ) : (
+              visibleOptions.map((opt) => {
+                const v = typeof opt === "string" ? opt : opt.value;
+                const l = typeof opt === "string" ? opt : opt.label;
+                const isSelected = v === value;
+                return (
+                  <button type="button" key={v} className={`csl-option${isSelected ? " csl-option--selected" : ""}`} onClick={() => { onChange(v); setOpen(false); }}>
+                    {l}
+                    {isSelected && (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" width="13" height="13">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
+// How far back/forward the scrollable year list reaches — wide enough to
+// cover old completed projects as well as ones starting a few years out.
+const MIN_YEAR = 1980;
+const MAX_YEAR = new Date().getFullYear() + 10;
+const YEAR_LIST = Array.from({ length: MAX_YEAR - MIN_YEAR + 1 }, (_, i) => MAX_YEAR - i);
+
 // ── Custom Month Picker ───────────────────────────────────────
+// The year is picked from a scrollable list (instead of one-at-a-time
+// prev/next arrows) sitting right next to the month grid, so jumping to a
+// year far from today is a scroll, not dozens of clicks.
 export function MonthPicker({ value, onChange, placeholder = "Select month" }) {
   const [open, setOpen] = useState(false);
   const [year, setYear] = useState(() => (value ? parseInt(value.split("-")[0]) : new Date().getFullYear()));
   const ref = useRef(null);
+  const selectedYearRef = useRef(null);
 
   useEffect(() => {
     function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  useEffect(() => {
+    if (open) selectedYearRef.current?.scrollIntoView({ block: "center" });
+  }, [open]);
 
   const selYear = value ? parseInt(value.split("-")[0]) : null;
   const selMonth = value ? parseInt(value.split("-")[1]) - 1 : null;
@@ -105,26 +146,32 @@ export function MonthPicker({ value, onChange, placeholder = "Select month" }) {
 
       {open && (
         <div className="mpc-panel">
-          <div className="mpc-year-row">
-            <button type="button" className="mpc-year-btn" onClick={() => setYear((y) => y - 1)}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14"><polyline points="15 18 9 12 15 6" /></svg>
-            </button>
-            <span className="mpc-year-label">{year}</span>
-            <button type="button" className="mpc-year-btn" onClick={() => setYear((y) => y + 1)}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="14" height="14"><polyline points="9 18 15 12 9 6" /></svg>
-            </button>
-          </div>
-
-          <div className="mpc-month-grid">
-            {MONTHS_SHORT.map((mo, i) => {
-              const isSelected = selYear === year && selMonth === i;
-              const isToday = new Date().getFullYear() === year && new Date().getMonth() === i;
-              return (
-                <button type="button" key={mo} className={`mpc-month-btn${isSelected ? " mpc-month-btn--selected" : ""}${isToday && !isSelected ? " mpc-month-btn--today" : ""}`} onClick={() => selectMonth(i)}>
-                  {mo}
+          <div className="mpc-body">
+            <div className="mpc-year-list">
+              {YEAR_LIST.map((y) => (
+                <button
+                  type="button"
+                  key={y}
+                  ref={y === year ? selectedYearRef : null}
+                  className={`mpc-year-item${y === year ? " mpc-year-item--selected" : ""}`}
+                  onClick={() => setYear(y)}
+                >
+                  {y}
                 </button>
-              );
-            })}
+              ))}
+            </div>
+
+            <div className="mpc-month-grid">
+              {MONTHS_SHORT.map((mo, i) => {
+                const isSelected = selYear === year && selMonth === i;
+                const isToday = new Date().getFullYear() === year && new Date().getMonth() === i;
+                return (
+                  <button type="button" key={mo} className={`mpc-month-btn${isSelected ? " mpc-month-btn--selected" : ""}${isToday && !isSelected ? " mpc-month-btn--today" : ""}`} onClick={() => selectMonth(i)}>
+                    {mo}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="mpc-footer">
