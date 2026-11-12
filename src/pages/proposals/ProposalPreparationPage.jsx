@@ -21,6 +21,7 @@ import ProposalDocumentsPanel from "../../components/proposals/ProposalDocuments
 import ProposalLockPanel from "../../components/proposals/ProposalLockPanel";
 import ProposalValuePanel from "../../components/proposals/ProposalValuePanel";
 import ProposalChatPanel from "../../components/proposals/ProposalChatPanel";
+import AdditionalResponsiblesPanel from "../../components/proposals/AdditionalResponsiblesPanel";
 import { FileTextIcon, UsersIcon } from "../../components/icons";
 import { isProposalLocked } from "../../lib/proposalPrep";
 import "../../styles/ApplicationReviewPage.css";
@@ -43,6 +44,7 @@ export default function ProposalPreparationPage() {
   const [baItems, setBaItems] = useState([]);
   const [monitoringProjectId, setMonitoringProjectId] = useState(null);
   const [documents, setDocuments] = useState([]);
+  const [additionalResponsibles, setAdditionalResponsibles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -67,12 +69,14 @@ export default function ProposalPreparationPage() {
       { data: baItemRows },
       { data: monitoringRow },
       { data: docRows },
+      { data: additionalRows },
     ] = await Promise.all([
       supabase.from("proposal_preparations").select("*, locker:locked_by(full_name), responder:client_response_by(full_name)").eq("id", proposalId).maybeSingle(),
       supabase.from("fee_notes").select("*").eq("proposal_id", proposalId),
       supabase.from("proposal_document_requests").select("*").eq("proposal_id", proposalId).order("created_at"),
       supabase.from("monitoring_projects").select("id").eq("proposal_id", proposalId).maybeSingle(),
       supabase.from("proposal_documents").select("*").eq("proposal_id", proposalId),
+      supabase.from("proposal_additional_responsibles").select("user_id, user:user_id(full_name)").eq("proposal_id", proposalId).order("created_at"),
     ]);
     if (proposalErr || !proposalRow) {
       setError(proposalErr?.message || "This proposal could not be loaded. It may have just been created — try refreshing.");
@@ -85,6 +89,7 @@ export default function ProposalPreparationPage() {
     setBaItems(baItemRows || []);
     setMonitoringProjectId(monitoringRow?.id || null);
     setDocuments(docRows || []);
+    setAdditionalResponsibles((additionalRows || []).map((r) => ({ user_id: r.user_id, full_name: r.user?.full_name || "—" })));
     setLoading(false);
   }, [leadId]);
 
@@ -114,9 +119,11 @@ export default function ProposalPreparationPage() {
     );
   }
 
+  const additionalResponsibleIds = additionalResponsibles.map((a) => a.user_id);
   const canManage = profile && (
     ["md", "admin"].includes(profile.role) ||
-    [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id)
+    [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id) ||
+    additionalResponsibleIds.includes(profile.id)
   );
   // Strictly "md" (no admin override) — only used by FeeNotesPanel, where
   // md_decided_by prints under "Managing Director" on the note itself, so
@@ -127,7 +134,10 @@ export default function ProposalPreparationPage() {
   // Recommending Authority) — MD/Admin can see them but never add/edit/
   // delete, unlike the rest of this page where MD/Admin get the usual
   // override.
-  const canManageDocs = profile && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
+  const canManageDocs = profile && (
+    [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id) ||
+    additionalResponsibleIds.includes(profile.id)
+  );
   const locked = isProposalLocked(proposal, lead);
   const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date() && !proposal.locked;
 
@@ -192,7 +202,22 @@ export default function ProposalPreparationPage() {
                   <div className="pp-summary-item"><span>Reviewer</span><strong>{lead.rev?.full_name || "—"}</strong></div>
                   <div className="pp-summary-item"><span>Recommending Authority</span><strong>{lead.aa?.full_name || "—"}</strong></div>
                   <div className="pp-summary-item"><span>Business Partner</span><strong>{lead.ba?.full_name || "—"}</strong></div>
+                  {additionalResponsibles.length > 0 && (
+                    <div className="pp-summary-item">
+                      <span>Additional Person(s) Responsible</span>
+                      <strong>{additionalResponsibles.map((a) => a.full_name).join(", ")}</strong>
+                    </div>
+                  )}
                 </div>
+                <AdditionalResponsiblesPanel
+                  leadId={lead.id}
+                  team={lead.team}
+                  existingIds={[lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id]}
+                  additional={additionalResponsibles}
+                  canManage={canManage}
+                  locked={locked}
+                  onChanged={fetchAll}
+                />
               </Collapsible>
             </Card>
           </div>

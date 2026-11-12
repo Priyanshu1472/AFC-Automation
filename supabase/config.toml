@@ -689,3 +689,15 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/monitoring-pdf/deno.json"
 entrypoint = "./functions/monitoring-pdf/index.ts"
+
+[functions.add-proposal-responsible]
+enabled = true
+verify_jwt = true
+import_map = "./functions/add-proposal-responsible/deno.json"
+entrypoint = "./functions/add-proposal-responsible/index.ts"
+
+[functions.remove-proposal-responsible]
+enabled = true
+verify_jwt = true
+import_map = "./functions/remove-proposal-responsible/deno.json"
+entrypoint = "./functions/remove-proposal-responsible/index.ts"
