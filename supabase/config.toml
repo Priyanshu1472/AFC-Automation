@@ -701,3 +701,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/remove-proposal-responsible/deno.json"
 entrypoint = "./functions/remove-proposal-responsible/index.ts"
+
+[functions.update-lead-due-date]
+enabled = true
+verify_jwt = true
+import_map = "./functions/update-lead-due-date/deno.json"
+entrypoint = "./functions/update-lead-due-date/index.ts"

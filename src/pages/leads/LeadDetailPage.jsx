@@ -17,6 +17,7 @@ import LeadTimeline from "../../components/leads/LeadTimeline";
 import LeadChatPanel from "../../components/leads/LeadChatPanel";
 import LeadQueryPanel from "../../components/leads/LeadQueryPanel";
 import LeadG3Panel from "../../components/leads/LeadG3Panel";
+import EditDueDatePanel from "../../components/leads/EditDueDatePanel";
 import MdTransferLeadDialog from "../../components/leads/MdTransferLeadDialog";
 import EscalateToG3Dialog from "../../components/leads/EscalateToG3Dialog";
 import LeadDuplicatesTable from "../../components/leads/LeadDuplicatesTable";
@@ -802,6 +803,14 @@ export default function LeadDetailPage() {
                   isn't part of an open G3 escalation. Sits above the
                   cross-team query panel — time-critical, MD-specific. */}
               <LeadG3Panel leadId={lead.id} leadStatus={lead.status} onResolved={fetchLead} />
+
+              {/* The one thing still editable past md_approved — a
+                  standalone card, not a slot in the "Your Action" card
+                  below, since that one is suppressed outright for every
+                  terminal status (isTerminal), md_approved included. */}
+              {lead.status === "md_approved" && profile?.id === lead.person_responsible_id && (
+                <EditDueDatePanel leadId={lead.id} submissionDeadline={lead.submission_deadline} onChanged={fetchLead} />
+              )}
 
               {profile?.role !== "admin" && (
                 <LeadQueryPanel
