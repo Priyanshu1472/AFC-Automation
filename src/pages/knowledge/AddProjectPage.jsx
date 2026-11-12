@@ -7,6 +7,7 @@ import { KeywordDropdown, DocumentUpload, INDIAN_STATES, CustomSelect, MonthPick
 import { useProjectIndexing } from "../../hooks/useProjectIndexing";
 import "../../styles/AddProjectPage.css";
 import BackButton from "../../components/ui/BackButton";
+import { lakhToCrore } from "../../lib/projectValue";
 
 const BUCKET = "project-documents";
 
@@ -90,7 +91,7 @@ export default function AddProjectPage() {
 
     const summaryData = {
       servicesDescription: form.servicesDescription,
-      capitalCost: form.capitalCost,
+      capitalCost: lakhToCrore(form.capitalCost),
       country: form.country,
       contactPerson: form.contactPerson,
       titleDesignation: form.titleDesignation,
@@ -193,7 +194,7 @@ export default function AddProjectPage() {
                 </div>
 
                 <div className="ap-field">
-                  <label>Approx. Value of the Contract (₹ Crore)</label>
+                  <label>Approx. Value of the Contract (₹ Lakh)</label>
                   <input type="number" placeholder="e.g. 45.50" value={form.capitalCost} onChange={(e) => handleFormChange("capitalCost", e.target.value)} />
                 </div>
 

@@ -17,6 +17,7 @@ import {
 import { CustomSelect } from "./KnowledgeFormParts";
 import RelevantExperienceModal from "./RelevantExperienceModal";
 import PageLoader from "../ui/PageLoader";
+import { croreToLakh, lakhToCrore } from "../../lib/projectValue";
 import Badge from "../ui/Badge";
 import "../../styles/FindExperiencePanel.css";
 
@@ -105,8 +106,8 @@ export default function FindExperiencePanel({ allLocations, allCountries, allKey
         p_keyword_names: filterKeywords.size > 0 ? [...filterKeywords] : null,
         p_year_min: filterYearMin ? parseInt(filterYearMin, 10) : null,
         p_year_max: filterYearMax ? parseInt(filterYearMax, 10) : null,
-        p_value_min: filterValueMin ? parseFloat(filterValueMin) : null,
-        p_value_max: filterValueMax ? parseFloat(filterValueMax) : null,
+        p_value_min: filterValueMin ? lakhToCrore(filterValueMin) : null,
+        p_value_max: filterValueMax ? lakhToCrore(filterValueMax) : null,
         p_match_count: 50,
       });
       if (rpcErr) { setError(rpcErr.message); setLoading(false); return; }
@@ -158,7 +159,7 @@ export default function FindExperiencePanel({ allLocations, allCountries, allKey
         <div className="fre-result-meta">
           {p.client && <span>{p.client}</span>}
           {p.location && <span className="fre-result-loc"><IconPin /> {p.location}</span>}
-          {s.capitalCost && <span>₹{s.capitalCost} Cr</span>}
+          {s.capitalCost && <span>₹{croreToLakh(s.capitalCost)} Lakh</span>}
         </div>
         {r.matched_keywords.length > 0 && (
           <div className="fre-match-list">
@@ -220,7 +221,7 @@ export default function FindExperiencePanel({ allLocations, allCountries, allKey
           </div>
         </div>
         <div className="fre-field">
-          <label className="field-label">Contract Value (₹ Cr)</label>
+          <label className="field-label">Contract Value (₹ Lakh)</label>
           <div className="kr-range-row">
             <input type="number" className="input" placeholder="Min" value={filterValueMin} onChange={(e) => setFilterValueMin(e.target.value)} />
             <span style={{ color: "var(--text-tertiary)" }}>—</span>

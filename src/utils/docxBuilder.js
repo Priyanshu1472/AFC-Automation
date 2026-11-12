@@ -2,6 +2,8 @@
 // Builds the "Consultant Assignment Reference" table (2-column paired layout)
 // used for Knowledge Repository exports (Word + PDF preview).
 
+import { croreToLakh } from "../lib/projectValue";
+
 const MONTHS_FULL = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -35,7 +37,7 @@ function projectValues(project) {
   const s = parseSummary(project.summary);
   return {
     assignment: project.title || "",
-    value:      s.capitalCost ? `Rs. ${s.capitalCost} Crore` : "",
+    value:      s.capitalCost ? `Rs. ${croreToLakh(s.capitalCost)} Lakh` : "",
     country:    s.country || "India",
     location:   project.location || "",
     duration:   s.durationMonths || monthsBetween(s.startDate, s.finishDate),

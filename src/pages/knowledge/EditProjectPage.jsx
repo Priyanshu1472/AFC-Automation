@@ -9,6 +9,7 @@ import { KeywordDropdown, DocumentUpload, INDIAN_STATES, CustomSelect, MonthPick
 import { useProjectIndexing } from "../../hooks/useProjectIndexing";
 import "../../styles/AddProjectPage.css";
 import BackButton from "../../components/ui/BackButton";
+import { croreToLakh, lakhToCrore } from "../../lib/projectValue";
 
 function monthsBetween(start, end) {
   if (!start || !end) return "";
@@ -51,7 +52,7 @@ export default function EditProjectPage() {
       shortform: proj.shortform || "",
       servicesDescription: s.servicesDescription || "",
       clientNameAddress: proj.client || "",
-      capitalCost: s.capitalCost || "",
+      capitalCost: croreToLakh(s.capitalCost),
       clientType: proj.client_type || "",
       status: proj.status || "",
       country: s.country || "India",
@@ -125,7 +126,7 @@ export default function EditProjectPage() {
 
     const summaryData = {
       servicesDescription: form.servicesDescription,
-      capitalCost: form.capitalCost,
+      capitalCost: lakhToCrore(form.capitalCost),
       country: form.country,
       contactPerson: form.contactPerson,
       titleDesignation: form.titleDesignation,
@@ -236,7 +237,7 @@ export default function EditProjectPage() {
                 </div>
 
                 <div className="ap-field">
-                  <label>Approx. Value of the Contract (₹ Crore)</label>
+                  <label>Approx. Value of the Contract (₹ Lakh)</label>
                   <input type="number" value={form.capitalCost} onChange={(e) => handleFormChange("capitalCost", e.target.value)} />
                 </div>
 
