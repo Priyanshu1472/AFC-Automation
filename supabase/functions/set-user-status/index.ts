@@ -106,10 +106,11 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const { data: target, error: targetErr } = await adminClient
       .from("afc_users")
-      .select("id, email, full_name")
+      .select("id, email, full_name, role")
       .eq("id", user_id)
       .single();
     if (targetErr || !target) return jsonRes(req, 404, { error: "User not found." });
+    if (target.role === "super_admin") return jsonRes(req, 403, { error: "The Super Admin account can't be changed here." });
 
     const { error: updateErr } = await adminClient
       .from("afc_users")

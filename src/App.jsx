@@ -3,11 +3,13 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
+import { ModulesProvider } from "./context/ModulesContext";
+import { PathModuleGate } from "./components/routing/ModuleGate";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
 import PublicOnlyRoute from "./components/routing/PublicOnlyRoute";
 import PageLoader from "./components/ui/PageLoader";
-import { USERS_PAGE_ROLES, USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, EMPANELMENT_SENDER_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES } from "./lib/roles";
+import { USERS_PAGE_ROLES, USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, EMPANELMENT_SENDER_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, MODULE_SETTINGS_ROLES } from "./lib/roles";
 
 // Lazy-loaded so each page (and anything only it imports, e.g. xlsx/jspdf on
 // the Reports pages) ships as its own chunk instead of all ~30 pages being
@@ -22,6 +24,7 @@ const CreateUserPage = lazy(() => import("./pages/admin/CreateUserPage"));
 const EditUserPage = lazy(() => import("./pages/admin/EditUserPage"));
 const UserListPage = lazy(() => import("./pages/admin/UserListPage"));
 const AuditLogsPage = lazy(() => import("./pages/admin/AuditLogsPage"));
+const ModuleSettingsPage = lazy(() => import("./pages/admin/ModuleSettingsPage"));
 const SendEmpanelmentPage = lazy(() => import("./pages/empanelment/SendEmpanelmentPage"));
 const BaFormPage = lazy(() => import("./pages/empanelment/BaFormPage"));
 const EmpanelmentListPage = lazy(() => import("./pages/empanelment/EmpanelmentListPage"));
@@ -61,7 +64,9 @@ export default function App() {
         <ErrorBoundary>
           <ToastProvider>
             <AuthProvider>
+              <ModulesProvider>
               <Suspense fallback={<PageLoader />}>
+                <PathModuleGate>
                 <Routes>
                 <Route path="/" element={<Navigate to="/login" replace />} />
 
@@ -140,6 +145,15 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={AUDIT_LOG_ROLES}>
                       <AuditLogsPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/settings/modules"
+                  element={
+                    <ProtectedRoute allowedRoles={MODULE_SETTINGS_ROLES}>
+                      <ModuleSettingsPage />
                     </ProtectedRoute>
                   }
                 />
@@ -359,7 +373,9 @@ export default function App() {
 
                 <Route path="*" element={<NotFoundPage />} />
                 </Routes>
+                </PathModuleGate>
               </Suspense>
+              </ModulesProvider>
             </AuthProvider>
           </ToastProvider>
         </ErrorBoundary>

@@ -28,7 +28,7 @@ describe("ROLES / VALID_ROLES", () => {
   });
 
   it("VALID_ROLES matches the keys of ROLES exactly", () => {
-    expect([...VALID_ROLES].sort()).toEqual(Object.keys(ROLES).sort());
+    expect([...VALID_ROLES].sort()).toEqual([...Object.keys(ROLES), "super_admin"].sort());
   });
 });
 
