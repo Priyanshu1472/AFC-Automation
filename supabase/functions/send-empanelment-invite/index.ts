@@ -1,11 +1,13 @@
 // supabase/functions/send-empanelment-invite/index.ts
-// JWT must be ON. Caller must be an active associate_consultant or
-// project_assistant (same send permissions).
+// JWT must be ON. Caller must be an active associate_consultant,
+// project_assistant or Project Officer (incl. the PO-tier area/regional
+// managers) — same send permissions for all.
 // Generates a 5-digit application code, creates the empanelment_applications
 // row, and emails the BP the invite + code.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 import { notifyUser } from "../_shared/notify.ts";
@@ -15,12 +17,17 @@ const ROLE_LABELS: Record<string, string> = {
   cfo: "Chief Financial Officer",
   cs: "Company Secretary",
   dgm: "Deputy General Manager",
+  general_manager: "General Manager",
   agm: "Assistant General Manager",
   srm: "Senior Regional Manager",
   project_officer: "Project Officer",
+  area_manager: "Area Manager",
+  regional_manager: "Regional Manager",
   associate_consultant: "Associate Consultant",
   project_assistant: "Project Assistant",
 };
+
+const SENDER_ROLES = ["associate_consultant", "project_assistant", "project_officer", "area_manager", "regional_manager"];
 
 function generateAppCode(): string {
   const arr = new Uint32Array(1);
@@ -34,14 +41,17 @@ function isValidEmail(v: string): boolean {
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "empanelment");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
 
-  if (!["associate_consultant", "project_assistant"].includes(caller.role)) {
-    return jsonRes(req, 403, { error: "Only Associate Consultants or Project Assistants can send empanelment invitations." });
+  // Project Officers (and the PO-tier Area/Regional Managers) can send too.
+  if (!SENDER_ROLES.includes(caller.role)) {
+    return jsonRes(req, 403, { error: "Only Associate Consultants, Project Assistants or Project Officers can send empanelment invitations." });
   }
 
   let body: Record<string, unknown>;
@@ -86,7 +96,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .from("afc_users")
       .select("id, full_name, email, role")
       .eq("id", project_officer_id)
-      .in("role", ["project_officer", "project_assistant"])
+      .in("role", ["project_officer", "area_manager", "regional_manager", "project_assistant"])
       .eq("team", team)
       .eq("is_active", true)
       .maybeSingle();
@@ -96,7 +106,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       const { count: activePoCount } = await adminClient
         .from("afc_users")
         .select("id", { count: "exact", head: true })
-        .eq("role", "project_officer")
+        .in("role", ["project_officer", "area_manager", "regional_manager"])
         .eq("team", team)
         .eq("is_active", true);
       if (activePoCount && activePoCount > 0) {
@@ -114,19 +124,21 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         .from("afc_users")
         .select("id, full_name, role")
         .eq("id", advisor_id)
-        .in("role", ["dgm", "agm"])
+        .in("role", ["dgm", "agm", "general_manager"])
         .eq("team", team)
         .eq("is_active", true)
         .maybeSingle();
-      if (advErr || !picked) return jsonRes(req, 400, { error: "Invalid advising authority for your team — pick an active DGM or AGM." });
+      if (advErr || !picked) return jsonRes(req, 400, { error: "Invalid advising authority for your team — pick an active DGM, AGM, or General Manager." });
       advisor = picked;
     } else {
       const { data: dgm } = await adminClient
         .from("afc_users")
         .select("id, full_name, role")
-        .eq("role", "dgm")
+        .in("role", ["dgm", "general_manager"])
         .eq("team", team)
         .eq("is_active", true)
+        .order("role", { ascending: true })
+        .limit(1)
         .maybeSingle();
       advisor = dgm || null;
     }
@@ -171,8 +183,11 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       <p style="margin:0 0 16px;font-size:14px;color:#374151;">Dear Sir / Ma'am,</p>
       <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">Greetings from AFC India Limited!</p>
       <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
-        As advised by <strong>${escapeHtml(advisedByName)}</strong> (${escapeHtml(advisedByDesig)}), please find enclosed the link for the
-        Business Partner (BP) empanelment form for your kind perusal.
+        As advised by <strong>${escapeHtml(advisedByName)}</strong> (${escapeHtml(advisedByDesig)}), you are requested to fill in the
+        Business Partner (BP) Empanelment Form using the link below to initiate your empanelment process with AFC India Limited.
+      </p>
+      <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
+        Kindly complete and submit the form at your earliest convenience, along with the supporting documents requested in it.
       </p>
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:20px 24px;margin:0 0 24px;">
         <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:0.08em;">Your Application Code</p>
@@ -181,7 +196,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       <p style="margin:0 0 8px;">
         <a href="${siteUrl}/ba-form" style="display:inline-block;background:#1a5fd4;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:600;font-size:14px;">Open Empanelment Form &rarr;</a>
       </p>
-      <p style="margin:16px 0 0;font-size:13px;color:#374151;line-height:1.7;">Keep this code safe — you will need it to submit the form.</p>
+      <p style="margin:16px 0 0;font-size:13px;color:#374151;line-height:1.7;">Please keep this application code safe — you will need it to submit the form.</p>
     `);
 
     const emailSent = await sendResendEmail({

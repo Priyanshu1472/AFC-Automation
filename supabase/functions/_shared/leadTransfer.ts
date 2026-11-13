@@ -1,0 +1,162 @@
+// supabase/functions/_shared/leadTransfer.ts
+// Moves a lead to a different team — used by respond-lead-query, the only
+// way a lead gets transferred (there is no standalone/free-transfer entry
+// point; it only happens once another team has raised a cross-team query
+// on the lead). Only ever runs on MD's say-so: MD transferring directly,
+// or MD approving a transfer PMT requested.
+// Works at any lead status, including
+// terminal ones (md_approved/md_declined/pa_dropped) — a lead can be
+// transferred even after MD approval, per product decision; any downstream
+// Proposal Preparation/Fee Note already created stays tied to the old
+// lead_id/team as-is (deliberately not touched or migrated).
+//
+// Resets the lead to po_assignment, as if it were being created again by an
+// Associate Consultant/Project Assistant for the new team (see create-lead's
+// isPoRouted), forwarded to whichever specific person PMT named rather than
+// left open to the whole team's PO tier: Person Responsible/Reviewer/
+// Recommending Authority/Business Partner all cleared (the new team names
+// its own — that's why those three columns had their NOT NULL constraint
+// dropped, see 20260928000100), every
+// Lead Approval Note / PR-review flag cleared so the note process restarts
+// from scratch, the chat roster wiped so the old team's participants don't
+// linger once the new team's chat reopens, a fresh lead_number issued under
+// the new team's own sequence (next_lead_number — same RPC create-lead
+// uses), and any stale unread notification still pointing at this lead
+// (from whatever the old team was mid-way through) marked read, since none
+// of those pending actions are still valid once the lead's state resets.
+
+import { createAdminClient } from "./auth.ts";
+import { logLeadActivity } from "./leadActivity.ts";
+import { notifyUser, notifyUsers, notifyTeam } from "./notify.ts";
+import { getOrgWideHolders } from "./leadAuth.ts";
+import { validateForwardedTo } from "./leadEligibility.ts";
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+export type TransferResult = { ok: true; leadNumber: string } | { ok: false; error: string };
+
+export async function performLeadTransfer(
+  admin: AdminClient,
+  leadId: string,
+  targetTeam: string,
+  forwardedToId: string,
+  justification: string,
+  actorId: string
+): Promise<TransferResult> {
+  const forwardErr = await validateForwardedTo(admin, forwardedToId, targetTeam);
+  if (forwardErr) return { ok: false, error: forwardErr };
+
+  const { data: lead, error: leadErr } = await admin
+    .from("leads")
+    .select("id, lead_number, title, team, status, transfer_count, person_responsible_id, forwarded_to_id")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (leadErr || !lead) return { ok: false, error: "Lead not found." };
+
+  if (targetTeam === lead.team) return { ok: false, error: "This lead is already on that team." };
+
+  const { data: teamCheck, error: teamErr } = await admin
+    .from("afc_users")
+    .select("id")
+    .eq("team", targetTeam)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  if (teamErr || !teamCheck) return { ok: false, error: "Target team not found." };
+
+  const fromTeam = lead.team as string;
+
+  const { data: leadNumberData, error: numErr } = await admin.rpc("next_lead_number", { p_team: targetTeam });
+  if (numErr || !leadNumberData) {
+    console.error("next_lead_number failed during transfer:", numErr?.message);
+    return { ok: false, error: "Failed to generate a lead number for the target team. Please try again." };
+  }
+  const newLeadNumber = leadNumberData as string;
+
+  const { error: updateErr } = await admin
+    .from("leads")
+    .update({
+      team: targetTeam,
+      lead_number: newLeadNumber,
+      status: "po_assignment",
+      person_responsible_id: null,
+      reviewer_id: null,
+      recommending_authority_id: null,
+      assigned_ba_id: null,
+      forwarded_to_id: forwardedToId,
+      handled_by_dgm_id: null,
+      declined_from_status: null,
+      approval_note_data: null,
+      approval_note_pr_reviewed: false,
+      approval_note_pending_pr_review: false,
+      chat_opened_at: null,
+      transferred_from_team: fromTeam,
+      transfer_count: (lead.transfer_count as number) + 1,
+    })
+    .eq("id", leadId);
+  if (updateErr) {
+    console.error("Lead transfer update failed:", updateErr.message);
+    return { ok: false, error: "Failed to transfer lead. Please try again." };
+  }
+
+  // The old team's chat roster has no business being on the new team's
+  // thread — chat_opened_at is already cleared above, but the participant
+  // rows themselves need wiping too, or the old team would silently regain
+  // visibility the moment the new team's chat reopens.
+  const { error: chatClearErr } = await admin.from("lead_chat_participants").delete().eq("lead_id", leadId);
+  if (chatClearErr) console.error("Clearing lead_chat_participants after transfer failed:", chatClearErr.message);
+
+  // Whatever anyone was mid-way through (Accept/Drop, Reviewer/Recommending
+  // Authority appointments, etc.) is void now — the lead's own fields were
+  // just cleared above, so acting on a stale notification would 404 or
+  // operate on a state that no longer exists. The link itself stays valid
+  // (same lead id), so this only needs to match on it.
+  const { error: notifClearErr } = await admin.from("notifications").update({ is_read: true }).eq("link", `/leads/${leadId}`).eq("is_read", false);
+  if (notifClearErr) console.error("Clearing stale notifications after transfer failed:", notifClearErr.message);
+
+  await logLeadActivity(admin, leadId, actorId, "md", "team_transfer", lead.status as string, "po_assignment", `${fromTeam} → ${targetTeam}. New number: ${newLeadNumber}. ${justification}`);
+
+  // Whoever currently "owns" the lead on the old team — its Person
+  // Responsible, or (if it was still po_assignment itself) whoever it was
+  // forwarded to there — gets a direct, personal notice on top of the
+  // team-wide one below, naming the MD as the one who moved it.
+  const oldOwnerId = (lead.status === "po_assignment" ? lead.forwarded_to_id : lead.person_responsible_id) as string | null;
+
+  // The specific person PMT forwarded this lead to (actionable — same
+  // wording as create-lead's isPoRouted notification, since this is now the
+  // exact same po_assignment state), the old owner and the old team
+  // (informational), and MD (informational — MD/PMT effectively see
+  // everything anyway now).
+  await Promise.all([
+    notifyUser(admin, forwardedToId, {
+      title: "A lead was forwarded to you",
+      sub_text: `${newLeadNumber} — "${lead.title}" was transferred from ${fromTeam} (was ${lead.lead_number}) and needs a Person Responsible, Reviewer, and Recommending Authority assigned.`,
+      type: "action_required",
+      link: `/leads/${leadId}`,
+    }),
+    oldOwnerId && oldOwnerId !== forwardedToId
+      ? notifyUser(admin, oldOwnerId, {
+          title: "Your lead was transferred by the MD",
+          sub_text: `${lead.lead_number} — "${lead.title}" was transferred by the MD from ${fromTeam} to ${targetTeam} (now ${newLeadNumber}).`,
+          type: "info",
+          link: `/leads/${leadId}`,
+        })
+      : Promise.resolve(),
+    notifyTeam(admin, fromTeam, {
+      title: "A lead was transferred out of your team",
+      sub_text: `${lead.lead_number} — "${lead.title}" was transferred to ${targetTeam} (now ${newLeadNumber}).`,
+      type: "info",
+      link: `/leads/${leadId}`,
+    }),
+    getOrgWideHolders(admin, { role: "md" }).then((mdHolders) =>
+      notifyUsers(admin, mdHolders, {
+        title: "A lead was transferred between teams",
+        sub_text: `${lead.lead_number} — "${lead.title}" moved from ${fromTeam} to ${targetTeam} (now ${newLeadNumber}).`,
+        type: "info",
+        link: `/leads/${leadId}`,
+      })
+    ),
+  ]);
+
+  return { ok: true, leadNumber: newLeadNumber };
+}

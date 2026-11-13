@@ -1,0 +1,26 @@
+-- Drop the ivfflat index added in 20260924000000_experience_search.sql —
+-- live-testing find_relevant_experience() surfaced a real correctness bug,
+-- not just a performance one.
+--
+-- ivfflat partitions vectors into `lists` clusters (100, in the original
+-- migration) and, by default, probes only 1 cluster per query. With the
+-- Knowledge Repository holding a handful of rows, that clustering is
+-- degenerate (most clusters empty, others holding 0-1 points). A query
+-- vector identical/near-identical to an already-indexed row tends to land
+-- in that row's own cluster and "work"; a genuinely new natural-language
+-- query can land in an unlucky, empty cluster and probe it, returning
+-- ZERO semantic matches even though every real nearest neighbor is
+-- sitting in the table — confirmed by reproducing semantic_score = 0
+-- for every candidate via the live RPC while the exact same embedding,
+-- compared with a plain (non-indexed) `ORDER BY 1 - (embedding <=> ...)`
+-- expression, correctly ranked all rows by genuine cosine similarity.
+--
+-- At the dataset size this feature actually has today (and for a long
+-- while as projects are added going forward), an exact sequential scan
+-- over 384-dim vectors is both fast and always correct — no approximate
+-- index is needed. Revisit (ivfflat with `lists` sized to the real row
+-- count, or hnsw, which doesn't have this small-dataset failure mode) once
+-- the Knowledge Repository actually holds enough projects for it to
+-- matter — pgvector's own guidance is to only add these indexes after
+-- the table is populated with a realistic amount of data.
+drop index if exists public.project_experience_embeddings_embedding_idx;

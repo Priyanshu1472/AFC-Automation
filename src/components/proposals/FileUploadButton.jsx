@@ -4,7 +4,7 @@
 import { useRef } from "react";
 import Button from "../ui/Button";
 
-export default function FileUploadButton({ label, onSelect, disabled, size = "sm", variant = "secondary" }) {
+export default function FileUploadButton({ label, onSelect, disabled, size = "sm", variant = "secondary", accept }) {
   const inputRef = useRef(null);
 
   return (
@@ -12,6 +12,7 @@ export default function FileUploadButton({ label, onSelect, disabled, size = "sm
       <input
         type="file"
         ref={inputRef}
+        accept={accept}
         style={{ display: "none" }}
         disabled={disabled}
         onChange={(e) => {

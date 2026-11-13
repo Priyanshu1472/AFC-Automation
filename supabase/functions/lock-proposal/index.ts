@@ -1,5 +1,5 @@
 // supabase/functions/lock-proposal/index.ts
-// JWT must be ON. Person Responsible / Reviewer / Approval Authority (the
+// JWT must be ON. Person Responsible / Reviewer / Recommending Authority (the
 // authorised signatory) manually locks a proposal — e.g. once it's been
 // submitted to the client. Locking also happens automatically once the
 // lead's own submission_deadline passes — that path needs no edge function
@@ -9,10 +9,13 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "proposals");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);
@@ -32,21 +35,22 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   try {
     const { data: proposal, error: propErr } = await adminClient
       .from("proposal_preparations")
-      .select("id, lead_id, locked")
+      .select("id, lead_id, locked, proposed_value")
       .eq("id", proposalId)
       .maybeSingle();
     if (propErr || !proposal) return jsonRes(req, 404, { error: "Proposal not found." });
     if (proposal.locked) return jsonRes(req, 400, { error: "This proposal is already locked." });
+    if (proposal.proposed_value == null) return jsonRes(req, 400, { error: "Enter the proposed value (Financial) before locking the proposal." });
 
     const { data: lead } = await adminClient
       .from("leads")
-      .select("person_responsible_id, reviewer_id, approval_authority_id")
+      .select("person_responsible_id, reviewer_id, recommending_authority_id")
       .eq("id", proposal.lead_id)
       .maybeSingle();
 
     const authorized =
       ["md", "admin"].includes(caller.role) ||
-      [lead?.person_responsible_id, lead?.reviewer_id, lead?.approval_authority_id].includes(caller.id);
+      [lead?.person_responsible_id, lead?.reviewer_id, lead?.recommending_authority_id].includes(caller.id);
     if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this proposal." });
 
     const { error: updErr } = await adminClient

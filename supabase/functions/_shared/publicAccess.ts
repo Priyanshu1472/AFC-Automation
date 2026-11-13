@@ -54,10 +54,3 @@ export async function clearRateLimit(adminClient: SupabaseClient, key: string) {
   const { error } = await adminClient.from("rate_limit_attempts").delete().eq("key", key);
   if (error) console.error("clearRateLimit failed:", error.message);
 }
-
-// Best-effort — never blocks the caller's actual response on cleanup.
-export function cleanupRateLimitAttempts(adminClient: SupabaseClient) {
-  adminClient.rpc("cleanup_rate_limit_attempts").then(({ error }: { error: unknown }) => {
-    if (error) console.error("cleanup_rate_limit_attempts failed:", error);
-  });
-}

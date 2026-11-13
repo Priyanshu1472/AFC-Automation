@@ -1,24 +1,32 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppHeader from "../components/shared/AppHeader";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
+import Button from "../components/ui/Button";
 import PageLoader from "../components/ui/PageLoader";
 import { useAuth } from "../hooks/useAuth";
+import { useModules } from "../context/ModulesContext";
 import { supabase } from "../lib/supabase";
+import { EMPANELMENT_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, MODULE_SETTINGS_ROLES } from "../lib/roles";
 import { fetchPendingActionNotifications, subscribeToNotifications, markNotificationRead } from "../lib/notifications";
+import { TargetIcon, ActivityIcon, RupeeIcon } from "../components/icons";
+import BpInvoiceRequestsCard from "../components/financials/BpInvoiceRequestsCard";
+import { syncDueAlerts } from "../lib/monitoring";
+import { describeNotification } from "../lib/notificationDisplay";
+import NotificationDetail from "../components/shared/NotificationDetail";
 import "../styles/HomePage.css";
 
 const STATUS_MAP = {
   sent: { label: "Sent", variant: "info" },
   filled: { label: "Form Filled", variant: "warning" },
   po_review: { label: "Under Review — Project Officer", variant: "warning" },
-  cfo_cs_review: { label: "Under Review — CFO / CS", variant: "info" },
+  cfo_cs_review: { label: "Under Review — CS / CFO", variant: "info" },
   po_final_review: { label: "Under Review — Project Officer", variant: "warning" },
   dgm_review: { label: "Under Review — DGM", variant: "neutral" },
   md_review: { label: "Under Review — Managing Director", variant: "neutral" },
   accepted: { label: "Accepted", variant: "success" },
-  rejected: { label: "Rejected", variant: "danger" },
+  rejected: { label: "Ineligible", variant: "neutral" },
   on_hold: { label: "Correction Needed", variant: "warning" },
 };
 
@@ -40,9 +48,37 @@ function timeAgo(val) {
   return new Date(val).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
+// Ticks a number up from 0 to `value` (and between values when it changes
+// live). Jumps straight there when the user prefers reduced motion.
+function CountUp({ value, duration = 700 }) {
+  const [shown, setShown] = useState(0);
+  const shownRef = useRef(0);
+
+  useEffect(() => {
+    const from = shownRef.current;
+    const set = (n) => { shownRef.current = n; setShown(n); };
+    if (from === value || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      set(value);
+      return;
+    }
+    let frame;
+    const start = performance.now();
+    const tick = (now) => {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      set(Math.round(from + (value - from) * eased));
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value, duration]);
+
+  return shown;
+}
+
 function BellIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
@@ -51,8 +87,57 @@ function BellIcon() {
 
 function ChevronRightIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16, flexShrink: 0 }}>
       <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+function ArrowLeftIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ width: 16, height: 16, flexShrink: 0 }}>
+      <path d="M19 12H5" />
+      <path d="m12 19-7-7 7-7" />
+    </svg>
+  );
+}
+
+function InboxIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+    </svg>
+  );
+}
+
+function UsersIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
     </svg>
   );
 }
@@ -107,20 +192,73 @@ function BaStatusCard() {
   );
 }
 
+// One box per module on Home. `canSee` mirrors AppHeader's nav gates, so
+// nobody gets an always-empty box for a module they can't open.
+const ACTION_CATEGORIES = [
+  { key: "empanelment", title: "Empanelment", to: "/empanelment", canSee: (role) => EMPANELMENT_ROLES.includes(role), icon: <UsersIcon /> },
+  { key: "leads", title: "Leads Approval", to: "/leads", canSee: (role) => LEAD_GENERATION_NAV_ROLES.includes(role), icon: <TargetIcon /> },
+  { key: "proposals", title: "Proposals", to: "/proposals", canSee: (role) => LEAD_GENERATION_NAV_ROLES.includes(role), icon: <FileIcon /> },
+  { key: "monitoring", title: "Monitoring", to: "/monitoring", canSee: (role) => MONITORING_ROLES.includes(role), icon: <ActivityIcon /> },
+  { key: "financials", title: "Financials", to: "/financials", canSee: (role) => FINANCIALS_ROLES.includes(role), icon: <RupeeIcon /> },
+];
+
+// Which module an alert belongs to — by the page it links to. Bid Payment
+// Requisition (fee) note alerts created before 2026-10-07 linked to the
+// plain "/leads" list, so those are recognised by their title instead.
+function categoryOf(n) {
+  const link = n.link || "";
+  if (link.startsWith("/empanelment")) return "empanelment";
+  if (link.startsWith("/proposals")) return "proposals";
+  if (link.startsWith("/monitoring")) return "monitoring";
+  if (link.startsWith("/financials")) return "financials";
+  if (link.startsWith("/leads")) return /requisition note|fee note/i.test(n.title || "") ? "proposals" : "leads";
+  return "other";
+}
+
+// Narrowest a box may get in the one-line row (and the row's gap); below
+// that the panel switches to list mode — the phone layout — instead of
+// squashing or scrolling the boxes.
+const MIN_BOX_WIDTH = 118;
+const BOX_GAP = 12;
+
+// Returns [ref, isList]: isList is true whenever `count` boxes can't each
+// get MIN_BOX_WIDTH across the element's current width. Re-checked on
+// every resize of that element.
+function useListMode(count) {
+  const [el, setEl] = useState(null);
+  const [isList, setIsList] = useState(false);
+  useLayoutEffect(() => {
+    if (!el) return;
+    const check = () => setIsList(el.clientWidth < count * MIN_BOX_WIDTH + (count - 1) * BOX_GAP);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el, count]);
+  return [setEl, isList];
+}
+
 // Notifications the recipient hasn't acted on yet (type: "action_required",
 // unread) — a review stage waiting on this specific person, not a generic
-// activity feed. Clicking one marks it read and jumps to the application.
+// activity feed. One box per module with its live pending count; clicking a
+// box lists that module's alerts in a table below it (clicking it again
+// closes the table). Clicking a row marks the alert read and opens it.
 function PendingActionsPanel() {
   const { profile } = useAuth();
+  const { isEnabled } = useModules();
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [active, setActive] = useState(null);
 
   useEffect(() => {
     if (!profile?.id) return;
     let cancelled = false;
 
-    fetchPendingActionNotifications(profile.id)
+    // Due-date alerts for Monitoring are generated lazily (and only once per
+    // item/date), so make sure they exist before the boxes are counted.
+    syncDueAlerts()
+      .then(() => fetchPendingActionNotifications(profile.id, 200))
       .then((rows) => {
         if (!cancelled) setItems(rows);
       })
@@ -130,7 +268,20 @@ function PendingActionsPanel() {
       });
 
     const unsubscribe = subscribeToNotifications(profile.id, (row) => {
-      if (row.type === "action_required") setItems((prev) => [row, ...prev]);
+      if (row.type !== "action_required") return;
+      setItems((prev) => {
+        const idx = prev.findIndex((it) => it.id === row.id);
+        // A grouped chat-message notification's 2nd+ message arrives as an
+        // UPDATE to a row already in the list (bumped count) rather than a
+        // new INSERT — replace it in place instead of duplicating it. If
+        // it's been marked read (e.g. the user opened the chat elsewhere),
+        // drop it instead of showing a stale unread row.
+        if (row.is_read) return idx === -1 ? prev : prev.filter((it) => it.id !== row.id);
+        if (idx === -1) return [row, ...prev];
+        const next = [...prev];
+        next[idx] = row;
+        return next;
+      });
     });
 
     return () => {
@@ -148,29 +299,135 @@ function PendingActionsPanel() {
     if (n.link) navigate(n.link, { state: { from: "home" } });
   }
 
-  if (loading || items.length === 0) return null;
+  const grouped = { empanelment: [], leads: [], proposals: [], monitoring: [], financials: [], other: [] };
+  items.forEach((n) => grouped[categoryOf(n)].push(n));
+
+  const boxes = [
+    // A module switched OFF on production gets no box at all, even if it
+    // still has old alerts.
+    ...ACTION_CATEGORIES.filter((c) => isEnabled(c.key) && (c.canSee(profile?.role) || grouped[c.key].length > 0)),
+    ...(grouped.other.length ? [{ key: "other", title: "General", icon: <BellIcon /> }] : []),
+  ];
+  const [sectionRef, isList] = useListMode(boxes.length);
+
+  if (loading) return <PageLoader text="Loading your alerts…" />;
+
+  const current = boxes.find((b) => b.key === active) || null;
+  const list = (current ? grouped[current.key] : []).map((n) => ({ n, d: describeNotification(n) }));
+  // Only modules whose alerts are about leads get the Lead Number column.
+  const showRef = list.some(({ d }) => d.ref);
 
   return (
-    <Card className="pending-actions-card">
-      <Card.Header
-        title="Needs your action"
-        subtitle={`${items.length} application${items.length !== 1 ? "s" : ""} waiting on you`}
-      />
-      <div className="pending-actions-list">
-        {items.map((n) => (
-          <button key={n.id} type="button" className="pending-action-item" onClick={() => handleClick(n)}>
-            <span className="pending-action-icon" aria-hidden="true"><BellIcon /></span>
-            <span className="pending-action-body">
-              <span className="pending-action-title">{n.title}</span>
-              {n.sub_text && <span className="pending-action-sub">{n.sub_text}</span>}
-            </span>
-            <span className="pending-action-right">
-              {n.created_at && <span className="pending-action-time">{timeAgo(n.created_at)}</span>}
-              <ChevronRightIcon />
-            </span>
-          </button>
-        ))}
+    <section ref={sectionRef} className={`home-actions${isList ? " is-list" : ""}${current ? " has-active" : ""}`} aria-label="Needs your action">
+      <div className="home-boxes" style={{ "--box-count": boxes.length }}>
+        {boxes.map((b, i) => {
+          const rows = grouped[b.key];
+          const isActive = current?.key === b.key;
+          return (
+            <button
+              key={b.key}
+              type="button"
+              className={`home-box home-box-${b.key}${isActive ? " active" : ""}${rows.length ? " has-items" : ""}`}
+              style={{ "--i": i }}
+              aria-expanded={isActive}
+              onClick={() => setActive(isActive ? null : b.key)}
+            >
+              <span className="home-box-top">
+                <span className="home-box-icon" aria-hidden="true">{b.icon}</span>
+                <span className="home-box-title">{b.title}</span>
+              </span>
+              <span className="home-box-count"><CountUp value={rows.length} /></span>
+              <span className="home-box-foot">
+                <span className="home-box-when">{rows.length === 0 ? "All caught up" : timeAgo(rows[0].created_at)}</span>
+                <span className="home-box-view" aria-hidden="true"><ChevronRightIcon /></span>
+              </span>
+            </button>
+          );
+        })}
       </div>
+
+      {!current ? (
+        <p className="home-actions-hint"><InboxIcon /> Click a box to see its alerts.</p>
+      ) : (
+        <Card key={current.key} className="home-table-card">
+          {/* Mobile only — there the alerts replace the module list in place
+              (see HomePage.css), so this is the way back to it. */}
+          <button type="button" className="back-link home-table-back" onClick={() => setActive(null)}>
+            <ArrowLeftIcon />
+            <span>Back</span>
+          </button>
+          <div className="home-table-head">
+            <h3>{current.title}</h3>
+            {current.to && (
+              <button type="button" className="home-table-open" onClick={() => navigate(current.to)}>
+                Open {current.title} <ChevronRightIcon />
+              </button>
+            )}
+          </div>
+
+          {list.length === 0 ? (
+            <div className="home-table-empty">
+              <span className="home-table-empty-icon" aria-hidden="true"><CheckCircleIcon /></span>
+              <p className="home-table-empty-title">All caught up</p>
+              <p className="home-table-empty-sub">New items will appear here as soon as they need you.</p>
+            </div>
+          ) : (
+            <div className="home-table-scroll">
+              <table className="table home-table">
+                <thead>
+                  <tr>
+                    <th className="home-col-num">#</th>
+                    <th>Alert</th>
+                    {showRef && <th className="home-col-ref">Lead Number</th>}
+                    <th>Details</th>
+                    <th className="home-col-date">Received</th>
+                    <th className="home-col-open" aria-label="Open" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map(({ n, d }, i) => (
+                    <tr
+                      key={n.id}
+                      className="home-table-row"
+                      style={{ "--i": Math.min(i, 12) }}
+                      tabIndex={0}
+                      onClick={() => handleClick(n)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(n); }
+                      }}
+                    >
+                      <td className="home-col-num">{i + 1}</td>
+                      <td className="home-table-title">{d.alert}</td>
+                      {showRef && <td className="home-col-ref">{d.ref ? <span className="notif-ref">{d.ref}</span> : "—"}</td>}
+                      <td className="home-table-sub"><NotificationDetail d={d} /></td>
+                      <td className="home-col-date">
+                        <span className="home-table-date">{fmtDate(n.created_at)}</span>
+                        <span className="home-table-ago">{timeAgo(n.created_at)}</span>
+                      </td>
+                      <td className="home-col-open"><ChevronRightIcon /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+    </section>
+  );
+}
+
+function SuperAdminCard() {
+  const navigate = useNavigate();
+  return (
+    <Card>
+      <Card.Header title="Super Admin" />
+      <Card.Body>
+        <p className="text-secondary" style={{ marginBottom: 12 }}>
+          Switch portal modules ON or OFF. Modules that are OFF show &quot;Coming Soon&quot; to everyone.
+        </p>
+        <Button variant="primary" onClick={() => navigate("/settings/modules")}>Open Module Settings</Button>
+      </Card.Body>
     </Card>
   );
 }
@@ -178,16 +435,19 @@ function PendingActionsPanel() {
 export default function HomePage() {
   const { profile } = useAuth();
   const isBa = profile?.role === "business_associate";
+  const isSuperAdmin = MODULE_SETTINGS_ROLES.includes(profile?.role);
 
   return (
     <div className="app-shell">
       <AppHeader />
       <div className="app-container">
-        <div className="page-header">
+        <div className="page-header home-welcome">
           <h1>Welcome, {profile?.full_name}</h1>
         </div>
         {isBa && <BaStatusCard />}
-        {!isBa && <PendingActionsPanel />}
+        {isBa && <BpInvoiceRequestsCard />}
+        {isSuperAdmin && <SuperAdminCard />}
+        {!isBa && !isSuperAdmin && <PendingActionsPanel />}
       </div>
     </div>
   );

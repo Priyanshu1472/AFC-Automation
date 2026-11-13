@@ -43,14 +43,26 @@ Deno.test("create-staff-user - rejects a deactivated caller", async () => {
   assertEquals(res.status, 403);
 });
 
-Deno.test("create-staff-user - rejects a role Admin isn't allowed to create (e.g. md)", async () => {
-  const res = await handleRequest(req({ email: "new@afc.com", full_name: "New Person", role: "md" }), client({}) as never);
-  assertEquals(res.status, 403);
+Deno.test("create-staff-user - Admin can create an md account", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = okFetch;
+  try {
+    const res = await handleRequest(req({ email: "new@afc.com", full_name: "New Person", role: "md" }), client({}) as never);
+    assertEquals(res.status, 200);
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 
-Deno.test("create-staff-user - rejects a role Admin isn't allowed to create (e.g. admin, to prevent silent self-replication)", async () => {
-  const res = await handleRequest(req({ email: "new@afc.com", full_name: "New Person", role: "admin" }), client({}) as never);
-  assertEquals(res.status, 403);
+Deno.test("create-staff-user - Admin can create another admin account", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = okFetch;
+  try {
+    const res = await handleRequest(req({ email: "new@afc.com", full_name: "New Person", role: "admin" }), client({}) as never);
+    assertEquals(res.status, 200);
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 
 Deno.test("create-staff-user - MD can no longer create any accounts (Admin-only now)", async () => {

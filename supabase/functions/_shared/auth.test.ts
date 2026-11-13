@@ -65,5 +65,6 @@ Deno.test("getCallerProfile - active caller -> ok with profile", async () => {
   const client = createFakeAdminClient({ afc_users: [{ data: caller, error: null }] });
   const token = fakeJwt({ sub: "user-1" });
   const result = await getCallerProfile(reqWithAuth(`Bearer ${token}`), client as never);
-  assertEquals(result, { ok: true, caller });
+  // No afc_user_teams rows and no primary team -> an empty teams list.
+  assertEquals(result, { ok: true, caller: { ...caller, teams: [] } });
 });

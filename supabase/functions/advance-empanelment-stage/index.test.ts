@@ -121,9 +121,19 @@ Deno.test("cfo_review - rejects a second review from the same CFO", async () => 
   assertEquals(res.status, 400);
 });
 
-Deno.test("cfo_review - first of the pair leaves status at cfo_cs_review (not yet forwarded)", async () => {
+Deno.test("cfo_review - blocked until the CS has reviewed (sequential CS → CFO)", async () => {
   const client = buildClient({ caller: callerRow({ role: "cfo" }), app: appRow({ status: "cfo_cs_review", cs_reviewed: false }) });
   const res = await handleRequest(req({ application_id: APP_ID, action: "cfo_review", comment: "looks fine" }), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("cs_review - CS goes first and hands over to the CFO (status stays cfo_cs_review)", async () => {
+  const client = buildClient({
+    caller: callerRow({ role: "cs" }),
+    app: appRow({ status: "cfo_cs_review", cs_reviewed: false, cfo_reviewed: false }),
+    routes: { afc_users: [{ data: [{ id: "cfo-1" }], error: null }, { data: [{ id: "cfo-1", email: "cfo@afc.com" }], error: null }] },
+  });
+  const res = await handleRequest(req({ application_id: APP_ID, action: "cs_review", comment: "compliant" }), client as never);
   assertEquals(res.status, 200);
   assertEquals(await res.json(), { success: true, status: "cfo_cs_review", forwarded: false });
 });
@@ -233,7 +243,7 @@ Deno.test("dgm_reject - always forbidden regardless of role/status, DGMs can't r
 });
 
 function assertStringIncludesForbidden(body: { error: string }) {
-  assert(body.error.includes("DGMs can no longer reject"));
+  assert(body.error.includes("can't mark an application ineligible directly"));
 }
 
 // ── md_send_back ─────────────────────────────────────────────

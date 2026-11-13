@@ -9,11 +9,14 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "empanelment");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);
@@ -40,17 +43,17 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, title, submission_deadline, assigned_ba_id, person_responsible_id, reviewer_id, approval_authority_id")
+      .select("id, title, submission_deadline, assigned_ba_id, person_responsible_id, reviewer_id, recommending_authority_id")
       .eq("id", proposal.lead_id)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
     // Managing/sending the BP document list is the lead's own team's job
-    // (Person Responsible, Reviewer, Approval Authority) — MD/Admin can
+    // (Person Responsible, Reviewer, Recommending Authority) — MD/Admin can
     // view but not act. Mirrors the client gate in
     // ProposalPreparationPage.jsx (canManageDocs).
-    const authorized = [lead.person_responsible_id, lead.reviewer_id, lead.approval_authority_id].includes(caller.id);
-    if (!authorized) return jsonRes(req, 403, { error: "Only the lead's Person Responsible, Reviewer, or Approval Authority can send this to the BP." });
+    const authorized = [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(caller.id);
+    if (!authorized) return jsonRes(req, 403, { error: "Only the lead's Person Responsible, Reviewer, or Recommending Authority can send this to the BP." });
 
     const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date();
     if (proposal.locked || pastDeadline) {

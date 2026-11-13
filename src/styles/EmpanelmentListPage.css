@@ -66,10 +66,16 @@
 .bl-stat-green::before  { background: var(--success); }
 .bl-stat-red::before    { background: var(--danger); }
 
-/* ── Status badge (table) — fixed width so "Sent" and "CFO/CS Review"
-   render the same size ────────────────────────────────────────── */
+/* ── Status badge (table) — one fixed width for every status so the
+   column reads as a clean vertical strip, not a ragged edge ────── */
 .bl-status-badge {
-  min-width: 116px;
+  min-width: 100px;
+  justify-content: center;
+}
+
+/* Team pill — one width for every team name, same idea as the status pill. */
+.bl-team-badge {
+  min-width: 60px;
   justify-content: center;
 }
 
@@ -131,38 +137,56 @@
   gap: var(--space-2);
 }
 
-/* ── Table scroll wrapper ────────────────────────────────── */
+/* ── Table layout ───────────────────────────────────────────
+   Fixed layout, full width, explicit column widths. Any extra room on
+   a wide screen is shared proportionally — so it lands mostly on the
+   two wide text columns (BP Email / Organisation), never on Contact,
+   Sent On, Status or Actions. Those four stay a constant width so the
+   right side of the table reads as clean vertical strips. The text
+   columns ellipsis-truncate (full value on the title tooltip).
+   .bl-table-scroll keeps overflow-x:auto only as a safety net. */
 .bl-table-scroll {
   overflow-x: auto;
 }
 
 .bl-table {
-  min-width: 720px;
+  width: 100%;
+  table-layout: fixed;
 }
+
+/* Tighter, even cell padding — override .table's 13px/16px (which is more
+   specific than a bare .bl-table td) so the fixed column widths below are
+   predictable. */
+.bl-table thead th,
+.bl-table tbody td {
+  padding: 12px 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bl-table thead th:first-child,
+.bl-table tbody td:first-child { padding-left: 16px; }
+.bl-table thead th:last-child,
+.bl-table tbody td:last-child { padding-right: 16px; }
+
+/* Status / Actions hold flex pills + icon buttons, never text — they must
+   not be ellipsis-clipped. Their columns are sized to fit the content. */
+.bl-table .bl-col-team,
+.bl-table .bl-col-status,
+.bl-table .bl-col-actions { overflow: visible; text-overflow: clip; }
+
+/* Fixed columns by class (positional nth-child breaks because the Team
+   column only renders for org-wide roles). BP Email + Organisation carry
+   no width and split whatever is left. */
+.bl-table .bl-col-code    { width: 98px; }
+.bl-table .bl-col-contact { width: 140px; }
+.bl-table .bl-col-team    { width: 92px; }
+.bl-table .bl-col-date    { width: 120px; }
+.bl-table .bl-col-status  { width: 132px; }
+.bl-table .bl-col-actions { width: 96px; }
 
 .bl-row-clickable {
   cursor: pointer;
-}
-
-/* ── Pinned Actions column ───────────────────────────────────
-   Keep the last column (Review button) stuck to the right edge so
-   it stays visible without horizontally scrolling the table on
-   narrow viewports. */
-.bl-table thead th:last-child,
-.bl-table tbody td:last-child {
-  position: sticky;
-  right: 0;
-  background: var(--card-bg);
-  box-shadow: -1px 0 0 var(--border-subtle);
-}
-
-.bl-table thead th:last-child {
-  background: var(--table-header-bg);
-  z-index: 2;
-}
-
-.bl-table tbody tr:hover td:last-child {
-  background: var(--table-row-hover);
 }
 
 /* ── Table cell content ──────────────────────────────────── */
@@ -183,7 +207,6 @@
 .bl-email {
   font-size: var(--text-sm);
   color: var(--text-primary);
-  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -194,7 +217,7 @@
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
-  max-width: 200px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -229,7 +252,82 @@
 .bl-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  flex-wrap: nowrap;
+  gap: 5px;
+}
+
+/* Square icon-only action button (view / open) — sized in CSS, never
+   relying on the inline SVG's width/height attrs, which collapse to 0
+   inside the button's flex box. */
+.bl-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.bl-icon-btn svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+.bl-icon-btn:hover:not(:disabled) {
+  background: var(--bg-surface-3);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.bl-icon-btn:disabled { opacity: 0.55; cursor: wait; }
+
+/* ── Provisional / Empanelment letter indicators ─────────── */
+.bl-letter-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.bl-letter-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  cursor: pointer;
+  transition: filter var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+}
+
+.bl-letter-icon svg { width: 15px; height: 15px; display: block; }
+.bl-letter-icon:hover:not(:disabled) { filter: brightness(0.94); transform: translateY(-1px); }
+.bl-letter-icon:disabled { opacity: 0.55; cursor: wait; }
+
+.bl-letter-provisional {
+  color: var(--warning);
+  background: var(--warning-light);
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+}
+
+.bl-letter-empanelment {
+  color: var(--success);
+  background: var(--success-light);
+  border-color: color-mix(in srgb, var(--success) 35%, transparent);
 }
 
 /* ── Empty / loading state ───────────────────────────────── */

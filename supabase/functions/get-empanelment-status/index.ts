@@ -11,6 +11,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { checkAnonKey, getClientIP, checkRateLimit } from "../_shared/publicAccess.ts";
 
 // A named function (rather than inlining `createClient(...)` as the default
@@ -25,6 +26,8 @@ function createPublicAdminClient() {
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createPublicAdminClient> = createPublicAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "empanelment");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
   if (!checkAnonKey(req)) return jsonRes(req, 401, { error: "Unauthorized" });
 
@@ -43,7 +46,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
   const { data: application, error: appErr } = await adminClient
     .from("empanelment_applications")
-    .select("id, status, application_code, created_at, md_remarks, dgm_comment")
+    .select("id, status, cs_reviewed, application_code, created_at, md_remarks, dgm_comment")
     .eq("application_code", appCode)
     .maybeSingle();
   if (appErr) return jsonRes(req, 500, { error: "Database error. Please try again." });
@@ -55,6 +58,9 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     .from("empanelment_activity_log")
     .select("id, actor_role, action, comment, created_at")
     .eq("application_id", application.id)
+    // Internal advisor ↔ MD back-and-forth over the provisional letter — the
+    // BP only needs to see that it was sent.
+    .not("action", "in", "(provisional_requested,provisional_declined)")
     .order("created_at", { ascending: true });
   if (logsErr) return jsonRes(req, 500, { error: "Database error. Please try again." });
 
@@ -72,6 +78,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   return jsonRes(req, 200, {
     org_name: reg?.org_name || null,
     status: application.status,
+    // Splits the sequential cfo_cs_review stage into CS → CFO on the stepper.
+    cs_reviewed: !!application.cs_reviewed,
     application_code: application.application_code,
     created_at: application.created_at,
     final_remark: ["accepted", "rejected"].includes(application.status) ? application.md_remarks || application.dgm_comment || null : null,

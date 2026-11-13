@@ -1,22 +1,94 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
+import SupportWidget from "./SupportWidget";
 import NavDropdown from "./NavDropdown";
 import UserMenu from "./UserMenu";
+import ProfileAvatar from "./ProfileAvatar";
 import { useAuth } from "../../hooks/useAuth";
-import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, ROLE_LABELS } from "../../lib/roles";
-import { MenuIcon, CloseIcon } from "../icons";
+import { useModules } from "../../context/ModulesContext";
+import { USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, MODULE_SETTINGS_ROLES, ROLE_LABELS } from "../../lib/roles";
+import {
+  MenuIcon, CloseIcon, HomeIcon, BookIcon, UsersIcon, TargetIcon, FileTextIcon, ActivityIcon, RupeeIcon,
+  UserCogIcon, ClipboardListIcon, LayoutGridIcon, BarChartIcon, ListChecksIcon,
+} from "../icons";
 import logo from "../../images/Logo.png";
 import "../../styles/AppHeader.css";
 
+// Desktop rail sits folded to icons and unfolds over the page while the
+// pointer (or keyboard focus) is on it. data-nav="collapsed" on <html> keeps
+// the page offset at the folded width (App.css), so content never shifts;
+// the unfolded rail just overlays it (AppHeader.css).
+const MOBILE_QUERY = "(max-width: 720px)";
+// Grace period before folding back, so brushing past the edge doesn't flicker.
+const COLLAPSE_DELAY_MS = 150;
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isMobile;
+}
+
+// A rail link: icon + label. When folded only the icon shows — hovering
+// unfolds the rail, so the label never needs a tooltip.
+function NavItem({ to, label, icon, collapsed, onClick }) {
+  return (
+    <NavLink to={to} className={({ isActive }) => (isActive ? "active" : "")} onClick={onClick} aria-label={collapsed ? label : undefined}>
+      <span className="app-header-nav-icon" aria-hidden="true">{icon}</span>
+      <span className="app-header-nav-label">{label}</span>
+    </NavLink>
+  );
+}
+
 export default function AppHeader() {
   const { profile, activeTeam, setActiveTeam, signOut } = useAuth();
+  const { isEnabled } = useModules();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focusInside, setFocusInside] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const collapseTimer = useRef(null);
+  // The mobile drawer always shows full labels.
+  const collapsed = !isMobile && !hovered && !focusInside;
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.nav = "collapsed";
+    return () => {
+      delete document.documentElement.dataset.nav;
+    };
+  }, []);
+
+  useEffect(() => () => clearTimeout(collapseTimer.current), []);
+
+  function handleMouseEnter() {
+    clearTimeout(collapseTimer.current);
+    setHovered(true);
+  }
+
+  function handleMouseLeave() {
+    clearTimeout(collapseTimer.current);
+    collapseTimer.current = setTimeout(() => setHovered(false), COLLAPSE_DELAY_MS);
+  }
+
+  // Focus keeps the rail open (keyboard users, and an open bell/profile
+  // popover whose trigger holds focus) until it moves outside the rail.
+  function handleBlur(e) {
+    if (!e.currentTarget.contains(e.relatedTarget)) setFocusInside(false);
+  }
 
   function closeMenu() {
     setMenuOpen(false);
+    // Drop focus from the clicked link so the rail can fold once the
+    // pointer leaves, instead of staying open on the new page.
+    document.activeElement?.blur?.();
   }
 
   // Mobile-drawer-only: Users tapping Sign out here shouldn't need to open
@@ -50,22 +122,45 @@ export default function AppHeader() {
 
   if (!profile) return null;
 
-  const canSeeUsers = USERS_PAGE_ROLES.includes(profile.role);
+  const canSeeUsers = USERS_VIEW_ROLES.includes(profile.role);
   const canSeeAuditLogs = AUDIT_LOG_ROLES.includes(profile.role);
-  const canSeeEmpanelment = EMPANELMENT_ROLES.includes(profile.role);
-  const canSeeKnowledge = KNOWLEDGE_REPOSITORY_ROLES.includes(profile.role);
-  const canSeeLeads = LEAD_GENERATION_NAV_ROLES.includes(profile.role);
-  const navLinkClass = ({ isActive }) => (isActive ? "active" : "");
+  // Role gate AND module switch (a module that's OFF on production
+  // disappears from the nav entirely — see ModulesContext).
+  const canSeeEmpanelment = EMPANELMENT_ROLES.includes(profile.role) && isEnabled("empanelment");
+  const canSeeKnowledge = KNOWLEDGE_REPOSITORY_ROLES.includes(profile.role) && isEnabled("knowledge");
+  const canSeeLeads = LEAD_GENERATION_NAV_ROLES.includes(profile.role) && isEnabled("leads");
+  const canSeeProposals = LEAD_GENERATION_NAV_ROLES.includes(profile.role) && isEnabled("proposals");
+  const canSeeMonitoring = MONITORING_ROLES.includes(profile.role) && isEnabled("monitoring");
+  const canSeeFinancials = FINANCIALS_ROLES.includes(profile.role) && isEnabled("financials");
+  const canSeeModuleSettings = MODULE_SETTINGS_ROLES.includes(profile.role);
+  const navItems = [
+    { to: "/home", label: "Home", icon: <HomeIcon />, show: true },
+    { to: "/knowledge", label: "Knowledge Repository", icon: <BookIcon />, show: canSeeKnowledge },
+    { to: "/empanelment", label: "Empanelment", icon: <UsersIcon />, show: canSeeEmpanelment },
+    { to: "/leads", label: "Leads Approval", icon: <TargetIcon />, show: canSeeLeads },
+    { to: "/proposals", label: "Proposals", icon: <FileTextIcon />, show: canSeeProposals },
+    { to: "/monitoring", label: "Monitoring", icon: <ActivityIcon />, show: canSeeMonitoring },
+    { to: "/financials", label: "Financials", icon: <RupeeIcon />, show: canSeeFinancials },
+    { to: "/users", label: "Users", icon: <UserCogIcon />, show: canSeeUsers },
+    { to: "/audit-logs", label: "Audit Logs", icon: <ClipboardListIcon />, show: canSeeAuditLogs },
+    { to: "/settings/modules", label: "Module Settings", icon: <ListChecksIcon />, show: canSeeModuleSettings },
+  ].filter((it) => it.show);
   const roleLabel = ROLE_LABELS[profile.role] || profile.role;
-  const initial = (profile.full_name || "?").trim().charAt(0).toUpperCase();
   const teams = profile.teams || [];
 
   return (
-    <header className="app-header">
+    <header
+      className={`app-header${collapsed ? " collapsed" : ""}`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onFocus={() => setFocusInside(true)}
+      onBlur={handleBlur}
+    >
       <Link to="/home" className="app-header-brand">
         <img src={logo} className="app-header-logo" alt="AFC India Limited" />
         <span className="font-display font-semibold text-primary">AFC India Limited</span>
       </Link>
+
 
       {/* Mobile-only — mirrors the desktop utilities row's Notifications
           button but sits in the top bar itself, not inside the off-canvas
@@ -73,6 +168,7 @@ export default function AppHeader() {
           Hidden above the mobile breakpoint, where the equivalent icon
           already lives in the sidebar. */}
       <div className="app-header-mobile-utilities">
+        <SupportWidget />
         <NotificationBell />
       </div>
 
@@ -82,9 +178,7 @@ export default function AppHeader() {
         {/* Mobile-drawer-only — hidden on desktop via CSS, where the
             equivalent info lives in UserMenu's chip + dropdown instead. */}
         <div className="app-header-nav-profile-mobile">
-          <span className="app-header-nav-profile-avatar" aria-hidden="true">
-            {initial}
-          </span>
+          <ProfileAvatar profile={profile} className="app-header-nav-profile-avatar" />
           <span className="app-header-nav-profile-text">
             <span className="app-header-nav-profile-name">{profile.full_name}</span>
             <span className="app-header-nav-profile-role">{roleLabel}</span>
@@ -92,39 +186,9 @@ export default function AppHeader() {
         </div>
 
         <div className="app-header-nav-links">
-          <NavLink to="/home" className={navLinkClass} onClick={closeMenu}>
-            Home
-          </NavLink>
-          {canSeeEmpanelment && (
-            <NavLink to="/empanelment" className={navLinkClass} onClick={closeMenu}>
-              Empanelment
-            </NavLink>
-          )}
-          {canSeeKnowledge && (
-            <NavLink to="/knowledge" className={navLinkClass} onClick={closeMenu}>
-              Knowledge Repository
-            </NavLink>
-          )}
-          {canSeeLeads && (
-            <NavLink to="/leads" className={navLinkClass} onClick={closeMenu}>
-              Leads
-            </NavLink>
-          )}
-          {canSeeLeads && (
-            <NavLink to="/proposals" className={navLinkClass} onClick={closeMenu}>
-              Proposals
-            </NavLink>
-          )}
-          {canSeeUsers && (
-            <NavLink to="/users" className={navLinkClass} onClick={closeMenu}>
-              Users
-            </NavLink>
-          )}
-          {canSeeAuditLogs && (
-            <NavLink to="/audit-logs" className={navLinkClass} onClick={closeMenu}>
-              Audit Logs
-            </NavLink>
-          )}
+          {navItems.map((it) => (
+            <NavItem key={it.to} to={it.to} label={it.label} icon={it.icon} collapsed={collapsed} onClick={closeMenu} />
+          ))}
         </div>
 
         {/* Dashboard / Reports dropdowns — kept as their own group, pushed to
@@ -134,6 +198,8 @@ export default function AppHeader() {
           {(canSeeEmpanelment || canSeeLeads) && (
             <NavDropdown
               label="Dashboard"
+              icon={<LayoutGridIcon />}
+              collapsed={collapsed}
               items={[
                 ...(canSeeEmpanelment ? [{ to: "/dashboard/empanelment", label: "Empanelment" }] : []),
                 ...(canSeeLeads ? [{ to: "/dashboard/leads", label: "Leads" }] : []),
@@ -144,6 +210,8 @@ export default function AppHeader() {
           {(canSeeEmpanelment || canSeeLeads) && (
             <NavDropdown
               label="Reports"
+              icon={<BarChartIcon />}
+              collapsed={collapsed}
               items={[
                 ...(canSeeEmpanelment ? [{ to: "/reports/empanelment", label: "Empanelment" }] : []),
                 ...(canSeeLeads ? [{ to: "/reports/leads", label: "Leads" }] : []),
@@ -153,14 +221,15 @@ export default function AppHeader() {
           )}
         </div>
 
-        <div className="app-header-nav-divider" aria-hidden="true" />
-
+        {/* Folded rail keeps only the bell + profile here; theme and Support
+            move into the profile menu as text items (UserMenu `compact`). */}
         <div className="app-header-nav-utilities">
-          <ThemeToggle />
+          {!collapsed && <ThemeToggle />}
           <span className="app-header-notif-desktop-only">
+            <SupportWidget showTrigger={!collapsed} open={supportOpen} onOpenChange={setSupportOpen} />
             <NotificationBell />
           </span>
-          <UserMenu />
+          <UserMenu compact={collapsed} onOpenSupport={() => setSupportOpen(true)} />
         </div>
 
         {/* Mobile-drawer-only — mirrors UserMenu's desktop team switcher

@@ -19,8 +19,8 @@ const TERMINAL = ["md_approved", "md_declined", "pa_dropped"];
 // The on-track funnel, in STATUS_FLOW order, ending at the terminal
 // approval — mirrors Empanelment's PIPELINE (which also ends at its
 // terminal "accepted").
-const PIPELINE = ["pa_review", "dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review", "md_approved"];
-const IN_PROGRESS_STATUSES = ["pa_review", "dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review"];
+const PIPELINE = ["pa_review", "recommending_authority_review", "pmt_review", "md_review", "md_approved"];
+const IN_PROGRESS_STATUSES = ["pa_review", "recommending_authority_review", "pmt_review", "md_review"];
 const DATE_RANGES = [
   { label: "7d", days: 7 },
   { label: "30d", days: 30 },
@@ -28,19 +28,16 @@ const DATE_RANGES = [
   { label: "All", days: null },
 ];
 
-// Same 8-slot count and adjacency requirement as Empanelment's donut, so
-// this reuses that already-validated colorblind-safe sequence (see
+// Reuses the same colorblind-safe sequence as Empanelment's donut (see
 // LeadDashboardPage.css) under a page-local variable name, matching this
-// codebase's per-page CSS variable convention. dgm_initial_review and
-// dgm_review are merged into one "DGM / G3 Review" slot — both are G3
-// committee work, same idea as Empanelment merging po_review +
-// po_final_review into one "PO Review" slot.
+// codebase's per-page CSS variable convention — now 7 slots (PMT Extended
+// was removed as its own bucket along with the stage itself) rather than
+// the original 8; unused --ldb-cat-8 just goes unreferenced.
 const DONUT_BUCKETS = [
   { key: "pa_review", label: "PR Review", match: (s) => s === "pa_review", colorVar: "--ldb-cat-1" },
   { key: "approved", label: "Approved", match: (s) => s === "md_approved", colorVar: "--ldb-cat-2" },
-  { key: "dgm", label: "DGM / G3 Review", match: (s) => s === "dgm_initial_review" || s === "dgm_review", colorVar: "--ldb-cat-3" },
+  { key: "recommending_authority", label: "Recommending Authority Review", match: (s) => s === "recommending_authority_review", colorVar: "--ldb-cat-3" },
   { key: "pmt", label: "PMT Review", match: (s) => s === "pmt_review", colorVar: "--ldb-cat-4" },
-  { key: "pmt_extended", label: "PMT Extended", match: (s) => s === "pmt_extended_review", colorVar: "--ldb-cat-5" },
   { key: "action_dropped", label: "Action Required / Dropped", match: (s) => s === "pa_action_required" || s === "pa_dropped", colorVar: "--ldb-cat-6" },
   { key: "md_pending", label: "MD Pending", match: (s) => s === "md_review", colorVar: "--ldb-cat-7" },
   { key: "declined", label: "Declined", match: (s) => s === "md_declined", colorVar: "--ldb-cat-8" },

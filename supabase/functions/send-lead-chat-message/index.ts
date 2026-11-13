@@ -9,7 +9,9 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { notifyUsers, bumpChatNotifications } from "../_shared/notify.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -17,6 +19,8 @@ const MAX_MESSAGE_LENGTH = 4000;
 
 export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "leads");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);
@@ -37,9 +41,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!message) return jsonRes(req, 400, { error: "Message cannot be empty." });
   if (message.length > MAX_MESSAGE_LENGTH) return jsonRes(req, 400, { error: `Message is too long (max ${MAX_MESSAGE_LENGTH} characters).` });
 
+  const mentionedUserIds = Array.isArray(body.mentioned_user_ids) ? body.mentioned_user_ids.filter((id): id is string => typeof id === "string") : [];
+
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, status, chat_opened_at")
+    .select("id, status, chat_opened_at, lead_number, title")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -61,6 +67,35 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     message,
   });
   if (insertErr) return jsonRes(req, 500, { error: "Failed to send message." });
+
+  try {
+    const [{ data: others }, { data: sender }] = await Promise.all([
+      adminClient.from("lead_chat_participants").select("user_id").eq("lead_id", lead_id).neq("user_id", caller.id),
+      adminClient.from("afc_users").select("full_name").eq("id", caller.id).maybeSingle(),
+    ]);
+    const preview = message.length > 140 ? `${message.slice(0, 140)}…` : message;
+    const senderName = sender?.full_name || "Someone";
+    const leadLabel = `${lead.lead_number} — "${lead.title}"`;
+    const otherIds = (others || []).map((p: { user_id: string }) => p.user_id);
+    // Only someone actually on this lead's chat roster can be meaningfully
+    // tagged — mentioned_user_ids is client-supplied, so it's intersected
+    // against the real recipient set rather than trusted outright.
+    const mentioned = otherIds.filter((id) => mentionedUserIds.includes(id));
+    const rest = otherIds.filter((id) => !mentioned.includes(id));
+
+    await Promise.all([
+      notifyUsers(adminClient, mentioned, {
+        title: `${senderName} tagged you on ${leadLabel}`,
+        sub_text: `"${preview}"`,
+        type: "action_required",
+        link: `/leads/${lead_id}`,
+        kind: "chat_mention",
+      }),
+      bumpChatNotifications(adminClient, rest, `/leads/${lead_id}`, `New messages on ${leadLabel}`),
+    ]);
+  } catch (err) {
+    console.error("lead chat notify failed:", (err as Error).message);
+  }
 
   return jsonRes(req, 200, { success: true });
 }

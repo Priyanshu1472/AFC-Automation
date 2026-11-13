@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
+import { useTheme } from "../../hooks/useTheme";
 import { ROLE_LABELS } from "../../lib/roles";
+import ProfileAvatar from "./ProfileAvatar";
 import "../../styles/UserMenu.css";
 
-export default function UserMenu() {
+// `compact`: the rail is folded, so the theme toggle and Support button
+// aren't shown in it — their actions move into this menu as text items.
+export default function UserMenu({ compact = false, onOpenSupport }) {
   const { profile, activeTeam, setActiveTeam, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
@@ -22,11 +27,20 @@ export default function UserMenu() {
   if (!profile) return null;
 
   const roleLabel = ROLE_LABELS[profile.role] || profile.role;
-  const initial = (profile.full_name || "?").trim().charAt(0).toUpperCase();
 
   function goToProfile() {
     setOpen(false);
     navigate("/profile");
+  }
+
+  function handleToggleTheme() {
+    setOpen(false);
+    toggleTheme();
+  }
+
+  function handleOpenSupport() {
+    setOpen(false);
+    onOpenSupport?.();
   }
 
   async function handleSignOut() {
@@ -56,9 +70,7 @@ export default function UserMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="user-menu-avatar" aria-hidden="true">
-          {initial}
-        </span>
+        <ProfileAvatar profile={profile} className="user-menu-avatar" />
         <span className="user-menu-text">
           <span className="user-menu-name">{profile.full_name}</span>
           <span className="user-menu-role">{roleLabel}</span>
@@ -95,6 +107,16 @@ export default function UserMenu() {
           <button type="button" className="user-menu-item" role="menuitem" onClick={goToProfile}>
             My Profile
           </button>
+          {compact && (
+            <>
+              <button type="button" className="user-menu-item" role="menuitem" onClick={handleToggleTheme}>
+                {theme === "dark" ? "Light Mode" : "Dark Mode"}
+              </button>
+              <button type="button" className="user-menu-item" role="menuitem" onClick={handleOpenSupport}>
+                Support
+              </button>
+            </>
+          )}
           <button type="button" className="user-menu-signout" role="menuitem" onClick={handleSignOut}>
             Sign out
           </button>

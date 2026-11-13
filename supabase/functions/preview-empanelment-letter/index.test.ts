@@ -83,12 +83,40 @@ Deno.test("provisional preview - the assigned AGM can preview it", async () => {
   });
 });
 
-Deno.test("provisional preview - rejects when already sent", async () => {
+Deno.test("provisional view - an already-sent letter can be re-opened by a viewer on the team", async () => {
+  const fake = client({
+    caller: { id: CALLER_ID, role: "dgm", team: "BPDD", is_active: true },
+    app: appRow({ provisional_letter_sent: true, provisional_sent_at: "2026-08-01T00:00:00Z" }),
+  });
+  await withFetch(logoOkFetch, async () => {
+    const res = await handleRequest(req({ application_id: APP_ID, type: "provisional" }), fake as never);
+    const json = await res.json();
+    assertEquals(res.status, 200);
+    assertEquals(json.success, true);
+    assertEquals(typeof json.pdf_base64, "string");
+  });
+});
+
+Deno.test("provisional view - a user with no access to the application is rejected", async () => {
   const res = await handleRequest(
     req({ application_id: APP_ID, type: "provisional" }),
-    client({ caller: { id: CALLER_ID, role: "dgm", team: "BPDD", is_active: true }, app: appRow({ provisional_letter_sent: true }) }) as never,
+    client({
+      caller: { id: "outsider", role: "project_officer", team: "BIID", is_active: true },
+      app: appRow({ provisional_letter_sent: true, project_officer_id: "someone-else" }),
+    }) as never,
   );
-  assertEquals(res.status, 400);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("final view - an accepted application's letter can be re-opened by CFO", async () => {
+  const fake = client({
+    caller: { id: "cfo-1", role: "cfo", team: null, is_active: true, email: "cfo@afc.com" },
+    app: appRow({ status: "accepted", empanelment_ref: "AFC/BA/2026/007", empanelment_expires_at: "2029-08-01T00:00:00Z", decided_at: "2026-08-01T00:00:00Z" }),
+  });
+  await withFetch(logoOkFetch, async () => {
+    const res = await handleRequest(req({ application_id: APP_ID, type: "final" }), fake as never);
+    assertEquals(res.status, 200);
+  });
 });
 
 Deno.test("provisional preview - success returns a pdf_base64", async () => {

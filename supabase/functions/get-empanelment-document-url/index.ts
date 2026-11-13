@@ -5,6 +5,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
 
 const BUCKET = "ba-documents";
@@ -12,6 +13,8 @@ const SIGNED_URL_TTL_SECONDS = 5 * 60;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "empanelment");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const adminClient = createAdminClient();
@@ -41,19 +44,28 @@ serve(async (req) => {
   // afc_users role/team, the same predicate the RLS helper encodes.
   const { data: application, error: appErr } = await adminClient
     .from("empanelment_applications")
-    .select("id, team, project_officer_id, sent_by")
+    .select("id, team")
     .eq("id", application_id)
     .maybeSingle();
   if (appErr || !application) return jsonRes(req, 404, { error: "Application not found." });
 
   const caller = callerResult.caller;
+  // Team-wide, matching can_view_empanelment_application()'s own predicate
+  // exactly — not just the one person recorded as project_officer_id.
+  // Team 2's own seed data caught this: an application can be handed off
+  // between a PO/AM/RM/PA/DGM/AGM/GM on the same team, and every one of
+  // them can already see the row (RLS is team-wide for this whole tier) —
+  // requiring an exact project_officer_id match here just meant whoever
+  // *wasn't* that one recorded person got a confusing "no access" the
+  // moment they tried to open the actual document.
+  // DGM / AGM / GM are org-wide (every team's applications), same as
+  // can_view_empanelment_application() since 20261006000000.
   const authorized =
-    ["md", "cfo", "cs", "admin"].includes(caller.role) ||
-    // DGM or AGM — the advising authority stage — anyone on the team, same
-    // as can_view_empanelment_application already permits for the row.
-    (["dgm", "agm"].includes(caller.role) && isCallerOnTeam(caller, application.team)) ||
-    (["project_officer", "project_assistant"].includes(caller.role) && caller.id === application.project_officer_id) ||
-    (["associate_consultant", "project_assistant"].includes(caller.role) && caller.id === application.sent_by);
+    ["md", "cfo", "cs", "admin", "dgm", "agm", "general_manager"].includes(caller.role) ||
+    (
+      ["srm", "project_officer", "associate_consultant", "project_assistant", "area_manager", "regional_manager"].includes(caller.role) &&
+      isCallerOnTeam(caller, application.team)
+    );
 
   if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this application." });
 

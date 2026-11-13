@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
@@ -15,11 +15,18 @@ import PinInput from "../../components/ui/PinInput";
 import PageLoader from "../../components/ui/PageLoader";
 import LeadTimeline from "../../components/leads/LeadTimeline";
 import LeadChatPanel from "../../components/leads/LeadChatPanel";
-import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, dgmInitialApproveLabel } from "../../components/leads/leadStatus";
+import LeadQueryPanel from "../../components/leads/LeadQueryPanel";
+import LeadG3Panel from "../../components/leads/LeadG3Panel";
+import MdTransferLeadDialog from "../../components/leads/MdTransferLeadDialog";
+import EscalateToG3Dialog from "../../components/leads/EscalateToG3Dialog";
+import LeadDuplicatesTable from "../../components/leads/LeadDuplicatesTable";
+import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId } from "../../components/leads/leadStatus";
+import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 // Reuses the ar-* detail/action/timeline/document styles already defined
 // for Empanelment's review page — generic patterns (label/value rows,
 // stepper, action panel, doc list), no Lead-Gen-specific CSS needed yet.
 import "../../styles/ApplicationReviewPage.css";
+import BackButton from "../../components/ui/BackButton";
 
 function fmt(v) {
   return v === null || v === undefined || v === "" ? "—" : v;
@@ -47,11 +54,20 @@ function Row({ label, value }) {
 // status — the server (advance-lead-stage) is the real authority; this is
 // UX only, filtered again below by the caller's actual tags/assignment.
 // requiresPin mirrors advance-lead-stage's REQUIRE_PIN exactly — every
-// committee/MD decision (accept, approve, escalate/forward, decline, drop)
-// except dgm_initial_decline, which is the one explicit exception (DGM
-// sending a lead back to the assignee doesn't need one), and never
-// edit/resubmit/claim/reject_reassign.
+// committee/MD decision (accept, approve, decline, drop, withdraw) except
+// ra_decline, which is the one explicit exception (the Recommending
+// Authority sending a lead back to the assignee doesn't need one), and
+// never edit/resubmit/claim/reject_reassign.
 const ACTIONS_BY_STATUS = {
+  // No Person Responsible yet — an Associate Consultant/Project Assistant
+  // created this lead without one (see create-lead's isPoRouted). The
+  // team's Project Officer (or Area Manager/Regional Manager) names all
+  // three assignments at once, PIN-confirmed, which lands the lead in
+  // pa_review exactly like every other creator's.
+  po_assignment: [
+    { key: "po_assign", label: "Assign PR / Reviewer / Recommending Authority", variant: "primary", requiresPin: true },
+    { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
+  ],
   pa_review: [
     // Replaces the old one-click "Accept" — navigates to the Lead Approval
     // Note form/preview flow, which itself invokes the same "accept" action
@@ -65,37 +81,43 @@ const ACTIONS_BY_STATUS = {
     { key: "reject_reassign", label: "Reject", variant: "danger" },
   ],
   pa_dropped: [{ key: "claim", label: "Claim Lead", variant: "primary" }],
-  dgm_initial_review: [
-    { key: "dgm_initial_approve", label: "Approve → PMT", variant: "primary", requiresReason: true, requiresPin: true },
-    { key: "dgm_initial_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
+  recommending_authority_review: [
+    { key: "ra_approve", label: "Recommend to PMT", variant: "primary", requiresReason: true, requiresPin: true },
+    { key: "ra_decline", label: "Clarification Request", variant: "danger", requiresReason: true },
+    { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
+    { key: "withdraw_submission", label: "Withdraw Submission (edit BA)", variant: "secondary", requiresReason: true, requiresPin: true },
   ],
+  // Past Recommending Authority review, neither Withdraw Submission (see
+  // leadCan.withdrawSubmission) nor Drop is available to anyone anymore —
+  // there's no way back once PMT is reviewing it, only forward (approve) or
+  // back to the creator/PR for rework (decline).
   pmt_review: [
-    { key: "pmt_approve", label: "Approve → MD", variant: "primary", requiresReason: true, requiresPin: true },
-    { key: "pmt_escalate", label: "Escalate to PMT Extended", variant: "secondary", requiresReason: true, requiresPin: true },
-    { key: "pmt_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
+    { key: "pmt_approve", label: "Recommend to MD", variant: "primary", requiresReason: true, requiresPin: true },
+    // Optional — not every lead goes through G3, only the ones PMT flags as
+    // conflicting with another team's. See escalate-lead-to-g3.
+    { key: "pmt_escalate_g3", label: "Escalate to G3", variant: "secondary", requiresReason: true, requiresPin: true },
+    { key: "pmt_decline", label: "Clarification Request", variant: "danger", requiresReason: true, requiresPin: true },
   ],
-  pmt_extended_review: [
-    { key: "pmt_extended_approve", label: "Approve → MD", variant: "primary", requiresReason: true, requiresPin: true },
-    { key: "pmt_extended_forward_dgm", label: "Forward to G3", variant: "secondary", requiresPin: true },
-    { key: "pmt_extended_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
-  ],
-  dgm_review: [
-    { key: "dgm_accept", label: "Accept → MD", variant: "primary", requiresReason: true, requiresPin: true },
-    { key: "dgm_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
-  ],
+  // Nobody acts here directly — it's MD's own decision box (LeadG3Panel)
+  // that resolves the escalation (resolve-g3-escalation), not a normal
+  // status-driven action. Falls through to the generic "Viewing only."
+  // card like any other empty entry.
+  g3_review: [],
   md_review: [
     { key: "md_approve", label: "Approve", variant: "primary", requiresPin: true },
-    { key: "md_decline", label: "Decline (return to creator)", variant: "danger", requiresReason: true, requiresPin: true },
-    { key: "drop", label: "Withdraw Lead", variant: "danger", requiresPin: true },
+    { key: "md_decline", label: "Clarification Request", variant: "danger", requiresReason: true, requiresPin: true },
   ],
+  // Drop only reappears here as an escape hatch for the Person Responsible
+  // when PMT or MD sent the lead back (declined_from_status) — a lead the
+  // Recommending Authority sent back has no Drop at all, only Edit &
+  // Resubmit (see leadCan.drop).
   pa_action_required: [
     { key: "__edit_resubmit", label: "Resubmit Lead Approval Form", variant: "primary" },
     { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
   ],
+  // md_approved is fully terminal now — Drop was the one action still open
+  // here, and it's gone along with every other stage past PMT review.
+  md_approved: [],
 };
 
 // The creator filled the Lead Approval Note themselves — it's a Draft
@@ -149,22 +171,69 @@ export default function LeadDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  // Opened from Home's "Needs your action" panel (see HomePage.jsx) — exit
-  // there instead of the Leads list, since that's where the user actually
-  // came from.
-  const backTo = location.state?.from === "home" ? "/home" : "/leads";
+  // Exit back to wherever the user actually came from — Home's "Needs your
+  // action" panel, or a Proposal's "Lead Number" link — instead of always
+  // dropping them on the full Leads list, which loses their place. Opened
+  // from another lead's "Possible duplicate" chip, Back is a real history
+  // step (no `to`) so that lead comes back with its own Back target intact.
+  const fromDuplicate = location.state?.from === "duplicate";
+  const backTo = fromDuplicate ? undefined
+    : location.state?.from === "home" ? "/home"
+    : location.state?.from === "proposal" ? `/proposals/${id}`
+    : "/leads";
+  const backLabel = fromDuplicate ? `Back to ${location.state.leadNumber || "Lead"}`
+    : location.state?.from === "home" ? "Back to Home"
+    : location.state?.from === "proposal" ? "Back to Proposal"
+    : "Back to Leads";
   const { profile } = useAuth();
   const { showToast } = useToast();
 
   const [lead, setLead] = useState(null);
   const [logs, setLogs] = useState([]);
+  // Client contact details (address / telephone / email) are captured on
+  // the Bid Payment Requisition Note during Proposal Preparation, not on the
+  // lead itself — surfaced read-only here once that note exists.
+  const [clientContact, setClientContact] = useState(null);
+  const [duplicateRefs, setDuplicateRefs] = useState([]);
+  // "Possible duplications" opens inline: the table replaces the stepper and
+  // records/actions grid until Close. Reset whenever the lead changes (same
+  // component instance across /leads/:id hops).
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  useEffect(() => setShowDuplicates(false), [id]);
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);
   const [reason, setReason] = useState("");
   const [pin, setPin] = useState("");
   const [selectedReassignId, setSelectedReassignId] = useState("");
   const [reassignOptions, setReassignOptions] = useState([]);
+  // The Project Officer (or Area Manager/Regional Manager) naming Person
+  // Responsible/Reviewer/Recommending Authority on a po_assignment lead —
+  // three pickers at once, same idea as reassignOptions/selectedReassignId
+  // above but tripled.
+  // Person Responsible lists any active team member except Business
+  // Partners and the AGM/SRM/DGM/General Manager tier (Recommending
+  // Authority/oversight, not hands-on PR work); Reviewer additionally
+  // excludes Associate Consultant/Project Assistant (that tier creates
+  // leads and needs a Project Officer to review them, not the other way
+  // around) — mirrors LeadForm.jsx's personResponsibleOptions/
+  // reviewerOptions split.
+  const [poAssignPrOptions, setPoAssignPrOptions] = useState([]);
+  const [poAssignReviewerOptions, setPoAssignReviewerOptions] = useState([]);
+  const [poAssignRaOptions, setPoAssignRaOptions] = useState([]);
+  const [poAssignPrId, setPoAssignPrId] = useState("");
+  const [poAssignReviewerId, setPoAssignReviewerId] = useState("");
+  const [poAssignRaId, setPoAssignRaId] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  // MD's standalone "Transfer Lead" dialog — available on any lead,
+  // regardless of status, not tied to a Cross-Team Query (see
+  // MdTransferLeadDialog / md-transfer-lead).
+  const [showMdTransfer, setShowMdTransfer] = useState(false);
+  // PMT's "Escalate to G3" dialog — shared between the direct "Your
+  // Action" button (escalateQueryId null, conflicting leads required) and
+  // the Cross-Team Query panel's "Forward to G3" (escalateQueryId set,
+  // conflicting leads optional — see EscalateToG3Dialog).
+  const [showEscalateG3, setShowEscalateG3] = useState(false);
+  const [escalateQueryId, setEscalateQueryId] = useState(null);
   // Which top-level action button is mid-flight — only PR-review Accept/
   // Edit call the backend directly from this list (every other action
   // opens the reason/PIN panel via pendingAction instead).
@@ -174,17 +243,43 @@ export default function LeadDetailPage() {
     const { data } = await supabase
       .from("leads")
       .select(
-        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name, role), reviewer:reviewer_id(full_name), authority:approval_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name)"
+        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name, role), reviewer:reviewer_id(full_name), authority:recommending_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name), forwarded:forwarded_to_id(full_name)"
       )
       .eq("id", id)
       .maybeSingle();
     setLead(data);
+    // Leads this one was saved as a possible duplicate of — can_view says
+    // whether the viewer may open that lead (DGM etc. org-wide); otherwise
+    // only its number and team are shown, unlinked.
+    if (data?.possible_duplicate_ids?.length) {
+      const { data: refs } = await supabase.rpc("get_lead_duplicate_refs", { p_lead_id: id });
+      setDuplicateRefs(refs || []);
+    } else {
+      setDuplicateRefs([]);
+    }
     const { data: activity } = await supabase
       .from("lead_activity_log")
       .select("*, actor:actor_id(full_name)")
       .eq("lead_id", id)
       .order("created_at", { ascending: false });
     setLogs(activity || []);
+
+    const { data: proposal } = await supabase
+      .from("proposal_preparations")
+      .select("id")
+      .eq("lead_id", id)
+      .maybeSingle();
+    if (proposal) {
+      const { data: feeNote } = await supabase
+        .from("fee_notes")
+        .select("client_address, client_telephone, client_email")
+        .eq("proposal_id", proposal.id)
+        .maybeSingle();
+      setClientContact(feeNote || null);
+    } else {
+      setClientContact(null);
+    }
+
     setLoading(false);
   }, [id]);
 
@@ -203,6 +298,19 @@ export default function LeadDetailPage() {
 
   function availableActions() {
     if (!lead) return [];
+    // Admin has org-wide VIEW-ONLY access to every lead (for the Audit
+    // Logs "Lead Activity" tab) — never an actor on any lead, regardless
+    // of any coincidental id/role/committee match below.
+    if (profile?.role === "admin") return [];
+    // This lead's submission deadline has passed — every normal action is
+    // blocked (see advance-lead-stage's blanket guard), and only the
+    // Person Responsible (or the creator, if none is assigned yet — e.g. a
+    // po_assignment lead) can still Edit it, regardless of status, to push
+    // the date into the future. Takes priority over the pending-PR-review
+    // branch below — the date must be fixed before anything else continues.
+    if (isLeadOverdue(lead)) {
+      return profile?.id === overdueEditorId(lead) ? [{ key: "__edit_resubmit", label: "Edit", variant: "primary" }] : [];
+    }
     // A creator-drafted note is sitting with the PR for Accept/Edit/Reject
     // — swap in that trio (PR only; everyone else, including the creator,
     // sees "Viewing only" until the PR acts) instead of the normal
@@ -214,67 +322,92 @@ export default function LeadDetailPage() {
     const candidates = ACTIONS_BY_STATUS[lead.status] || [];
     return candidates.filter((a) => {
       switch (a.key) {
+        // Only the exact person this lead was forwarded to — not just any
+        // PO/AM/RM on the team.
+        case "po_assign":
+          return !!profile?.id && profile.id === lead.forwarded_to_id;
         // Generating/editing the note itself is open to creator or PR (same
-        // as Edit), but only PR can actually Submit for DGM Approval from
-        // the preview page — enforced there and, ultimately, server-side.
+        // as Edit), but only PR can actually Submit for approval from the
+        // preview page — enforced there and, ultimately, server-side.
         case "lead_approval_note":
           return lead.status === "pa_review" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
-        // A true drop, no reassignment. At pa_review, only the creator can
-        // drop (whether or not they're also PR) — a non-creator PR has no
-        // Drop here at all, only Accept/Reject; PR gains Drop once they've
-        // actually accepted (pmt_review onward), never before. Creator or
-        // PR at every other non-terminal status.
-        case "drop":
-          if (lead.status === "pa_review") return profile?.id === lead.created_by;
-          // DGM sent this back for changes — only they should re-review it,
-          // so there's no Withdraw here, only Edit & Resubmit.
-          if (lead.status === "pa_action_required" && lead.declined_from_status === "dgm_initial_review") return false;
-          return profile?.id === lead.created_by || profile?.id === lead.person_responsible_id;
-        // The PR rejecting a lead they didn't create — hands it to a
-        // teammate instead of dropping it.
+        // A true drop, no reassignment. The creator has no Drop of their
+        // own.
+        // - po_assignment: the person it was forwarded to.
+        // - pa_review: the named Person Responsible, Reviewer, or
+        //   Recommending Authority.
+        // - recommending_authority_review: only the Recommending Authority
+        //   or the Person Responsible — Reviewer no longer has Drop here.
+        // - pmt_review, md_review, md_approved: nobody — Drop is removed
+        //   entirely once a lead reaches PMT review.
+        // - pa_action_required: nobody, EXCEPT the Person Responsible when
+        //   PMT or MD sent it back (an escape hatch for a lead that already
+        //   passed PMT and is now back for rework); a lead the Recommending
+        //   Authority sent back has no Drop at all, only Edit & Resubmit.
+        case "drop": {
+          if (lead.status === "po_assignment") return !!profile?.id && profile.id === lead.forwarded_to_id;
+          if (lead.status === "pa_review") {
+            return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
+          }
+          if (lead.status === "recommending_authority_review") {
+            return !!profile?.id && [lead.person_responsible_id, lead.recommending_authority_id].includes(profile.id);
+          }
+          if (lead.status === "pa_action_required") {
+            return ["pmt_review", "md_review"].includes(lead.declined_from_status) && profile?.id === lead.person_responsible_id;
+          }
+          return false;
+        }
+        // The PR handing the lead to a teammate instead of dropping it — an
+        // alternative to Drop, not exclusive with it.
         case "reject_reassign":
-          return lead.status === "pa_review" && profile?.id === lead.person_responsible_id && profile?.id !== lead.created_by;
+          return lead.status === "pa_review" && profile?.id === lead.person_responsible_id;
         case "claim":
           return LEAD_PA_TIER_ROLES.includes(profile?.role) && !!profile?.teams?.includes(lead.team);
-        // This initial DGM gate is the lead's own team's DGM (role + team
-        // membership) — NOT the org-wide G3 committee (that only applies to
-        // the later PMT-Extended-escalated dgm_review stage, see below). A
-        // multi-team DGM is eligible on any of their assigned teams, not
-        // just their primary one.
-        case "dgm_initial_approve":
-        case "dgm_initial_decline":
-          return profile?.role === "dgm" && !!profile?.teams?.includes(lead.team);
-        // PMT / PMT Extended / G3 are all org-wide committees (each spans
-        // all 4 teams) — membership alone qualifies, no team match needed.
+        // The lead's actual first-line gate — the exact named person, not a
+        // role or team match.
+        case "ra_approve":
+        case "ra_decline":
+          return profile?.id === lead.recommending_authority_id;
+        // PMT is org-wide (spans all 4 teams) — membership alone qualifies,
+        // no team match needed.
         case "pmt_approve":
-        case "pmt_escalate":
         case "pmt_decline":
+        case "pmt_escalate_g3":
           return profile?.committee === "PMT";
-        case "pmt_extended_approve":
-        case "pmt_extended_forward_dgm":
-        case "pmt_extended_decline":
-          return profile?.committee === "PMT Extended";
-        case "dgm_accept":
-        case "dgm_decline":
-          return profile?.committee === "G3";
         case "md_approve":
         case "md_decline":
           return profile?.role === "md";
         case "__edit_resubmit":
-          return profile?.id === lead.created_by || profile?.id === lead.person_responsible_id;
+          // A just-transferred lead (person_responsible_id null) has no PR
+          // yet — anyone on its new team can pick it up (see
+          // _shared/leadTransfer.ts).
+          return (
+            profile?.id === lead.created_by ||
+            profile?.id === lead.person_responsible_id ||
+            (!lead.person_responsible_id && !!profile?.teams?.includes(lead.team))
+          );
+        // Returns the lead to PR Review — it is NOT a drop. Only available
+        // at Recommending Authority review; once a lead has passed that
+        // stage it can no longer be withdrawn, only dropped (see "drop").
+        case "withdraw_submission":
+          return lead.status === "recommending_authority_review" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
         default:
           return false;
       }
     }).map((a) =>
       // Resubmitting after a decline resumes at whichever stage sent it
       // back, not always PMT — see advance-lead-stage's RESUME_AFTER_DECLINE.
-      a.key === "dgm_initial_approve" ? { ...a, label: dgmInitialApproveLabel(lead.declined_from_status) } : a
+      a.key === "ra_approve" ? { ...a, label: raApproveLabel(lead.declined_from_status) } : a
     );
   }
 
   // Rejecting before PMT review (as PR, not the creator) hands the lead
   // straight to a chosen teammate instead of releasing it into an open pool.
   const needsReassignSelection = pendingAction?.key === "reject_reassign";
+  // The Project Officer/Area Manager/Regional Manager naming Person
+  // Responsible/Reviewer/Recommending Authority on a po_assignment lead —
+  // three required pickers instead of the usual single reason/PIN panel.
+  const needsPoAssignSelection = pendingAction?.key === "po_assign";
 
   // The PR taking ownership of a creator-drafted note — Accept and Edit
   // both call the exact same backend transition (they're now the reviewer
@@ -303,12 +436,12 @@ export default function LeadDetailPage() {
 
   function startAction(action) {
     if (action.key === "__edit_resubmit") {
-      // A decline at any stage (DGM, PMT, PMT Extended, G3, or MD) is a
+      // A decline at any stage (Recommending Authority, PMT, or MD) is a
       // decline of the Lead Approval Note itself — by the time a lead has
       // reached any of them, the note already exists and has been stamped
       // with committee remarks, so resubmitting always means editing that
       // note (not the plain lead-fields form) and sending it back through
-      // DGM again. Only pa_review (before any decline has ever happened)
+      // the Recommending Authority again. Only pa_review (before any decline has ever happened)
       // uses the plain lead-fields edit form.
       if (lead.status === "pa_action_required") {
         navigate(`/leads/${id}/approval-note`);
@@ -329,19 +462,57 @@ export default function LeadDetailPage() {
       runPrReviewTakeover(`/leads/${id}/approval-note`, action.key);
       return;
     }
+    if (action.key === "pmt_escalate_g3") {
+      setEscalateQueryId(null);
+      setShowEscalateG3(true);
+      return;
+    }
     setReason("");
     setPin("");
     setSelectedReassignId("");
+    setPoAssignPrId("");
+    setPoAssignReviewerId("");
+    setPoAssignRaId("");
     setPendingAction(action);
     if (action.key === "reject_reassign" && lead?.team) {
+      // Rejecting hands the lead to a new Person Responsible — same
+      // AGM/SRM exclusion as po_assign's own PR picker just below (they're
+      // Recommending Authority/oversight, not hands-on PR work); DGM/
+      // General Manager were never in LEAD_PA_TIER_ROLES to begin with.
       supabase
         .from("afc_users")
         .select("id, full_name")
-        .in("role", LEAD_PA_TIER_ROLES)
+        .in("role", LEAD_PA_TIER_ROLES.filter((r) => r !== "agm" && r !== "srm"))
         .eq("team", lead.team)
         .eq("is_active", true)
         .order("full_name")
         .then(({ data }) => setReassignOptions((data || []).filter((u) => u.id !== profile?.id)));
+    }
+    if (action.key === "po_assign" && lead?.team) {
+      supabase
+        .from("afc_users")
+        .select("id, full_name")
+        .eq("team", lead.team)
+        .eq("is_active", true)
+        .not("role", "in", "(business_associate,agm,srm,dgm,general_manager)")
+        .order("full_name")
+        .then(async ({ data }) => setPoAssignPrOptions(await withActiveCounts(data || [])));
+      supabase
+        .from("afc_users")
+        .select("id, full_name")
+        .eq("team", lead.team)
+        .eq("is_active", true)
+        .not("role", "in", "(business_associate,associate_consultant,project_assistant)")
+        .order("full_name")
+        .then(({ data }) => setPoAssignReviewerOptions(data || []));
+      supabase
+        .from("afc_users")
+        .select("id, full_name")
+        .eq("team", lead.team)
+        .eq("is_active", true)
+        .in("role", ["agm", "srm", "dgm", "general_manager"])
+        .order("full_name")
+        .then(({ data }) => setPoAssignRaOptions(data || []));
     }
   }
 
@@ -359,6 +530,10 @@ export default function LeadDetailPage() {
       showToast("Select a team member to assign this lead to.", "danger");
       return;
     }
+    if (needsPoAssignSelection && (!poAssignPrId || !poAssignReviewerId || !poAssignRaId)) {
+      showToast("Select a Person Responsible, Reviewer, and Recommending Authority.", "danger");
+      return;
+    }
     setActionLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("advance-lead-stage", {
@@ -368,6 +543,9 @@ export default function LeadDetailPage() {
           comment: reason.trim(),
           ...(pendingAction.requiresPin ? { pin } : {}),
           ...(needsReassignSelection ? { reassign_to_id: selectedReassignId } : {}),
+          ...(needsPoAssignSelection
+            ? { person_responsible_id: poAssignPrId, reviewer_id: poAssignReviewerId, recommending_authority_id: poAssignRaId }
+            : {}),
         },
       });
       if (error) {
@@ -390,6 +568,9 @@ export default function LeadDetailPage() {
       setReason("");
       setPin("");
       setSelectedReassignId("");
+      setPoAssignPrId("");
+      setPoAssignReviewerId("");
+      setPoAssignRaId("");
       fetchLead();
     } catch (err) {
       showToast(err.message || "Something went wrong.", "danger");
@@ -411,6 +592,7 @@ export default function LeadDetailPage() {
 
   const statusCfg = STATUS_MAP[lead.status] || { label: lead.status, variant: "neutral" };
   const isTerminal = ["md_approved", "md_declined", "pa_dropped"].includes(lead.status);
+  const overdue = isLeadOverdue(lead);
   const actions = availableActions();
   const currentFlowIdx = STATUS_FLOW.findIndex((s) => s.key === lead.status);
   // Every uploaded/generated document lives under Lead Records now — the
@@ -423,7 +605,7 @@ export default function LeadDetailPage() {
       <AppHeader />
       <div className="app-container">
         <div className="ar-page">
-          <button className="ar-back-btn" onClick={() => navigate(backTo)}>← {backTo === "/home" ? "Back to Home" : "Back to Leads"}</button>
+          <BackButton to={backTo} label={backLabel} fallback={fromDuplicate ? `/leads/${location.state.leadId}` : undefined} />
 
           <Card className="ar-header-card">
             <Card.Body className="ar-header-body">
@@ -431,6 +613,7 @@ export default function LeadDetailPage() {
                 <div className="ar-header-badges">
                   <Badge variant="brand">Lead</Badge>
                   <Badge variant={statusCfg.variant} dot>{statusCfg.label}</Badge>
+                  {overdue && <Badge variant="danger" dot>Submission Overdue</Badge>}
                 </div>
                 <h1 className="ar-header-email">{lead.title}</h1>
                 <p className="ar-header-meta">
@@ -439,9 +622,74 @@ export default function LeadDetailPage() {
                   {" "}· Created: <strong>{fmtDate(lead.created_at)}</strong>
                 </p>
               </div>
+              {(duplicateRefs.length > 0 || profile?.role === "md") && (
+                <div className="ld-header-actions">
+                  {duplicateRefs.length > 0 && (
+                    showDuplicates ? (
+                      <button type="button" className="ld-dup-close-btn" onClick={() => setShowDuplicates(false)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                        <span>Close</span>
+                      </button>
+                    ) : (
+                      <button type="button" className="ld-dup-btn" onClick={() => setShowDuplicates(true)}>
+                        <span className="ld-dup-btn-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                            <line x1="12" x2="12" y1="9" y2="13" />
+                            <line x1="12" x2="12.01" y1="17" y2="17" />
+                          </svg>
+                        </span>
+                        <span>Possible duplications</span>
+                        <span className="ld-dup-btn-count">{duplicateRefs.length}</span>
+                      </button>
+                    )
+                  )}
+                  {profile?.role === "md" && (
+                    <Button variant="secondary" onClick={() => setShowMdTransfer(true)}>
+                      Transfer Lead
+                    </Button>
+                  )}
+                </div>
+              )}
             </Card.Body>
           </Card>
 
+          {showMdTransfer && (
+            <MdTransferLeadDialog
+              leadId={lead.id}
+              currentTeam={lead.team}
+              onClose={() => setShowMdTransfer(false)}
+              onTransferred={fetchLead}
+            />
+          )}
+
+          {showEscalateG3 && (
+            <EscalateToG3Dialog
+              leadId={lead.id}
+              queryId={escalateQueryId}
+              requireConflictLeads={!escalateQueryId}
+              onClose={() => setShowEscalateG3(false)}
+              onEscalated={fetchLead}
+            />
+          )}
+
+          {showDuplicates ? (
+            <Card className="ld-dup-card">
+              <Card.Body style={{ padding: 0 }}>
+                <div className="ld-dup-card-head">
+                  <h2>Possible duplications</h2>
+                  <p>
+                    {lead.lead_number} matches {duplicateRefs.length === 1 ? "1 existing lead" : `${duplicateRefs.length} existing leads`} — here's what's the same.
+                  </p>
+                </div>
+                <LeadDuplicatesTable refs={duplicateRefs} currentLeadId={lead.id} currentLeadNumber={lead.lead_number} />
+              </Card.Body>
+            </Card>
+          ) : (
+          <>
           {currentFlowIdx >= 0 && (
             <Card>
               <Card.Body className="ar-stepper-body">
@@ -516,17 +764,64 @@ export default function LeadDetailPage() {
                 <Card.Header title="Assignment" />
                 <Card.Body className="ar-detail-body">
                   <Row label="Creator" value={fmt(lead.creator?.full_name)} />
+                  {lead.status === "po_assignment" && (
+                    <Row label="Forwarded To" value={fmt(lead.forwarded?.full_name)} />
+                  )}
                   <Row label="Person Responsible" value={fmt(lead.assignee?.full_name)} />
                   <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
-                  <Row label="Approval Authority" value={fmt(lead.authority?.full_name)} />
-                  <Row label="DGM" value={fmt(lead.dgm?.full_name)} />
-                  <Row label="Business Partner" value={fmt(lead.ba?.full_name)} />
+                  <Row label="Recommending Authority" value={fmt(lead.authority?.full_name)} />
+                  <Row label="Business Partner" value={lead.ba?.full_name || "Yet to be Decided"} />
+                  {lead.transferred_from_team && <Row label="Transferred From" value={lead.transferred_from_team} />}
                 </Card.Body>
               </Card>
+
+              {clientContact && (
+                <Card>
+                  <Card.Header title="Client Contact Details" subtitle="Captured on the Bid Payment Requisition Note" />
+                  <Card.Body className="ar-detail-body">
+                    <div className="ar-row">
+                      <span className="ar-row-label">Address</span>
+                      <span className="ar-row-value">{clientContact.client_address || <em className="ar-empty-text">Not added yet</em>}</span>
+                    </div>
+                    <div className="ar-row">
+                      <span className="ar-row-label">Telephone</span>
+                      <span className="ar-row-value">{clientContact.client_telephone || <em className="ar-empty-text">Not added yet</em>}</span>
+                    </div>
+                    <div className="ar-row">
+                      <span className="ar-row-label">Email</span>
+                      <span className="ar-row-value">{clientContact.client_email || <em className="ar-empty-text">Not added yet</em>}</span>
+                    </div>
+                  </Card.Body>
+                </Card>
+              )}
 
             </div>
 
             <div className="ar-right">
+              {/* MD-only; renders nothing for anyone else or when this lead
+                  isn't part of an open G3 escalation. Sits above the
+                  cross-team query panel — time-critical, MD-specific. */}
+              <LeadG3Panel leadId={lead.id} leadStatus={lead.status} onResolved={fetchLead} />
+
+              {profile?.role !== "admin" && (
+                <LeadQueryPanel
+                  leadId={lead.id}
+                  leadTeam={lead.team}
+                  leadStatus={lead.status}
+                  onLeadTransferred={fetchLead}
+                  onForwardToG3={(queryId) => {
+                    setEscalateQueryId(queryId);
+                    setShowEscalateG3(true);
+                  }}
+                />
+              )}
+
+              {/* md_approved has no ACTIONS_BY_STATUS entry anymore — Drop
+                  was the one action still open there, and it's gone now
+                  that Drop is removed entirely past PMT review. md_declined
+                  has no entry either (actions.length is already 0 there).
+                  pa_dropped's own "Claim Lead" action deliberately keeps
+                  its existing isTerminal-suppressed behavior. */}
               {actions.length > 0 && !isTerminal && (
                 <Card className="ar-action-card">
                   <Card.Header title="Your Action" />
@@ -546,6 +841,49 @@ export default function LeadDetailPage() {
                               disabled={actionLoading}
                             />
                           </div>
+                        )}
+                        {needsPoAssignSelection && (
+                          <>
+                            <div className="ar-field">
+                              <label className="ar-label">
+                                Person Responsible <span className="ar-required">*</span>
+                              </label>
+                              <Select
+                                options={poAssignPrOptions.map(personOption)}
+                                value={poAssignPrId}
+                                onChange={setPoAssignPrId}
+                                placeholder="Select a team member"
+                                disabled={actionLoading}
+                                searchable
+                              />
+                            </div>
+                            <div className="ar-field">
+                              <label className="ar-label">
+                                Reviewer <span className="ar-required">*</span>
+                              </label>
+                              <Select
+                                options={poAssignReviewerOptions.map((u) => ({ value: u.id, label: u.full_name }))}
+                                value={poAssignReviewerId}
+                                onChange={setPoAssignReviewerId}
+                                placeholder="Select a team member"
+                                disabled={actionLoading}
+                                searchable
+                              />
+                            </div>
+                            <div className="ar-field">
+                              <label className="ar-label">
+                                Recommending Authority <span className="ar-required">*</span>
+                              </label>
+                              <Select
+                                options={poAssignRaOptions.map((u) => ({ value: u.id, label: u.full_name }))}
+                                value={poAssignRaId}
+                                onChange={setPoAssignRaId}
+                                placeholder={poAssignRaOptions.length ? "Select an AGM, SRM, DGM, or General Manager" : "No AGM, SRM, DGM, or General Manager found on your team."}
+                                disabled={actionLoading}
+                                searchable
+                              />
+                            </div>
+                          </>
                         )}
                         <div className="ar-field">
                           <label className="ar-label">
@@ -567,12 +905,12 @@ export default function LeadDetailPage() {
                               value={pin}
                               onChange={setPin}
                               disabled={actionLoading}
-                              hint="Confirms it's really you — set or change this from My Profile."
+                              hint="Confirms it's really you"
                             />
                           </div>
                         )}
                         <Button variant={pendingAction.variant} block loading={actionLoading} onClick={confirmAction}>
-                          Confirm: {pendingAction.label}
+                          {needsPoAssignSelection ? "Confirm" : `Confirm: ${pendingAction.label}`}
                         </Button>
                         <Button variant="secondary" block disabled={actionLoading} onClick={() => setPendingAction(null)}>
                           Cancel
@@ -597,7 +935,13 @@ export default function LeadDetailPage() {
               )}
 
               {actions.length === 0 && !isTerminal && (
-                <Card><Card.Body className="ar-view-only"><span>Viewing only. Action pending from <strong>{statusCfg.label}</strong>.</span></Card.Body></Card>
+                <Card><Card.Body className="ar-view-only">
+                  {overdue ? (
+                    <span>Submission deadline passed. Only the Person Responsible (or the creator, if none is assigned yet) can edit this lead to update the date.</span>
+                  ) : (
+                    <span>Viewing only. Action pending from <strong>{statusCfg.label}</strong>.</span>
+                  )}
+                </Card.Body></Card>
               )}
 
               {isTerminal && (
@@ -617,8 +961,12 @@ export default function LeadDetailPage() {
 
               {/* Floating bubble (portaled to <body>) rather than an inline
                   card — LeadChatPanel renders nothing itself when the chat
-                  hasn't opened yet. */}
-              <LeadChatPanel leadId={lead.id} chatOpenedAt={lead.chat_opened_at} locked={lead.status === "md_approved"} />
+                  hasn't opened yet. Admin never gets the chat at all — it's
+                  view-only access to the lead, not a seat in the
+                  conversation (also enforced server-side in RLS). */}
+              {profile?.role !== "admin" && (
+                <LeadChatPanel leadId={lead.id} chatOpenedAt={lead.chat_opened_at} locked={lead.status === "md_approved"} />
+              )}
 
               <Card>
                 <Card.Header title="Timeline" />
@@ -628,8 +976,11 @@ export default function LeadDetailPage() {
               </Card>
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
+
     </div>
   );
 }

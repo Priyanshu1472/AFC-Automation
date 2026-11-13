@@ -2,8 +2,8 @@
 // Builds the "Lead Approval Note" / "MD Approval Note" PDF — the AFC
 // letterhead + bordered-table engine from letterPdf.ts, laid out to match
 // the 4-page reference document: (1) Business Lead Approval Note fields,
-// (2) Preliminary Scrutiny by Office + Project Coordinator/DGM signatures,
-// (3) PMT / PMT Extended / G3 remarks & signatures, (4) MD remarks &
+// (2) Preliminary Scrutiny by Office + Project Coordinator/Recommending
+// Authority signatures, (3) PMT remarks & signatures, (4) MD remarks &
 // approval (final mode only). Visual fidelity is a first pass against the
 // supplied screenshots — pdf-lib's manual-coordinate drawing can't do a
 // pixel-perfect reproduction, so expect a follow-up tightening pass once an
@@ -77,24 +77,23 @@ type LeadForNote = {
 // (group key -> the advance-lead-stage action names that resolve it, in
 // pipeline order) — used to pick each stage's most recent activity row.
 const STAGE_GROUPS: { key: string; label: string; actions: string[] }[] = [
-  { key: "dgm_initial", label: "DGM", actions: ["dgm_initial_approve", "dgm_initial_decline"] },
-  { key: "pmt", label: "PMT (Stage I)", actions: ["pmt_approve", "pmt_escalate", "pmt_decline"] },
-  { key: "pmt_extended", label: "PMT Extended (Stage II)", actions: ["pmt_extended_approve", "pmt_extended_forward_dgm", "pmt_extended_decline"] },
-  { key: "g3", label: "G3 (Stage III)", actions: ["dgm_accept", "dgm_decline"] },
+  { key: "recommending_authority", label: "Recommending Authority", actions: ["ra_approve", "ra_decline"] },
+  { key: "pmt", label: "PMT", actions: ["pmt_approve", "pmt_decline", "pmt_escalate_g3"] },
   { key: "md", label: "MD", actions: ["md_approve", "md_decline"] },
 ];
 
-// Page 2's DGM signature block only ever shows an *approval* — unlike
-// every other stage's signatureBlock (which prints whoever most recently
-// acted, decline included, since those live under an explicit "Remarks/
-// Recommendation" heading that already states the outcome), this one sits
-// directly below "Project Coordinator" with no outcome label of its own.
-// If DGM declined, the stale note is deleted immediately (see
-// advance-lead-stage's "dgm_initial_decline") and a resubmission always
-// runs the note back through the exact same "accept" gate as day one — so
-// by the time DGM approves, this always reflects that approval, never a
-// leftover decline from an earlier round still sitting in the activity log.
-const DGM_APPROVE_ACTIONS = ["dgm_initial_approve"];
+// Page 2's Recommending Authority signature block only ever shows an
+// *approval* — unlike every other stage's signatureBlock (which prints
+// whoever most recently acted, decline included, since those live under an
+// explicit "Remarks/Recommendation" heading that already states the
+// outcome), this one sits directly below "Project Coordinator" with no
+// outcome label of its own. If the Recommending Authority declined, the
+// stale note is deleted immediately (see advance-lead-stage's
+// "ra_decline") and a resubmission always runs the note back through the
+// exact same "accept" gate as day one — so by the time they approve, this
+// always reflects that approval, never a leftover decline from an earlier
+// round still sitting in the activity log.
+const RA_APPROVE_ACTIONS = ["ra_approve"];
 
 function latestByAction(rows: ActivityRow[], actions: string[]): ActivityRow | null {
   const matches = rows.filter((r) => actions.includes(r.action));
@@ -105,6 +104,44 @@ function latestByAction(rows: ActivityRow[], actions: string[]): ActivityRow | n
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   return formatDateDDMMYYYY(new Date(iso));
+}
+
+// Breathing room inserted between a section and whatever precedes it when
+// they end up sharing a page (see the conditional page-break checks below)
+// — without it, a heading's baseline lands right on the previous element's
+// bottom border/line. One full blank line's worth of space (PageEngine's
+// own LINE_H is 13.5), rounded up a little for clearer visual separation.
+const SECTION_GAP = 20;
+
+// Height a drawGridTable call with these exact columns/rows/opts would
+// take, WITHOUT drawing anything — mirrors drawGridTable's own row-height
+// math in letterPdf.ts exactly (header row + every data row). Used to
+// decide up front whether the whole table fits on the current page, so a
+// table is either kept together or moved to a fresh page entirely, never
+// split partway through just because it happened to start mid-page.
+function measureGridTableHeight(
+  e: PageEngine,
+  columns: { header: string; width: number }[],
+  rows: string[][],
+  opts: { fontSize?: number; lineH?: number; padX?: number; padY?: number } = {}
+): number {
+  const fontSize = opts.fontSize ?? 8.5;
+  const lineH = opts.lineH ?? 11;
+  const padX = opts.padX ?? 5;
+  const padY = opts.padY ?? 4;
+  const totalW = columns.reduce((s, c) => s + c.width, 0);
+  const scale = e.MAX_W / totalW;
+  const widths = columns.map((c) => c.width * scale);
+
+  function rowHeight(cells: string[], bold: boolean): number {
+    const cellLines = cells.map((text, i) => wrapMultiline(bold ? e.fonts.bold : e.fonts.reg, text, fontSize, widths[i] - 2 * padX));
+    const nLines = Math.max(...cellLines.map((l) => l.length));
+    return nLines * lineH + 2 * padY;
+  }
+
+  let total = rowHeight(columns.map((c) => c.header), true);
+  for (const row of rows) total += rowHeight(row, false);
+  return total;
 }
 
 async function drawTitle(e: PageEngine, text: string) {
@@ -176,7 +213,7 @@ function centeredText(e: PageEngine, text: string, xCenter: number, y: number, s
   e.currentPage.drawText(text, { x: xCenter - w / 2, y, size, font, color: BLACK });
 }
 
-// Page 2's Project Coordinator / DGM signatures, laid out as a bordered
+// Page 2's Project Coordinator / Recommending Authority signatures, laid out as a bordered
 // two-row table per the reference form: an upper (blank-until-signed) row
 // for the actual signature image + signer's name, and a lower row that's
 // always the same printed caption ("Name & Signature" / role / team) —
@@ -255,7 +292,7 @@ export async function buildLeadApprovalNotePdf(opts: {
   personResponsibleName: string;
   personResponsibleDesignation: string;
   personResponsibleSignatureBytes?: Uint8Array | null;
-  dgmSignatureBytes?: Uint8Array | null;
+  raSignatureBytes?: Uint8Array | null;
   baOrgName: string | null;
   team: string;
   activityRows: ActivityRow[];
@@ -275,14 +312,15 @@ export async function buildLeadApprovalNotePdf(opts: {
   const data = opts.approvalNoteData || {};
   const financial = data.financial_requirement || {};
 
-  const dgmRow = latestByAction(opts.activityRows, DGM_APPROVE_ACTIONS);
+  const raRow = latestByAction(opts.activityRows, RA_APPROVE_ACTIONS);
   // The Person Responsible's signing date is when they actually submitted
-  // the note for DGM approval — the most recent "accept" (covers the first
-  // submission and any DGM-decline resubmission alike).
+  // the note for Recommending Authority approval — the most recent
+  // "accept" (covers the first submission and any decline resubmission
+  // alike).
   const prAcceptRow = latestByAction(opts.activityRows, ["accept"]);
 
   const prSignatureImage = opts.personResponsibleSignatureBytes ? await embedImageAuto(pdf, opts.personResponsibleSignatureBytes).catch(() => null) : null;
-  const dgmSignatureImage = opts.dgmSignatureBytes ? await embedImageAuto(pdf, opts.dgmSignatureBytes).catch(() => null) : null;
+  const raSignatureImage = opts.raSignatureBytes ? await embedImageAuto(pdf, opts.raSignatureBytes).catch(() => null) : null;
 
   // ── Page 1: Business Lead Approval Note ──────────────────────────
   await e.newPage();
@@ -296,6 +334,11 @@ export async function buildLeadApprovalNotePdf(opts: {
   ].filter(Boolean).join("\n") || "—";
 
   const implementationArrangement = opts.lead.assigned_ba_id ? "Business Partner" : "In-house";
+  // BA selection is optional at submission (see LeadApprovalNotePreviewPage
+  // / advance-lead-stage's "accept" case) — the row always shows, printing
+  // "Yet to be Decided" until one is actually assigned, rather than
+  // silently disappearing.
+  const baNameValue = opts.lead.assigned_ba_id ? opts.baOrgName || "—" : "Yet to be Decided";
 
   const rows = [
     { label: "Nature of Lead", value: data.nature_of_lead || "—" },
@@ -304,7 +347,7 @@ export async function buildLeadApprovalNotePdf(opts: {
     { label: "Brief write-up on nature and objective of the proposed assignment*", value: briefValue },
     { label: "Project Timeline", value: data.project_timeline || "—" },
     { label: "Proposed Implementation Arrangements* (In-house/BP)", value: implementationArrangement },
-    ...(opts.lead.assigned_ba_id ? [{ label: "Name of BP*", value: opts.baOrgName || "—" }] : []),
+    { label: "Name of BP*", value: baNameValue },
     {
       label: "Financial Requirement*",
       value: [
@@ -315,15 +358,19 @@ export async function buildLeadApprovalNotePdf(opts: {
       ].join("\n"),
     },
     { label: "Last date for submission of Proposal*", value: fmtDate(opts.lead.submission_deadline) },
-    { label: "Revenue sharing", value: data.revenue_sharing || "NA" },
+    { label: "Revenue sharing", value: data.revenue_sharing || "Yet to be decided" },
   ];
   await drawKeyValueTable(e, rows, { labelWidth: 165 });
 
-  // ── Page 2: Preliminary Scrutiny by Office ───────────────────────
-  await e.newPage();
-  await drawTitle(e, "Preliminary Scrutiny by Office");
-  e.y -= 4;
-
+  // ── Preliminary Scrutiny by Office ────────────────────────────────
+  // Kept together as a whole — moves to a fresh page entirely if the full
+  // table (title + every row) doesn't fit in whatever room is left, rather
+  // than starting here and letting drawGridTable split it mid-table onto
+  // the next page. Only continues on the current page (e.g. below a short
+  // last row on page 1, like Revenue Sharing) when the ENTIRE table fits.
+  // A one-line gap is inserted when it does continue on the same page —
+  // without it the title's text baseline lands right on the previous
+  // element's bottom border.
   const scrutinyEntries = data.scrutiny || [];
   const scrutinyRows: string[][] = SCRUTINY_PARAMETERS.map((param, i) => {
     const entry = scrutinyEntries[i];
@@ -331,9 +378,21 @@ export async function buildLeadApprovalNotePdf(opts: {
     const remarks = entry?.remarks?.trim() || param.defaultRemark;
     return [String(i + 1), param.label, yesNo, remarks];
   });
+  const scrutinyColumns = [
+    { header: "S.No.", width: 30 }, { header: "Evaluation Parameter", width: 130 },
+    { header: "Yes/No", width: 35 }, { header: "Justification / Remarks", width: 200 },
+  ];
+  const TITLE_H = 20; // matches drawTitle's own e.y -= 20
+  const scrutinyBlockH = TITLE_H + 4 + measureGridTableHeight(e, scrutinyColumns, scrutinyRows);
+
+  if (e.y - SECTION_GAP - scrutinyBlockH < e.FOOTER_SAFE) await e.newPage();
+  else e.gap(SECTION_GAP);
+  await drawTitle(e, "Preliminary Scrutiny by Office");
+  e.y -= 4;
+
   await drawGridTable(
     e,
-    [{ header: "S.No.", width: 30 }, { header: "Evaluation Parameter", width: 130 }, { header: "Yes/No", width: 35 }, { header: "Justification / Remarks", width: 200 }],
+    scrutinyColumns,
     scrutinyRows
   );
 
@@ -360,21 +419,24 @@ export async function buildLeadApprovalNotePdf(opts: {
       signatureImage: prSignatureImage,
     },
     {
-      roleLine: "Deputy General Manager",
+      roleLine: "Recommending Authority",
       teamLine: opts.team,
-      name: dgmRow?.actor_full_name || null,
-      date: dgmRow ? fmtDate(dgmRow.created_at) : null,
-      signatureImage: dgmRow ? dgmSignatureImage : null,
+      name: raRow?.actor_full_name || null,
+      date: raRow ? fmtDate(raRow.created_at) : null,
+      signatureImage: raRow ? raSignatureImage : null,
     },
   ]);
   e.y -= 20;
 
-  // ── Page 3: Remarks/Recommendation (PMT / PMT Extended / G3) ────
+  // ── Page: Remarks/Recommendation (PMT) ────────────────────────────
+  // Always starts on a fresh page, per product decision — unlike
+  // Preliminary Scrutiny/MD below, this one doesn't try to continue on
+  // whatever page the signature table above happened to end on.
   await e.newPage();
   await drawTitle(e, "Remarks/ Recommendation");
 
-  const committeeStages = STAGE_GROUPS.slice(1, 4); // pmt, pmt_extended, g3
-  const stageNumerals = ["Stage-I", "Stage-II", "Stage-III"];
+  const committeeStages = STAGE_GROUPS.slice(1, 2); // pmt
+  const stageNumerals = ["Stage - PMT"];
   for (let i = 0; i < committeeStages.length; i++) {
     const stage = committeeStages[i];
     const row = latestByAction(opts.activityRows, stage.actions);
@@ -400,10 +462,13 @@ export async function buildLeadApprovalNotePdf(opts: {
     e.y -= 30;
   }
 
-  // ── Page 4: MD remarks & approval (final mode only) ──────────────
+  // ── MD remarks & approval (final mode only) ───────────────────────
+  // With a single committee (PMT) now, MD's remarks/signature go directly
+  // below PMT's on the same page whenever there's room, rather than always
+  // starting a new one — same conditional-break reasoning as above.
   if (opts.mode === "final") {
-    const mdRow = latestByAction(opts.activityRows, STAGE_GROUPS[4].actions);
-    await e.newPage();
+    const mdRow = latestByAction(opts.activityRows, STAGE_GROUPS[2].actions);
+    if (e.y < e.FOOTER_SAFE + 150) await e.newPage();
     e.currentPage.drawText("Deputy General Manager", { x: e.RIGHT_EDGE - 140, y: e.y, size: 9.5, font: e.fonts.bold, color: BLACK });
     e.y -= 12;
     e.currentPage.drawText(opts.team, { x: e.RIGHT_EDGE - 140, y: e.y, size: 9, font: e.fonts.reg, color: BLACK });
@@ -549,7 +614,8 @@ async function regenerateApprovalNoteInner(
 
   let baOrgName: string | null = null;
   if (lead.assigned_ba_id) {
-    const { data: baList } = await admin.rpc("get_team_business_associates", { p_team: lead.team });
+    // Org-wide: the linked BP may belong to another team.
+    const { data: baList } = await admin.rpc("get_empanelled_business_partners");
     const match = ((baList || []) as Row[]).find((b) => b.id === lead.assigned_ba_id);
     baOrgName = match?.org_name || null;
   }
@@ -569,14 +635,14 @@ async function regenerateApprovalNoteInner(
     actor_signature_path: r.actor?.signature_path || null,
   }));
 
-  const dgmActivityRow = latestByAction(flatActivity, DGM_APPROVE_ACTIONS);
+  const raActivityRow = latestByAction(flatActivity, RA_APPROVE_ACTIONS);
   // Blank ("pending") until the Person Responsible has actually reviewed
   // this note themselves — set once they generate/edit it directly, or
   // explicitly Accept a draft the creator produced (pr_review_accept in
   // advance-lead-stage). Never auto-stamped just because a note exists.
-  const [personResponsibleSignatureBytes, dgmSignatureBytes] = await Promise.all([
+  const [personResponsibleSignatureBytes, raSignatureBytes] = await Promise.all([
     lead.approval_note_pr_reviewed ? fetchSignatureBytes(admin, pr?.signature_path) : Promise.resolve(null),
-    fetchSignatureBytes(admin, dgmActivityRow?.actor_signature_path),
+    fetchSignatureBytes(admin, raActivityRow?.actor_signature_path),
   ]);
 
   const pdfBytes = await buildLeadApprovalNotePdf({
@@ -592,7 +658,7 @@ async function regenerateApprovalNoteInner(
     personResponsibleName: pr?.full_name || "—",
     personResponsibleDesignation: humanizeRole(pr?.role),
     personResponsibleSignatureBytes,
-    dgmSignatureBytes,
+    raSignatureBytes,
     baOrgName,
     team: lead.team,
     activityRows: flatActivity,
@@ -600,12 +666,13 @@ async function regenerateApprovalNoteInner(
   });
 
   // Still pa_review/pa_action_required — the note hasn't actually been
-  // submitted for DGM review yet (whether it's mid-edit or sitting with the
-  // Person Responsible for their Accept/Edit/Reject — that's tracked via
-  // approval_note_pending_pr_review, not a status change), so the single
-  // stored document is labeled "-- Draft" to make that unambiguous. The
-  // moment "accept" transitions the lead to dgm_initial_review (accept is
-  // in REGENERATE_DRAFT_NOTE_ON), this same regeneration runs again and
+  // submitted for Recommending Authority review yet (whether it's mid-edit
+  // or sitting with the Person Responsible for their Accept/Edit/Reject —
+  // that's tracked via approval_note_pending_pr_review, not a status
+  // change), so the single stored document is labeled "-- Draft" to make
+  // that unambiguous. The moment "accept" transitions the lead to
+  // recommending_authority_review (accept is in REGENERATE_DRAFT_NOTE_ON),
+  // this same regeneration runs again and
   // drops the suffix — replacing, never duplicating, the stored document
   // (see saveApprovalNoteDocument).
   const isPreSubmission = lead.status === "pa_review" || lead.status === "pa_action_required";

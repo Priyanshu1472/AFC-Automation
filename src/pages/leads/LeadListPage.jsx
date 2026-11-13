@@ -27,7 +27,7 @@ const QUICK_FILTERS = {
   all: { label: "Total", match: () => true },
   in_review: {
     label: "In Review",
-    match: (l) => ["pa_review", "dgm_initial_review", "pmt_review", "pmt_extended_review", "dgm_review", "md_review"].includes(l.status),
+    match: (l) => ["po_assignment", "pa_review", "recommending_authority_review", "pmt_review", "md_review"].includes(l.status),
   },
   action_required: { label: "Action Required", match: (l, profile) => isActionRequiredForViewer(profile, l) },
   approved: { label: "Approved", match: (l) => l.status === "md_approved" },
@@ -44,6 +44,18 @@ function fmt(v) {
 function fmtDate(v) {
   if (!v) return "—";
   return new Date(v).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Mirrors LeadForm's own review-summary "Type" line (lead_type doesn't
+// apply to a Suo Moto lead — the form just leaves it at its default, so a
+// Suo Moto source always wins regardless of what's stored there).
+const SOURCE_LABELS = { in_house: "In-House", ba: "BP Source", suo_moto: "Suo Moto" };
+function leadTypeLabel(l) {
+  if (l.source === "suo_moto") return "Suo Moto";
+  const source = SOURCE_LABELS[l.source];
+  const type = l.lead_type ? l.lead_type.toUpperCase() : null;
+  if (type && source) return `${type} · ${source}`;
+  return type || source || "—";
 }
 
 // Restores search/filter/page state after a trip out to a lead's detail
@@ -68,13 +80,12 @@ export default function LeadListPage() {
   // { [lead_id]: unread_count } for the current viewer, across every lead
   // they're a chat participant on — powers the badge on the chat icon.
   const [unreadCounts, setUnreadCounts] = useState({});
-  // "mine" (My Leads), "team" (Team Leads), or a committee name ("PMT"/
-  // "PMT Extended"/"G3") — the last is only ever one extra tab, for a
-  // viewer who holds that committee (see committeeTab below). MD is
-  // org-wide and never a lead's creator/Person Responsible, so "My Leads"
-  // would just be empty for them — the page always opens on Team Leads for
-  // that role, ignoring whatever tab was last open (never restored from
-  // sessionStorage either).
+  // "mine" (My Leads), "team" (Team Leads), or a committee name ("PMT") —
+  // the last is only ever one extra tab, for a viewer who holds that
+  // committee (see committeeTab below). MD is org-wide and never a lead's
+  // creator/Person Responsible, so "My Leads" would just be empty for
+  // them — the page always opens on Team Leads for that role, ignoring
+  // whatever tab was last open (never restored from sessionStorage either).
   const [view, setView] = useState(() => (profile?.role === "md" ? "team" : loadStoredFilters().view || "mine"));
   const [search, setSearch] = useState(() => loadStoredFilters().search || "");
   const [quickFilter, setQuickFilter] = useState(() => loadStoredFilters().quickFilter || "all");
@@ -91,11 +102,24 @@ export default function LeadListPage() {
     }
   }, [view, search, quickFilter, statusFilter, teamFilter, page]);
 
-  // Team Leads and any committee tab are both org-wide-flavored (a team, or
-  // a whole committee's queue), so the Team filter/column is worth showing
-  // there to everyone, not just the md/cfo/cs/admin roles that see it on
-  // "My Leads".
-  const canFilterTeam = can.viewAllTeams(profile?.role) || view !== "mine";
+  // A committee tab (e.g. "PMT Leads") is inherently cross-team — that
+  // committee reviews every team's leads at its stage — so the Team filter/
+  // column is worth showing there to everyone, not just the md/cfo/cs/admin
+  // roles that see it on "My Leads". "Team Leads" is different: it's meant
+  // to be exactly "my active team's leads" for a team-scoped role, so it
+  // does NOT get the exception — a multi-team dgm/agm/srm is hard-locked to
+  // whichever team is currently active there, same as the Leads Dashboard
+  // and Empanelment. "All Leads" (DGM/General Manager only — see
+  // hasAllLeadsTab) is the deliberate exception to that: an explicit
+  // org-wide browse view with its own Team filter, alongside (not instead
+  // of) their existing Team Leads tab.
+  const canFilterTeam = can.viewAllTeams(profile?.role) || (view !== "mine" && view !== "team");
+  // DGM, General Manager, and PMT committee members already have org-wide
+  // RLS read access to every team's leads (see can_view_lead()) — this just
+  // gives them an explicit tab to browse it, with a Team filter, instead of
+  // only ever seeing their own active team under "Team Leads" (and, for
+  // PMT, only pmt_review-stage leads under their own committee tab).
+  const hasAllLeadsTab = ["dgm", "general_manager"].includes(profile?.role) || profile?.committee === "PMT";
   // A viewer only ever holds one committee (afc_users.committee), so this is
   // at most a single extra tab, only for a member of that committee.
   const committeeTab = profile?.committee ? { key: profile.committee, label: `${profile.committee} Leads` } : null;
@@ -126,8 +150,9 @@ export default function LeadListPage() {
     // Empanelment.
     const { data } = await supabase
       .from("leads")
-      .select("*, creator:created_by(full_name), assignee:person_responsible_id(full_name)")
-      .order("created_at", { ascending: false });
+      .select("*, assignee:person_responsible_id(full_name)")
+      .order("created_at", { ascending: false })
+      .limit(5000);
     setLeads(data || []);
     setLoading(false);
   }, []);
@@ -156,7 +181,7 @@ export default function LeadListPage() {
   // The tab's own base set, all drawn from the one RLS-permitted `leads`
   // fetch — no separate query per tab:
   //  - "mine": only leads the viewer is Person Responsible, Reviewer, or
-  //    Approval Authority on (see isMyLead) — a lead they merely created
+  //    Recommending Authority on (see isMyLead) — a lead they merely created
   //    (and aren't otherwise named on) stays on "team", not here.
   //  - "team": every lead going on in the viewer's own team(s) (see
   //    isTeamLead) — an org-wide role's "team" is every team, so this is
@@ -167,6 +192,10 @@ export default function LeadListPage() {
   const baseLeads = useMemo(() => {
     if (view === "mine") return leads.filter((l) => isMyLead(profile, l));
     if (view === "team") return leads.filter((l) => isTeamLead(profile, l));
+    // Every RLS-permitted lead, org-wide — `leads` is already scoped to
+    // whatever can_view_lead() grants this caller, which for DGM/General
+    // Manager is every team's leads already, so no extra filtering needed.
+    if (view === "all") return leads;
     return leads.filter((l) => l.status === COMMITTEE_STAGE_STATUS[view]);
   }, [leads, profile, view]);
 
@@ -203,24 +232,29 @@ export default function LeadListPage() {
 
   // Search runs over every matching lead, not just the current page — the
   // page slice below is purely a display concern.
-  const filtered = baseLeads.filter((l) => {
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const matchSearch =
-      (l.lead_number || "").toLowerCase().includes(q) ||
-      (l.title || "").toLowerCase().includes(q) ||
-      (l.client_name || "").toLowerCase().includes(q) ||
-      (l.creator?.full_name || "").toLowerCase().includes(q);
-    return (
-      matchSearch &&
-      QUICK_FILTERS[quickFilter].match(l, profile) &&
-      (statusFilter === "all" || l.status === statusFilter) &&
-      (effectiveTeamFilter === "all" || l.team === effectiveTeamFilter)
-    );
-  });
+    return baseLeads.filter((l) => {
+      const matchSearch =
+        (l.lead_number || "").toLowerCase().includes(q) ||
+        (l.title || "").toLowerCase().includes(q) ||
+        (l.client_name || "").toLowerCase().includes(q) ||
+        (l.creator?.full_name || "").toLowerCase().includes(q);
+      return (
+        matchSearch &&
+        QUICK_FILTERS[quickFilter].match(l, profile) &&
+        (statusFilter === "all" || l.status === statusFilter) &&
+        (effectiveTeamFilter === "all" || l.team === effectiveTeamFilter)
+      );
+    });
+  }, [baseLeads, search, quickFilter, profile, statusFilter, effectiveTeamFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const paged = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage]
+  );
 
   const canCreate = leadCan.create(profile);
 
@@ -251,6 +285,17 @@ export default function LeadListPage() {
               >
                 Team Leads
               </button>
+              {hasAllLeadsTab && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === "all"}
+                  className={`ll-view-tab${view === "all" ? " ll-view-tab-active" : ""}`}
+                  onClick={() => selectView("all")}
+                >
+                  All Leads
+                </button>
+              )}
               {committeeTab && (
                 <button
                   type="button"
@@ -328,8 +373,8 @@ export default function LeadListPage() {
               <table className="table ll-table">
                 <thead>
                   <tr>
-                    <th>Lead Number</th><th>Title</th><th>Creator</th>{canFilterTeam && <th>Team</th>}
-                    <th>Person Responsible</th><th>Status</th><th>Created</th><th>Actions</th>
+                    <th>Lead Number</th><th>Title</th>{canFilterTeam && <th>Team</th>}
+                    <th>Person Responsible</th><th>Lead Type</th><th>Status</th><th>Last Date</th><th className="ll-col-actions">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -337,12 +382,12 @@ export default function LeadListPage() {
                     <tr key={l.id} className="ll-row-clickable" onClick={() => navigate(`/leads/${l.id}`)}>
                       <td><span className="ll-lead-number">{l.lead_number}</span></td>
                       <td className="ll-title" title={l.title}>{fmt(l.title)}</td>
-                      <td className="ll-name-cell" title={l.creator?.full_name || ""}>{fmt(l.creator?.full_name)}</td>
                       {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>}
                       <td className="ll-name-cell" title={l.assignee?.full_name || ""}>{fmt(l.assignee?.full_name)}</td>
+                      <td>{leadTypeLabel(l)}</td>
                       <td><StatusBadge status={l.status} /></td>
-                      <td className="ll-date">{fmtDate(l.created_at)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
+                      <td className="ll-date">{fmtDate(l.submission_deadline)}</td>
+                      <td className="ll-col-actions" onClick={(e) => e.stopPropagation()}>
                         <div className="ll-action-icons">
                           {l.chat_opened_at && (
                             <button

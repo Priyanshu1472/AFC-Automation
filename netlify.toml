@@ -5,6 +5,14 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# A missing build asset (an old chunk removed by a newer deploy) must be a
+# real 404, not index.html served as 200: HTML in place of a JS module gives
+# a confusing MIME error and can get cached as if it were the script.
+[[redirects]]
+  from = "/assets/*"
+  to = "/404.html"
+  status = 404
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

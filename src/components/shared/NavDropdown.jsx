@@ -12,8 +12,10 @@ function ChevronIcon() {
   );
 }
 
-// items: [{ to, label }]
-export default function NavDropdown({ label, items, onNavigate }) {
+// items: [{ to, label }]. `collapsed`: the desktop rail is folded to icons
+// only — the label is hidden on the trigger, so the panel opens to the
+// trigger's right and repeats the label as its heading.
+export default function NavDropdown({ label, icon, items, onNavigate, collapsed = false }) {
   const [open, setOpen] = useState(false);
   const [panelStyle, setPanelStyle] = useState(null);
   const wrapRef = useRef(null);
@@ -51,7 +53,11 @@ export default function NavDropdown({ label, items, onNavigate }) {
     function updatePosition() {
       if (!wrapRef.current) return;
       const rect = wrapRef.current.getBoundingClientRect();
-      setPanelStyle({ position: "fixed", top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+      setPanelStyle(
+        collapsed
+          ? { position: "fixed", top: rect.top, left: rect.right + 8 }
+          : { position: "fixed", top: rect.bottom + 4, left: rect.left, minWidth: rect.width }
+      );
     }
     updatePosition();
     window.addEventListener("resize", updatePosition);
@@ -60,7 +66,7 @@ export default function NavDropdown({ label, items, onNavigate }) {
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [open]);
+  }, [open, collapsed]);
 
   function handleItemClick() {
     setOpen(false);
@@ -69,6 +75,7 @@ export default function NavDropdown({ label, items, onNavigate }) {
 
   const panel = (
     <div className="nav-dropdown-panel" role="menu" ref={panelRef} style={panelStyle || undefined}>
+      {collapsed && <div className="nav-dropdown-heading">{label}</div>}
       {items.map((it) => (
         <NavLink key={it.to} to={it.to} className={({ isActive: navActive }) => `nav-dropdown-item${navActive ? " active" : ""}`} role="menuitem" onClick={handleItemClick}>
           {it.label}
@@ -85,8 +92,10 @@ export default function NavDropdown({ label, items, onNavigate }) {
         onClick={() => setOpen((p) => !p)}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={collapsed ? label : undefined}
       >
-        {label}
+        {icon && <span className="app-header-nav-icon" aria-hidden="true">{icon}</span>}
+        <span className="app-header-nav-label">{label}</span>
         <span className={`nav-dropdown-chevron${open ? " nav-dropdown-chevron-open" : ""}`} aria-hidden="true">
           <ChevronIcon />
         </span>

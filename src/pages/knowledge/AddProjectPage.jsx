@@ -4,7 +4,10 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import AppHeader from "../../components/shared/AppHeader";
 import { KeywordDropdown, DocumentUpload, INDIAN_STATES, CustomSelect, MonthPicker } from "../../components/knowledge/KnowledgeFormParts";
+import { useProjectIndexing } from "../../hooks/useProjectIndexing";
 import "../../styles/AddProjectPage.css";
+import BackButton from "../../components/ui/BackButton";
+import { lakhToCrore } from "../../lib/projectValue";
 
 const BUCKET = "project-documents";
 
@@ -20,10 +23,12 @@ function monthsBetween(start, end) {
 export default function AddProjectPage() {
   const navigate = useNavigate();
   const { profile, activeTeam } = useAuth();
+  const { reindexProject } = useProjectIndexing();
 
   const [form, setForm] = useState({
-    projectName: "", shortform: "", servicesDescription: "",
+    projectName: "", servicesDescription: "",
     clientNameAddress: "", capitalCost: "",
+    clientType: "", status: "",
     country: "India", location: "",
     contactPerson: "", titleDesignation: "", telephone: "", email: "",
     associatedConsultants: "",
@@ -72,15 +77,21 @@ export default function AddProjectPage() {
   const handleAddDoc = (doc) => setDocuments((prev) => [...prev, doc]);
   const handleRemoveDoc = (i) => setDocuments((prev) => prev.filter((_, idx) => idx !== i));
 
+  // Only the project name (never-null at the DB level) and at least one
+  // keyword are still required to save — every other field below is now
+  // optional, and whatever's left blank shows up as a "Missing Details"
+  // flag on the project afterward instead of blocking Save (see
+  // lib/projectCompleteness.js, which must list the exact same fields
+  // this form collects so nothing is silently un-trackable).
   async function handleSubmit() {
     setError("");
-    if (!form.projectName.trim()) { setError("Project name is required."); return; }
+    if (!form.projectName.trim()) { setError("Name of the Project is required."); return; }
     if (Object.keys(selectedKeywords).length === 0) { setError("Please select at least one keyword."); return; }
     setLoading(true);
 
     const summaryData = {
       servicesDescription: form.servicesDescription,
-      capitalCost: form.capitalCost,
+      capitalCost: lakhToCrore(form.capitalCost),
       country: form.country,
       contactPerson: form.contactPerson,
       titleDesignation: form.titleDesignation,
@@ -102,7 +113,8 @@ export default function AddProjectPage() {
         client: form.clientNameAddress,
         summary: summaryData,
         location: form.location || null,
-        shortform: form.shortform || null,
+        client_type: form.clientType || null,
+        status: form.status || null,
         team: activeTeam ?? profile?.team ?? null,
         created_by: profile?.id ?? null,
       }])
@@ -127,6 +139,10 @@ export default function AddProjectPage() {
         await supabase.from("project_keyword_details").insert({ project_id: project.id, keyword_id: keywordId, description: kwDesc });
       }
     }
+
+    // Fire-and-forget: index this project for "Find Relevant Experience"
+    // search. Never blocks/fails the save itself.
+    reindexProject(project, Object.entries(selectedKeywords).map(([name, description]) => ({ name, description })));
 
     // Documents were only staged in memory until now — the storage RLS
     // policy needs the project row to already exist to accept the upload.
@@ -158,15 +174,12 @@ export default function AddProjectPage() {
       <div className="app-container">
         <div className="add-project-wrapper">
           <div className="form-header">
+            <BackButton label="Back" fallback="/knowledge" disabled={loading} />
             <div className="page-title-row">
               <div>
                 <h1>Add Project</h1>
                 <p>Fill in the project details and save to the Knowledge Repository.</p>
               </div>
-              <button className="btn-back" onClick={() => navigate(-1)} disabled={loading}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="13" height="13"><polyline points="15 18 9 12 15 6" /></svg>
-                Back
-              </button>
             </div>
           </div>
 
@@ -181,12 +194,7 @@ export default function AddProjectPage() {
                 </div>
 
                 <div className="ap-field">
-                  <label>Short Form / Abbreviation</label>
-                  <input type="text" placeholder="e.g. SCMP-KOL" value={form.shortform} onChange={(e) => handleFormChange("shortform", e.target.value)} />
-                </div>
-
-                <div className="ap-field">
-                  <label>Approx. Value of the Contract (₹ Crore)</label>
+                  <label>Approx. Value of the Contract (₹ Lakh)</label>
                   <input type="number" placeholder="e.g. 45.50" value={form.capitalCost} onChange={(e) => handleFormChange("capitalCost", e.target.value)} />
                 </div>
 
@@ -197,7 +205,17 @@ export default function AddProjectPage() {
 
                 <div className="ap-field">
                   <label>Location within Country (State / UT)</label>
-                  <CustomSelect value={form.location} onChange={(v) => handleFormChange("location", v)} options={[{ value: "", label: "— Select State / UT —" }, ...INDIAN_STATES.map((s) => ({ value: s, label: s }))]} placeholder="— Select State / UT —" />
+                  <CustomSelect searchable value={form.location} onChange={(v) => handleFormChange("location", v)} options={[{ value: "", label: "— Select State / UT —" }, ...INDIAN_STATES.map((s) => ({ value: s, label: s }))]} placeholder="— Select State / UT —" />
+                </div>
+
+                <div className="ap-field">
+                  <label>Client Type</label>
+                  <CustomSelect value={form.clientType} onChange={(v) => handleFormChange("clientType", v)} options={[{ value: "", label: "— Select Client Type —" }, { value: "Government", label: "Government" }, { value: "Private", label: "Private" }]} placeholder="— Select Client Type —" />
+                </div>
+
+                <div className="ap-field">
+                  <label>Project Status</label>
+                  <CustomSelect value={form.status} onChange={(v) => handleFormChange("status", v)} options={[{ value: "", label: "— Select Project Status —" }, { value: "Ongoing", label: "Ongoing" }, { value: "Completed", label: "Completed" }]} placeholder="— Select Project Status —" />
                 </div>
 
                 <div className="ap-field full-width">
@@ -217,7 +235,7 @@ export default function AddProjectPage() {
 
                 <div className="ap-field">
                   <label>Telephone</label>
-                  <input type="text" placeholder="e.g. +91 98300 00000" value={form.telephone} onChange={(e) => handleFormChange("telephone", e.target.value)} />
+                  <input type="text" placeholder="e.g. +91 00000 00000" value={form.telephone} onChange={(e) => handleFormChange("telephone", e.target.value)} />
                 </div>
 
                 <div className="ap-field">
@@ -240,7 +258,7 @@ export default function AddProjectPage() {
 
                 <div className="ap-field">
                   <label>Duration of Assignment (months)</label>
-                  <input type="text" readOnly value={durationAuto || ""} placeholder="Auto-calculated from dates" style={{ background: "var(--surface-2, #f5f5f5)", cursor: "not-allowed" }} />
+                  <input type="text" readOnly value={durationAuto || ""} placeholder="Auto-calculated from dates" style={{ background: "var(--surface-2, #222b26)", cursor: "not-allowed" }} />
                 </div>
 
                 <div className="ap-field">
@@ -255,7 +273,7 @@ export default function AddProjectPage() {
 
                 <div className="ap-field full-width">
                   <label>Name of Associated Consultants, if any</label>
-                  <textarea rows={2} placeholder="e.g. XYZ Advisory Pvt Ltd (leave blank if none)" value={form.associatedConsultants} onChange={(e) => handleFormChange("associatedConsultants", e.target.value)} />
+                  <textarea rows={2} placeholder="e.g. XYZ Advisory Pvt Ltd" value={form.associatedConsultants} onChange={(e) => handleFormChange("associatedConsultants", e.target.value)} />
                 </div>
 
                 <div className="ap-field full-width">
@@ -269,7 +287,7 @@ export default function AddProjectPage() {
                 </div>
 
                 <div className="ap-field full-width">
-                  <label>Description of Actual Services Provided by Your Staff</label>
+                  <label>Description of Actual Services Provided by the Staff</label>
                   <textarea rows={3} placeholder="Describe services actually rendered..." value={form.servicesDescription} onChange={(e) => handleFormChange("servicesDescription", e.target.value)} />
                 </div>
               </div>

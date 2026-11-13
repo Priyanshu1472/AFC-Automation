@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { ROLE_LABELS } from "../../lib/roles";
+import { ROLE_LABELS, OFFICE_LABELS } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -15,8 +15,8 @@ import "../../styles/SendEmpanelmentPage.css";
 function isValidEmail(v) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
-function capitalise(str) {
-  return str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
+function officeLabel(office) {
+  return office ? OFFICE_LABELS[office] || office : "";
 }
 
 function SendIcon() {
@@ -62,7 +62,7 @@ function SenderInfoRow({ profile, team, advisorName }) {
     { label: "Sent by", value: profile?.full_name },
     { label: "Advised by", value: advisorName || profile?.full_name },
     { label: "Team", value: team, highlight: true },
-    { label: "Office", value: capitalise(profile?.office) },
+    { label: "Office", value: officeLabel(profile?.office) },
   ];
   return (
     <div className="sef-sender-row">
@@ -98,14 +98,14 @@ function EmailPreview({ to, advisedByName, advisedByDesig, acName }) {
         <p className="sef-email-salutation">Dear Sir / Ma'am,</p>
         <p className="sef-email-para">Greetings from AFC India Limited!</p>
         <p className="sef-email-para">
-          As advised by <strong>{advisedByName}</strong> ({advisedByDesig}), please find enclosed the link for the Business Partner (BP)
-          empanelment form for your kind perusal.
+          As advised by <strong>{advisedByName}</strong> ({advisedByDesig}), you are requested to fill in the Business Partner (BP)
+          Empanelment Form using the link below to initiate your empanelment process with AFC India Limited.
         </p>
-        <p className="sef-email-para">Kindly fill in the form at your earliest convenience to initiate the empanelment process with AFC India Limited.</p>
+        <p className="sef-email-para">Kindly complete and submit the form at your earliest convenience, along with the supporting documents requested in it.</p>
         <div className="sef-email-code-block">
           <span className="sef-email-code-label">Your Application Code</span>
           <span className="sef-email-code-value">XXXXX</span>
-          <span className="sef-email-code-note">This code is sent securely in the actual email. Keep it safe — you will need it to submit the form.</span>
+          <span className="sef-email-code-note">This code is sent securely in the actual email. Please keep it safe — you will need it to submit the form.</span>
         </div>
         <div className="sef-email-cta-wrap">
           <div className="sef-email-cta" aria-hidden="true">Open Empanelment Form →</div>
@@ -164,12 +164,15 @@ export default function SendEmpanelmentPage() {
       return;
     }
     const [{ data: pos }, { data: advs }] = await Promise.all([
-      supabase.from("afc_users").select("id, full_name, email").eq("role", "project_officer").eq("team", team).eq("is_active", true).order("full_name"),
-      supabase.from("afc_users").select("id, full_name, email, role").in("role", ["dgm", "agm"]).eq("team", team).eq("is_active", true).order("role", { ascending: false }).order("full_name"),
+      supabase.from("afc_users").select("id, full_name, email").in("role", ["project_officer", "area_manager", "regional_manager"]).eq("team", team).eq("is_active", true).order("full_name"),
+      supabase.from("afc_users").select("id, full_name, email, role").in("role", ["dgm", "agm", "general_manager"]).eq("team", team).eq("is_active", true).order("role", { ascending: false }).order("full_name"),
     ]);
     if (pos && pos.length > 0) {
       setProjectOfficers(pos);
       setReviewerRole("project_officer");
+      // A Project Officer sending the form themselves is preselected as its
+      // reviewer — they can still pick a different PO.
+      if (pos.some((p) => p.id === profile?.id)) setForm((p) => ({ ...p, projectOfficer: p.projectOfficer || profile.id }));
     } else {
       const { data: pas } = await supabase.from("afc_users").select("id, full_name, email").eq("role", "project_assistant").eq("team", team).eq("is_active", true).order("full_name");
       setProjectOfficers(pas || []);
@@ -178,7 +181,7 @@ export default function SendEmpanelmentPage() {
     setAdvisors(advs || []);
     setForm((p) => ({ ...p, advisorId: p.advisorId || advs?.[0]?.id || "" }));
     setLoadingPOs(false);
-  }, [team]);
+  }, [team, profile?.id]);
 
   useEffect(() => {
     fetchPOs();
@@ -326,7 +329,7 @@ export default function SendEmpanelmentPage() {
                     <div className="sef-summary-item"><span className="sef-summary-label">{reviewerLabel}</span><span className="sef-summary-value">{selectedPO?.full_name || "—"}</span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Advised by</span><span className="sef-summary-value">{advisedByName} <span className="sef-summary-role">({advisedByDesig})</span></span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Sent by</span><span className="sef-summary-value">{profile?.full_name}</span></div>
-                    <div className="sef-summary-item sef-summary-last"><span className="sef-summary-label">Team / Office</span><span className="sef-summary-value">{team} · {capitalise(profile?.office)}</span></div>
+                    <div className="sef-summary-item sef-summary-last"><span className="sef-summary-label">Team / Office</span><span className="sef-summary-value">{team} · {officeLabel(profile?.office)}</span></div>
                   </div>
                   <div className="sef-summary-notice">The application code is generated and sent securely in the actual email — it is not shown in this preview.</div>
                   {sendError && <Alert variant="danger" onClose={() => setSendError("")}>{sendError}</Alert>}

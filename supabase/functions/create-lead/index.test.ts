@@ -17,14 +17,27 @@ function baseFields(overrides: Record<string, string> = {}) {
     title: "Preparation of DPR for Smart City Project",
     person_responsible_id: PR_ID,
     reviewer_id: REVIEWER_ID,
-    approval_authority_id: AUTHORITY_ID,
+    recommending_authority_id: AUTHORITY_ID,
     ...overrides,
   };
 }
 
+function pdfFile(name: string): File {
+  return new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00])], name, { type: "application/pdf" });
+}
+
+// At least one document is mandatory for every source except Suo Moto, so
+// the default request attaches one RFP PDF (none for a Suo Moto lead). Use
+// formReqWithFiles to control the attachments explicitly.
 function formReq(fields: Record<string, string>, token = fakeJwt({ sub: CALLER_ID })): Request {
+  const files = fields.source === "suo_moto" ? [] : [pdfFile("rfp.pdf")];
+  return formReqWithFiles(fields, files, token);
+}
+
+function formReqWithFiles(fields: Record<string, string>, files: File[], token = fakeJwt({ sub: CALLER_ID })): Request {
   const fd = new FormData();
   for (const [k, v] of Object.entries(fields)) fd.set(k, v);
+  for (const f of files) fd.append("document", f, f.name);
   return new Request("https://x.com/create-lead", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: fd });
 }
 
@@ -51,6 +64,9 @@ function buildClient(opts: {
     opts.authorityTarget ?? { data: { id: AUTHORITY_ID, role: "agm", team: TEAM, committee: "PMT Extended", is_active: true }, error: null },
   ];
   if (opts.baTarget) routes.afc_users.push(opts.baTarget);
+  // Any later afc_users lookup is a list query (notifyRole fan-out to the
+  // DGM/AGM/GM holders after creation) — answer it with an empty list.
+  routes.afc_users.push({ data: [], error: null });
   routes.leads = routes.leads ?? [{ data: { id: "new-lead-1", lead_number: "LH-2026-000001", status: "pa_review" }, error: null }];
   return createFakeAdminClient(routes, { rpc: { next_lead_number: { data: "LH-2026-000001", error: null }, ...(opts.rpc || {}) } });
 }
@@ -149,8 +165,24 @@ Deno.test("handleRequest - Admin cannot create a lead directly", async () => {
   assertEquals(res.status, 403);
 });
 
-Deno.test("handleRequest - every non-md/non-admin role can create a lead", async () => {
-  for (const role of ["project_assistant", "project_officer", "associate_consultant", "agm", "dgm", "cfo"]) {
+Deno.test("handleRequest - CFO cannot create a lead directly", async () => {
+  const client = buildClient({ caller: callerRow({ role: "cfo" }) });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("handleRequest - CS cannot create a lead directly", async () => {
+  const client = buildClient({ caller: callerRow({ role: "cs" }) });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("handleRequest - every other role can create a lead directly", async () => {
+  // project_assistant/associate_consultant are isPoRouted instead — they
+  // need forwarded_to_id/team, not baseFields()'s direct-creation shape
+  // (person_responsible_id/reviewer_id/recommending_authority_id); covered
+  // separately below.
+  for (const role of ["project_officer", "area_manager", "regional_manager", "agm", "srm", "dgm", "general_manager"]) {
     const client = buildClient({ caller: callerRow({ role }) });
     const res = await handleRequest(formReq(baseFields()), client as never);
     assertEquals(res.status, 200, `expected role "${role}" to be allowed to create a lead`);
@@ -223,6 +255,38 @@ Deno.test("handleRequest - success creates the lead directly into pa_review", as
   assertEquals(body.lead_number, "LH-2026-000001");
 });
 
+Deno.test("handleRequest - adds every MD holder to the chat roster on direct (non-isPoRouted) creation, alongside the named trio", async () => {
+  // buildClient's own afc_users array doesn't leave room for the extra
+  // getOrgWideHolders(role: md) lookup this adds — built directly here,
+  // same 5 entries buildClient would use, plus the MD list and a trailing
+  // empty one for the later org-wide DGM/AGM notifyRole fan-out.
+  const client = createFakeAdminClient(
+    {
+      afc_users: [
+        { data: callerRow(), error: null },
+        { data: { id: PR_ID, team: TEAM, is_active: true }, error: null },
+        { data: { id: PR_ID, role: "project_officer", team: TEAM, committee: null, is_active: true }, error: null },
+        { data: { id: REVIEWER_ID, role: "associate_consultant", team: TEAM, committee: "PMT", is_active: true }, error: null },
+        { data: { id: AUTHORITY_ID, role: "agm", team: TEAM, committee: "PMT Extended", is_active: true }, error: null },
+        { data: [{ id: "md-1" }, { id: "md-2" }], error: null },
+        { data: [], error: null },
+      ],
+      leads: [{ data: { id: "new-lead-1", lead_number: "LH-2026-000001", status: "pa_review" }, error: null }],
+    },
+    { rpc: { next_lead_number: { data: "LH-2026-000001", error: null } } }
+  );
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const participantCalls = log.filter((l) => l.table === "lead_chat_participants");
+  const rows = participantCalls.flatMap(
+    (l) => JSON.parse(l.calls.find((c) => c[0] === "upsert")![1]) as { user_id: string; role_at_add: string }[]
+  );
+  const mdRows = rows.filter((r) => r.role_at_add === "md");
+  assertEquals(mdRows.map((r) => r.user_id).sort(), ["md-1", "md-2"]);
+});
+
 Deno.test("handleRequest - notifies Person Responsible, Reviewer, and Approval Authority on creation", async () => {
   const client = buildClient({});
   const res = await handleRequest(formReq(baseFields()), client as never);
@@ -235,7 +299,7 @@ Deno.test("handleRequest - notifies Person Responsible, Reviewer, and Approval A
   const prNotify = notifyInserts.find((n: { user_id: string }) => n.user_id === PR_ID);
   assertEquals(prNotify.type, "action_required");
   const reviewerNotify = notifyInserts.find((n: { user_id: string }) => n.user_id === REVIEWER_ID);
-  assertEquals(reviewerNotify.type, "info");
+  assertEquals(reviewerNotify.type, "action_required");
   assertEquals(reviewerNotify.link, "/leads/new-lead-1");
 });
 
@@ -248,4 +312,90 @@ Deno.test("handleRequest - does not notify the caller if they assigned themselve
   const notifyInserts = log.filter((l) => l.table === "notifications").map((l) => JSON.parse(l.calls.find((c) => c[0] === "insert")![1])[0]);
   const notifiedIds = notifyInserts.map((n: { user_id: string }) => n.user_id);
   assertEquals(notifiedIds.sort(), [AUTHORITY_ID, REVIEWER_ID].sort());
+});
+
+// ── Multiple document upload ────────────────────────────────────
+Deno.test("handleRequest - accepts more than one document and stores all of them on the lead", async () => {
+  const client = buildClient({});
+  const files = [pdfFile("tender.pdf"), pdfFile("annexure-1.pdf"), pdfFile("annexure-2.pdf")];
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const insertCall = log.find((l) => l.table === "leads" && l.calls.some((c) => c[0] === "insert"));
+  const insertBody = JSON.parse(insertCall!.calls.find((c) => c[0] === "insert")![1]);
+  assertEquals(insertBody.documents.length, 3);
+  assertEquals(insertBody.documents.map((d: { name: string }) => d.name), ["tender.pdf", "annexure-1.pdf", "annexure-2.pdf"]);
+});
+
+Deno.test("handleRequest - a non-Suo-Moto lead with zero documents is rejected", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(formReqWithFiles(baseFields(), []), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "At least one document is required.");
+});
+
+Deno.test("handleRequest - a Suo Moto lead needs no document", async () => {
+  const BA_ID = "ba-1";
+  const client = buildClient({ baTarget: { data: { id: BA_ID, role: "business_associate", team: TEAM, is_active: true }, error: null } });
+  const res = await handleRequest(formReqWithFiles(baseFields({ source: "suo_moto", assigned_ba_id: BA_ID }), []), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const insertCall = log.find((l) => l.table === "leads" && l.calls.some((c) => c[0] === "insert"));
+  const insertBody = JSON.parse(insertCall!.calls.find((c) => c[0] === "insert")![1]);
+  assertEquals(insertBody.documents, []);
+});
+
+Deno.test("handleRequest - rejects more than the max number of documents", async () => {
+  const client = buildClient({});
+  const files = Array.from({ length: 11 }, (_, i) => pdfFile(`doc-${i}.pdf`));
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "You can attach at most 10 documents.");
+});
+
+Deno.test("handleRequest - one invalid document among several rejects the whole request and cleans up what was already uploaded", async () => {
+  const client = buildClient({});
+  const badFile = new File([new Uint8Array([0, 0, 0, 0])], "not-a-pdf.pdf", { type: "application/pdf" });
+  const files = [pdfFile("tender.pdf"), badFile];
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 400);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  assertEquals(log.some((l) => l.table === "leads" && l.calls.some((c) => c[0] === "insert")), false);
+});
+
+Deno.test("handleRequest - a possible duplicate back-links onto the matched lead and notifies its stakeholders", async () => {
+  const matchedLead = {
+    id: "existing-lead-1",
+    possible_duplicate_ids: [],
+    created_by: "matched-creator",
+    person_responsible_id: "matched-pr",
+    reviewer_id: "matched-reviewer",
+    recommending_authority_id: "matched-authority",
+    handled_by_dgm_id: null,
+  };
+  const client = buildClient({
+    rpc: { find_similar_leads: { data: [{ id: "existing-lead-1" }], error: null } },
+    routes: {
+      leads: [
+        { data: { id: "new-lead-1", lead_number: "LH-2026-000001", status: "pa_review" }, error: null },
+        { data: [matchedLead], error: null },
+      ],
+    },
+  });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const leadUpdate = log.find((l) => l.table === "leads" && l.calls.some(([name]) => name === "update"));
+  assertEquals(!!leadUpdate, true);
+  const updatePayload = JSON.parse(leadUpdate!.calls.find(([name]) => name === "update")![1]);
+  assertEquals(updatePayload.possible_duplicate_ids, ["new-lead-1"]);
+
+  const notificationsInsert = log.find((l) => l.table === "notifications" && l.calls.some(([name]) => name === "insert"));
+  assertEquals(!!notificationsInsert, true);
+  const notifiedIds = JSON.parse(notificationsInsert!.calls.find(([name]) => name === "insert")![1]).map((r: { user_id: string }) => r.user_id);
+  assertEquals(notifiedIds.sort(), ["matched-authority", "matched-creator", "matched-pr", "matched-reviewer"]);
 });

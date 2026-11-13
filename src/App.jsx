@@ -1,46 +1,59 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
+import { ModulesProvider } from "./context/ModulesContext";
+import { PathModuleGate } from "./components/routing/ModuleGate";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
 import PublicOnlyRoute from "./components/routing/PublicOnlyRoute";
+import PageLoader from "./components/ui/PageLoader";
+import { USERS_PAGE_ROLES, USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, EMPANELMENT_SENDER_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, MODULE_SETTINGS_ROLES } from "./lib/roles";
 
-import LoginPage from "./pages/auth/LoginPage";
-import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
-import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
-import ChangePasswordPage from "./pages/auth/ChangePasswordPage";
-import MyProfilePage from "./pages/auth/MyProfilePage";
-import HomePage from "./pages/HomePage";
-import CreateUserPage from "./pages/admin/CreateUserPage";
-import EditUserPage from "./pages/admin/EditUserPage";
-import UserListPage from "./pages/admin/UserListPage";
-import AuditLogsPage from "./pages/admin/AuditLogsPage";
-import SendEmpanelmentPage from "./pages/empanelment/SendEmpanelmentPage";
-import BaFormPage from "./pages/empanelment/BaFormPage";
-import EmpanelmentListPage from "./pages/empanelment/EmpanelmentListPage";
-import ApplicationReviewPage from "./pages/empanelment/ApplicationReviewPage";
-import EmpanelmentCorrectionPage from "./pages/empanelment/EmpanelmentCorrectionPage";
-import ApplicationStatusPage from "./pages/empanelment/ApplicationStatusPage";
-import EmpanelmentDashboardPage from "./pages/empanelment/EmpanelmentDashboardPage";
-import EmpanelmentReportsPage from "./pages/empanelment/EmpanelmentReportsPage";
-import KnowledgeSearchPage from "./pages/knowledge/KnowledgeSearchPage";
-import AddProjectPage from "./pages/knowledge/AddProjectPage";
-import EditProjectPage from "./pages/knowledge/EditProjectPage";
-import ProjectDetailsPage from "./pages/knowledge/ProjectDetailsPage";
-import ShortlistsPage from "./pages/knowledge/ShortlistsPage";
-import LeadListPage from "./pages/leads/LeadListPage";
-import CreateLeadPage from "./pages/leads/CreateLeadPage";
-import EditLeadPage from "./pages/leads/EditLeadPage";
-import LeadDetailPage from "./pages/leads/LeadDetailPage";
-import LeadApprovalNoteForm from "./pages/leads/LeadApprovalNoteForm";
-import LeadApprovalNotePreviewPage from "./pages/leads/LeadApprovalNotePreviewPage";
-import LeadDashboardPage from "./pages/leads/LeadDashboardPage";
-import LeadReportsPage from "./pages/leads/LeadReportsPage";
-import ProposalsListPage from "./pages/proposals/ProposalsListPage";
-import ProposalPreparationPage from "./pages/proposals/ProposalPreparationPage";
-import NotFoundPage from "./pages/NotFoundPage";
-import { USERS_PAGE_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES } from "./lib/roles";
+// Lazy-loaded so each page (and anything only it imports, e.g. xlsx/jspdf on
+// the Reports pages) ships as its own chunk instead of all ~30 pages being
+// bundled into one multi-MB chunk loaded even by the login screen.
+const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/auth/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("./pages/auth/ResetPasswordPage"));
+const ChangePasswordPage = lazy(() => import("./pages/auth/ChangePasswordPage"));
+const MyProfilePage = lazy(() => import("./pages/auth/MyProfilePage"));
+const HomePage = lazy(() => import("./pages/HomePage"));
+const CreateUserPage = lazy(() => import("./pages/admin/CreateUserPage"));
+const EditUserPage = lazy(() => import("./pages/admin/EditUserPage"));
+const UserListPage = lazy(() => import("./pages/admin/UserListPage"));
+const AuditLogsPage = lazy(() => import("./pages/admin/AuditLogsPage"));
+const ModuleSettingsPage = lazy(() => import("./pages/admin/ModuleSettingsPage"));
+const SendEmpanelmentPage = lazy(() => import("./pages/empanelment/SendEmpanelmentPage"));
+const BaFormPage = lazy(() => import("./pages/empanelment/BaFormPage"));
+const EmpanelmentListPage = lazy(() => import("./pages/empanelment/EmpanelmentListPage"));
+const ApplicationReviewPage = lazy(() => import("./pages/empanelment/ApplicationReviewPage"));
+const EmpanelmentCorrectionPage = lazy(() => import("./pages/empanelment/EmpanelmentCorrectionPage"));
+const ApplicationStatusPage = lazy(() => import("./pages/empanelment/ApplicationStatusPage"));
+const EmpanelmentDashboardPage = lazy(() => import("./pages/empanelment/EmpanelmentDashboardPage"));
+const EmpanelmentReportsPage = lazy(() => import("./pages/empanelment/EmpanelmentReportsPage"));
+const KnowledgeSearchPage = lazy(() => import("./pages/knowledge/KnowledgeSearchPage"));
+const AddProjectPage = lazy(() => import("./pages/knowledge/AddProjectPage"));
+const EditProjectPage = lazy(() => import("./pages/knowledge/EditProjectPage"));
+const ProjectDetailsPage = lazy(() => import("./pages/knowledge/ProjectDetailsPage"));
+const ShortlistsPage = lazy(() => import("./pages/knowledge/ShortlistsPage"));
+const LeadListPage = lazy(() => import("./pages/leads/LeadListPage"));
+const CreateLeadPage = lazy(() => import("./pages/leads/CreateLeadPage"));
+const EditLeadPage = lazy(() => import("./pages/leads/EditLeadPage"));
+const LeadDetailPage = lazy(() => import("./pages/leads/LeadDetailPage"));
+const LeadApprovalNoteForm = lazy(() => import("./pages/leads/LeadApprovalNoteForm"));
+const LeadApprovalNotePreviewPage = lazy(() => import("./pages/leads/LeadApprovalNotePreviewPage"));
+const LeadDashboardPage = lazy(() => import("./pages/leads/LeadDashboardPage"));
+const LeadReportsPage = lazy(() => import("./pages/leads/LeadReportsPage"));
+const ProposalsListPage = lazy(() => import("./pages/proposals/ProposalsListPage"));
+const ProposalPreparationPage = lazy(() => import("./pages/proposals/ProposalPreparationPage"));
+const FeeNoteEditPage = lazy(() => import("./pages/proposals/FeeNoteEditPage"));
+const MonitoringListPage = lazy(() => import("./pages/monitoring/MonitoringListPage"));
+const MonitoringProjectPage = lazy(() => import("./pages/monitoring/MonitoringProjectPage"));
+const ClientInvoiceEditorPage = lazy(() => import("./pages/monitoring/ClientInvoiceEditorPage"));
+const FinancialsPage = lazy(() => import("./pages/financials/FinancialsPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
 import "./App.css";
 
@@ -51,7 +64,10 @@ export default function App() {
         <ErrorBoundary>
           <ToastProvider>
             <AuthProvider>
-              <Routes>
+              <ModulesProvider>
+              <Suspense fallback={<PageLoader />}>
+                <PathModuleGate>
+                <Routes>
                 <Route path="/" element={<Navigate to="/login" replace />} />
 
                 <Route
@@ -111,7 +127,7 @@ export default function App() {
                 <Route
                   path="/users"
                   element={
-                    <ProtectedRoute allowedRoles={USERS_PAGE_ROLES}>
+                    <ProtectedRoute allowedRoles={USERS_VIEW_ROLES}>
                       <UserListPage />
                     </ProtectedRoute>
                   }
@@ -119,7 +135,7 @@ export default function App() {
                 <Route
                   path="/users/:id/edit"
                   element={
-                    <ProtectedRoute allowedRoles={USERS_PAGE_ROLES}>
+                    <ProtectedRoute allowedRoles={USERS_VIEW_ROLES}>
                       <EditUserPage />
                     </ProtectedRoute>
                   }
@@ -133,13 +149,22 @@ export default function App() {
                   }
                 />
 
+                <Route
+                  path="/settings/modules"
+                  element={
+                    <ProtectedRoute allowedRoles={MODULE_SETTINGS_ROLES}>
+                      <ModuleSettingsPage />
+                    </ProtectedRoute>
+                  }
+                />
+
                 <Route path="/ba-form" element={<BaFormPage />} />
                 <Route path="/empanelment/correction" element={<EmpanelmentCorrectionPage />} />
                 <Route path="/empanelment/status" element={<ApplicationStatusPage />} />
                 <Route
                   path="/empanelment/send"
                   element={
-                    <ProtectedRoute allowedRoles={["associate_consultant", "project_assistant"]}>
+                    <ProtectedRoute allowedRoles={EMPANELMENT_SENDER_ROLES}>
                       <SendEmpanelmentPage />
                     </ProtectedRoute>
                   }
@@ -250,6 +275,54 @@ export default function App() {
                   }
                 />
                 <Route
+                  path="/monitoring"
+                  element={
+                    <ProtectedRoute allowedRoles={MONITORING_ROLES}>
+                      <MonitoringListPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/monitoring/:id"
+                  element={
+                    <ProtectedRoute allowedRoles={MONITORING_ROLES}>
+                      <MonitoringProjectPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/monitoring/:id/invoice"
+                  element={
+                    <ProtectedRoute allowedRoles={MONITORING_ROLES}>
+                      <ClientInvoiceEditorPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/monitoring/:id/invoice/:invoiceId"
+                  element={
+                    <ProtectedRoute allowedRoles={MONITORING_ROLES}>
+                      <ClientInvoiceEditorPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/financials"
+                  element={
+                    <ProtectedRoute allowedRoles={FINANCIALS_ROLES}>
+                      <FinancialsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/proposals/:leadId/fee-note"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <FeeNoteEditPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/proposals/:leadId"
                   element={
                     <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
@@ -299,7 +372,10 @@ export default function App() {
                 />
 
                 <Route path="*" element={<NotFoundPage />} />
-              </Routes>
+                </Routes>
+                </PathModuleGate>
+              </Suspense>
+              </ModulesProvider>
             </AuthProvider>
           </ToastProvider>
         </ErrorBoundary>

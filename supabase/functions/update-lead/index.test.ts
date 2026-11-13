@@ -27,7 +27,7 @@ function baseFields(overrides: Record<string, string> = {}) {
     title: "Preparation of DPR for Smart City Project (revised)",
     person_responsible_id: PR_ID,
     reviewer_id: REVIEWER_ID,
-    approval_authority_id: AUTHORITY_ID,
+    recommending_authority_id: AUTHORITY_ID,
     ...overrides,
   };
 }
@@ -35,6 +35,17 @@ function baseFields(overrides: Record<string, string> = {}) {
 function formReq(fields: Record<string, string>, token = fakeJwt({ sub: CALLER_ID })): Request {
   const fd = new FormData();
   for (const [k, v] of Object.entries(fields)) fd.set(k, v);
+  return new Request("https://x.com/update-lead", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: fd });
+}
+
+function pdfFile(name: string): File {
+  return new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00])], name, { type: "application/pdf" });
+}
+
+function formReqWithFiles(fields: Record<string, string>, files: File[], token = fakeJwt({ sub: CALLER_ID })): Request {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) fd.set(k, v);
+  for (const f of files) fd.append("document", f, f.name);
   return new Request("https://x.com/update-lead", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: fd });
 }
 
@@ -155,17 +166,31 @@ Deno.test("handleRequest - a resubmit_comment field, if sent, is simply ignored 
   assertEquals(body.status, "pa_action_required");
 });
 
-Deno.test("handleRequest - title/portal_name/bid_number in the request body are ignored — server keeps the lead's existing values", async () => {
+Deno.test("handleRequest - title/portal_name/bid_number are editable, unlike at creation", async () => {
   const client = buildClient({});
   const res = await handleRequest(
-    formReq(baseFields({ title: "Sneaky new title", portal_name: "Sneaky portal", bid_number: "Sneaky bid" })),
+    formReq(baseFields({
+      title: "Updated title", portal_name: "Updated portal", bid_number: "Updated bid",
+      recommending_authority_id: AUTHORITY_ID,
+    })),
     client as never
   );
   assertEquals(res.status, 200);
   const updateCall = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log
     .find((entry) => entry.table === "leads" && entry.calls.some((c) => c[0] === "update"));
   const updatePayload = updateCall?.calls.find((c) => c[0] === "update")?.[1] ?? "";
-  assertEquals(updatePayload.includes("Sneaky"), false);
+  assertEquals(updatePayload.includes("Updated title"), true);
+  assertEquals(updatePayload.includes("Updated portal"), true);
+  assertEquals(updatePayload.includes("Updated bid"), true);
+});
+
+Deno.test("handleRequest - an empty title is rejected", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(
+    formReq(baseFields({ title: "  ", recommending_authority_id: AUTHORITY_ID })),
+    client as never
+  );
+  assertEquals(res.status, 400);
 });
 
 Deno.test("handleRequest - a pa_review lead can be edited in place, status unchanged", async () => {
@@ -205,7 +230,7 @@ Deno.test("handleRequest - notifies newly-assigned Reviewer and Approval Authori
 
 Deno.test("handleRequest - notifies a newly-assigned Person Responsible when reassigned away from the original", async () => {
   const client = buildClient({
-    lead: leadRow({ person_responsible_id: "old-pr", reviewer_id: REVIEWER_ID, approval_authority_id: AUTHORITY_ID }),
+    lead: leadRow({ person_responsible_id: "old-pr", reviewer_id: REVIEWER_ID, recommending_authority_id: AUTHORITY_ID }),
   });
   const res = await handleRequest(formReq(baseFields()), client as never);
   assertEquals(res.status, 200);
@@ -235,7 +260,7 @@ Deno.test("handleRequest - does not notify the caller if they reassign themselve
 
 Deno.test("handleRequest - saving with no reassignment sends no notifications", async () => {
   const client = buildClient({
-    lead: leadRow({ person_responsible_id: PR_ID, reviewer_id: REVIEWER_ID, approval_authority_id: AUTHORITY_ID }),
+    lead: leadRow({ person_responsible_id: PR_ID, reviewer_id: REVIEWER_ID, recommending_authority_id: AUTHORITY_ID }),
   });
   const res = await handleRequest(formReq(baseFields()), client as never);
   assertEquals(res.status, 200);
@@ -243,4 +268,126 @@ Deno.test("handleRequest - saving with no reassignment sends no notifications", 
   const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
   const notifyInserts = log.filter((l) => l.table === "notifications");
   assertEquals(notifyInserts.length, 0);
+});
+
+// ── Multiple document upload ────────────────────────────────────
+Deno.test("handleRequest - adds more than one new document alongside a lead's existing ones", async () => {
+  const client = buildClient({
+    lead: leadRow({ documents: [{ name: "existing.pdf", path: "p/existing.pdf", size: 100, uploaded_at: "2026-01-01T00:00:00Z" }] }),
+  });
+  const files = [pdfFile("annexure-1.pdf"), pdfFile("annexure-2.pdf")];
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 200);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const updateCall = log.find((l) => l.table === "leads" && l.calls.some((c) => c[0] === "update"));
+  const updateBody = JSON.parse(updateCall!.calls.find((c) => c[0] === "update")![1]);
+  assertEquals(updateBody.documents.map((d: { name: string }) => d.name), ["existing.pdf", "annexure-1.pdf", "annexure-2.pdf"]);
+});
+
+Deno.test("handleRequest - rejects going over the max combined document count", async () => {
+  const existing = Array.from({ length: 9 }, (_, i) => ({ name: `doc-${i}.pdf`, path: `p/doc-${i}.pdf`, size: 10, uploaded_at: "2026-01-01T00:00:00Z" }));
+  const client = buildClient({ lead: leadRow({ documents: existing }) });
+  const files = [pdfFile("new-1.pdf"), pdfFile("new-2.pdf")];
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "A lead can have at most 10 documents.");
+});
+
+Deno.test("handleRequest - one invalid document among several rejects the whole update", async () => {
+  const client = buildClient({});
+  const badFile = new File([new Uint8Array([0, 0, 0, 0])], "not-a-pdf.pdf", { type: "application/pdf" });
+  const files = [pdfFile("tender.pdf"), badFile];
+  const res = await handleRequest(formReqWithFiles(baseFields(), files), client as never);
+  assertEquals(res.status, 400);
+
+  const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  assertEquals(log.some((l) => l.table === "leads" && l.calls.some((c) => c[0] === "update")), false);
+});
+
+// ── Submission Overdue ──────────────────────────────────────
+Deno.test("overdue - the Person Responsible can edit an overdue pa_review lead", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: PR_ID }),
+    lead: leadRow({ status: "pa_review", submission_deadline: "2000-01-01", created_by: "creator-1", person_responsible_id: PR_ID }),
+  });
+  const res = await handleRequest(
+    formReq(baseFields({ recommending_authority_id: AUTHORITY_ID }), fakeJwt({ sub: PR_ID })),
+    client as never
+  );
+  assertEquals(res.status, 200);
+});
+
+Deno.test("overdue - the creator (not PR) is rejected from editing an overdue pa_review lead", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: "creator-1" }),
+    lead: leadRow({ status: "pa_review", submission_deadline: "2000-01-01", created_by: "creator-1", person_responsible_id: PR_ID }),
+  });
+  const res = await handleRequest(
+    formReq(baseFields({ recommending_authority_id: AUTHORITY_ID }), fakeJwt({ sub: "creator-1" })),
+    client as never
+  );
+  assertEquals(res.status, 403);
+});
+
+Deno.test("overdue - the person it was forwarded to can edit an overdue po_assignment lead (no Person Responsible yet)", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: "forwarded-1" }),
+    lead: leadRow({ status: "po_assignment", submission_deadline: "2000-01-01", created_by: "creator-1", person_responsible_id: null, forwarded_to_id: "forwarded-1" }),
+  });
+  const res = await handleRequest(
+    formReq({ lead_id: LEAD_ID, title: "Updated title" }, fakeJwt({ sub: "forwarded-1" })),
+    client as never
+  );
+  assertEquals(res.status, 200);
+});
+
+Deno.test("overdue - the creator (not the forwarded person) is rejected from editing an overdue po_assignment lead", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: "creator-1" }),
+    lead: leadRow({ status: "po_assignment", submission_deadline: "2000-01-01", created_by: "creator-1", person_responsible_id: null, forwarded_to_id: "forwarded-1" }),
+  });
+  const res = await handleRequest(
+    formReq({ lead_id: LEAD_ID, title: "Updated title" }, fakeJwt({ sub: "creator-1" })),
+    client as never
+  );
+  assertEquals(res.status, 403);
+});
+
+Deno.test("overdue - editing past pa_review preserves the existing PR/Reviewer/Recommending Authority even if the client sends different ones", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: PR_ID }),
+    lead: leadRow({
+      status: "recommending_authority_review", submission_deadline: "2000-01-01",
+      created_by: "creator-1", person_responsible_id: PR_ID, reviewer_id: REVIEWER_ID, recommending_authority_id: AUTHORITY_ID,
+    }),
+  });
+  const res = await handleRequest(
+    formReq(
+      baseFields({ person_responsible_id: "someone-else", reviewer_id: "someone-else", recommending_authority_id: "someone-else" }),
+      fakeJwt({ sub: PR_ID })
+    ),
+    client as never
+  );
+  assertEquals(res.status, 200);
+  const leadsUpdateCall = (client as { __log: { table: string; calls: string[][] }[] }).__log
+    .filter((l) => l.table === "leads")
+    .flatMap((l) => l.calls)
+    .find((c) => c[0] === "update");
+  const payload = JSON.parse(leadsUpdateCall![1]);
+  assertEquals(payload.person_responsible_id, PR_ID);
+  assertEquals(payload.reviewer_id, REVIEWER_ID);
+  assertEquals(payload.recommending_authority_id, AUTHORITY_ID);
+});
+
+Deno.test("overdue - a non-overdue lead outside pa_review/pa_action_required is still rejected as before", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: PR_ID }),
+    lead: leadRow({ status: "recommending_authority_review", submission_deadline: null, created_by: "creator-1", person_responsible_id: PR_ID }),
+  });
+  const res = await handleRequest(
+    formReq({ lead_id: LEAD_ID, title: "Updated title" }, fakeJwt({ sub: PR_ID })),
+    client as never
+  );
+  assertEquals(res.status, 400);
 });

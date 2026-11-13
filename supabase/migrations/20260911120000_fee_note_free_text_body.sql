@@ -1,0 +1,13 @@
+-- Person Responsible found the note fully form-driven (separate fields for
+-- every sentence, nothing to just type into) harder to work with than
+-- editing the finished document directly. `note_body` holds the free-text
+-- draft of page 1's covering-note paragraphs (everything between the date
+-- and "Thanks and regards," — subject line, bidding/borne-by paragraph,
+-- numbered fee list, transfer request): the frontend auto-composes a
+-- starting draft (src/lib/feeNoteDraft.js, mirroring feeNotePdf.ts's own
+-- composition) the moment the fee fields are filled in, then it's plain
+-- free text the Person Responsible can edit like a Word doc. NULL/blank
+-- falls back to the server auto-composing it fresh (buildCoverParagraphs in
+-- _shared/feeNotePdf.ts) — unchanged behavior for any note that never got
+-- a custom body.
+alter table public.fee_notes add column note_body text;

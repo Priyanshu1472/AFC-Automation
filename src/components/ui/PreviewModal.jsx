@@ -12,7 +12,7 @@ const PREVIEW_STYLES = `
 </style>
 `;
 
-export default function PreviewModal({ html, title, onDownload, onClose, downloadLabel = "Download" }) {
+export default function PreviewModal({ html, title, onDownload, onClose, downloadLabel = "Download", downloading = false, downloadingLabel = "Preparing…" }) {
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
@@ -27,8 +27,8 @@ export default function PreviewModal({ html, title, onDownload, onClose, downloa
             <span className="pv-modal-name">{title}</span>
           </div>
           <div className="pv-modal-actions">
-            <button className="pv-download-btn" onClick={onDownload}>
-              ↓ {downloadLabel}
+            <button className="pv-download-btn" onClick={onDownload} disabled={downloading}>
+              {downloading ? downloadingLabel : `↓ ${downloadLabel}`}
             </button>
             <button className="pv-close-btn" onClick={onClose}>✕</button>
           </div>

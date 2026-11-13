@@ -10,6 +10,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { checkAnonKey, getClientIP, checkRateLimit, clearRateLimit } from "../_shared/publicAccess.ts";
 import { notifyUser, notifyRole } from "../_shared/notify.ts";
 import { labelForFieldKey } from "../_shared/empanelmentFields.ts";
@@ -56,6 +57,8 @@ async function validateFileBytes(file: File): Promise<string> {
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createPublicAdminClient> = createPublicAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "empanelment");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
   if (!checkAnonKey(req)) return jsonRes(req, 401, { error: "Unauthorized" });
 
@@ -193,7 +196,10 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       await notifyUser(adminClient, application.project_officer_id, correctionPayload);
     } else if (resumeStatus === "dgm_review") {
       if (application.dgm_id) await notifyUser(adminClient, application.dgm_id, correctionPayload);
-      else await notifyRole(adminClient, "dgm", correctionPayload, application.team);
+      else await Promise.all([
+        notifyRole(adminClient, "dgm", correctionPayload, application.team),
+        notifyRole(adminClient, "general_manager", correctionPayload, application.team),
+      ]);
     } else if (resumeStatus === "md_review") {
       await notifyRole(adminClient, "md", correctionPayload);
     }

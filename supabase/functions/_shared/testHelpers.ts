@@ -46,11 +46,13 @@ export function createFakeAdminClient(routes: Record<string, FakeResult[]> = {},
   auth?: {
     createUser?: FakeResult | ((args: Record<string, unknown>) => FakeResult);
     deleteUser?: FakeResult;
+    signInWithPassword?: FakeResult | ((args: Record<string, unknown>) => FakeResult);
   };
 } = {}) {
   const cursors: Record<string, number> = {};
   const log: FakeCallLog = [];
   const authCalls: { method: string; args: unknown[] }[] = [];
+  const rpcCalls: { name: string; args: Record<string, unknown> | undefined }[] = [];
 
   const client = {
     from(table: string) {
@@ -61,7 +63,8 @@ export function createFakeAdminClient(routes: Record<string, FakeResult[]> = {},
       log.push({ table, calls });
       return makeQueryBuilder(queue[idx], calls);
     },
-    rpc(name: string, _args?: Record<string, unknown>) {
+    rpc(name: string, args?: Record<string, unknown>) {
+      rpcCalls.push({ name, args });
       const result = opts.rpc?.[name] ?? { data: null, error: null };
       return Promise.resolve(result);
     },
@@ -90,9 +93,16 @@ export function createFakeAdminClient(routes: Record<string, FakeResult[]> = {},
           return Promise.resolve(opts.auth?.deleteUser ?? { data: {}, error: null });
         },
       },
+      signInWithPassword(args: Record<string, unknown>) {
+        authCalls.push({ method: "signInWithPassword", args: [args] });
+        const configured = opts.auth?.signInWithPassword;
+        const result = typeof configured === "function" ? configured(args) : configured;
+        return Promise.resolve(result ?? { data: { user: { id: "fake-user-id" } }, error: null });
+      },
     },
     __log: log,
     __authCalls: authCalls,
+    __rpcCalls: rpcCalls,
   };
   return client;
 }

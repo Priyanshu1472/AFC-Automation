@@ -1,5 +1,7 @@
 import { Component } from "react";
 import Button from "../ui/Button";
+import PageLoader from "../ui/PageLoader";
+import { isChunkLoadError, reloadForStaleChunk } from "../../lib/staleChunkReload";
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -13,10 +15,19 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error("Unhandled render error:", error, info.componentStack);
+    // Old build asking for a chunk that a newer deploy removed: reload into
+    // the new version instead of leaving the user on the error screen.
+    if (isChunkLoadError(error) && reloadForStaleChunk()) {
+      this.setState({ updating: true });
+    }
   }
 
   render() {
     if (!this.state.error) return this.props.children;
+
+    if (this.state.updating) {
+      return <PageLoader text="Loading the latest version…" />;
+    }
 
     return (
       <div className="page-loader">

@@ -33,15 +33,26 @@ vi.mock("../../lib/supabase", () => ({
 }));
 
 const SAMPLE_MESSAGES = [
-  { id: "m1", lead_id: "lead-1", sender_id: "user-1", message: "Hello team", created_at: "2026-08-25T10:00:00Z", sender: { full_name: "Jane Doe" } },
-  { id: "m2", lead_id: "lead-1", sender_id: "user-2", message: "Looks good", created_at: "2026-08-25T10:05:00Z", sender: { full_name: "Bob Smith" } },
+  { id: "m1", lead_id: "lead-1", sender_id: "user-1", message: "Hello team", created_at: "2026-08-25T10:00:00Z" },
+  { id: "m2", lead_id: "lead-1", sender_id: "user-2", message: "Looks good", created_at: "2026-08-25T10:05:00Z" },
+];
+
+const SAMPLE_PARTICIPANTS = [
+  { user_id: "user-1", full_name: "Jane Doe", role: "project_officer", avatar_path: null },
+  { user_id: "user-2", full_name: "Bob Smith", role: "dgm", avatar_path: null },
 ];
 
 beforeEach(() => {
   vi.clearAllMocks();
   order.mockResolvedValue({ data: SAMPLE_MESSAGES, error: null });
   invoke.mockResolvedValue({ data: { success: true }, error: null });
-  rpc.mockResolvedValue({ data: null, error: null });
+  rpc.mockImplementation(async (fn) => {
+    if (fn === "get_lead_chat_participant_names") return { data: SAMPLE_PARTICIPANTS, error: null };
+    // Defaults to "on the roster" — the one test that cares about the
+    // opposite (not a participant) overrides this per-test.
+    if (fn === "is_lead_chat_participant") return { data: true, error: null };
+    return { data: null, error: null };
+  });
 });
 
 // The widget starts collapsed to a floating bubble — every test that needs
@@ -56,15 +67,27 @@ describe("LeadChatPanel", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("renders only a floating bubble until clicked", async () => {
+  it("renders nothing for a caller who isn't on this lead's chat roster, even once the chat is open", async () => {
+    rpc.mockImplementation(async (fn) => {
+      if (fn === "is_lead_chat_participant") return { data: false, error: null };
+      return { data: null, error: null };
+    });
+    const { container } = render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked={false} />);
+    await waitFor(() => expect(rpc).toHaveBeenCalledWith("is_lead_chat_participant", { p_lead_id: "lead-1" }));
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole("button", { name: "Open chat" })).not.toBeInTheDocument();
+  });
+
+  it("renders only a floating bubble until clicked, once confirmed as a participant", async () => {
     render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked={false} />);
-    expect(screen.getByRole("button", { name: "Open chat" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Open chat" })).toBeInTheDocument());
     expect(screen.queryByText("Hello team")).not.toBeInTheDocument();
     expect(order).not.toHaveBeenCalled();
   });
 
   it("renders messages with sender names once the bubble is opened", async () => {
     render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked={false} />);
+    await waitFor(() => screen.getByRole("button", { name: "Open chat" }));
     openWidget();
     await waitFor(() => expect(screen.getByText("Hello team")).toBeInTheDocument());
     expect(screen.getByText("Jane Doe")).toBeInTheDocument();
@@ -74,36 +97,42 @@ describe("LeadChatPanel", () => {
 
   it("marks the chat read for this lead once the bubble is opened", async () => {
     render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked={false} />);
+    await waitFor(() => screen.getByRole("button", { name: "Open chat" }));
     openWidget();
     await waitFor(() => expect(rpc).toHaveBeenCalledWith("mark_lead_chat_read", { p_lead_id: "lead-1" }));
   });
 
   it("shows a locked message and hides the input once the lead is approved", async () => {
     render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked />);
+    await waitFor(() => screen.getByRole("button", { name: "Open chat" }));
     openWidget();
     await waitFor(() => expect(screen.getByText("Hello team")).toBeInTheDocument());
     expect(screen.getByText("Chat closed — this lead has been approved.")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("Type a message…")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Type a message… use @ to tag someone")).not.toBeInTheDocument();
   });
 
   it("sends a message via send-lead-chat-message with the right body", async () => {
     render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked={false} />);
+    await waitFor(() => screen.getByRole("button", { name: "Open chat" }));
     openWidget();
     await waitFor(() => expect(screen.getByText("Hello team")).toBeInTheDocument());
 
-    const textarea = screen.getByPlaceholderText("Type a message…");
+    const textarea = screen.getByPlaceholderText("Type a message… use @ to tag someone");
     fireEvent.change(textarea, { target: { value: "New update" } });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 
     await waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("send-lead-chat-message", { body: { lead_id: "lead-1", message: "New update" } })
+      expect(invoke).toHaveBeenCalledWith("send-lead-chat-message", {
+        body: { lead_id: "lead-1", message: "New update", mentioned_user_ids: [] },
+      })
     );
   });
 
-  it("the Send button is disabled when the draft is empty", async () => {
+  it("the send button is disabled when the draft is empty", async () => {
     render(<LeadChatPanel leadId="lead-1" chatOpenedAt="2026-08-25T00:00:00Z" locked={false} />);
+    await waitFor(() => screen.getByRole("button", { name: "Open chat" }));
     openWidget();
     await waitFor(() => expect(screen.getByText("Hello team")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
   });
 });

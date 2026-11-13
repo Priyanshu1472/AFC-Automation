@@ -10,6 +10,11 @@
   padding-bottom: var(--space-12);
 }
 
+/* .page-header's own margin-bottom (App.css) would stack on top of the
+   gap above, doubling the space before the mode tabs — kr-page's gap
+   already spaces every section consistently, so cancel it here. */
+.kr-page .page-header { margin-bottom: 0; }
+
 .page-title-row {
   display: flex;
   align-items: center;
@@ -53,6 +58,25 @@
 }
 .kr-view-btn:hover   { color: var(--text-secondary); background: var(--bg-surface-3); }
 .kr-view-btn--active { background: var(--card-bg); color: var(--text-brand); box-shadow: var(--shadow-xs); }
+
+/* ── Search Projects / Find Relevant Experience mode toggle ───── */
+.kr-mode-tabs { display: flex; gap: var(--space-2); }
+.kr-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.kr-mode-tab:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.kr-mode-tab--active { background: var(--brand-500); border-color: var(--brand-500); color: #fff; }
 
 /* ── Shortlists button ──────────────────────────────────────── */
 .kr-btn-shortlists {
@@ -249,6 +273,8 @@
 }
 .kr-year-chip:hover   { border-color: var(--border-strong); color: var(--text-primary); }
 .kr-year-chip--active { background: var(--brand-500); color: #fff; border-color: var(--brand-500); }
+
+.kr-kw-chip-scroll { max-height: 180px; overflow-y: auto; padding-right: 2px; }
 
 .kr-range-row        { display: flex; align-items: center; gap: var(--space-2); }
 .kr-range-row .input { flex: 1; }
@@ -486,21 +512,24 @@
   .kr-table-wrap  { display: none; }
   .kr-mobile-list { display: block; }
 
-  /* Header actions — full width row */
+  /* Header actions — the view toggle stays a small icon-only control on
+     its own line; the labeled buttons below it wrap into a tidy 2-per-row
+     grid instead of every button fighting flex-shrink: 1 for space. */
   .kr-header-actions {
     width: 100%;
+    flex-wrap: wrap;
     gap: var(--space-2);
   }
 
-  .kr-btn-shortlists {
-    flex: 1;
+  .kr-view-toggle {
+    flex: 1 1 100%;
     justify-content: center;
-    padding: 8px 10px;
-    font-size: var(--text-xs);
   }
 
+  .kr-btn-shortlists,
   .kr-btn-add {
-    flex: 1;
+    flex: 1 1 calc(50% - var(--space-2) / 2);
+    min-width: 0;
     justify-content: center;
     padding: 8px 10px;
     font-size: var(--text-xs);

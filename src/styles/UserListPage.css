@@ -66,17 +66,29 @@
   padding-right: var(--space-6);
 }
 
+/* table-layout:fixed makes the table always fit 100% of its container
+   (table/.table already has width:100% from App.css) instead of an
+   unconstrained column — a long name, email, or team — growing the whole
+   table past its container and forcing the horizontal-scroll fallback.
+   Name/Email below ellipsis instead of pushing anything wider; every
+   column's actual width budget is set per-table further down (the grouped
+   and flat variants have a different column count/mix). */
+.ul-desktop-table .table {
+  table-layout: fixed;
+}
+
 /* Name column carries the visual weight of the row */
 .ul-desktop-table .table tbody td:first-child {
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Email — quieter, truncates gracefully */
 .ul-desktop-table .table tbody td:nth-child(2) {
   color: var(--text-secondary);
-  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -91,6 +103,26 @@
 .ul-desktop-table .table thead th:last-child {
   text-align: right;
 }
+
+/* Flat table (ungrouped view) — 8 columns including Team. */
+.ul-flat-table th:nth-child(1) { width: 14%; }  /* Name */
+.ul-flat-table th:nth-child(2) { width: 19%; }  /* Email */
+.ul-flat-table th:nth-child(3) { width: 12%; }  /* Role */
+.ul-flat-table th:nth-child(4) { width: 8%;  }  /* Office */
+.ul-flat-table th:nth-child(5) { width: 7%;  }  /* Team */
+.ul-flat-table th:nth-child(6) { width: 9%;  }  /* Committee */
+.ul-flat-table th:nth-child(7) { width: 10%; }  /* Status */
+.ul-flat-table th:nth-child(8) { width: 21%; }  /* Actions — Edit + Activate/Deactivate side by side */
+
+/* Grouped-by-team view — 7 columns, no separate Team column (the team
+   name is already the section header). */
+.ul-grouped-table th:nth-child(1) { width: 15%; }  /* Name */
+.ul-grouped-table th:nth-child(2) { width: 20%; }  /* Email */
+.ul-grouped-table th:nth-child(3) { width: 13%; }  /* Role */
+.ul-grouped-table th:nth-child(4) { width: 9%;  }  /* Office */
+.ul-grouped-table th:nth-child(5) { width: 10%; }  /* Committee */
+.ul-grouped-table th:nth-child(6) { width: 11%; }  /* Status */
+.ul-grouped-table th:nth-child(7) { width: 22%; }  /* Actions */
 
 /* ── Mobile list (hidden by default) ────────────────────── */
 .ul-mobile-list {
@@ -118,11 +150,11 @@
   cursor: pointer;
 }
 
-/* Fixed-width role pills so the Role column reads as a clean aligned block
-   instead of every row's badge being a different width — same idea as
-   Empanelment's .bl-status-badge and Proposals' .pp-status-badge. Sized for
-   the longest label, "Assistant General Manager". */
-.ul-role-badge { min-width: 190px; justify-content: center; }
+/* Shrink-wraps to its own text rather than forcing every row's badge (and
+   so the whole table, and so the horizontal scrollbar this table doesn't
+   need to need) 190px wide regardless of the actual role name's length —
+   see the identical fix/reasoning on AuditLogsPage's .al-role-badge. */
+.ul-role-badge { justify-content: center; }
 
 .ul-mobile-card-top {
   display: flex;

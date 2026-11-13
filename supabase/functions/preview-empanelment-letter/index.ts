@@ -1,35 +1,38 @@
 // supabase/functions/preview-empanelment-letter/index.ts
-// JWT must be ON. Read-only: renders the exact same PDF the real action
-// would attach/send, WITHOUT performing that action — no email, no status
-// change, no ref-number/sent-flag persisted, no activity log entry. Lets
-// the MD/DGM see precisely what they're about to sign before they type
-// their PIN to actually confirm it (see advance-empanelment-stage's
-// md_accept and send-provisional-letter for the real, PIN-gated actions —
-// authorization here mirrors each of those exactly, minus the PIN check).
+// JWT must be ON. Renders an empanelment letter PDF as base64 — no email,
+// no status change, no ref-number/sent-flag persisted, no activity log.
 //
-// Computing a ref number here is safe to do without persisting it: both
-// buildEmpanelmentLetter and buildProvisionalLetter derive the ref from a
-// read-only COUNT query, never a sequence/counter that this call would
-// consume — so a preview never "burns" the number the real send will get
-// (barring the ordinary race of two accepts happening between preview and
-// confirm, same as any preview-then-commit UI).
+// Two modes, distinguished by whether the letter has already been issued:
+//
+//  1. Pre-issue PREVIEW — the MD/DGM sees exactly what they're about to sign
+//     before typing their PIN (see LetterPreviewPinModal). Authorization
+//     mirrors advance-empanelment-stage's md_accept / send-provisional-letter
+//     exactly, minus the PIN check.
+//
+//  2. Post-issue VIEW — the letter was already sent; any staff member who
+//     can view the application (same predicate as get-empanelment-document-url)
+//     can re-open it from the Empanelment list. The persisted ref/expiry are
+//     passed back into the builder so the reproduced PDF matches what was
+//     emailed instead of drifting on a live COUNT / "today" date.
+//
+// Computing a ref number in preview mode is safe without persisting it: the
+// builders derive the ref from a read-only COUNT, never a sequence this call
+// would consume.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
-import { bytesToBase64 } from "../_shared/letterPdf.ts";
+import { bytesToBase64, formatDateDDMMYYYY, formatDateLong } from "../_shared/letterPdf.ts";
 import { buildEmpanelmentLetter } from "../_shared/empanelmentLetterPdf.ts";
-import { buildProvisionalLetter } from "../_shared/provisionalLetterPdf.ts";
+import { buildProvisionalLetter, isProvisionalLetterOpen } from "../_shared/provisionalLetterPdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-// Same set send-provisional-letter allows sending from.
-const PROVISIONAL_ALLOWED_STATUSES = new Set([
-  "filled", "po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "accepted", "on_hold",
-]);
-
 export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "empanelment");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);
@@ -49,16 +52,36 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: app, error: appErr } = await adminClient
     .from("empanelment_applications")
-    .select("id, status, team, dgm_id, application_code, provisional_letter_sent")
+    .select("id, status, hold_origin_status, team, project_officer_id, sent_by, dgm_id, application_code, provisional_letter_sent, provisional_sent_at, provisional_request_status, empanelment_ref, empanelment_expires_at, decided_at")
     .eq("id", application_id)
     .maybeSingle();
   if (appErr || !app) return jsonRes(req, 404, { error: "Application not found." });
 
+  // Whether the caller may view this application at all — team-wide,
+  // matching can_view_empanelment_application() / get-empanelment-document-url
+  // exactly (not just the one person recorded as project_officer_id — see
+  // get-empanelment-document-url for why that was too narrow), since
+  // auth.uid() is null for the service-role client used here.
+  // DGM / AGM / GM see every team's applications (and letters) so they can
+  // spot a company that's already empanelled via another team.
+  const canViewApplication =
+    ["md", "cfo", "cs", "admin", "dgm", "agm", "general_manager"].includes(caller.role) ||
+    (
+      ["srm", "project_officer", "associate_consultant", "project_assistant", "area_manager", "regional_manager"].includes(caller.role) &&
+      isCallerOnTeam(caller, app.team)
+    );
+
   try {
     if (type === "final") {
-      // Mirrors md_accept's authorization exactly, minus the PIN check.
-      if (caller.role !== "md") return jsonRes(req, 403, { error: "Only the MD can preview this letter." });
-      if (app.status !== "md_review") return jsonRes(req, 400, { error: `This application is in "${app.status}" status, not "md_review".` });
+      const issued = app.status === "accepted";
+
+      if (issued) {
+        if (!canViewApplication) return jsonRes(req, 403, { error: "You do not have access to this application." });
+      } else {
+        // Pre-issue preview — mirrors md_accept's authorization, minus the PIN.
+        if (caller.role !== "md") return jsonRes(req, 403, { error: "Only the MD can preview this letter." });
+        if (app.status !== "md_review") return jsonRes(req, 400, { error: `This application is in "${app.status}" status, not "md_review".` });
+      }
 
       const { data: baData } = await adminClient
         .from("ba_registrations")
@@ -67,16 +90,56 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         .maybeSingle();
       if (!baData) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet." });
 
-      const built = await buildEmpanelmentLetter(adminClient, baData, caller.id);
-      if (!built) return jsonRes(req, 500, { error: "Could not generate the letter preview. Please try again." });
+      // Signed by the application's advising authority — same signer
+      // md_accept uses (advance-empanelment-stage). Only a legacy
+      // application with no advisor recorded falls back to the accepting MD
+      // (from the activity log) / the previewing MD.
+      let signerId = app.dgm_id || caller.id;
+      if (!app.dgm_id && issued) {
+        const { data: acceptLog } = await adminClient
+          .from("empanelment_activity_log")
+          .select("actor_id")
+          .eq("application_id", application_id)
+          .in("action", ["md_accepted", "md_accepted_email_failed"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (acceptLog?.actor_id) signerId = acceptLog.actor_id;
+      }
+
+      const built = await buildEmpanelmentLetter(
+        adminClient,
+        baData,
+        signerId,
+        issued
+          ? {
+              refOverride: app.empanelment_ref,
+              dateOverride: app.decided_at ? formatDateDDMMYYYY(new Date(app.decided_at)) : null,
+              validUntilOverride: app.empanelment_expires_at ? formatDateLong(new Date(app.empanelment_expires_at)) : null,
+            }
+          : undefined
+      );
+      if (!built) return jsonRes(req, 500, { error: "Could not generate the letter. Please try again." });
       return jsonRes(req, 200, { success: true, pdf_base64: bytesToBase64(built.pdfBytes) });
     }
 
-    // type === "provisional" — mirrors send-provisional-letter's authorization exactly, minus the PIN check.
-    if (!["dgm", "agm"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM or AGM can preview the provisional letter." });
-    if (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id) return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can preview its provisional letter." });
-    if (!PROVISIONAL_ALLOWED_STATUSES.has(app.status)) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet, so there's nothing to preview." });
-    if (app.provisional_letter_sent) return jsonRes(req, 400, { error: "A provisional letter has already been sent for this application." });
+    // type === "provisional"
+    const issued = !!app.provisional_letter_sent;
+
+    if (issued) {
+      if (!canViewApplication) return jsonRes(req, 403, { error: "You do not have access to this application." });
+    } else {
+      // Pre-issue preview — mirrors send-provisional-letter's authorization,
+      // minus the PIN: the assigned advisor (before requesting) or the MD
+      // (while a request is waiting on their approval).
+      if (caller.role === "md") {
+        if (app.provisional_request_status !== "pending") return jsonRes(req, 400, { error: "There is no pending provisional letter request for this application." });
+      } else {
+        if (!["dgm", "agm", "general_manager"].includes(caller.role)) return jsonRes(req, 403, { error: "Only the advising DGM, AGM, or General Manager, or the MD, can preview the provisional letter." });
+        if (!isCallerOnTeam(caller, app.team) || caller.id !== app.dgm_id) return jsonRes(req, 403, { error: "Only the advising authority assigned to this application can preview its provisional letter." });
+      }
+      if (!isProvisionalLetterOpen(app.status, app.hold_origin_status)) return jsonRes(req, 400, { error: "The provisional letter opens only after the Project Officer has forwarded this application to the CS." });
+    }
 
     const { data: reg } = await adminClient
       .from("ba_registrations")
@@ -85,8 +148,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .maybeSingle();
     if (!reg) return jsonRes(req, 400, { error: "The BP hasn't submitted their form yet." });
 
-    const built = await buildProvisionalLetter(adminClient, app, reg, caller.id);
-    if (!built) return jsonRes(req, 500, { error: "Could not generate the letter preview. Please try again." });
+    const built = await buildProvisionalLetter(
+      adminClient,
+      app,
+      reg,
+      app.dgm_id || caller.id,
+      issued && app.provisional_sent_at ? { dateOverride: formatDateDDMMYYYY(new Date(app.provisional_sent_at)) } : undefined
+    );
+    if (!built) return jsonRes(req, 500, { error: "Could not generate the letter. Please try again." });
     return jsonRes(req, 200, { success: true, pdf_base64: bytesToBase64(built.pdfBytes) });
   } catch (err) {
     console.error("Unhandled error:", (err as Error).message);

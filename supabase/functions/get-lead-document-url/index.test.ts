@@ -14,7 +14,7 @@ function callerRow(overrides: Record<string, unknown> = {}) {
 function leadRow(overrides: Record<string, unknown> = {}) {
   return {
     id: LEAD_ID, status: "pmt_review", team: TEAM, created_by: "creator-1", person_responsible_id: "pr-1",
-    reviewer_id: "reviewer-1", approval_authority_id: "authority-1", handled_by_dgm_id: null, assigned_ba_id: null,
+    reviewer_id: "reviewer-1", recommending_authority_id: "authority-1", handled_by_dgm_id: null, assigned_ba_id: null,
     ...overrides,
   };
 }
@@ -68,10 +68,10 @@ Deno.test("handleRequest - a same-team user is authorized", async () => {
   assertEquals(res.status, 200);
 });
 
-Deno.test("handleRequest - an AGM on the same team is NOT authorized unless named on the lead", async () => {
-  const client = buildClient({ caller: callerRow({ role: "agm", team: TEAM }) });
+Deno.test("handleRequest - an AGM has org-wide visibility, even off-team and not named on the lead", async () => {
+  const client = buildClient({ caller: callerRow({ role: "agm", team: "SomeOtherTeam" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, path: PATH }), client as never);
-  assertEquals(res.status, 403);
+  assertEquals(res.status, 200);
 });
 
 Deno.test("handleRequest - an AGM named as Approval Authority is authorized", async () => {
@@ -92,13 +92,13 @@ Deno.test("handleRequest - a PMT committee member is authorized while the lead i
   assertEquals(res.status, 200);
 });
 
-Deno.test("handleRequest - a G3 (DGM committee) member from a different team is authorized once the lead is in dgm_review", async () => {
+Deno.test("handleRequest - a G3 committee seat alone no longer grants off-team access", async () => {
   const client = buildClient({
     caller: callerRow({ team: "SomeOtherTeam", committee: "G3" }),
     lead: leadRow({ status: "dgm_review", team: TEAM }),
   });
   const res = await handleRequest(req({ lead_id: LEAD_ID, path: PATH }), client as never);
-  assertEquals(res.status, 200);
+  assertEquals(res.status, 403);
 });
 
 Deno.test("handleRequest - success returns a signed url", async () => {

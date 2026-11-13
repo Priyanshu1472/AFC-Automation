@@ -8,22 +8,27 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
-import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
-import { notifyUser } from "../_shared/notify.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
+import { createAdminClient, getCallerProfile, isCallerOnTeam } from "../_shared/auth.ts";
+import { notifyUser, notifyRole } from "../_shared/notify.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
+import { findPossibleDuplicateIds, linkAndNotifyReciprocalDuplicates } from "../_shared/leadDuplicates.ts";
+import { addLeadChatParticipants, getOrgWideHolders } from "../_shared/leadAuth.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
-  validateApprovalAuthority, validateBusinessAssociate, clampText,
+  validateRecommendingAuthority, validateBusinessAssociate, validateForwardedTo, clampText,
 } from "../_shared/leadEligibility.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 const BUCKET = "lead-documents";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILES = 10;
 const MAGIC: Record<string, number[]> = {
   "application/pdf": [0x25, 0x50, 0x44, 0x46],
   "application/msword": [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1],
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [0x50, 0x4b, 0x03, 0x04],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [0x50, 0x4b, 0x03, 0x04],
 };
 
 function clean(val: FormDataEntryValue | null): string {
@@ -34,7 +39,7 @@ function clean(val: FormDataEntryValue | null): string {
 
 async function validateDocument(file: File): Promise<string> {
   const magic = MAGIC[file.type];
-  if (!magic) return `"${file.name}" must be a PDF or Word document.`;
+  if (!magic) return `"${file.name}" must be a PDF, Word, or Excel document.`;
   if (file.size > MAX_FILE_SIZE) return `"${file.name}" exceeds the 10 MB limit.`;
   if (file.size === 0) return `"${file.name}" is empty.`;
   const bytes = new Uint8Array(await file.slice(0, magic.length).arrayBuffer());
@@ -59,6 +64,8 @@ async function uploadDocument(admin: AdminClient, leadId: string, file: File) {
 
 export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "leads");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);
@@ -81,11 +88,24 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     delivery_type: get("delivery_type") || null,
     person_responsible_id: get("person_responsible_id"),
     reviewer_id: get("reviewer_id"),
-    approval_authority_id: get("approval_authority_id"),
+    recommending_authority_id: get("recommending_authority_id"),
   };
 
-  const fieldErr = validateRequiredFields(input);
+  // An Associate Consultant/Project Assistant isn't allowed to name Person
+  // Responsible/Reviewer/Recommending Authority themselves — their lead is
+  // routed to the team's Project Officer (or Area Manager/Regional Manager,
+  // same permission tier) to assign those three instead, PIN-confirmed, via
+  // advance-lead-stage's "po_assign" action. Every other creator role is
+  // unaffected.
+  const isPoRouted = caller.role === "associate_consultant" || caller.role === "project_assistant";
+  const forwardedToId = get("forwarded_to_id");
+
+  const fieldErr = validateRequiredFields(input, { requireAssignment: !isPoRouted });
   if (fieldErr) return jsonRes(req, 400, { error: fieldErr });
+
+  if (isPoRouted && !forwardedToId) {
+    return jsonRes(req, 400, { error: "Forward to is required." });
+  }
 
   const assignedBaId = get("assigned_ba_id") || null;
   if (input.source === "ba" && !assignedBaId) {
@@ -98,58 +118,96 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   }
 
   try {
-    // Team is derived from Person Responsible's own team — not a field the
-    // creator picks directly, matching the real form (no Team selector).
-    const { data: personResponsible, error: prErr } = await adminClient
-      .from("afc_users")
-      .select("id, team, is_active")
-      .eq("id", input.person_responsible_id)
-      .maybeSingle();
-    if (prErr || !personResponsible || !personResponsible.is_active || !personResponsible.team) {
-      return jsonRes(req, 400, { error: "Person Responsible is not a valid active user with a team." });
-    }
-    const team = personResponsible.team as string;
-
-    // Every role can create a lead except MD and Admin, per explicit
-    // product decision — Admin can view/manage everything but doesn't
-    // originate leads. No separate creator-eligibility list; the caller's
+    // Every role can create a lead except MD, Admin, CFO, and CS, per
+    // explicit product decision — Admin can view/manage everything but
+    // doesn't originate leads, and CFO/CS are view-only throughout Lead
+    // Generation (org-wide read access via can_view_lead(), no action
+    // branch anywhere in advance-lead-stage — see LEAD_GENERATION_NAV_ROLES'
+    // own comment). No separate creator-eligibility list; the caller's
     // existing afc_users.role (set on the Users page) is authoritative.
-    if (caller.role === "md" || caller.role === "admin") {
-      return jsonRes(req, 403, { error: `${caller.role === "md" ? "MD" : "Admin"} does not create leads directly.` });
+    const NON_CREATOR_ROLES: Record<string, string> = { md: "MD", admin: "Admin", cfo: "CFO", cs: "CS" };
+    if (caller.role in NON_CREATOR_ROLES) {
+      return jsonRes(req, 403, { error: `${NON_CREATOR_ROLES[caller.role]} does not create leads directly.` });
     }
 
-    const assignErr = await validateAssignment(adminClient, input.person_responsible_id, team);
-    if (assignErr) return jsonRes(req, 400, { error: assignErr });
+    let team: string;
+    let forwardedToName = "";
+    if (isPoRouted) {
+      // No Person Responsible to derive a team from — the creator's own
+      // (active) team is used instead, same pattern as send-empanelment-
+      // invite's requestedTeam for a multi-team caller.
+      const requestedTeam = get("team");
+      if (!requestedTeam || !isCallerOnTeam(caller, requestedTeam)) {
+        return jsonRes(req, 400, { error: "You are not assigned to that team." });
+      }
+      team = requestedTeam;
 
-    const reviewerErr = await validateReviewer(adminClient, input.reviewer_id, team);
-    if (reviewerErr) return jsonRes(req, 400, { error: reviewerErr });
+      const forwardErr = await validateForwardedTo(adminClient, forwardedToId, team);
+      if (forwardErr) return jsonRes(req, 400, { error: forwardErr });
+      const { data: forwardedToUser } = await adminClient.from("afc_users").select("full_name").eq("id", forwardedToId).maybeSingle();
+      forwardedToName = (forwardedToUser?.full_name as string) || "the selected person";
+    } else {
+      // Team is derived from Person Responsible's own team — not a field the
+      // creator picks directly, matching the real form (no Team selector).
+      const { data: personResponsible, error: prErr } = await adminClient
+        .from("afc_users")
+        .select("id, team, is_active")
+        .eq("id", input.person_responsible_id)
+        .maybeSingle();
+      if (prErr || !personResponsible || !personResponsible.is_active || !personResponsible.team) {
+        return jsonRes(req, 400, { error: "Person Responsible is not a valid active user with a team." });
+      }
+      team = personResponsible.team as string;
 
-    const authorityErr = await validateApprovalAuthority(adminClient, input.approval_authority_id, team);
-    if (authorityErr) return jsonRes(req, 400, { error: authorityErr });
+      const assignErr = await validateAssignment(adminClient, input.person_responsible_id, team);
+      if (assignErr) return jsonRes(req, 400, { error: assignErr });
+
+      const reviewerErr = await validateReviewer(adminClient, input.reviewer_id, team);
+      if (reviewerErr) return jsonRes(req, 400, { error: reviewerErr });
+
+      const authorityErr = await validateRecommendingAuthority(adminClient, input.recommending_authority_id, team);
+      if (authorityErr) return jsonRes(req, 400, { error: authorityErr });
+    }
 
     if (assignedBaId) {
       const baErr = await validateBusinessAssociate(adminClient, assignedBaId, team);
       if (baErr) return jsonRes(req, 400, { error: baErr });
     }
 
-    const file = formData.get("document");
-    let documents: Array<{ name: string; path: string; size: number; uploaded_at: string }> = [];
-    let uploadedPath: string | null = null;
+    const files = formData.getAll("document").filter((f): f is File => f instanceof File && f.size > 0);
+    if (files.length > MAX_FILES) return jsonRes(req, 400, { error: `You can attach at most ${MAX_FILES} documents.` });
+    // A Suo Moto lead has no RFP/Tender document to attach in the first
+    // place — every other source (In-House/BP Source, RFP or EOI) requires
+    // at least one.
+    if (input.source !== "suo_moto" && files.length === 0) {
+      return jsonRes(req, 400, { error: "At least one document is required." });
+    }
+    const documents: Array<{ name: string; path: string; size: number; uploaded_at: string }> = [];
+    const uploadedPaths: string[] = [];
     const leadId = crypto.randomUUID();
 
-    if (file instanceof File && file.size > 0) {
+    for (const file of files) {
       const docErr = await validateDocument(file);
-      if (docErr) return jsonRes(req, 400, { error: docErr });
+      if (docErr) {
+        if (uploadedPaths.length) await adminClient.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
+        return jsonRes(req, 400, { error: docErr });
+      }
       const uploaded = await uploadDocument(adminClient, leadId, file);
-      documents = [uploaded];
-      uploadedPath = uploaded.path;
+      documents.push(uploaded);
+      uploadedPaths.push(uploaded.path);
     }
 
     const { data: leadNumberData, error: numErr } = await adminClient.rpc("next_lead_number", { p_team: team });
     if (numErr || !leadNumberData) {
-      if (uploadedPath) await adminClient.storage.from(BUCKET).remove([uploadedPath]).catch(() => {});
+      if (uploadedPaths.length) await adminClient.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
       return jsonRes(req, 500, { error: "Failed to generate a lead number. Please try again." });
     }
+
+    const possibleDuplicateIds = await findPossibleDuplicateIds(adminClient, {
+      title: input.title.trim(),
+      bidNumber: clampText(get("bid_number"), 200),
+      documents,
+    });
 
     const { data: lead, error: insertErr } = await adminClient
       .from("leads")
@@ -172,26 +230,78 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         followup_date: get("followup_date") || null,
         remark: clampText(get("remark")),
         documents,
+        possible_duplicate_ids: possibleDuplicateIds,
         team,
         created_by: caller.id,
-        person_responsible_id: input.person_responsible_id,
-        reviewer_id: input.reviewer_id,
-        approval_authority_id: input.approval_authority_id,
+        person_responsible_id: isPoRouted ? null : input.person_responsible_id,
+        reviewer_id: isPoRouted ? null : input.reviewer_id,
+        recommending_authority_id: isPoRouted ? null : input.recommending_authority_id,
         assigned_ba_id: assignedBaId,
-        status: "pa_review",
+        forwarded_to_id: isPoRouted ? forwardedToId : null,
+        status: isPoRouted ? "po_assignment" : "pa_review",
+        // Chat opens the moment Person Responsible/Reviewer/Recommending
+        // Authority are all named — immediately here for a direct creation,
+        // or later via advance-lead-stage's "po_assign" case for an
+        // isPoRouted lead (see that case for why). Never at po_assignment,
+        // where there's no one to chat with yet.
+        chat_opened_at: isPoRouted ? null : new Date().toISOString(),
       })
       .select("id, lead_number, status")
       .single();
 
     if (insertErr || !lead) {
-      if (uploadedPath) await adminClient.storage.from(BUCKET).remove([uploadedPath]).catch(() => {});
+      if (uploadedPaths.length) await adminClient.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
       console.error("Lead insert failed:", insertErr?.message);
       return jsonRes(req, 500, { error: "Failed to create lead. Please try again." });
     }
 
-    await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "created", null, "pa_review", null);
+    // A brand-new lead has no prior possible_duplicate_ids — every match
+    // found is new, so every matched lead gets back-linked and notified.
+    await linkAndNotifyReciprocalDuplicates(adminClient, {
+      newLeadId: lead.id,
+      newLeadNumber: lead.lead_number,
+      newLeadTitle: input.title.trim(),
+      newLeadTeam: team,
+      newlyMatchedIds: possibleDuplicateIds,
+    });
 
-    if (input.person_responsible_id !== caller.id) {
+    if (!isPoRouted) {
+      await addLeadChatParticipants(
+        adminClient,
+        lead.id,
+        [caller.id, input.person_responsible_id, input.reviewer_id, input.recommending_authority_id],
+        "named"
+      );
+      // MD is in every lead's chat from the moment it opens, not just once
+      // the lead actually reaches md_review — org-wide, same as every MD
+      // already gets on a proposal's chat at creation.
+      const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
+      await addLeadChatParticipants(adminClient, lead.id, mdHolders, "md");
+    }
+
+    await logLeadActivity(
+      adminClient,
+      lead.id,
+      caller.id,
+      caller.role,
+      "created",
+      null,
+      lead.status,
+      isPoRouted ? `Lead forwarded to ${forwardedToName}` : null
+    );
+
+    if (isPoRouted) {
+      // No PR/Reviewer/Recommending Authority to notify yet — instead, only
+      // the person this lead was explicitly forwarded to needs to know.
+      await notifyUser(adminClient, forwardedToId, {
+        title: "A lead was forwarded to you",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" needs a Person Responsible, Reviewer, and Recommending Authority assigned.`,
+        type: "action_required",
+        link: `/leads/${lead.id}`,
+      });
+    }
+
+    if (!isPoRouted && input.person_responsible_id !== caller.id) {
       await notifyUser(adminClient, input.person_responsible_id, {
         title: "A lead has been assigned to you",
         sub_text: `${lead.lead_number} — "${input.title.trim()}" is awaiting your Accept/Drop decision.`,
@@ -200,27 +310,56 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       });
     }
 
-    // Reviewer/Approval Authority aren't being asked to act yet (that only
-    // comes once the lead clears PA/DGM review) — just letting them know
-    // they've been named on it, same as PR's notice above minus the
-    // Accept/Drop framing.
-    if (input.reviewer_id !== caller.id) {
+    // Reviewer/Recommending Authority aren't being asked to act yet (that
+    // only comes once the lead clears PA review) — but still surfaced as
+    // action_required so the appointment itself shows on their Home page,
+    // not just the notification bell; it drops off there once they open
+    // the lead (see fetchPendingActionNotifications).
+    if (!isPoRouted && input.reviewer_id !== caller.id) {
       await notifyUser(adminClient, input.reviewer_id, {
         title: "You've been assigned as Reviewer",
         sub_text: `${lead.lead_number} — "${input.title.trim()}" has named you as Reviewer.`,
-        type: "info",
+        type: "action_required",
         link: `/leads/${lead.id}`,
       });
     }
 
-    if (input.approval_authority_id !== caller.id) {
-      await notifyUser(adminClient, input.approval_authority_id, {
-        title: "You've been assigned as Approval Authority",
-        sub_text: `${lead.lead_number} — "${input.title.trim()}" has named you as Approval Authority.`,
-        type: "info",
+    if (!isPoRouted && input.recommending_authority_id !== caller.id) {
+      await notifyUser(adminClient, input.recommending_authority_id, {
+        title: "You've been assigned as Recommending Authority",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" has named you as Recommending Authority.`,
+        type: "action_required",
         link: `/leads/${lead.id}`,
       });
     }
+
+    // Every DGM and AGM org-wide gets to know the instant any lead is
+    // created — not just their own team's — so another team can catch a
+    // duplicate early instead of two teams independently chasing the same
+    // bid (see 20260928000200_lead_org_wide_visibility.sql, which gives
+    // them the read access to match). Bell-only (type "info"), not
+    // action_required — nobody in this audience is actually on the hook to
+    // act on someone else's lead just because they were notified about it.
+    await Promise.all([
+      notifyRole(adminClient, "dgm", {
+        title: "New lead added",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" (${team}) was just created.`,
+        type: "info",
+        link: `/leads/${lead.id}`,
+      }),
+      notifyRole(adminClient, "agm", {
+        title: "New lead added",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" (${team}) was just created.`,
+        type: "info",
+        link: `/leads/${lead.id}`,
+      }),
+      notifyRole(adminClient, "general_manager", {
+        title: "New lead added",
+        sub_text: `${lead.lead_number} — "${input.title.trim()}" (${team}) was just created.`,
+        type: "info",
+        link: `/leads/${lead.id}`,
+      }),
+    ]);
 
     return jsonRes(req, 200, { success: true, id: lead.id, lead_number: lead.lead_number, status: lead.status });
   } catch (err) {

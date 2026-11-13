@@ -3,14 +3,15 @@
 // creator or Person Responsible fills the Lead Approval Form here, which
 // upserts leads.approval_note_data and (re)generates the draft "Lead
 // Approval Note" PDF via the shared engine — status never changes here.
-// The actual pa_review -> dgm_initial_review transition still happens
-// through advance-lead-stage's existing "accept" action, which now
+// The actual pa_review -> recommending_authority_review transition still
+// happens through advance-lead-stage's existing "accept" action, which now
 // requires this note to exist first. Available again at pa_action_required
 // (after a decline) so the note can be edited and regenerated before
 // resubmitting — mirrors update-lead's own status whitelist.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
 import { clampText } from "../_shared/leadEligibility.ts";
@@ -81,6 +82,8 @@ function sanitizeScrutiny(input: unknown): { yes_no: "Yes" | "No"; remarks: stri
 
 export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "leads");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);
@@ -109,7 +112,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   }
   if (lead.status !== "pa_review" && lead.status !== "pa_action_required") {
     return jsonRes(req, 400, {
-      error: `This lead is in "${lead.status}" status — the Approval Note can only be generated/edited before it's submitted for DGM approval, or while it's been returned for changes.`,
+      error: `This lead is in "${lead.status}" status — the Approval Note can only be generated/edited before it's submitted for approval, or while it's been returned for changes.`,
     });
   }
   // A creator-drafted note sitting with the PR for Accept/Edit/Reject can't

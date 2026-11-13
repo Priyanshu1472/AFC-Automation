@@ -219,10 +219,13 @@ token_verifications = 30
 web3 = 30
 
 # Configure one of the supported captcha providers: `hcaptcha`, `turnstile`.
-# [auth.captcha]
-# enabled = true
-# provider = "hcaptcha"
-# secret = ""
+# For local dev parity only (`supabase start`) — the live project's captcha
+# is enabled directly in the Supabase Dashboard (Authentication > Attack
+# Protection) with its own secret, not by pushing this file wholesale.
+[auth.captcha]
+enabled = true
+provider = "turnstile"
+secret = "env(TURNSTILE_SECRET_KEY)"
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
@@ -277,9 +280,9 @@ max_frequency = "5s"
 # 4152127777 = "123456"
 
 # Configure logged in session timeouts.
-# [auth.sessions]
-# Force log out after the specified duration.
-# timebox = "24h"
+[auth.sessions]
+# Force log out after the specified duration, regardless of activity.
+timebox = "10h"
 # Force log out if the user has been inactive longer than the specified duration.
 # inactivity_timeout = "8h"
 
@@ -516,11 +519,59 @@ verify_jwt = true
 import_map = "./functions/send-lead-chat-message/deno.json"
 entrypoint = "./functions/send-lead-chat-message/index.ts"
 
+[functions.add-lead-chat-member]
+enabled = true
+verify_jwt = true
+import_map = "./functions/add-lead-chat-member/deno.json"
+entrypoint = "./functions/add-lead-chat-member/index.ts"
+
+[functions.escalate-lead-to-g3]
+enabled = true
+verify_jwt = true
+import_map = "./functions/escalate-lead-to-g3/deno.json"
+entrypoint = "./functions/escalate-lead-to-g3/index.ts"
+
+[functions.resolve-g3-escalation]
+enabled = true
+verify_jwt = true
+import_map = "./functions/resolve-g3-escalation/deno.json"
+entrypoint = "./functions/resolve-g3-escalation/index.ts"
+
+[functions.raise-lead-query]
+enabled = true
+verify_jwt = true
+import_map = "./functions/raise-lead-query/deno.json"
+entrypoint = "./functions/raise-lead-query/index.ts"
+
+[functions.respond-lead-query]
+enabled = true
+verify_jwt = true
+import_map = "./functions/respond-lead-query/deno.json"
+entrypoint = "./functions/respond-lead-query/index.ts"
+
+[functions.md-transfer-lead]
+enabled = true
+verify_jwt = true
+import_map = "./functions/md-transfer-lead/deno.json"
+entrypoint = "./functions/md-transfer-lead/index.ts"
+
+[functions.update-lead-query]
+enabled = true
+verify_jwt = true
+import_map = "./functions/update-lead-query/deno.json"
+entrypoint = "./functions/update-lead-query/index.ts"
+
 [functions.create-proposal-preparation]
 enabled = true
 verify_jwt = true
 import_map = "./functions/create-proposal-preparation/deno.json"
 entrypoint = "./functions/create-proposal-preparation/index.ts"
+
+[functions.send-proposal-chat-message]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-proposal-chat-message/deno.json"
+entrypoint = "./functions/send-proposal-chat-message/index.ts"
 
 [functions.get-proposal-document-url]
 enabled = true
@@ -564,6 +615,12 @@ verify_jwt = true
 import_map = "./functions/decide-fee-note-md/deno.json"
 entrypoint = "./functions/decide-fee-note-md/index.ts"
 
+[functions.decide-client-invoice]
+enabled = true
+verify_jwt = true
+import_map = "./functions/decide-client-invoice/deno.json"
+entrypoint = "./functions/decide-client-invoice/index.ts"
+
 [functions.set-own-pin]
 enabled = true
 verify_jwt = true
@@ -587,3 +644,48 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/get-user-signature-url/deno.json"
 entrypoint = "./functions/get-user-signature-url/index.ts"
+
+[functions.send-support-request]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-support-request/deno.json"
+entrypoint = "./functions/send-support-request/index.ts"
+
+[functions.log-password-changed]
+enabled = true
+verify_jwt = true
+import_map = "./functions/log-password-changed/deno.json"
+entrypoint = "./functions/log-password-changed/index.ts"
+
+[functions.experience-import]
+enabled = true
+# Not a Supabase user JWT — Experience Intelligence signs its own
+# short-lived service token, verified inside the function itself
+# (_shared/serviceAuth.ts). GET (health check) is unauthenticated by design.
+verify_jwt = false
+import_map = "./functions/experience-import/deno.json"
+entrypoint = "./functions/experience-import/index.ts"
+
+[functions.check-reset-email]
+enabled = true
+verify_jwt = false
+import_map = "./functions/check-reset-email/deno.json"
+entrypoint = "./functions/check-reset-email/index.ts"
+
+[functions.send-empanelment-chat-message]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-empanelment-chat-message/deno.json"
+entrypoint = "./functions/send-empanelment-chat-message/index.ts"
+
+[functions.request-bp-invoice]
+enabled = true
+verify_jwt = true
+import_map = "./functions/request-bp-invoice/deno.json"
+entrypoint = "./functions/request-bp-invoice/index.ts"
+
+[functions.monitoring-pdf]
+enabled = true
+verify_jwt = true
+import_map = "./functions/monitoring-pdf/deno.json"
+entrypoint = "./functions/monitoring-pdf/index.ts"

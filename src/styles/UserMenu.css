@@ -174,3 +174,16 @@
    .app-header-nav-utilities .user-menu-wrap rule) — the mobile drawer
    shows profile info and Sign out directly instead, so there's no
    mobile-specific layout needed here. */
+
+/* Profile photo inside any avatar circle (ProfileAvatar). */
+.profile-avatar {
+  overflow: hidden;
+}
+
+.profile-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}

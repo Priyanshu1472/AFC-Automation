@@ -45,40 +45,51 @@
    overlaying the main content. Fixed positioning escapes that clipping
    and is anchored relative to the viewport instead. */
 .notif-bell-panel {
+  /* Full-height drawer docked against the sidebar's right edge — same
+     shape as the lead/application chat drawer, but on the left. */
   position: fixed;
-  top: auto;
-  bottom: var(--space-4);
-  left: calc(var(--sidebar-nav-w) + var(--space-3));
+  top: 0;
+  bottom: 0;
+  left: var(--sidebar-nav-w);
   right: auto;
-  width: 340px;
-  max-width: calc(100vw - var(--sidebar-nav-w) - var(--space-4));
-  max-height: min(480px, calc(100vh - var(--space-8)));
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-lg);
+  width: 400px;
+  max-width: calc(100vw - var(--sidebar-nav-w));
+  height: 100vh;
+  background: var(--bg-surface);
+  border: none;
+  border-right: 1px solid var(--border-subtle);
+  border-radius: 0;
   box-shadow: var(--shadow-lg);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   /* Above the mobile drawer/backdrop, and above the page's own hamburger
      button (z-index: var(--z-modal) + 2 — it needs to clear the drawer
      backdrop) too, since on mobile this panel is a full-screen overlay
      that would otherwise let that button visibly poke through on top of
      it. */
   z-index: calc(var(--z-modal) + 3);
-  animation: slideIn var(--duration-fast) var(--ease-out);
+  animation: notif-panel-in var(--duration-fast) var(--ease-out);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+@keyframes notif-panel-in {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 .notif-bell-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
+  flex: none;
+  padding: var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .notif-bell-panel-title {
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -164,9 +175,15 @@
   margin-top: 6px;
   border-radius: 50%;
   background: var(--border-brand);
+  visibility: hidden;
+}
+
+.notif-bell-item.unread .notif-bell-dot {
+  visibility: visible;
 }
 
 .notif-bell-item-body {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -179,16 +196,67 @@
   color: var(--text-primary);
 }
 
-.notif-bell-item-sub {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  line-height: 1.4;
+.notif-bell-item-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .notif-bell-item-time {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
+}
+
+.notif-bell-item-detail {
   margin-top: 2px;
+  font-size: var(--text-xs);
+}
+
+/* Shared with the Home alerts table (NotificationDetail). */
+.notif-ref {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.notif-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notif-detail-subject {
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-detail-text {
+  color: var(--text-secondary);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.notif-detail-text strong {
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 @media (max-width: 720px) {
@@ -203,7 +271,7 @@
     left: 0;
     width: auto;
     max-width: none;
-    max-height: none;
+    height: auto;
     border: none;
     border-radius: 0;
     box-shadow: none;

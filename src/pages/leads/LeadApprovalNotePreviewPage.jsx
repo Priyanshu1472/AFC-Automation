@@ -11,6 +11,7 @@ import PinInput from "../../components/ui/PinInput";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import "../../styles/ApplicationReviewPage.css";
+import BackButton from "../../components/ui/BackButton";
 
 // Not a real business_associates row — picking this just flags that the BP
 // is still undecided. It never reaches the backend: submitForDgmApproval
@@ -40,7 +41,7 @@ export default function LeadApprovalNotePreviewPage() {
     setLoading(false);
     const isResubmittable = data?.status === "pa_action_required";
     if ((data?.status === "pa_review" || isResubmittable) && !data.assigned_ba_id && data.team) {
-      supabase.rpc("get_team_business_associates", { p_team: data.team }).then(({ data: list }) => setBaOptions(list || []));
+      supabase.rpc("get_empanelled_business_partners").then(({ data: list }) => setBaOptions(list || []));
     }
     return data;
   }, [id]);
@@ -64,10 +65,16 @@ export default function LeadApprovalNotePreviewPage() {
     fetchLead().then((data) => data && loadPdfUrl(data));
   }, [fetchLead, loadPdfUrl]);
 
-  // A resubmission after a decline at any stage (DGM, PMT, PMT Extended,
-  // G3, or MD) goes through the exact same "accept" action/PIN gate as the
-  // very first submission — see advance-lead-stage's "accept" case.
+  // A resubmission after a decline at any stage (Recommending Authority,
+  // PMT, or MD) goes through the exact same "accept" action/PIN gate as
+  // the very first submission — see advance-lead-stage's "accept" case.
   const isResubmit = lead?.status === "pa_action_required";
+  // The Business Partner is optional here, same as at creation — leaving
+  // it as "Yet to be Decided" is a real, submittable choice (the note
+  // prints that text in the BA field); it's only locked from editing once
+  // the lead actually leaves pa_review/pa_action_required (see
+  // leadEligibility's BA lock and advance-lead-stage's "withdraw_
+  // submission" for changing it after that point).
   const needsBaSelection = (lead?.status === "pa_review" || isResubmit) && !lead?.assigned_ba_id;
 
   async function submitForDgmApproval() {
@@ -75,10 +82,7 @@ export default function LeadApprovalNotePreviewPage() {
       showToast("Enter your 4-digit PIN.", "danger");
       return;
     }
-    if (needsBaSelection && (!selectedBaId || selectedBaId === TBD_BA_VALUE)) {
-      showToast("Select a Business Partner", "danger");
-      return;
-    }
+    const hasRealBaSelection = needsBaSelection && selectedBaId && selectedBaId !== TBD_BA_VALUE;
     setSubmitting(true);
     try {
       const { data, error } = await supabase.functions.invoke("advance-lead-stage", {
@@ -87,18 +91,18 @@ export default function LeadApprovalNotePreviewPage() {
           action: "accept",
           comment: "",
           pin,
-          ...(needsBaSelection ? { assigned_ba_id: selectedBaId } : {}),
+          ...(hasRealBaSelection ? { assigned_ba_id: selectedBaId } : {}),
         },
       });
       if (error) {
-        showToast(await extractFunctionErrorMessage(error, "Failed to submit for DGM approval."), "danger");
+        showToast(await extractFunctionErrorMessage(error, "Failed to submit for approval."), "danger");
         return;
       }
       if (!data?.success) {
-        showToast(data?.error || "Failed to submit for DGM approval.", "danger");
+        showToast(data?.error || "Failed to submit for approval.", "danger");
         return;
       }
-      showToast("Submitted for DGM approval.", "success");
+      showToast("Submitted for approval.", "success");
       navigate(`/leads/${id}`);
     } catch (err) {
       showToast(err.message || "Something went wrong.", "danger");
@@ -120,7 +124,7 @@ export default function LeadApprovalNotePreviewPage() {
       <AppHeader />
       <div className="app-container">
         <div className="ar-page">
-          <button className="ar-back-btn" onClick={() => navigate(`/leads/${id}`)}>← Back to Lead</button>
+          <BackButton to={`/leads/${id}`} label="Back to Lead" />
 
           {!lead && <Alert variant="danger">Lead not found.</Alert>}
           {lead && !canManage && <Alert variant="danger">The Lead Approval Note can&apos;t be reviewed here right now.</Alert>}
@@ -134,17 +138,15 @@ export default function LeadApprovalNotePreviewPage() {
                     {pdfLoading && <p className="ar-empty-text">Loading PDF…</p>}
                     {!pdfLoading && !pdfUrl && <Alert variant="danger">The Approval Note PDF couldn&apos;t be loaded — try generating it again.</Alert>}
                     {!pdfLoading && pdfUrl && (
-                      <a href={pdfUrl} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
-                        <iframe
-                          src={pdfUrl}
-                          title="Lead Approval Note"
-                          style={{ width: "100%", height: "70vh", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-md)", pointerEvents: "none" }}
-                        />
-                      </a>
+                      <iframe
+                        src={pdfUrl}
+                        title="Lead Approval Note"
+                        style={{ display: "block", width: "100%", height: "70vh", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-md)" }}
+                      />
                     )}
                     {!pdfLoading && pdfUrl && (
                       <p className="field-hint" style={{ marginTop: "var(--space-2)" }}>
-                        Click the preview or <a href={pdfUrl} target="_blank" rel="noopener noreferrer">open it in a new tab</a>.
+                        Scroll through the note above, or <a href={pdfUrl} target="_blank" rel="noopener noreferrer">open it in a new tab</a>.
                       </p>
                     )}
                   </Card.Body>
@@ -163,19 +165,19 @@ export default function LeadApprovalNotePreviewPage() {
                       <>
                         {needsBaSelection && (
                           <div className="ar-field">
-                            <label className="ar-label">
-                              Business Partner <span className="ar-required">*</span>
-                            </label>
+                            <label className="ar-label">Business Partner (optional)</label>
                             <Select
                               options={[
-                                ...(lead.source === "in_house" ? [{ value: TBD_BA_VALUE, label: "To be Decided" }] : []),
-                                ...baOptions.map((u) => ({ value: u.id, label: u.org_name })),
+                                ...(lead.source === "in_house" ? [{ value: TBD_BA_VALUE, label: "Yet to be Decided" }] : []),
+                                ...baOptions.map((u) => ({ value: u.id, label: u.org_name, hint: u.team ? `Team: ${u.team}` : undefined })),
                               ]}
                               value={selectedBaId}
                               onChange={setSelectedBaId}
-                              placeholder={baOptions.length ? "Select a Business Partner" : "No active BPs found on your team."}
+                              placeholder={baOptions.length ? "Select a Business Partner" : "No empanelled Business Partners found yet."}
                               disabled={submitting}
+                              searchable
                             />
+                            <span className="field-hint">Leave unselected (or pick "Yet to be Decided") to submit without one — the note will print "Yet to be Decided" until you edit the lead again to set it.</span>
                           </div>
                         )}
                         <div className="ar-field">
@@ -185,17 +187,17 @@ export default function LeadApprovalNotePreviewPage() {
                             value={pin}
                             onChange={setPin}
                             disabled={submitting}
-                            hint="Confirms it's really you — set or change this from My Profile."
+                            hint="Confirms it's really you"
                           />
                         </div>
                         <Button variant="primary" block loading={submitting} disabled={submitting} onClick={submitForDgmApproval}>
-                          {isResubmit ? "Resubmit for DGM Approval" : "Submit for DGM Approval"}
+                          {isResubmit ? "Resubmit for Approval" : "Forward to Recommending Authority"}
                         </Button>
                       </>
                     )}
                     {!canSubmit && (
                       <p className="ar-empty-text">
-                        Only the assigned Person Responsible can submit this lead for DGM approval.
+                        Only the assigned Person Responsible can submit this lead for approval.
                       </p>
                     )}
                   </Card.Body>

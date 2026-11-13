@@ -4,7 +4,9 @@ import logo from "../../images/Logo.png";
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
+import ThemeToggle from "../../components/shared/ThemeToggle";
 import "../../styles/BaFormPage.css";
+import "../../styles/BaFormGlass.css";
 
 // Shared building blocks for the public BP pages (BaFormPage,
 // EmpanelmentCorrectionPage, ApplicationStatusPage) so all three render the
@@ -61,6 +63,7 @@ export function FormNav({ subtitle, onBack }) {
         </div>
       </div>
       <div className="bf-nav-actions">
+        <ThemeToggle />
         <Button variant="secondary" size="sm" icon={<ArrowLeftIcon />} onClick={onBack || (() => navigate("/login"))}>Back to Login</Button>
       </div>
     </nav>

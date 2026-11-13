@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../lib/supabase";
+import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
-import { can } from "../../lib/roles";
+import { useToast } from "../../hooks/useToast";
+import { can, EMPANELMENT_SENDER_ROLES, EMPANELMENT_ALL_TEAMS_ROLES } from "../../lib/roles";
+import { displayStatus, INELIGIBLE_LABEL } from "../../components/empanelment/ApplicationTimeline";
+import "../../styles/LeadListPage.css";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Select from "../../components/ui/Select";
+import Tooltip from "../../components/ui/Tooltip";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import "../../styles/EmpanelmentListPage.css";
@@ -22,16 +26,20 @@ function fmtJsonb(val) {
   catch { return String(val); }
 }
 
+// Keyed by display status (see displayStatus): the stored cfo_cs_review is
+// shown — and filtered — as its two sequential halves, CS then CFO.
+// "rejected" is the stored key; it's always shown as "Ineligible".
 const STATUS_MAP = {
   sent: { label: "Sent", variant: "info" },
   filled: { label: "BP Filled", variant: "warning" },
   po_review: { label: "PO Review", variant: "warning" },
-  cfo_cs_review: { label: "CFO/CS Review", variant: "info" },
+  cs_review: { label: "CS Review", variant: "info" },
+  cfo_review: { label: "CFO Review", variant: "info" },
   po_final_review: { label: "PO Final", variant: "warning" },
   dgm_review: { label: "DGM Review", variant: "neutral" },
   md_review: { label: "MD Review", variant: "neutral" },
   accepted: { label: "Accepted", variant: "success" },
-  rejected: { label: "Rejected", variant: "danger" },
+  rejected: { label: INELIGIBLE_LABEL, variant: "neutral" },
   on_hold: { label: "On Hold", variant: "warning" },
 };
 
@@ -40,21 +48,104 @@ const STATUS_OPTIONS = [
   ...Object.entries(STATUS_MAP).map(([value, cfg]) => ({ value, label: cfg.label })),
 ];
 
+const DATE_FILTER_OPTIONS = [
+  { value: "all", label: "All Time" },
+  { value: "week", label: "Last Week" },
+  { value: "month", label: "Last Month" },
+  { value: "3months", label: "Last 3 Months" },
+  { value: "year", label: "Last Year" },
+];
+
+// Cutoff for the "Sent On" date filter — applied against created_at.
+function dateFilterCutoff(key) {
+  if (key === "all") return null;
+  const d = new Date();
+  if (key === "week") d.setDate(d.getDate() - 7);
+  else if (key === "month") d.setMonth(d.getMonth() - 1);
+  else if (key === "3months") d.setMonth(d.getMonth() - 3);
+  else if (key === "year") d.setFullYear(d.getFullYear() - 1);
+  return d;
+}
+
 const PAGE_SIZE = 10;
 
 // Two review stages carry a role that isn't fixed: PO/PO Final go to a
 // Project Assistant when the team has no active PO, and DGM goes to an AGM
 // when the sender assigned an AGM as advising authority. The badge label
 // follows whoever is actually on the hook (see SendEmpanelmentPage).
-function StatusBadge({ status, reviewerRole, advisorRole }) {
+function StatusBadge({ status: storedStatus, csReviewed, reviewerRole, advisorRole }) {
+  const status = displayStatus(storedStatus, csReviewed);
   const config = STATUS_MAP[status] || { label: status, variant: "neutral" };
   let label = config.label;
   if ((status === "po_review" || status === "po_final_review") && reviewerRole === "project_assistant") {
     label = label.replace("PO", "PA");
   } else if (status === "dgm_review" && advisorRole === "agm") {
     label = label.replace("DGM", "AGM");
+  } else if (status === "dgm_review" && advisorRole === "general_manager") {
+    label = label.replace("DGM", "GM");
   }
   return <Badge variant={config.variant} dot className="bl-status-badge">{label}</Badge>;
+}
+
+function EyeIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>;
+}
+function FileTextIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>;
+}
+function AwardIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg>;
+}
+
+// The letter state shown beside the view button. Once the final
+// (MD-signed) Empanelment Letter is issued, it replaces the provisional
+// one — never both at once. Each icon opens the actual letter PDF in a
+// new tab (regenerated on demand via preview-empanelment-letter).
+function LetterIcons({ app }) {
+  const { showToast } = useToast();
+  const [busy, setBusy] = useState(null);
+  const hasEmpanelment = !!app.empanelment_ref || app.status === "accepted";
+  const hasProvisional = !!app.provisional_letter_sent && !hasEmpanelment;
+  if (!hasEmpanelment && !hasProvisional) return null;
+  const empTooltip = app.empanelment_ref
+    ? `Open empanelment letter · Ref ${app.empanelment_ref}${app.empanelment_expires_at ? ` · valid until ${fmtDate(app.empanelment_expires_at)}` : ""}`
+    : "Open empanelment letter";
+
+  async function openLetter(e, type) {
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(type);
+    try {
+      const { data, error } = await supabase.functions.invoke("preview-empanelment-letter", {
+        body: { application_id: app.id, type },
+      });
+      if (error) { showToast(await extractFunctionErrorMessage(error, "Could not open the letter."), "danger"); return; }
+      if (!data?.success || !data?.pdf_base64) { showToast(data?.error || "Could not open the letter.", "danger"); return; }
+      const bytes = Uint8Array.from(atob(data.pdf_base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      showToast(err.message || "Could not open the letter.", "danger");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="bl-letter-icons">
+      {hasProvisional && (
+        <Tooltip text={busy === "provisional" ? "Opening…" : `Open provisional letter${app.provisional_sent_at ? ` · sent ${fmtDate(app.provisional_sent_at)}` : ""}`}>
+          <button type="button" className="bl-letter-icon bl-letter-provisional" onClick={(e) => openLetter(e, "provisional")} disabled={!!busy} aria-label="Open provisional letter"><FileTextIcon /></button>
+        </Tooltip>
+      )}
+      {hasEmpanelment && (
+        <Tooltip text={busy === "final" ? "Opening…" : empTooltip}>
+          <button type="button" className="bl-letter-icon bl-letter-empanelment" onClick={(e) => openLetter(e, "final")} disabled={!!busy} aria-label="Open empanelment letter"><AwardIcon /></button>
+        </Tooltip>
+      )}
+    </div>
+  );
 }
 
 function SearchIcon() {
@@ -81,7 +172,7 @@ function DetailField({ label, value }) {
   );
 }
 
-function BADetailModal({ ba, invStatus, invReviewerRole, invAdvisorRole, canReview, onReview, onClose }) {
+function BADetailModal({ ba, appRow, invReviewerRole, invAdvisorRole, canReview, onReview, onClose }) {
   if (!ba) return null;
   return (
     <div className="bl-modal-backdrop" onClick={onClose}>
@@ -92,8 +183,13 @@ function BADetailModal({ ba, invStatus, invReviewerRole, invAdvisorRole, canRevi
             <p className="bl-modal-sub">{fmt(ba.contact_person)} · {fmt(ba.email)} · {fmt(ba.phone)}</p>
           </div>
           <div className="bl-modal-header-right">
-            <StatusBadge status={invStatus} reviewerRole={invReviewerRole} advisorRole={invAdvisorRole} />
-            {canReview && <Button variant="primary" size="sm" onClick={onReview}>Review</Button>}
+            <StatusBadge status={appRow?.status} csReviewed={appRow?.cs_reviewed} reviewerRole={invReviewerRole} advisorRole={invAdvisorRole} />
+            {appRow && <LetterIcons app={appRow} />}
+            {canReview && (
+              <Tooltip text="View application">
+                <button type="button" className="bl-icon-btn" aria-label="View application" onClick={onReview}><EyeIcon /></button>
+              </Tooltip>
+            )}
             <button className="bl-modal-close" onClick={onClose} aria-label="Close"><CloseIcon /></button>
           </div>
         </div>
@@ -162,7 +258,7 @@ const QUICK_FILTERS = {
     match: (a) => ["po_review", "cfo_cs_review", "po_final_review", "dgm_review", "md_review", "on_hold"].includes(a.status),
   },
   accepted: { label: "Accepted", match: (a) => a.status === "accepted" },
-  rejected: { label: "Rejected", match: (a) => a.status === "rejected" },
+  rejected: { label: INELIGIBLE_LABEL, match: (a) => a.status === "rejected" },
 };
 
 function StatCard({ label, value, colorClass, loading, active, onClick }) {
@@ -187,11 +283,12 @@ export default function EmpanelmentListPage() {
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
   const [selectedBA, setSelectedBA] = useState(null);
-  const [selectedStatus, setSelectedStatus] = useState(null);
   const [selectedAppId, setSelectedAppId] = useState(null);
   const [selectedReviewerRole, setSelectedReviewerRole] = useState(null);
   const [selectedAdvisorRole, setSelectedAdvisorRole] = useState(null);
+  const [selectedAppRow, setSelectedAppRow] = useState(null);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [teamFilter, setTeamFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -202,7 +299,8 @@ export default function EmpanelmentListPage() {
     const { data, error } = await supabase
       .from("empanelment_applications")
       .select("*, ba_reg:ba_registrations(*), po:project_officer_id(role), dgm:dgm_id(role)")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(5000);
     if (!error) {
       setApplications((data || []).map((a) => ({ ...a, ba_reg: Array.isArray(a.ba_reg) ? a.ba_reg[0] || null : a.ba_reg })));
     }
@@ -224,10 +322,25 @@ export default function EmpanelmentListPage() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchApplications]);
 
-  // Only org-wide roles (md/cfo/cs/admin) get a visible team switcher —
-  // team-scoped roles (dgm/po/etc.) fall back to their activeTeam, same
-  // convention as LeadListPage/EmpanelmentDashboardPage.
-  const canFilterTeam = can.viewAllTeams(profile?.role);
+  // DGM / AGM / GM read every team's applications (RLS) and get two tabs:
+  // "My Team" (their active team, same as before) and "All Teams" (every
+  // team, with a Team filter/column) — so they can check whether a company
+  // is already empanelled via another team before an invite goes out, and
+  // open that application's letters from here.
+  const hasAllTeamsTab = EMPANELMENT_ALL_TEAMS_ROLES.includes(profile?.role);
+  const [view, setView] = useState("team");
+  function selectView(next) {
+    setView(next);
+    setQuickFilter("all");
+    setStatusFilter("all");
+    setTeamFilter("all");
+    setSearch("");
+  }
+
+  // Only org-wide roles (md/cfo/cs/admin) — and DGM/AGM/GM on their All
+  // Teams tab — get a visible team switcher; everyone else is narrowed to
+  // their activeTeam, same convention as LeadListPage/EmpanelmentDashboardPage.
+  const canFilterTeam = can.viewAllTeams(profile?.role) || (hasAllTeamsTab && view === "all");
   const teams = useTeamOptions();
   const teamOptions = [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))];
   const effectiveTeamFilter = canFilterTeam ? teamFilter : (activeTeam || "all");
@@ -262,34 +375,41 @@ export default function EmpanelmentListPage() {
     setTeamFilter(value);
   }
 
-  const filtered = teamScoped.filter((a) => {
+  const dateCutoff = dateFilterCutoff(dateFilter);
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const sectorsServed = Array.isArray(a.ba_reg?.sectors_served) ? a.ba_reg.sectors_served.join(" ") : (a.ba_reg?.sectors_served || "");
-    const assignments = a.ba_reg?.assignments ? (typeof a.ba_reg.assignments === "string" ? a.ba_reg.assignments : JSON.stringify(a.ba_reg.assignments)) : "";
-    const matchSearch =
-      (a.ba_email || "").toLowerCase().includes(q) ||
-      (a.ba_reg?.org_name || "").toLowerCase().includes(q) ||
-      (a.ba_reg?.contact_person || "").toLowerCase().includes(q) ||
-      (a.application_code || "").includes(search) ||
-      (a.ba_reg?.core_expertise || "").toLowerCase().includes(q) ||
-      sectorsServed.toLowerCase().includes(q) ||
-      assignments.toLowerCase().includes(q);
-    return matchSearch && QUICK_FILTERS[quickFilter].match(a) && (statusFilter === "all" || a.status === statusFilter);
-  });
+    return teamScoped.filter((a) => {
+      if (dateCutoff && (!a.created_at || new Date(a.created_at) < dateCutoff)) return false;
+      const sectorsServed = Array.isArray(a.ba_reg?.sectors_served) ? a.ba_reg.sectors_served.join(" ") : (a.ba_reg?.sectors_served || "");
+      const assignments = a.ba_reg?.assignments ? (typeof a.ba_reg.assignments === "string" ? a.ba_reg.assignments : JSON.stringify(a.ba_reg.assignments)) : "";
+      const matchSearch =
+        (a.ba_email || "").toLowerCase().includes(q) ||
+        (a.ba_reg?.org_name || "").toLowerCase().includes(q) ||
+        (a.ba_reg?.contact_person || "").toLowerCase().includes(q) ||
+        (a.application_code || "").includes(search) ||
+        (a.ba_reg?.core_expertise || "").toLowerCase().includes(q) ||
+        sectorsServed.toLowerCase().includes(q) ||
+        assignments.toLowerCase().includes(q);
+      return matchSearch && QUICK_FILTERS[quickFilter].match(a) && (statusFilter === "all" || displayStatus(a.status, a.cs_reviewed) === statusFilter);
+    });
+  }, [teamScoped, search, dateCutoff, quickFilter, statusFilter]);
 
   // Search/filters run over every matching application — the page slice
   // below is purely a display concern that keeps the rendered table light.
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const paged = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage]
+  );
 
   // Any change to what's being filtered snaps back to the first page.
-  useEffect(() => { setPage(1); }, [search, quickFilter, statusFilter, effectiveTeamFilter]);
+  useEffect(() => { setPage(1); }, [search, quickFilter, statusFilter, dateFilter, effectiveTeamFilter, view]);
 
-  const canSend = ["associate_consultant", "project_assistant"].includes(profile?.role);
+  const canSend = EMPANELMENT_SENDER_ROLES.includes(profile?.role);
   // Admin included so it can open the full read-only review page (timeline,
   // documents, etc.) — it has no action branch there, so it lands view-only.
-  const canReview = ["project_officer", "project_assistant", "cfo", "cs", "dgm", "agm", "md", "admin"].includes(profile?.role);
+  const canReview = ["project_officer", "area_manager", "regional_manager", "project_assistant", "cfo", "cs", "dgm", "general_manager", "agm", "md", "admin"].includes(profile?.role);
 
   if (loading) return <PageLoader text="Loading applications…" />;
 
@@ -300,9 +420,20 @@ export default function EmpanelmentListPage() {
         <div className="bl-page">
           <div className="page-header">
             <div className="page-title-row">
-              <div>
-                <h1>Empanelment Applications</h1>
-              </div>
+              {hasAllTeamsTab ? (
+                <div className="ll-view-tabs" role="tablist">
+                  <button type="button" role="tab" aria-selected={view === "team"} className={`ll-view-tab${view === "team" ? " ll-view-tab-active" : ""}`} onClick={() => selectView("team")}>
+                    My Team
+                  </button>
+                  <button type="button" role="tab" aria-selected={view === "all"} className={`ll-view-tab${view === "all" ? " ll-view-tab-active" : ""}`} onClick={() => selectView("all")}>
+                    All Teams
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <h1>Empanelment Applications</h1>
+                </div>
+              )}
               {canSend && (
                 <Button variant="primary" onClick={() => navigate("/empanelment/send")}>+ Send Empanelment Form</Button>
               )}
@@ -313,7 +444,7 @@ export default function EmpanelmentListPage() {
             <StatCard label="Total" value={stats.total} colorClass="blue" loading={loading} active={quickFilter === "all"} onClick={() => selectQuickFilter("all")} />
             <StatCard label="In Review" value={stats.inReview} colorClass="purple" loading={loading} active={quickFilter === "in_review"} onClick={() => selectQuickFilter("in_review")} />
             <StatCard label="Accepted" value={stats.accepted} colorClass="green" loading={loading} active={quickFilter === "accepted"} onClick={() => selectQuickFilter("accepted")} />
-            <StatCard label="Rejected" value={stats.rejected} colorClass="red" loading={loading} active={quickFilter === "rejected"} onClick={() => selectQuickFilter("rejected")} />
+            <StatCard label={INELIGIBLE_LABEL} value={stats.rejected} colorClass="red" loading={loading} active={quickFilter === "rejected"} onClick={() => selectQuickFilter("rejected")} />
           </div>
 
           <Card className="bl-filter-card">
@@ -328,7 +459,7 @@ export default function EmpanelmentListPage() {
                     <Select options={teamOptions} value={teamFilter} onChange={selectTeamFilter} placeholder="All Teams" />
                   </div>
                 )}
-                <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={statusFilter !== "all" ? 1 : 0} />
+                <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={(statusFilter !== "all" ? 1 : 0) + (dateFilter !== "all" ? 1 : 0)} />
               </div>
             </Card.Body>
           </Card>
@@ -341,8 +472,8 @@ export default function EmpanelmentListPage() {
                 <table className="table bl-table">
                   <thead>
                     <tr>
-                      <th>App Code</th><th>BP Email</th><th>Organisation</th>
-                      <th>Contact</th><th>Team</th><th>Sent On</th><th>Status</th><th>Actions</th>
+                      <th className="bl-col-code">App Code</th><th>BP Email</th><th>Organisation</th>
+                      <th className="bl-col-contact">Contact</th>{canFilterTeam && <th className="bl-col-team">Team</th>}<th className="bl-col-date">Sent On</th><th className="bl-col-status">Status</th><th className="bl-col-actions">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -350,20 +481,23 @@ export default function EmpanelmentListPage() {
                       <tr
                         key={a.id}
                         className={a.ba_reg ? "bl-row-clickable" : undefined}
-                        onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedStatus(a.status); setSelectedAppId(a.id); setSelectedReviewerRole(a.po?.role || null); setSelectedAdvisorRole(a.dgm?.role || null); } : undefined}
+                        onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedAppId(a.id); setSelectedAppRow(a); setSelectedReviewerRole(a.po?.role || null); setSelectedAdvisorRole(a.dgm?.role || null); } : undefined}
                       >
-                        <td><span className="bl-app-code">{a.application_code || "—"}</span></td>
+                        <td className="bl-col-code"><span className="bl-app-code">{a.application_code || "—"}</span></td>
                         <td className="bl-email" title={a.ba_email || ""}>{fmt(a.ba_email)}</td>
                         <td>{a.ba_reg?.org_name ? <span className="bl-org" title={a.ba_reg.org_name}>{fmt(a.ba_reg.org_name)}</span> : <span className="bl-not-filled">Not filled yet</span>}</td>
-                        <td className="bl-contact" title={a.ba_reg?.contact_person || ""}>{fmt(a.ba_reg?.contact_person)}</td>
-                        <td>{a.team ? <Badge variant="neutral">{a.team}</Badge> : "—"}</td>
-                        <td className="bl-date">{fmtDate(a.created_at)}</td>
-                        <td><StatusBadge status={a.status} reviewerRole={a.po?.role} advisorRole={a.dgm?.role} /></td>
-                        <td onClick={(e) => e.stopPropagation()}>
+                        <td className="bl-contact bl-col-contact" title={a.ba_reg?.contact_person || ""}>{fmt(a.ba_reg?.contact_person)}</td>
+                        {canFilterTeam && <td className="bl-col-team">{a.team ? <Badge variant="neutral" className="bl-team-badge">{a.team}</Badge> : "—"}</td>}
+                        <td className="bl-date bl-col-date">{fmtDate(a.created_at)}</td>
+                        <td className="bl-col-status"><StatusBadge status={a.status} csReviewed={a.cs_reviewed} reviewerRole={a.po?.role} advisorRole={a.dgm?.role} /></td>
+                        <td className="bl-col-actions" onClick={(e) => e.stopPropagation()}>
                           <div className="bl-actions">
                             {a.ba_reg && canReview && (
-                              <Button variant="primary" size="sm" onClick={() => navigate(`/empanelment/${a.id}`)}>Review</Button>
+                              <Tooltip text="View application">
+                                <button type="button" className="bl-icon-btn" aria-label="View application" onClick={() => navigate(`/empanelment/${a.id}`)}><EyeIcon /></button>
+                              </Tooltip>
                             )}
+                            <LetterIcons app={a} />
                           </div>
                         </td>
                       </tr>
@@ -395,17 +529,20 @@ export default function EmpanelmentListPage() {
 
       <BADetailModal
         ba={selectedBA}
-        invStatus={selectedStatus}
+        appRow={selectedAppRow}
         invReviewerRole={selectedReviewerRole}
         invAdvisorRole={selectedAdvisorRole}
         canReview={canReview}
         onReview={() => navigate(`/empanelment/${selectedAppId}`)}
-        onClose={() => { setSelectedBA(null); setSelectedStatus(null); setSelectedAppId(null); setSelectedReviewerRole(null); setSelectedAdvisorRole(null); }}
+        onClose={() => { setSelectedBA(null); setSelectedAppId(null); setSelectedAppRow(null); setSelectedReviewerRole(null); setSelectedAdvisorRole(null); }}
       />
 
-      <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={() => setStatusFilter("all")}>
+      <FilterDrawer open={filterDrawerOpen} onClose={() => setFilterDrawerOpen(false)} onReset={() => { setStatusFilter("all"); setDateFilter("all"); }}>
         <FilterField label="Status">
           <Select options={STATUS_OPTIONS} value={statusFilter} onChange={selectStatusFilter} placeholder="All Statuses" />
+        </FilterField>
+        <FilterField label="Sent On">
+          <Select options={DATE_FILTER_OPTIONS} value={dateFilter} onChange={setDateFilter} placeholder="All Time" />
         </FilterField>
       </FilterDrawer>
     </div>

@@ -1,12 +1,13 @@
 // Admin-only: sets a new 4-digit action PIN for another user. The PIN is
 // one-way hashed server-side — nobody, including Admin, can ever view the
 // current value, only reset it to a new one. Gated by the ADMIN'S OWN
-// password (re-verified via supabase.auth.signInWithPassword, same pattern
-// as every other self-service sensitive action in this app), not the
+// password (re-verified via the verify-own-password edge function, same
+// pattern as every other self-service sensitive action in this app — not a
+// direct client-side supabase.auth.signInWithPassword call, which is
+// captcha-gated through the anon key once Turnstile is enabled), not the
 // target user's — Admin doesn't and shouldn't know that.
 import { useState } from "react";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { useAuth } from "../../hooks/useAuth";
 import Modal from "../../components/ui/Modal";
 import Input from "../../components/ui/Input";
 import PinInput from "../../components/ui/PinInput";
@@ -17,7 +18,6 @@ import { LockIcon } from "../../components/icons";
 const PIN_PATTERN = /^\d{4}$/;
 
 export default function ResetPinModal({ targetUserId, targetName, onClose, onSuccess }) {
-  const { profile } = useAuth();
   const [adminPassword, setAdminPassword] = useState("");
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
@@ -32,8 +32,8 @@ export default function ResetPinModal({ targetUserId, targetName, onClose, onSuc
 
     setLoading(true);
     try {
-      const { error: verifyError } = await supabase.auth.signInWithPassword({ email: profile.email, password: adminPassword });
-      if (verifyError) {
+      const { data: verifyData, error: verifyError } = await supabase.functions.invoke("verify-own-password", { body: { password: adminPassword } });
+      if (verifyError || !verifyData?.success) {
         setError("Your password is incorrect.");
         return;
       }

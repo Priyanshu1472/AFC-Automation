@@ -62,3 +62,44 @@ describe("ErrorBoundary", () => {
     expect(window.location.href).toBe("/home");
   });
 });
+
+describe("ErrorBoundary — stale chunk after a deploy", () => {
+  function StaleChunk() {
+    throw new TypeError("Failed to fetch dynamically imported module: https://x/assets/HomePage-old.js");
+  }
+
+  beforeEach(() => sessionStorage.clear());
+
+  it("reloads into the new version instead of showing the error screen", () => {
+    render(
+      <ErrorBoundary>
+        <StaleChunk />
+      </ErrorBoundary>,
+    );
+    expect(window.location.reload).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
+  });
+
+  it("does not reload again within 30s, so a truly broken chunk can't loop", () => {
+    sessionStorage.setItem("afc:stale-chunk-reload-at", String(Date.now()));
+    render(
+      <ErrorBoundary>
+        <StaleChunk />
+      </ErrorBoundary>,
+    );
+    expect(window.location.reload).not.toHaveBeenCalled();
+    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+  });
+
+  it("does not reload for an ordinary render error", () => {
+    function Bomb2() {
+      throw new Error("kaboom");
+    }
+    render(
+      <ErrorBoundary>
+        <Bomb2 />
+      </ErrorBoundary>,
+    );
+    expect(window.location.reload).not.toHaveBeenCalled();
+  });
+});

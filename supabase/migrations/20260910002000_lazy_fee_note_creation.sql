@@ -1,0 +1,13 @@
+-- Reverts eager fee-note creation (20260910000000_fee_notes_workflow.sql /
+-- 20260910000100_backfill_fee_notes.sql): auto-creating all 3 fee notes the
+-- moment a proposal opened meant a note could get "created" with no amount
+-- at all if Person Responsible never touched it — generating a PDF with a
+-- blank underline instead of the figure they'd already entered on the
+-- Lead Approval Note. Fee notes are now created lazily, the first time
+-- Person Responsible actually fills the edit form and generates the PDF
+-- (see save-fee-note's new create-or-update branch) — never as an empty
+-- stub. Delete every stub already sitting untouched from the old eager
+-- behavior; a real note always has a justification (required on save), so
+-- justification IS NULL reliably identifies "never actually edited" and
+-- can't catch a note someone genuinely filled in.
+delete from public.fee_notes where status = 'draft' and justification is null;

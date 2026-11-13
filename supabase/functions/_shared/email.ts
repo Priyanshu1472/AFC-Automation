@@ -43,6 +43,7 @@ export function wrapEmailBody(bodyHtml: string): string {
 
 export async function sendResendEmail(opts: {
   to: string;
+  cc?: string;
   subject: string;
   html: string;
   attachments?: { filename: string; content: string }[]; // content is base64
@@ -61,6 +62,7 @@ export async function sendResendEmail(opts: {
       to: [opts.to],
       subject: opts.subject,
       html: opts.html,
+      ...(opts.cc ? { cc: [opts.cc] } : {}),
       ...(opts.attachments ? { attachments: opts.attachments } : {}),
     }),
   });
