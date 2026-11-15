@@ -205,10 +205,10 @@ function BarRow({ label, count, total, variant, onClick, active }) {
   );
 }
 
-function ChartCard({ title, subtitle, children, action }) {
+function ChartCard({ title, children, action }) {
   return (
     <Card hoverable className="ldb-chart-card">
-      <Card.Header title={title} subtitle={subtitle} action={action} />
+      <Card.Header title={title} action={action} />
       <Card.Body>{children}</Card.Body>
     </Card>
   );
@@ -478,11 +478,11 @@ export default function LeadDashboardPage() {
         </div>
 
         <div className="ldb-charts-grid">
-          <ChartCard title="Status Distribution" subtitle="Click a segment to see those leads">
+          <ChartCard title="Status Distribution">
             <DonutChart segments={donutSegments} onSegmentClick={handleDonutClick} activeKey={activeDonut} />
           </ChartCard>
 
-          <ChartCard title="Lead Pipeline" subtitle="Leads currently at each stage — click to drill in">
+          <ChartCard title="Lead Pipeline">
             <div className="ldb-bar-list">
               {funnelCounts.map((f) => (
                 <BarRow key={f.key} label={STATUS_MAP[f.key]?.label || f.key} count={f.count} total={total} variant="brand" onClick={() => handleStageClick(f.key)} active={activeStage === f.key} />
@@ -490,7 +490,7 @@ export default function LeadDashboardPage() {
             </div>
           </ChartCard>
 
-          <ChartCard title="Monthly Trend" subtitle="Hover for exact count, click a bar to drill in">
+          <ChartCard title="Monthly Trend">
             <div className="ldb-spark">
               {monthly.map((m) => (
                 <button key={m.key} type="button" className="ldb-spark-col" onClick={() => m.count > 0 && handleMonthClick(m)}>
@@ -506,7 +506,7 @@ export default function LeadDashboardPage() {
         </div>
 
         <div className="ldb-charts-grid ldb-charts-grid-2">
-          <ChartCard title="Source & Lead Type" subtitle="Where leads come from, and how they're filed">
+          <ChartCard title="Source & Lead Type">
             <div className="ldb-mini-charts">
               <div>
                 <p className="ldb-mini-label">Source</p>
@@ -527,7 +527,7 @@ export default function LeadDashboardPage() {
             </div>
           </ChartCard>
 
-          <ChartCard title="Quick Insights" subtitle="Things that need attention">
+          <ChartCard title="Quick Insights">
             <div className="ldb-insights">
               {insights.map((ins, i) => (
                 <div key={i} className={`ldb-insight ldb-insight-${ins.tone}`}>
@@ -541,7 +541,7 @@ export default function LeadDashboardPage() {
 
         {canFilterTeam && teamBreakdown.length > 0 && (
           <div className="ldb-bottom-grid ldb-bottom-grid-single">
-            <ChartCard title="Team Performance" subtitle="Approval rate per team">
+            <ChartCard title="Team Performance">
               <div className="ldb-team-list">
                 {teamBreakdown.map((t) => (
                   <div key={t.team} className="ldb-team-row">

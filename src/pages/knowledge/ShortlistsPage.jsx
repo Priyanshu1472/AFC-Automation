@@ -383,7 +383,6 @@ export default function ShortlistsPage() {
             <div className="page-title-row">
               <div>
                 <h1>Shortlists</h1>
-                <p>Saved project collections — export as Word or PDF.</p>
               </div>
             </div>
           </div>

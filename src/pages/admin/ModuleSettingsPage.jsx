@@ -51,9 +51,6 @@ export default function ModuleSettingsPage() {
       <div className="app-container">
         <div className="page-header">
           <h1>Module Settings</h1>
-          <p className="text-secondary">
-            Switch portal modules ON or OFF. A module that's OFF is hidden from everyone and shows a &quot;Coming Soon&quot; page, even when opened by a direct link.
-          </p>
         </div>
 
         {!IS_PRODUCTION && (

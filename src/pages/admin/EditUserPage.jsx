@@ -169,11 +169,6 @@ export default function EditUserPage() {
           <div className="page-title-row">
             <div>
               <h1>{canEdit ? "Edit User" : "User"}</h1>
-              <p>
-                {canEdit
-                  ? `Fix a mistake on this account — name, team, office${canEditRole ? ", or role" : ""}.`
-                  : "Account information (view-only)."}
-              </p>
             </div>
           </div>
         </div>

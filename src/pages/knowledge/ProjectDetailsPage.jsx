@@ -21,6 +21,24 @@ const IconEdit = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="no
 const IconBookmark = ({ filled }) => (<svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg>);
 const IconChevron = () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>);
 
+// Text pasted/extracted from PDFs arrives with a hard line break every
+// ~80 chars, which pre-wrap then honours — so a paragraph only filled half
+// the card. Re-join those wrapped lines, keeping real breaks: blank lines,
+// and lines that start a bullet / numbered item.
+const NEW_ITEM_RE = /^([•▪◦●\-–*]|\(?[0-9ivxIVX]{1,4}[.)]\s|\(?[a-zA-Z]\)\s)/;
+function reflowText(text) {
+  if (!text) return text;
+  const out = [];
+  for (const raw of String(text).replace(/\r\n?/g, "\n").split("\n")) {
+    const line = raw.trim();
+    const prev = out.length ? out[out.length - 1] : null;
+    if (!line || prev === null || prev === "" || NEW_ITEM_RE.test(line)) { out.push(line); continue; }
+    // "workflow-⏎based" → "workflow-based"; otherwise join with a space.
+    out[out.length - 1] = /[A-Za-z]-$/.test(prev) ? prev + line : `${prev} ${line}`;
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 // A single "Download X" trigger that opens a small PDF/Word menu instead
 // of immediately downloading — three of these (Profile / Supportings /
 // Both) replace the old single Word+PDF button pair.
@@ -406,14 +424,14 @@ export default function ProjectDetailsPage() {
             {summary.servicesDescription && (
               <div className="details-card full-card">
                 <h3 className="card-section-title">Services Performed</h3>
-                <p className="detail-para">{summary.servicesDescription}</p>
+                <p className="detail-para">{reflowText(summary.servicesDescription)}</p>
               </div>
             )}
 
             {summary.projectBriefDescription && (
               <div className="details-card full-card">
                 <h3 className="card-section-title">Project Description</h3>
-                <p className="detail-para">{summary.projectBriefDescription}</p>
+                <p className="detail-para">{reflowText(summary.projectBriefDescription)}</p>
               </div>
             )}
 

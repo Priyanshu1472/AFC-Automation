@@ -6,7 +6,6 @@ import { useShortlist } from "../../hooks/useShortlist";
 import ShortlistModal from "../../components/knowledge/ShortlistModal";
 import MissingDetailsModal from "../../components/knowledge/MissingDetailsModal";
 import { getMissingProjectFields } from "../../lib/projectCompleteness";
-import CompanyDocumentsPanel from "../../components/knowledge/CompanyDocumentsPanel";
 import FindExperiencePanel from "../../components/knowledge/FindExperiencePanel";
 import RebuildIndexPanel from "../../components/knowledge/RebuildIndexPanel";
 import AppHeader from "../../components/shared/AppHeader";
@@ -39,7 +38,6 @@ const IconPin = () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="non
 const IconSearch = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>);
 const IconPlus = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>);
 const IconBookmark = ({ filled = false }) => (<svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg>);
-const IconEye = () => (<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>);
 const IconBuilding = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="2" width="16" height="20" rx="1" /><line x1="9" y1="6" x2="9" y2="6.01" /><line x1="15" y1="6" x2="15" y2="6.01" /><line x1="9" y1="10" x2="9" y2="10.01" /><line x1="15" y1="10" x2="15" y2="10.01" /><line x1="9" y1="14" x2="9" y2="14.01" /><line x1="15" y1="14" x2="15" y2="14.01" /><line x1="10" y1="22" x2="10" y2="18" /><line x1="14" y1="22" x2="14" y2="18" /></svg>);
 const IconSparkle = () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" /></svg>);
 const IconWarning = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>);
@@ -90,7 +88,6 @@ export default function KnowledgeSearchPage() {
 
   const [slProject, setSlProject] = useState(null);
   const [missingDetailsProject, setMissingDetailsProject] = useState(null);
-  const [showCompanyDocs, setShowCompanyDocs] = useState(false);
   const { shortlists, createShortlist, addToShortlist, isInAnyShortlist, getProjectShortlists } = useShortlist();
 
   useEffect(() => {
@@ -303,7 +300,6 @@ export default function KnowledgeSearchPage() {
                   <span className="kr-file-icon"><IconFile /></span>
                   <div className="kr-file-actions">
                     {p.shortform && <span className="kr-file-shortform">{p.shortform}</span>}
-                    <span className="kr-icon-action" title="View project" onClick={(e) => { e.stopPropagation(); navigate(`/knowledge/${p.id}`); }}><IconEye /></span>
                     <span className={`kr-icon-action${shortlisted ? " kr-icon-action--active" : ""}`} title={shortlisted ? "Shortlisted" : "Add to shortlist"} onClick={(e) => openSlModal(e, p)}><IconBookmark filled={shortlisted} /></span>
                   </div>
                 </div>
@@ -334,8 +330,12 @@ export default function KnowledgeSearchPage() {
     <>
       <div className="kr-table-wrap">
         <table className="kr-table">
+          <colgroup>
+            <col style={{ width: 48 }} /><col /><col style={{ width: "17%" }} /><col style={{ width: "11%" }} />
+            <col style={{ width: 150 }} /><col style={{ width: 110 }} /><col style={{ width: 160 }} /><col style={{ width: 76 }} />
+          </colgroup>
           <thead>
-            <tr><th>#</th><th>Project</th><th>Client</th><th>Location</th><th>Duration</th><th>Value (Lakh)</th><th>Status</th><th style={{ width: 72 }}>Actions</th></tr>
+            <tr><th>#</th><th>Project</th><th>Client</th><th>Location</th><th>Duration</th><th>Value (Lakh)</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
@@ -343,17 +343,22 @@ export default function KnowledgeSearchPage() {
             ) : filtered.map((p, i) => {
               const shortlisted = isInAnyShortlist(p.id);
               return (
-                <tr key={p.id}>
+                <tr
+                  key={p.id}
+                  className="kr-tr-link"
+                  tabIndex={0}
+                  onClick={() => navigate(`/knowledge/${p.id}`)}
+                  onKeyDown={(e) => { if (e.target === e.currentTarget && e.key === "Enter") navigate(`/knowledge/${p.id}`); }}
+                >
                   <td className="kr-td-num">{i + 1}</td>
-                  <td><div className="kr-td-title">{p.title}</div>{p.shortform && <div className="kr-td-shortform">{p.shortform}</div>}</td>
-                  <td><div className="kr-td-client">{p.client || <span className="kr-td-muted">—</span>}</div></td>
-                  <td>{p.location ? <span className="kr-td-loc"><IconPin /> {p.location}</span> : <span className="kr-td-muted">—</span>}</td>
-                  <td className="kr-td-date">{fmtYM(p.startDate)} – {fmtYM(p.finishDate)}</td>
-                  <td className="kr-td-date">{p.capitalCost != null ? `₹${p.capitalCost} Lakh` : <span className="kr-td-muted">—</span>}</td>
+                  <td title={p.shortform ? `${p.title} (${p.shortform})` : p.title}><div className="kr-td-title">{p.title}</div>{p.shortform && <div className="kr-td-shortform">{p.shortform}</div>}</td>
+                  <td title={p.client || ""}><div className="kr-td-client">{p.client || <span className="kr-td-muted">—</span>}</div></td>
+                  <td title={p.location || ""}>{p.location ? <span className="kr-td-loc"><IconPin /> <span className="kr-td-ellipsis">{p.location}</span></span> : <span className="kr-td-muted">—</span>}</td>
+                  <td className="kr-td-date" title={`${fmtYM(p.startDate)} – ${fmtYM(p.finishDate)}`}>{fmtYM(p.startDate)} – {fmtYM(p.finishDate)}</td>
+                  <td className="kr-td-date" title={p.capitalCost != null ? `₹${p.capitalCost} Lakh` : ""}>{p.capitalCost != null ? `₹${p.capitalCost} Lakh` : <span className="kr-td-muted">—</span>}</td>
                   <td><MissingDetailsBtn p={p} /></td>
                   <td>
                     <div className="kr-td-actions">
-                      <button className="kr-icon-action" title="View project" onClick={() => navigate(`/knowledge/${p.id}`)}><IconEye /></button>
                       <button className={`kr-icon-action${shortlisted ? " kr-icon-action--active" : ""}`} title={shortlisted ? "Shortlisted" : "Add to shortlist"} onClick={(e) => openSlModal(e, p)}><IconBookmark filled={shortlisted} /></button>
                     </div>
                   </td>
@@ -428,7 +433,7 @@ export default function KnowledgeSearchPage() {
                   <button className={`kr-view-btn${viewMode === "folder" ? " kr-view-btn--active" : ""}`} onClick={() => setViewMode("folder")} title="Folder View"><IconGrid /></button>
                   <button className={`kr-view-btn${viewMode === "table" ? " kr-view-btn--active" : ""}`} onClick={() => setViewMode("table")} title="Table View"><IconTable /></button>
                 </div>
-                <button className="kr-btn-shortlists" onClick={() => setShowCompanyDocs(true)}>
+                <button className="kr-btn-shortlists" onClick={() => navigate("/knowledge/company-documents")}>
                   <span className="kr-btn-icon"><IconBuilding /></span>
                   <span className="kr-btn-label">Company Documents</span>
                 </button>
@@ -561,7 +566,6 @@ export default function KnowledgeSearchPage() {
           </>
           )}
 
-          {showCompanyDocs && <CompanyDocumentsPanel onClose={() => setShowCompanyDocs(false)} />}
           {showRebuildIndex && <RebuildIndexPanel onClose={() => setShowRebuildIndex(false)} />}
 
           {missingDetailsProject && (

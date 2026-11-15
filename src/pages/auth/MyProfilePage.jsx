@@ -143,7 +143,6 @@ export default function MyProfilePage() {
       <div className="app-container mp-page">
         <div className="page-header">
           <h1>My Profile</h1>
-          <p>Your photo, name and signature, plus your password and action PIN.</p>
         </div>
 
         {/* Identity — photo, name, designation and the admin-managed facts. */}
@@ -198,7 +197,7 @@ export default function MyProfilePage() {
           <div className="mp-col">
             <Card className="mp-section-card">
               <form onSubmit={handleSaveName} noValidate>
-                <Card.Header title="Display Name" subtitle="How your name appears across the app and on generated documents." />
+                <Card.Header title="Display Name" />
                 <Card.Body>
                   {banner && (
                     <Alert variant="danger" onClose={() => setBanner("")}>
@@ -217,7 +216,7 @@ export default function MyProfilePage() {
             </Card>
 
             <Card className="mp-section-card">
-              <Card.Header title="Signature" subtitle="Used to sign the PDFs you generate." />
+              <Card.Header title="Signature" />
               <Card.Body>
                 {signatureUrl ? (
                   <div className="mp-signature">
@@ -240,7 +239,6 @@ export default function MyProfilePage() {
               <SetPasswordForm
                 variant="section"
                 heading="Change Password"
-                subheading="Choose a new password for your account."
                 submitLabel="Update Password"
                 hookOptions={{ requireMarkChanged: false, redirectTo: null, requireCurrentPassword: true }}
                 successMessage="Password updated successfully."

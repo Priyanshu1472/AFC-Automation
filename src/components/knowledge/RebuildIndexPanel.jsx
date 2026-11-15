@@ -56,7 +56,7 @@ export default function RebuildIndexPanel({ onClose }) {
 
   return (
     <Modal onClose={onClose} size="md">
-      <Modal.Header title="Search Index" subtitle="Powers Find Relevant Experience — keeps every project's searchable text up to date." onClose={onClose} />
+      <Modal.Header title="Search Index" onClose={onClose} />
       <Modal.Body>
         {error && <div className="field-error" style={{ marginBottom: "var(--space-3)" }}>{error}</div>}
 

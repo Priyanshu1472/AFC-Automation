@@ -220,10 +220,10 @@ function BarRow({ label, count, total, variant, onClick, active }) {
   );
 }
 
-function ChartCard({ title, subtitle, children, action }) {
+function ChartCard({ title, children, action }) {
   return (
     <Card hoverable className="edb-chart-card">
-      <Card.Header title={title} subtitle={subtitle} action={action} />
+      <Card.Header title={title} action={action} />
       <Card.Body>{children}</Card.Body>
     </Card>
   );
@@ -494,11 +494,11 @@ export default function EmpanelmentDashboardPage() {
         </div>
 
         <div className="edb-charts-grid">
-          <ChartCard title="Status Distribution" subtitle="Click a segment to see those applications">
+          <ChartCard title="Status Distribution">
             <DonutChart segments={donutSegments} onSegmentClick={handleDonutClick} activeKey={activeDonut} />
           </ChartCard>
 
-          <ChartCard title="Application Pipeline" subtitle="Applications currently at each stage — click to drill in">
+          <ChartCard title="Application Pipeline">
             <div className="edb-bar-list">
               {funnelCounts.map((f) => (
                 <BarRow key={f.key} label={STATUS_MAP[f.key]?.label || f.key} count={f.count} total={total} variant="brand" onClick={() => handleStageClick(f.key)} active={activeStage === f.key} />
@@ -506,7 +506,7 @@ export default function EmpanelmentDashboardPage() {
             </div>
           </ChartCard>
 
-          <ChartCard title="Monthly Trend" subtitle="Hover for exact count, click a bar to drill in">
+          <ChartCard title="Monthly Trend">
             <div className="edb-spark">
               {monthly.map((m) => (
                 <button key={m.key} type="button" className="edb-spark-col" onClick={() => m.count > 0 && handleMonthClick(m)}>
@@ -522,7 +522,7 @@ export default function EmpanelmentDashboardPage() {
         </div>
 
         <div className="edb-charts-grid edb-charts-grid-2">
-          <ChartCard title="Sector-wise Coverage" subtitle="Top sectors served by empanelled BPs">
+          <ChartCard title="Sector-wise Coverage">
             {sectorBreakdown.length === 0 ? <p className="text-secondary text-sm">No sector data yet.</p> : (
               <div className="edb-bar-list">
                 {sectorBreakdown.map((s) => (
@@ -532,7 +532,7 @@ export default function EmpanelmentDashboardPage() {
             )}
           </ChartCard>
 
-          <ChartCard title="Quick Insights" subtitle="Things that need attention">
+          <ChartCard title="Quick Insights">
             <div className="edb-insights">
               {insights.map((ins, i) => (
                 <div key={i} className={`edb-insight edb-insight-${ins.tone}`}>
@@ -546,7 +546,7 @@ export default function EmpanelmentDashboardPage() {
 
         {canFilterTeam && teamBreakdown.length > 0 && (
           <div className="edb-bottom-grid edb-bottom-grid-single">
-            <ChartCard title="Team Performance" subtitle="Acceptance rate per team">
+            <ChartCard title="Team Performance">
               <div className="edb-team-list">
                 {teamBreakdown.map((t) => (
                   <div key={t.team} className="edb-team-row">

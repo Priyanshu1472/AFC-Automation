@@ -282,7 +282,6 @@ export default function AuditLogsPage() {
       <div className="app-container">
         <div className="page-header">
           <h1>Audit Logs</h1>
-          <p>Complete history of account-management, empanelment, and lead generation pipeline actions across the system.</p>
         </div>
 
         <div className="al-tabs">

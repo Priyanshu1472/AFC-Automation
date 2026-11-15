@@ -132,7 +132,6 @@ export default function CreateUserPage() {
           <div className="page-title-row">
             <div>
               <h1>Create User</h1>
-              <p>Create a staff account. A temporary password will be generated and emailed automatically.</p>
             </div>
           </div>
         </div>

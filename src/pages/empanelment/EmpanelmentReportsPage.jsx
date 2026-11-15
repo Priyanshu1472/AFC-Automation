@@ -503,7 +503,6 @@ function ReportPreview({ report, output, onExcel, onPdf }) {
     <Card className="erp-preview">
       <Card.Header
         title={report.title}
-        subtitle={report.desc}
         action={
           <div className="erp-dl-btns">
             <Button variant="secondary" size="sm" disabled={empty} onClick={onExcel}>Excel</Button>

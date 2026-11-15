@@ -76,7 +76,6 @@ export default function ProposalLockPanel({ proposal, pastDeadline, canManage, m
         <span className="pp-flow-head-icon" aria-hidden="true"><LockIcon /></span>
         <div>
           <h2>Lock &amp; Client Response</h2>
-          <p>Lock the proposal once it’s submitted, then record what the client decided.</p>
         </div>
       </div>
 

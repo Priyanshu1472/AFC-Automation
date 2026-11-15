@@ -280,7 +280,6 @@ export default function UserListPage() {
           <div className="page-title-row">
             <div>
               <h1>Users</h1>
-              <p>{can.viewAllTeams(profile?.role) ? "All staff accounts." : "Your team's staff accounts."}</p>
             </div>
             {canCreate && (
               <Tooltip text="Create a new staff account. A temporary password is generated and emailed automatically.">

@@ -38,6 +38,7 @@ const AddProjectPage = lazy(() => import("./pages/knowledge/AddProjectPage"));
 const EditProjectPage = lazy(() => import("./pages/knowledge/EditProjectPage"));
 const ProjectDetailsPage = lazy(() => import("./pages/knowledge/ProjectDetailsPage"));
 const ShortlistsPage = lazy(() => import("./pages/knowledge/ShortlistsPage"));
+const CompanyDocumentsPage = lazy(() => import("./pages/knowledge/CompanyDocumentsPage"));
 const LeadListPage = lazy(() => import("./pages/leads/LeadListPage"));
 const CreateLeadPage = lazy(() => import("./pages/leads/CreateLeadPage"));
 const EditLeadPage = lazy(() => import("./pages/leads/EditLeadPage"));
@@ -343,6 +344,14 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={KNOWLEDGE_REPOSITORY_ROLES}>
                       <AddProjectPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/knowledge/company-documents"
+                  element={
+                    <ProtectedRoute allowedRoles={KNOWLEDGE_REPOSITORY_ROLES}>
+                      <CompanyDocumentsPage />
                     </ProtectedRoute>
                   }
                 />

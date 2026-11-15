@@ -3,10 +3,11 @@
    All values use App.css tokens. Zero hardcoded colours.
    ============================================================ */
 
-.cdp-add-row {
+.cdp-page {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: var(--space-4);
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-bottom: var(--space-12);
 }
 
 .cdp-empty {

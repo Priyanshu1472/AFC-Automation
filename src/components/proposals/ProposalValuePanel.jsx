@@ -43,7 +43,7 @@ export default function ProposalValuePanel({ proposal, canManage, onChanged }) {
 
   return (
     <Card>
-      <Collapsible title="Financial" subtitle="Total value proposed to the client." icon={<RupeeIcon />} expandable={false}>
+      <Collapsible title="Financial" icon={<RupeeIcon />} expandable={false}>
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         {showForm ? (
           <form className="pp-value-form" onSubmit={save}>
