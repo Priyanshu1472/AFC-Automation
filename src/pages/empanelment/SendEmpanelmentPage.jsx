@@ -88,7 +88,7 @@ function EmailPreview({ to, advisedByName, advisedByDesig, acName }) {
         <div className="sef-email-head-info">
           <div className="sef-email-subject">Business Partner Empanelment Form — AFC India Limited</div>
           <div className="sef-email-meta-row">
-            <span className="sef-email-from">noreply@pmis.afcindia.org.in</span>
+            <span className="sef-email-from">noreply@pmisafc.in</span>
             <span className="sef-email-arrow" aria-hidden="true">→</span>
             <span className="sef-email-to">{to}</span>
           </div>

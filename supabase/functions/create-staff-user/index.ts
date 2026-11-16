@@ -191,7 +191,7 @@ async function sendCredentialsEmail(opts: {
     method: "POST",
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: "AFC India Limited <noreply@pmis.afcindia.org.in>",
+      from: "AFC India Limited <noreply@pmisafc.in>",
       to: [opts.to],
       subject: "Your AFC India Limited staff account",
       html,
