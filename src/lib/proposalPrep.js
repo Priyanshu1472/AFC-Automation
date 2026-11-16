@@ -135,3 +135,31 @@ export function isProposalLocked(proposal, lead) {
   if (lead?.submission_deadline && new Date(lead.submission_deadline) < new Date()) return true;
   return false;
 }
+
+// "My Proposals" on ProposalsListPage — personally named on the lead
+// (Person Responsible, Reviewer, Recommending Authority) or added as an
+// additional Person Responsible on the proposal itself (see
+// AdditionalResponsiblesPanel / proposal_additional_responsibles).
+// `additionalResponsibleIds` is that lead's own list, not a global one —
+// callers pass whatever's already keyed by lead id in their fetch.
+export function isMyProposal(profile, lead, additionalResponsibleIds = []) {
+  if (!profile) return false;
+  return (
+    profile.id === lead.person_responsible_id ||
+    profile.id === lead.reviewer_id ||
+    profile.id === lead.recommending_authority_id ||
+    additionalResponsibleIds.includes(profile.id)
+  );
+}
+
+// "Team Proposals" — every proposal going on in the viewer's own team(s),
+// full stop, with no org-wide-role exception (unlike isTeamLead on the
+// Leads list) — org-wide visibility has its own separate "Organization
+// Proposals" tab here, so this one stays literally team-scoped for
+// everyone, including md/cfo/cs/admin/dgm/agm/srm (who have no team of
+// their own and so see nothing under this tab — Organization Proposals is
+// the one for them).
+export function isTeamProposal(profile, lead) {
+  if (!profile) return false;
+  return !!profile.teams?.includes(lead.team);
+}

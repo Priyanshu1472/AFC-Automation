@@ -815,3 +815,35 @@
 @media (max-width: 900px) {
   .pp-stats-grid--5 { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* My Proposals / Team Proposals / Organization Proposals — same look as
+   LeadListPage's ll-view-tabs. */
+.pp-view-tabs {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.pp-view-tab {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-lg);
+  color: var(--text-tertiary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.pp-view-tab:hover {
+  color: var(--text-secondary);
+}
+
+.pp-view-tab-active {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
