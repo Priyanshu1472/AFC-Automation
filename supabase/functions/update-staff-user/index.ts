@@ -51,6 +51,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     .eq("id", user_id)
     .maybeSingle();
   if (targetErr || !target) return jsonRes(req, 404, { error: "User not found." });
+  if (target.role === "super_admin") return jsonRes(req, 403, { error: "The Super Admin account can't be changed here." });
 
   const update: Record<string, unknown> = { full_name: full_name.trim() };
 
@@ -66,6 +67,9 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     update.role = role;
   }
   if (committee !== undefined) update.committee = (committee as string) || null;
+  // Proposals' Accounts Committee (pays approved Bid Payment Requisition
+  // Notes, verifies EMD refunds / PBG) — independent of `committee`.
+  if (body.accounts_committee !== undefined && role !== undefined) update.accounts_committee = body.accounts_committee === true;
   if (office !== undefined) update.office = (office as string) || null;
 
   // `teams` (plural) is the full assignment set for team-scoped roles —

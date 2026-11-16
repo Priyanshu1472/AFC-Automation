@@ -143,7 +143,7 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
 
   return (
     <Modal onClose={saving ? undefined : onClose} closeOnBackdrop={!saving}>
-      <Modal.Header title={`${editing ? "Edit" : "Add"} ${noun}`} subtitle={kind === "milestone" ? "A billing / progress point from the MoU." : "A piece of work to deliver, optionally under a milestone."} onClose={saving ? undefined : onClose} />
+      <Modal.Header title={`${editing ? "Edit" : "Add"} ${noun}`} onClose={saving ? undefined : onClose} />
       <Modal.Body>
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         <div className="mon-form">

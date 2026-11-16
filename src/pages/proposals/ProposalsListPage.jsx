@@ -18,7 +18,7 @@ import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import { ChatIcon, ArrowRightIcon, ActivityIcon } from "../../components/icons";
-import { CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS, canOpenProposal } from "../../lib/proposalPrep";
+import { CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS, canOpenProposal, isAccountsCommittee } from "../../lib/proposalPrep";
 import "../../styles/ProposalPreparationPage.css";
 
 // "In Preparation" covers both "no proposal_preparations row yet" and "row
@@ -31,7 +31,24 @@ const QUICK_FILTERS = {
   in_preparation: { label: "In Preparation", match: (l) => (l.proposal?.client_response || "pending") === "pending" },
   accepted: { label: "Accepted", match: (l) => l.proposal?.client_response === "awarded" },
   rejected: { label: "Rejected", match: (l) => l.proposal?.client_response === "rejected" },
+  // Accounts Committee only: an approved note still to be paid, or an EMD
+  // refund / PBG forwarded for verification.
+  accounts: { label: "Pending with Accounts", match: (l) => !!accountsPendingOf(l) },
 };
+
+function accountsPendingOf(l) {
+  if (l.feeNote?.status === "approved" && l.feeNote?.payment_status !== "paid") return "Payment Due";
+  if (l.emd?.status === "pending_accounts") return l.emd.track === "pbg" ? "PBG with Accounts" : "EMD Verification";
+  return null;
+}
+
+// What the EMD is waiting on, for the lead's own team.
+function emdBadgeOf(l) {
+  if (!l.emd) return null;
+  if (l.emd.status === "completed") return { label: l.emd.track === "pbg" ? "PBG Done" : "EMD Refunded", variant: "success" };
+  if (l.emd.status === "pending") return { label: "EMD Refund Pending", variant: "warning" };
+  return null;
+}
 
 const PREP_STATUS_OPTIONS = [
   { value: "all", label: "All" },
@@ -57,6 +74,8 @@ export default function ProposalsListPage() {
   const [leads, setLeads] = useState([]);
   const [proposalByLead, setProposalByLead] = useState({});
   const [monitoringByProposal, setMonitoringByProposal] = useState({});
+  const [feeNoteByProposal, setFeeNoteByProposal] = useState({});
+  const [emdByProposal, setEmdByProposal] = useState({});
   const [unreadCounts, setUnreadCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -67,6 +86,7 @@ export default function ProposalsListPage() {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   const canFilterTeam = can.viewAllTeams(profile?.role);
+  const isAccounts = isAccountsCommittee(profile);
   const teams = useTeamOptions();
   const teamOptions = [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))];
 
@@ -87,6 +107,16 @@ export default function ProposalsListPage() {
 
     const propByLead = Object.fromEntries((proposalRows || []).map((p) => [p.lead_id, p]));
     setProposalByLead(propByLead);
+
+    const proposalIds = (proposalRows || []).map((p) => p.id);
+    const [{ data: noteRows }, { data: emdRows }] = proposalIds.length
+      ? await Promise.all([
+        supabase.from("fee_notes").select("proposal_id, status, payment_status").in("proposal_id", proposalIds),
+        supabase.from("proposal_emd_tracking").select("proposal_id, track, status").in("proposal_id", proposalIds),
+      ])
+      : [{ data: [] }, { data: [] }];
+    setFeeNoteByProposal(Object.fromEntries((noteRows || []).map((n) => [n.proposal_id, n])));
+    setEmdByProposal(Object.fromEntries((emdRows || []).map((t) => [t.proposal_id, t])));
 
     const awardedIds = (proposalRows || []).filter((p) => p.client_response === "awarded").map((p) => p.id);
     const { data: monitoringRows } = awardedIds.length
@@ -111,6 +141,8 @@ export default function ProposalsListPage() {
       .channel("proposals-list")
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => fetchAll())
       .on("postgres_changes", { event: "*", schema: "public", table: "proposal_preparations" }, () => fetchAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "fee_notes" }, () => fetchAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "proposal_emd_tracking" }, () => fetchAll())
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "proposal_chat_messages" }, () => fetchUnreadCounts())
       .subscribe();
     return () => supabase.removeChannel(channel);
@@ -120,15 +152,19 @@ export default function ProposalsListPage() {
   // filter below stays single-argument — same convention QUICK_FILTERS
   // follows on LeadListPage/EmpanelmentListPage.
   const merged = useMemo(
-    () => leads.map((l) => ({ ...l, proposal: proposalByLead[l.id] || null })),
-    [leads, proposalByLead]
+    () => leads.map((l) => {
+      const proposal = proposalByLead[l.id] || null;
+      return { ...l, proposal, feeNote: proposal ? feeNoteByProposal[proposal.id] || null : null, emd: proposal ? emdByProposal[proposal.id] || null : null };
+    }),
+    [leads, proposalByLead, feeNoteByProposal, emdByProposal]
   );
 
   // Team-scoped roles (dgm/agm/srm/etc.) have no visible team filter — a
   // multi-team user's rows span every team they're on, so this needs to
   // actively narrow to whichever team is currently active, same convention
   // as LeadDashboardPage/EmpanelmentListPage.
-  const effectiveTeamFilter = canFilterTeam ? teamFilter : (activeTeam || "all");
+  // Accounts Committee members work across every team.
+  const effectiveTeamFilter = canFilterTeam ? teamFilter : isAccounts ? "all" : (activeTeam || "all");
 
   const teamScoped = useMemo(
     () => (effectiveTeamFilter === "all" ? merged : merged.filter((l) => l.team === effectiveTeamFilter)),
@@ -176,7 +212,7 @@ export default function ProposalsListPage() {
 
           {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
-          <div className="pp-stats-grid">
+          <div className={`pp-stats-grid${isAccounts ? " pp-stats-grid--5" : ""}`}>
             <button type="button" className={`pp-stat-card pp-stat-blue${quickFilter === "all" ? " pp-stat-active" : ""}`} onClick={() => selectQuickFilter("all")}>
               <div className="pp-stat-value">{stats.all}</div>
               <div className="pp-stat-label">Total</div>
@@ -193,6 +229,12 @@ export default function ProposalsListPage() {
               <div className="pp-stat-value">{stats.rejected}</div>
               <div className="pp-stat-label">Rejected</div>
             </button>
+            {isAccounts && (
+              <button type="button" className={`pp-stat-card pp-stat-amber${quickFilter === "accounts" ? " pp-stat-active" : ""}`} onClick={() => selectQuickFilter("accounts")}>
+                <div className="pp-stat-value">{stats.accounts}</div>
+                <div className="pp-stat-label">Pending with Accounts</div>
+              </button>
+            )}
           </div>
 
           <Card className="pp-filter-card">
@@ -241,6 +283,8 @@ export default function ProposalsListPage() {
                           <td className={overdue ? "pp-td-date--overdue" : ""}>{fmtDate(l.submission_deadline)}</td>
                           <td>
                             <Badge className="pp-status-badge" variant={proposal?.locked ? "neutral" : "success"}>{proposal?.locked ? "Locked" : proposal ? "In Progress" : "Not Started"}</Badge>
+                            {accountsPendingOf(l) && <Badge className="pp-status-badge pp-status-badge--extra" variant="warning">{accountsPendingOf(l)}</Badge>}
+                            {!accountsPendingOf(l) && emdBadgeOf(l) && <Badge className="pp-status-badge pp-status-badge--extra" variant={emdBadgeOf(l).variant}>{emdBadgeOf(l).label}</Badge>}
                           </td>
                           <td>
                             {proposal ? (

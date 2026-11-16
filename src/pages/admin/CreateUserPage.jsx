@@ -12,7 +12,7 @@ import Alert from "../../components/ui/Alert";
 import "../../styles/CreateUserPage.css";
 import BackButton from "../../components/ui/BackButton";
 
-const EMPTY_FORM = { full_name: "", email: "", role: "", teams: [], office: "", committee: "" };
+const EMPTY_FORM = { full_name: "", email: "", role: "", teams: [], office: "", committee: "", accounts_committee: false };
 const SIGNATURE_TYPES = ["image/png", "image/jpeg"];
 
 // Each team has one "home" office — picking a team auto-fills Office with
@@ -88,6 +88,7 @@ export default function CreateUserPage() {
             teams: form.teams,
             office: form.office || null,
             committee: form.committee || null,
+            accounts_committee: form.accounts_committee,
           },
         });
 
@@ -132,7 +133,6 @@ export default function CreateUserPage() {
           <div className="page-title-row">
             <div>
               <h1>Create User</h1>
-              <p>Create a staff account. A temporary password will be generated and emailed automatically.</p>
             </div>
           </div>
         </div>
@@ -236,6 +236,17 @@ export default function CreateUserPage() {
                     value={form.committee}
                     onChange={(v) => set("committee", v)}
                     placeholder="— None —"
+                    disabled={saving}
+                  />
+                </div>
+                <div className="field">
+                  <label className="field-label">
+                    Accounts Committee
+                  </label>
+                  <Select
+                    options={[{ value: "no", label: "No" }, { value: "yes", label: "Yes" }]}
+                    value={form.accounts_committee ? "yes" : "no"}
+                    onChange={(v) => set("accounts_committee", v === "yes")}
                     disabled={saving}
                   />
                 </div>

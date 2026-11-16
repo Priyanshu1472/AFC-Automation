@@ -397,14 +397,17 @@
 .kr-tag--more { color: var(--text-secondary); background: var(--bg-surface-2); }
 
 /* ── Table ──────────────────────────────────────────────────── */
-.kr-table-wrap { overflow-x: auto; }
+/* Fixed layout: columns share the card's width (see <colgroup>) and long
+   text truncates with an ellipsis + hover title, so the table never needs
+   to scroll sideways. */
+.kr-table-wrap { overflow-x: hidden; }
 
 .kr-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--text-sm);
   font-family: var(--font-body);
-  min-width: 760px;
 }
 
 .kr-table thead           { background: var(--table-header-bg); }
@@ -419,8 +422,10 @@
   border-bottom: 1px solid var(--table-border);
   white-space: nowrap;
 }
+.kr-table thead th { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kr-table tbody td {
   padding: 13px 16px;
+  overflow: hidden;
   color: var(--text-primary);
   border-bottom: 1px solid var(--table-border);
   vertical-align: middle;
@@ -430,12 +435,19 @@
 .kr-table tbody tr:hover         { background: var(--table-row-hover); }
 
 .kr-td-num       { color: var(--text-tertiary); font-weight: 600; width: 40px; text-align: center; }
-.kr-td-title     { font-weight: 600; color: var(--text-primary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kr-td-title     { font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kr-td-shortform { font-size: 11px; color: var(--text-brand); margin-top: 2px; }
-.kr-td-client    { color: var(--text-secondary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kr-td-client    { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kr-td-muted     { color: var(--text-tertiary); }
-.kr-td-date      { white-space: nowrap; color: var(--text-secondary); font-size: var(--text-xs); }
-.kr-td-loc       { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--success); font-weight: 500; }
+.kr-td-date      { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); font-size: var(--text-xs); }
+.kr-td-loc       { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: var(--text-xs); color: var(--success); font-weight: 500; }
+.kr-td-loc svg   { flex-shrink: 0; width: 11px; height: 11px; }
+.kr-td-ellipsis  { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kr-td-shortform { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Whole row opens the project */
+.kr-tr-link               { cursor: pointer; }
+.kr-tr-link:focus-visible { outline: 2px solid var(--border-focus, var(--text-brand)); outline-offset: -2px; }
 
 .kr-btn-view {
   font-family: var(--font-body);
@@ -576,4 +588,4 @@
 }
 
 /* Mobile card wrap for positioning */
-.kr-mobile-card-wrap { position: relative; }
+.kr-mobile-card-wrap { position: relative; }.kr-table .kr-missing-btn { white-space: nowrap; }

@@ -58,6 +58,7 @@ export const ROLE_LABELS = {
   associate_consultant: "Associate Consultant",
   project_assistant: "Project Assistant",
   business_associate: "Business Partner",
+  super_admin: "Super Admin",
 };
 
 // ─── Short form of ROLE_LABELS for space-constrained UI (e.g. the Users
@@ -78,6 +79,7 @@ export const ROLE_ABBR = {
   associate_consultant: "AC",
   project_assistant: "PA",
   business_associate: "BP",
+  super_admin: "Super Admin",
 };
 
 // ─── Admin can create any staff role, including more admin or md
@@ -112,6 +114,10 @@ export const USERS_PAGE_ROLES = ["admin"];
 // Admin-only) — everyone else besides Admin still can't see or reach it.
 // Guards /users and /users/:id/edit.
 export const USERS_VIEW_ROLES = ["admin", "md"];
+
+// ─── Module Settings (switch modules ON/OFF / "Coming Soon") — Super
+// Admin only. Mirrors app_modules' RLS update policy.
+export const MODULE_SETTINGS_ROLES = ["super_admin"];
 
 // ─── Audit log — Admin only. ──────────────────────────────────────────
 export const AUDIT_LOG_ROLES = ["admin"];
@@ -204,7 +210,11 @@ export const OFFICE_LABELS = {
 export const TEAMS = ["BPDD", "BIID"];
 
 // ─── Whitelist of valid roles — validate any role value from the DB before trusting it ──
-export const VALID_ROLES = new Set(Object.keys(ROLES));
+// super_admin is valid but deliberately NOT in ROLES above: it isn't part
+// of the hierarchy, can't be created from Create/Edit User, and must not
+// leak into any Object.keys(ROLES)-derived permission list. Its only power
+// is the Module Settings page (MODULE_SETTINGS_ROLES).
+export const VALID_ROLES = new Set([...Object.keys(ROLES), "super_admin"]);
 export function isValidRole(role) {
   return VALID_ROLES.has(role);
 }

@@ -8,14 +8,15 @@
 // these buttons — see 20260910000000_company_documents.sql.
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../../lib/supabase";
+import AppHeader from "../../components/shared/AppHeader";
+import BackButton from "../../components/ui/BackButton";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { can } from "../../lib/roles";
-import Modal from "../ui/Modal";
-import Button from "../ui/Button";
-import Input from "../ui/Input";
-import ConfirmDialog from "../ui/ConfirmDialog";
-import { openStorageDocument } from "./KnowledgeFormParts";
+import Button from "../../components/ui/Button";
+import Input from "../../components/ui/Input";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import { openStorageDocument } from "../../components/knowledge/KnowledgeFormParts";
 import "../../styles/CompanyDocumentsPanel.css";
 
 const BUCKET = "company-documents";
@@ -144,7 +145,7 @@ function CompanyDocumentForm({ doc, onSaved, onCancel }) {
   );
 }
 
-export default function CompanyDocumentsPanel({ onClose }) {
+export default function CompanyDocumentsPage() {
   const { profile } = useAuth();
   const { showToast } = useToast();
   const isAdmin = can.manageCompanyDocuments(profile?.role);
@@ -200,15 +201,27 @@ export default function CompanyDocumentsPanel({ onClose }) {
 
   return (
     <>
-      <Modal onClose={onClose} size="xl">
-        <Modal.Header title="Company Documents" subtitle="Organization-wide policies, SOPs, and guidelines — separate from project documents." onClose={onClose} />
-        <Modal.Body>
-          {isAdmin && !showAddForm && !editingDoc && (
-            <div className="cdp-add-row">
-              <Button variant="primary" size="sm" onClick={() => setShowAddForm(true)}>+ Add Document</Button>
+      <div className="app-shell">
+        <AppHeader />
+        <div className="app-container">
+          <div className="cdp-page">
+          <div className="page-header">
+            <BackButton to="/knowledge" label="Back" />
+            <div className="page-title-row">
+              <div>
+                <h1>Company Documents</h1>
+              </div>
+              {isAdmin && !showAddForm && !editingDoc && (
+                <Button variant="primary" onClick={() => setShowAddForm(true)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: 14, height: 14, flexShrink: 0 }} aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                  Add Document
+                </Button>
+              )}
             </div>
-          )}
+          </div>
 
+          <div className="card">
+          <div className="card-body">
           {isAdmin && showAddForm && (
             <CompanyDocumentForm onSaved={handleAdded} onCancel={() => setShowAddForm(false)} />
           )}
@@ -266,8 +279,11 @@ export default function CompanyDocumentsPanel({ onClose }) {
               </table>
             </div>
           )}
-        </Modal.Body>
-      </Modal>
+          </div>
+          </div>
+          </div>
+        </div>
+      </div>
 
       {deleteTarget && (
         <ConfirmDialog

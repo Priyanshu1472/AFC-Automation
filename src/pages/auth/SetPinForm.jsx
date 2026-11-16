@@ -120,7 +120,7 @@ export default function SetPinForm({ hasPin, variant = "login" }) {
     return (
       <Card className="mp-section-card">
         <form onSubmit={submit} noValidate>
-          <Card.Header title={heading} subtitle={subheading} />
+          <Card.Header title={heading} />
           <Card.Body>
             {alerts}
             {fields}

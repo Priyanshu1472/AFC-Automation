@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import AppHeader from "../components/shared/AppHeader";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
+import Button from "../components/ui/Button";
 import PageLoader from "../components/ui/PageLoader";
 import { useAuth } from "../hooks/useAuth";
+import { useModules } from "../context/ModulesContext";
 import { supabase } from "../lib/supabase";
-import { EMPANELMENT_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES } from "../lib/roles";
+import { EMPANELMENT_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, MODULE_SETTINGS_ROLES } from "../lib/roles";
 import { fetchPendingActionNotifications, subscribeToNotifications, markNotificationRead } from "../lib/notifications";
 import { TargetIcon, ActivityIcon, RupeeIcon } from "../components/icons";
 import BpInvoiceRequestsCard from "../components/financials/BpInvoiceRequestsCard";
@@ -243,6 +245,7 @@ function useListMode(count) {
 // closes the table). Clicking a row marks the alert read and opens it.
 function PendingActionsPanel() {
   const { profile } = useAuth();
+  const { isEnabled } = useModules();
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -300,7 +303,9 @@ function PendingActionsPanel() {
   items.forEach((n) => grouped[categoryOf(n)].push(n));
 
   const boxes = [
-    ...ACTION_CATEGORIES.filter((c) => c.canSee(profile?.role) || grouped[c.key].length > 0),
+    // A module switched OFF on production gets no box at all, even if it
+    // still has old alerts.
+    ...ACTION_CATEGORIES.filter((c) => isEnabled(c.key) && (c.canSee(profile?.role) || grouped[c.key].length > 0)),
     ...(grouped.other.length ? [{ key: "other", title: "General", icon: <BellIcon /> }] : []),
   ];
   const [sectionRef, isList] = useListMode(boxes.length);
@@ -412,9 +417,25 @@ function PendingActionsPanel() {
   );
 }
 
+function SuperAdminCard() {
+  const navigate = useNavigate();
+  return (
+    <Card>
+      <Card.Header title="Super Admin" />
+      <Card.Body>
+        <p className="text-secondary" style={{ marginBottom: 12 }}>
+          Switch portal modules ON or OFF. Modules that are OFF show &quot;Coming Soon&quot; to everyone.
+        </p>
+        <Button variant="primary" onClick={() => navigate("/settings/modules")}>Open Module Settings</Button>
+      </Card.Body>
+    </Card>
+  );
+}
+
 export default function HomePage() {
   const { profile } = useAuth();
   const isBa = profile?.role === "business_associate";
+  const isSuperAdmin = MODULE_SETTINGS_ROLES.includes(profile?.role);
 
   return (
     <div className="app-shell">
@@ -425,7 +446,8 @@ export default function HomePage() {
         </div>
         {isBa && <BaStatusCard />}
         {isBa && <BpInvoiceRequestsCard />}
-        {!isBa && <PendingActionsPanel />}
+        {isSuperAdmin && <SuperAdminCard />}
+        {!isBa && !isSuperAdmin && <PendingActionsPanel />}
       </div>
     </div>
   );

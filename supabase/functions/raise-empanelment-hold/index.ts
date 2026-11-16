@@ -6,6 +6,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
 import { isValidFieldKey, labelForFieldKey } from "../_shared/empanelmentFields.ts";
@@ -28,6 +29,8 @@ const ADVISOR_ROLES = ["dgm", "agm", "general_manager"];
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "empanelment");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);

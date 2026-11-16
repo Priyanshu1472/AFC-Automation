@@ -345,7 +345,7 @@ export default function LeadApprovalNoteForm() {
           <form onSubmit={handleGenerate} noValidate className="lan-layout">
             <div className="lan-form">
               <Card className="lf-section">
-                <SectionHead step={1} title="From the Lead" subtitle="These details are taken from the lead and printed on the note as they are." />
+                <SectionHead step={1} title="From the Lead" />
                 <Card.Body className="lf-body">
                   <dl className="lan-info-grid">
                     <div className="lan-info-item">
@@ -384,7 +384,7 @@ export default function LeadApprovalNoteForm() {
               </Card>
 
               <Card className="lf-section">
-                <SectionHead step={2} title="Assignment Details" subtitle="Client address, objectives, scope and timeline." />
+                <SectionHead step={2} title="Assignment Details" />
                 <Card.Body className="lf-body">
                   <div className="field">
                     <label className="field-label">Client Address <span className="required">*</span></label>
@@ -493,7 +493,7 @@ export default function LeadApprovalNoteForm() {
               </Card>
 
               <Card className="lf-section">
-                <SectionHead step={4} title="Preliminary Scrutiny by Office" subtitle="Mark each parameter and give a remark for it." />
+                <SectionHead step={4} title="Preliminary Scrutiny by Office" />
                 <Card.Body className="lf-body">
                   <div className="lan-scrutiny-list">
                     {SCRUTINY_PARAMETERS.map((param, i) => (

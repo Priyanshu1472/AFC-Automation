@@ -72,3 +72,18 @@ Deno.test("clearRateLimit - deletes the rate_limit_attempts row for the key with
   assertEquals(call.table, "rate_limit_attempts");
   assertEquals(call.calls[0][0], "delete");
 });
+
+Deno.test("checkAnonKey - also accepts LEGACY_ANON_KEY when SUPABASE_ANON_KEY is the new publishable key", () => {
+  const prevAnon = Deno.env.get("SUPABASE_ANON_KEY");
+  const prevLegacy = Deno.env.get("LEGACY_ANON_KEY");
+  Deno.env.set("SUPABASE_ANON_KEY", "sb_publishable_new");
+  Deno.env.set("LEGACY_ANON_KEY", "legacy-jwt");
+  try {
+    assertEquals(checkAnonKey(new Request("http://x", { headers: { apikey: "legacy-jwt" } })), true);
+    assertEquals(checkAnonKey(new Request("http://x", { headers: { apikey: "sb_publishable_new" } })), true);
+    assertEquals(checkAnonKey(new Request("http://x", { headers: { apikey: "something-else" } })), false);
+  } finally {
+    if (prevAnon === undefined) Deno.env.delete("SUPABASE_ANON_KEY"); else Deno.env.set("SUPABASE_ANON_KEY", prevAnon);
+    if (prevLegacy === undefined) Deno.env.delete("LEGACY_ANON_KEY"); else Deno.env.set("LEGACY_ANON_KEY", prevLegacy);
+  }
+});

@@ -1701,3 +1701,15 @@ select.input {
 [data-theme="dark"] .tt-bottom .tt-arrow { border-bottom-color: #26312b; }
 [data-theme="dark"] .tt-left   .tt-arrow { border-left-color:   #26312b; }
 [data-theme="dark"] .tt-right  .tt-arrow { border-right-color:  #26312b; }
+
+/* Number inputs: no up/down spinner arrows anywhere — amounts are typed,
+   and the arrows only cluttered the field. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}

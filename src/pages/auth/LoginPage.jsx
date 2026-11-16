@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLogin } from "../../hooks/useLogin";
+import { useModules } from "../../context/ModulesContext";
 import ThemeToggle from "../../components/shared/ThemeToggle";
 import Turnstile from "../../components/shared/Turnstile";
 import { MailIcon, LockIcon, ArrowRightIcon, ShowHideButton } from "../../components/icons";
@@ -114,6 +115,8 @@ function BusinessPartnerMenu() {
 }
 
 export default function LoginPage() {
+  // The BP links follow the Empanelment module switch (production only).
+  const empanelmentOn = useModules().isEnabled("empanelment");
   const {
     email,
     setEmail,
@@ -167,7 +170,7 @@ export default function LoginPage() {
           <span>AFC India Limited</span>
         </div>
         <div className="afc-login-actions">
-          <BusinessPartnerMenu />
+          {empanelmentOn && <BusinessPartnerMenu />}
           <ThemeToggle />
         </div>
       </header>

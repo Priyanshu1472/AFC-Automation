@@ -15,9 +15,15 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.0
 export function checkAnonKey(req: Request): boolean {
   const apiKey = req.headers.get("apikey");
   const authHeader = req.headers.get("authorization");
-  const expectedKey = Deno.env.get("SUPABASE_ANON_KEY");
   const providedKey = apiKey || authHeader?.replace("Bearer ", "");
-  return !!providedKey && !!expectedKey && providedKey === expectedKey;
+  if (!providedKey) return false;
+  // Newer Supabase projects (e.g. prod, ydymhqzvnrxdjfehmawv) inject the new
+  // sb_publishable_… key as SUPABASE_ANON_KEY, while the frontend still
+  // sends the legacy JWT anon key — so the legacy key is also accepted via
+  // the LEGACY_ANON_KEY secret (set on prod; unset on older projects where
+  // SUPABASE_ANON_KEY already is the legacy key).
+  const accepted = [Deno.env.get("SUPABASE_ANON_KEY"), Deno.env.get("LEGACY_ANON_KEY")].filter(Boolean);
+  return accepted.includes(providedKey);
 }
 
 export function getClientIP(req: Request): string {

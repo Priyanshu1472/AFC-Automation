@@ -7,12 +7,16 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { getOrgWideHolders } from "../_shared/leadAuth.ts";
 import { addProposalChatParticipants } from "../_shared/proposalChat.ts";
+import { isAccountsMember } from "../_shared/proposalFinance.ts";
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "proposals");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);
@@ -40,7 +44,19 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     const authorized =
       ["md", "admin"].includes(caller.role) ||
       [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(caller.id);
-    if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this lead's proposal." });
+    if (!authorized) {
+      // Accounts Committee members only ever open an existing proposal
+      // whose Bid Payment Requisition Note the MD has approved — never
+      // create one or touch the chat roster.
+      if (await isAccountsMember(adminClient, caller.id)) {
+        const { data: existingForAccounts } = await adminClient.from("proposal_preparations").select("id").eq("lead_id", leadId).maybeSingle();
+        if (existingForAccounts) {
+          const { data: approved } = await adminClient.from("fee_notes").select("id").eq("proposal_id", existingForAccounts.id).eq("status", "approved").maybeSingle();
+          if (approved) return jsonRes(req, 200, { success: true, proposal_id: existingForAccounts.id });
+        }
+      }
+      return jsonRes(req, 403, { error: "You do not have access to this lead's proposal." });
+    }
 
     if (lead.status !== "md_approved") {
       return jsonRes(req, 400, { error: "This lead has not been approved for proposal preparation yet." });

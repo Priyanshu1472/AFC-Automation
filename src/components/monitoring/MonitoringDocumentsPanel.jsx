@@ -54,7 +54,7 @@ function UploadDocumentsModal({ projectId, categories, defaultCategory, onClose,
 
   return (
     <Modal onClose={busy ? undefined : onClose} closeOnBackdrop={!busy}>
-      <Modal.Header title="Upload Documents" subtitle="MoUs, the work order, or anything received from the client." onClose={busy ? undefined : onClose} />
+      <Modal.Header title="Upload Documents" onClose={busy ? undefined : onClose} />
       <Modal.Body>
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         <div className="mon-form">
@@ -122,7 +122,6 @@ export default function MonitoringDocumentsPanel({ projectId, documents, canEdit
     <Card>
       <Collapsible
         title="Documents"
-        subtitle="MoUs, work orders, and every document or proof received from the client."
         icon={<FolderIcon />}
         expandable={false}
         action={canEdit ? <Button size="sm" icon={<PaperclipIcon />} onClick={() => setUploading(true)}>Upload</Button> : null}

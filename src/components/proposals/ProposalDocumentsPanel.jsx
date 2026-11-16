@@ -80,7 +80,6 @@ export default function ProposalDocumentsPanel({ proposalId, documents, canManag
     <Card>
       <Collapsible
         title="Proposal Documents"
-        subtitle="Technical, financial and any other proposal files — select several at once."
         icon={<FolderIcon />}
         action={editable ? (
           <>

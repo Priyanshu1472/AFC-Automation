@@ -323,6 +323,9 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         team: finalTeam,
         office: finalOffice,
         committee: finalCommittee,
+        // Only sent when ticked, so this keeps working on a database that
+        // doesn't have the column yet.
+        ...(body.accounts_committee === true ? { accounts_committee: true } : {}),
         is_active: true,
         must_change_password: true,
         created_by: caller.id,

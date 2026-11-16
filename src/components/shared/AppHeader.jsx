@@ -7,10 +7,11 @@ import NavDropdown from "./NavDropdown";
 import UserMenu from "./UserMenu";
 import ProfileAvatar from "./ProfileAvatar";
 import { useAuth } from "../../hooks/useAuth";
-import { USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, ROLE_LABELS } from "../../lib/roles";
+import { useModules } from "../../context/ModulesContext";
+import { USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, MODULE_SETTINGS_ROLES, ROLE_LABELS } from "../../lib/roles";
 import {
   MenuIcon, CloseIcon, HomeIcon, BookIcon, UsersIcon, TargetIcon, FileTextIcon, ActivityIcon, RupeeIcon,
-  UserCogIcon, ClipboardListIcon, LayoutGridIcon, BarChartIcon,
+  UserCogIcon, ClipboardListIcon, LayoutGridIcon, BarChartIcon, ListChecksIcon,
 } from "../icons";
 import logo from "../../images/Logo.png";
 import "../../styles/AppHeader.css";
@@ -47,6 +48,7 @@ function NavItem({ to, label, icon, collapsed, onClick }) {
 
 export default function AppHeader() {
   const { profile, activeTeam, setActiveTeam, signOut } = useAuth();
+  const { isEnabled } = useModules();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -122,21 +124,26 @@ export default function AppHeader() {
 
   const canSeeUsers = USERS_VIEW_ROLES.includes(profile.role);
   const canSeeAuditLogs = AUDIT_LOG_ROLES.includes(profile.role);
-  const canSeeEmpanelment = EMPANELMENT_ROLES.includes(profile.role);
-  const canSeeKnowledge = KNOWLEDGE_REPOSITORY_ROLES.includes(profile.role);
-  const canSeeLeads = LEAD_GENERATION_NAV_ROLES.includes(profile.role);
-  const canSeeMonitoring = MONITORING_ROLES.includes(profile.role);
-  const canSeeFinancials = FINANCIALS_ROLES.includes(profile.role);
+  // Role gate AND module switch (a module that's OFF on production
+  // disappears from the nav entirely — see ModulesContext).
+  const canSeeEmpanelment = EMPANELMENT_ROLES.includes(profile.role) && isEnabled("empanelment");
+  const canSeeKnowledge = KNOWLEDGE_REPOSITORY_ROLES.includes(profile.role) && isEnabled("knowledge");
+  const canSeeLeads = LEAD_GENERATION_NAV_ROLES.includes(profile.role) && isEnabled("leads");
+  const canSeeProposals = LEAD_GENERATION_NAV_ROLES.includes(profile.role) && isEnabled("proposals");
+  const canSeeMonitoring = MONITORING_ROLES.includes(profile.role) && isEnabled("monitoring");
+  const canSeeFinancials = FINANCIALS_ROLES.includes(profile.role) && isEnabled("financials");
+  const canSeeModuleSettings = MODULE_SETTINGS_ROLES.includes(profile.role);
   const navItems = [
     { to: "/home", label: "Home", icon: <HomeIcon />, show: true },
     { to: "/knowledge", label: "Knowledge Repository", icon: <BookIcon />, show: canSeeKnowledge },
     { to: "/empanelment", label: "Empanelment", icon: <UsersIcon />, show: canSeeEmpanelment },
     { to: "/leads", label: "Leads Approval", icon: <TargetIcon />, show: canSeeLeads },
-    { to: "/proposals", label: "Proposals", icon: <FileTextIcon />, show: canSeeLeads },
+    { to: "/proposals", label: "Proposals", icon: <FileTextIcon />, show: canSeeProposals },
     { to: "/monitoring", label: "Monitoring", icon: <ActivityIcon />, show: canSeeMonitoring },
     { to: "/financials", label: "Financials", icon: <RupeeIcon />, show: canSeeFinancials },
     { to: "/users", label: "Users", icon: <UserCogIcon />, show: canSeeUsers },
     { to: "/audit-logs", label: "Audit Logs", icon: <ClipboardListIcon />, show: canSeeAuditLogs },
+    { to: "/settings/modules", label: "Module Settings", icon: <ListChecksIcon />, show: canSeeModuleSettings },
   ].filter((it) => it.show);
   const roleLabel = ROLE_LABELS[profile.role] || profile.role;
   const teams = profile.teams || [];

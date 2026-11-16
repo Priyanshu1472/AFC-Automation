@@ -5,15 +5,26 @@
 // enter it once they hear back. Recorded once only. An "awarded" answer
 // opens the project in Monitoring (DB trigger open_monitoring_on_award, see
 // 20261008020000_monitoring_and_financials.sql); a rejected one never does.
+//
+// When the approved Bid Payment Requisition Note carried an EMD, the EMD's
+// own follow-up starts here: a not-awarded proposal opens an EMD refund
+// (pending until the team marks it received — reminded every 14 days); an
+// awarded one asks the team to choose EMD refund or conversion to PBG
+// (proposal-emd-action).
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { notifyUsers } from "../_shared/notify.ts";
+import { KIND_EMD, teamIds, leadRef, rupees } from "../_shared/proposalFinance.ts";
 
 const OUTCOMES = new Set(["awarded", "rejected"]);
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "proposals");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);
@@ -45,7 +56,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const { data: lead } = await adminClient
       .from("leads")
-      .select("person_responsible_id, reviewer_id, recommending_authority_id")
+      .select("id, lead_number, title, person_responsible_id, reviewer_id, recommending_authority_id")
       .eq("id", proposal.lead_id)
       .maybeSingle();
 
@@ -65,10 +76,59 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .eq("id", proposalId);
     if (updErr) throw new Error(updErr.message);
 
+    if (lead) await startEmdFollowUp(adminClient, proposalId, outcome, lead, caller.id);
+
     return jsonRes(req, 200, { success: true });
   } catch (err) {
     console.error("Unhandled error:", (err as Error).message);
     return jsonRes(req, 500, { error: (err as Error).message || "Internal server error." });
+  }
+}
+
+// Best-effort: a failure here must never undo the recorded response.
+async function startEmdFollowUp(
+  adminClient: ReturnType<typeof createAdminClient>,
+  proposalId: string,
+  outcome: string,
+  lead: { id: string; lead_number: string; title: string; person_responsible_id: string | null; reviewer_id: string | null; recommending_authority_id: string | null },
+  callerId: string,
+) {
+  try {
+    const { data: note } = await adminClient
+      .from("fee_notes")
+      .select("emd_amount")
+      .eq("proposal_id", proposalId)
+      .eq("status", "approved")
+      .maybeSingle();
+    const emd = note?.emd_amount != null ? Number(note.emd_amount) : 0;
+    if (!(emd > 0)) return;
+
+    const link = `/proposals/${lead.id}`;
+    if (outcome === "rejected") {
+      const { error } = await adminClient.from("proposal_emd_tracking").upsert(
+        { proposal_id: proposalId, track: "refund", status: "pending", emd_amount: emd, created_by: callerId },
+        { onConflict: "proposal_id", ignoreDuplicates: true },
+      );
+      if (error) throw new Error(error.message);
+      await adminClient.from("proposal_finance_events").insert({ proposal_id: proposalId, scope: "emd", action: "refund_opened", actor_id: callerId });
+      await notifyUsers(adminClient, teamIds(lead), {
+        title: "EMD refund to follow up",
+        sub_text: `${leadRef(lead)} was not awarded. Follow up on the EMD refund of ${rupees(emd)} and mark it Received with proof once it comes back.`,
+        type: "action_required",
+        link,
+        kind: KIND_EMD,
+      });
+    } else {
+      await notifyUsers(adminClient, teamIds(lead), {
+        title: "Choose what happens to the EMD",
+        sub_text: `${leadRef(lead)} was awarded. Choose EMD Refund or Converted to PBG for the EMD of ${rupees(emd)}.`,
+        type: "action_required",
+        link,
+        kind: KIND_EMD,
+      });
+    }
+  } catch (err) {
+    console.error("EMD follow-up failed:", (err as Error).message);
   }
 }
 

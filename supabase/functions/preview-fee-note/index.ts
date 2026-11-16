@@ -10,14 +10,18 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { bytesToBase64 } from "../_shared/letterPdf.ts";
 import { buildFeeNotePdfForNote } from "../_shared/feeNotePdf.ts";
+import { isAccountsMember } from "../_shared/proposalFinance.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "proposals");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);
@@ -37,7 +41,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   try {
     const { data: note, error: noteErr } = await adminClient
       .from("fee_notes")
-      .select("id, proposal_id")
+      .select("id, proposal_id, status")
       .eq("id", feeNoteId)
       .maybeSingle();
     if (noteErr || !note) return jsonRes(req, 404, { error: "Fee note not found." });
@@ -56,9 +60,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
+    // The Accounts Committee checks the signed note before paying, so they
+    // can open it once the MD has approved it.
     const authorized =
       ["md", "admin"].includes(caller.role) ||
-      [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(caller.id);
+      [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(caller.id) ||
+      (note.status === "approved" && (await isAccountsMember(adminClient, caller.id)));
     if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this proposal." });
 
     const built = await buildFeeNotePdfForNote(adminClient, feeNoteId);

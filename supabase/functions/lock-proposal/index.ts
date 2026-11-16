@@ -6,13 +6,20 @@
 // since can_edit_proposal() already folds the deadline check into every
 // direct-RLS write, and this function's own guards do the same for the
 // state-changing actions that go through edge functions.
+//
+// Locking needs all three of: the Bid Payment Requisition Note approved by
+// the MD, at least one proposal document uploaded, and the proposed value
+// (Financial) entered — mirrored by lockBlockers() in src/lib/proposalPrep.js.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "proposals");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   const callerResult = await getCallerProfile(req, adminClient);
@@ -37,6 +44,12 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .maybeSingle();
     if (propErr || !proposal) return jsonRes(req, 404, { error: "Proposal not found." });
     if (proposal.locked) return jsonRes(req, 400, { error: "This proposal is already locked." });
+    const [{ data: approvedNote }, { count: docCount }] = await Promise.all([
+      adminClient.from("fee_notes").select("id").eq("proposal_id", proposalId).eq("status", "approved").maybeSingle(),
+      adminClient.from("proposal_documents").select("id", { count: "exact", head: true }).eq("proposal_id", proposalId),
+    ]);
+    if (!approvedNote) return jsonRes(req, 400, { error: "The Bid Payment Requisition Note must be approved by the MD before locking the proposal." });
+    if (!docCount) return jsonRes(req, 400, { error: "Upload the proposal documents before locking the proposal." });
     if (proposal.proposed_value == null) return jsonRes(req, 400, { error: "Enter the proposed value (Financial) before locking the proposal." });
 
     const { data: lead } = await adminClient

@@ -7,6 +7,10 @@
 // Recommending Authority forwards to MD or sends it back, MD gives the
 // final approval — mirroring the eye-icon + PDF pattern shipped for
 // Empanelment letters.
+//
+// Once the MD approves it, the note goes to the Accounts Committee, who
+// check the signatures, upload the payment proof and record the payment
+// (mark-fee-note-paid, PIN-gated).
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
@@ -17,6 +21,8 @@ import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import FeeNotePinActionModal from "./FeeNotePinActionModal";
 import FeeNoteSendBackModal from "./FeeNoteSendBackModal";
+import FinanceActionModal from "./FinanceActionModal";
+import FinanceFiles from "./FinanceFiles";
 import { ReceiptIcon, InfoIcon } from "../icons";
 import {
   FEE_LINES, FEE_NOTE_TITLE, FEE_NOTE_STATUS_LABELS, FEE_NOTE_STATUS_VARIANTS,
@@ -32,7 +38,12 @@ function EditIcon() {
 
 const RETURN_ACTIONS = new Set(["returned_by_ra", "md_rejected"]);
 
-export default function FeeNotesPanel({ feeNotes, lead, profile, isMd, locked, onChanged }) {
+function fmtDateTime(d) {
+  if (!d) return "";
+  return new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+export default function FeeNotesPanel({ proposalId, feeNotes, lead, profile, isMd, isAccounts = false, financeFiles = [], locked, onChanged }) {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const note = feeNotes[0] || null;
@@ -40,6 +51,7 @@ export default function FeeNotesPanel({ feeNotes, lead, profile, isMd, locked, o
   const [sendBackAction, setSendBackAction] = useState(null); // { feeNoteId, action }
   const [viewing, setViewing] = useState(false);
   const [latestEvent, setLatestEvent] = useState(null);
+  const [payOpen, setPayOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +108,9 @@ export default function FeeNotesPanel({ feeNotes, lead, profile, isMd, locked, o
       {note ? (
         <>
           <Badge variant={FEE_NOTE_STATUS_VARIANTS[note.status]}>{FEE_NOTE_STATUS_LABELS[note.status]}</Badge>
+          {note.status === "approved" && (
+            <Badge variant={note.payment_status === "paid" ? "success" : "warning"}>{note.payment_status === "paid" ? "Paid" : "Payment Pending"}</Badge>
+          )}
           <button type="button" className="pp-row-icon-btn" title={viewing ? "Loading…" : "View note"} aria-label={viewing ? "Loading note" : "View note"} onClick={handleView} disabled={viewing}>
             {viewing ? <span className="spinner spinner-sm" aria-hidden="true" /> : <EyeIcon />}
           </button>
@@ -160,6 +175,38 @@ export default function FeeNotesPanel({ feeNotes, lead, profile, isMd, locked, o
             )}
           </div>
 
+          {note && note.status === "approved" && (
+            <div className="pp-fin-block">
+              <div className="pp-fin-block-head">
+                <strong>Payment by Accounts</strong>
+                {note.payment_status === "paid" ? (
+                  <span className="pp-fin-done">
+                    Paid {fmtDateTime(note.payment_done_at)}{note.payer?.full_name ? ` by ${note.payer.full_name}` : ""}
+                    {note.payment_reference ? ` · Ref: ${note.payment_reference}` : ""}
+                  </span>
+                ) : (
+                  <span className="pp-fin-wait">{isAccounts ? "Check the signatures on the note (eye icon above), upload the payment proof and mark it done." : "Approved — waiting for the Accounts Committee to make the payment."}</span>
+                )}
+              </div>
+              {note.payment_remark && <p className="pp-fee-note-justification">“{note.payment_remark}”</p>}
+              {(note.payment_status === "paid" || isAccounts) && (
+                <FinanceFiles
+                  proposalId={proposalId}
+                  purpose="fee_payment"
+                  files={financeFiles}
+                  canManage={isAccounts && note.payment_status !== "paid"}
+                  emptyText={note.payment_status === "paid" ? "No payment proof was attached." : "No payment proof uploaded yet."}
+                  onChanged={onChanged}
+                />
+              )}
+              {isAccounts && note.payment_status !== "paid" && (
+                <div className="pp-fin-actions">
+                  <Button variant="primary" size="sm" onClick={() => setPayOpen(true)}>Mark Payment Done</Button>
+                </div>
+              )}
+            </div>
+          )}
+
           {note && canForwardAsPR && note.status === "draft" && !locked && (
             <div style={{ marginTop: "var(--space-4)" }}>
               <Button variant="primary" size="sm" onClick={() => setPinAction({ feeNoteId: note.id, action: "pr_forward" })}>
@@ -204,6 +251,19 @@ export default function FeeNotesPanel({ feeNotes, lead, profile, isMd, locked, o
           action={pinAction.action}
           onClose={() => setPinAction(null)}
           onSuccess={() => { setPinAction(null); onChanged(); }}
+        />
+      )}
+
+      {payOpen && note && (
+        <FinanceActionModal
+          title="Mark Payment Done"
+          intro="Confirm that the note carries every required signature and the payment has been made. This can't be undone."
+          confirmLabel="Confirm Payment"
+          withReference
+          withPin
+          run={({ remark, reference, pin }) => supabase.functions.invoke("mark-fee-note-paid", { body: { fee_note_id: note.id, payment_reference: reference, remark, pin } })}
+          onClose={() => setPayOpen(false)}
+          onSuccess={() => { setPayOpen(false); showToast("Payment recorded.", "success"); onChanged(); }}
         />
       )}
 

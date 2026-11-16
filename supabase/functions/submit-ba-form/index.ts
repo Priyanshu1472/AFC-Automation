@@ -8,6 +8,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
+import { moduleOffResponse } from "../_shared/modules.ts";
 import { checkAnonKey, getClientIP, checkRateLimit, clearRateLimit } from "../_shared/publicAccess.ts";
 import { notifyUser } from "../_shared/notify.ts";
 
@@ -100,6 +101,8 @@ const TEXT_FIELD_COLUMNS: Record<string, string> = {
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createPublicAdminClient> = createPublicAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
+  const moduleOff = await moduleOffResponse(req, "empanelment");
+  if (moduleOff) return moduleOff;
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
   if (!checkAnonKey(req)) return jsonRes(req, 401, { error: "Unauthorized" });

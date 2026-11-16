@@ -107,7 +107,7 @@ function ProjectDetailsModal({ project, invoicedBase, allocated, onClose, onSave
 
   return (
     <Modal onClose={saving ? undefined : onClose} closeOnBackdrop={!saving} size="lg">
-      <Modal.Header title="Project Details" subtitle="Contract, client billing details, and what the payment note needs." onClose={saving ? undefined : onClose} />
+      <Modal.Header title="Project Details" onClose={saving ? undefined : onClose} />
       <Modal.Body>
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         <div className="mon-form">
