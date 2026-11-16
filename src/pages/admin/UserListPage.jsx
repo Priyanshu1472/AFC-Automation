@@ -89,11 +89,12 @@ function EditButton({ user, isSelf, onEdit }) {
   );
 }
 
-// Proposals' Accounts Committee is a separate flag, not a `committee` value.
-const ACCOUNTS_FILTER = "__accounts";
+// Accounts is now an ordinary committee value, same as PMT/G3 — filters on
+// the scalar `committee` (the "primary" one), same known limitation as
+// filtering by PMT/G3 already had: someone whose Accounts membership is a
+// secondary committee won't match. Good enough for a list filter.
 function applyCommitteeFilter(query, committee) {
   if (committee === "all") return query;
-  if (committee === ACCOUNTS_FILTER) return query.eq("accounts_committee", true);
   return query.eq("committee", committee);
 }
 
@@ -143,7 +144,7 @@ export default function UserListPage() {
   const teams = useTeamOptions();
   const teamFilterOptions = useMemo(() => [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))], [teams]);
   const committeeFilterOptions = useMemo(
-    () => [{ value: "all", label: "All Committees" }, ...COMMITTEE_OPTIONS.map((c) => ({ value: c, label: c })), { value: ACCOUNTS_FILTER, label: "Accounts Committee" }],
+    () => [{ value: "all", label: "All Committees" }, ...COMMITTEE_OPTIONS.map((c) => ({ value: c, label: c }))],
     []
   );
 

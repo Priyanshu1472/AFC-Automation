@@ -55,10 +55,11 @@ function jsonRes(req: Request, status: number, body: unknown) {
 // a normal-flow UI capability).
 const ADMIN_CREATABLE_ROLES = ["admin", "md", "executive_director", "cfo", "cs", "general_manager", "dgm", "agm", "srm", "regional_manager", "area_manager", "project_officer", "associate_consultant", "project_assistant"];
 
-// Lead Generation review committees — an optional, independent tag on top
-// of the person's HR role (e.g. a DGM sits on G3; a Project Officer might
-// sit on PMT). Not every role needs one.
-const LEAD_COMMITTEES = ["PMT", "PMT Extended", "G3"];
+// Lead Generation / Proposals review committees — an optional, independent
+// tag on top of the person's HR role (e.g. a DGM sits on G3; a Project
+// Officer might sit on PMT; anyone can also sit on Accounts). Not every
+// role needs one, and a person can now hold more than one at once.
+const LEAD_COMMITTEES = ["PMT", "G3", "Accounts"];
 
 const ROLE_LABELS: Record<string, string> = {
   md: "Managing Director",
@@ -264,7 +265,17 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     if (!role || typeof role !== "string") {
       return jsonRes(req, 400, { error: "Role is required." });
     }
-    if (committee != null && !LEAD_COMMITTEES.includes(committee as string)) {
+
+    // `committees` (plural) is the full set — a person can hold more than
+    // one at once (e.g. PMT and Accounts). Falls back to the singular
+    // `committee` field alone when `committees` isn't sent, so older
+    // callers/tests still work unchanged.
+    const rawCommittees = Array.isArray(body.committees) ? body.committees : null;
+    const committeeSet = (rawCommittees
+      ? rawCommittees.filter((c): c is string => typeof c === "string" && c.trim().length > 0).map((c) => c.trim())
+      : (committee ? [committee as string] : [])
+    );
+    if (committeeSet.some((c) => !LEAD_COMMITTEES.includes(c))) {
       return jsonRes(req, 400, { error: `Committee must be one of: ${LEAD_COMMITTEES.join(", ")}.` });
     }
 
@@ -308,7 +319,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     );
     const finalTeam = teamSet[0] || (body.team as string) || null;
     const finalOffice = (body.office as string) || null;
-    const finalCommittee = (committee as string) || null;
+    const finalCommittee = committeeSet[0] || null;
     // Every account starts with the same default action PIN ("1234") so a
     // new user can act on PIN-gated lead actions immediately — same idea as
     // the generated temp password, changeable any time from My Profile.
@@ -323,9 +334,6 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         team: finalTeam,
         office: finalOffice,
         committee: finalCommittee,
-        // Only sent when ticked, so this keeps working on a database that
-        // doesn't have the column yet.
-        ...(body.accounts_committee === true ? { accounts_committee: true } : {}),
         is_active: true,
         must_change_password: true,
         created_by: caller.id,
@@ -348,6 +356,13 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         .from("afc_user_teams")
         .insert(teamsToAssign.map((team) => ({ user_id: newAuthUser.user.id, team })));
       if (teamsErr) console.error("Failed to insert afc_user_teams:", teamsErr.message);
+    }
+
+    if (committeeSet.length) {
+      const { error: committeesErr } = await adminClient
+        .from("afc_user_committees")
+        .insert(committeeSet.map((committee) => ({ user_id: newAuthUser.user.id, committee })));
+      if (committeesErr) console.error("Failed to insert afc_user_committees:", committeesErr.message);
     }
 
     // ── Notify the new user (best-effort — never fails account creation) ──

@@ -10,6 +10,7 @@ import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
 import TeamMultiSelect from "../../components/ui/TeamMultiSelect";
+import MultiSelect from "../../components/ui/MultiSelect";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
@@ -24,8 +25,7 @@ const FIELD_HELP = {
   role: "Changing a role controls what this person can see and do going forward. Only Admin and MD can change a role.",
   team: "The working group this person belongs to (e.g. BPDD, BIID). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
   office: "The physical office this person is based out of.",
-  accountsCommittee: "Proposals’ Accounts Committee — members make the payment on MD-approved Bid Payment Requisition Notes and verify EMD refunds / PBG. Only Admin can change this.",
-  committee: "Optional Lead Generation review committee (PMT) — membership grants PMT-stage review/approval on leads, org-wide. Only Admin and MD can change this.",
+  committee: "Optional review committees — PMT (Lead Generation review, org-wide), G3 (conflict review), Accounts (Proposals payment/EMD verification). A person can hold more than one. Only Admin and MD can change this.",
 };
 
 export default function EditUserPage() {
@@ -57,7 +57,7 @@ export default function EditUserPage() {
     }
     return base;
   }, [target]);
-  const [form, setForm] = useState({ full_name: "", role: "", teams: [], office: "", committee: "", accounts_committee: false });
+  const [form, setForm] = useState({ full_name: "", role: "", teams: [], office: "", committees: [] });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState("");
@@ -70,11 +70,7 @@ export default function EditUserPage() {
   const fetchUser = useCallback(async () => {
     setLoading(true);
     const cols = "id, full_name, email, role, team, office, committee, pin_updated_at, signature_path";
-    let { data, error } = await supabase.from("afc_users").select(`${cols}, accounts_committee`).eq("id", id).maybeSingle();
-    // Tolerates a database that doesn't have accounts_committee yet.
-    if (error && /accounts_committee/.test(error.message || "")) {
-      ({ data, error } = await supabase.from("afc_users").select(cols).eq("id", id).maybeSingle());
-    }
+    const { data, error } = await supabase.from("afc_users").select(cols).eq("id", id).maybeSingle();
     if (error || !data) {
       setNotFound(true);
       setLoading(false);
@@ -88,7 +84,14 @@ export default function EditUserPage() {
       : data.team
         ? [data.team]
         : [];
-    setForm({ full_name: data.full_name || "", role: data.role || "", teams: assignedTeams, office: data.office || "", committee: data.committee || "", accounts_committee: data.accounts_committee === true });
+    const { data: committeeRows } = await supabase.from("afc_user_committees").select("committee").eq("user_id", id);
+    const committeeSet = (committeeRows || []).map((r) => r.committee);
+    const assignedCommittees = committeeSet.length
+      ? [data.committee, ...committeeSet.filter((c) => c !== data.committee)].filter(Boolean)
+      : data.committee
+        ? [data.committee]
+        : [];
+    setForm({ full_name: data.full_name || "", role: data.role || "", teams: assignedTeams, office: data.office || "", committees: assignedCommittees });
     setSignatureUrl(null);
     if (data.signature_path) {
       const { data: signed } = await supabase.functions.invoke("get-user-signature-url", { body: { user_id: id } });
@@ -127,7 +130,7 @@ export default function EditUserPage() {
           full_name: form.full_name.trim(),
           teams: form.teams,
           office: form.office || null,
-          ...(canEditRole ? { role: form.role, committee: form.committee || null, accounts_committee: form.accounts_committee } : {}),
+          ...(canEditRole ? { role: form.role, committees: form.committees } : {}),
         },
       });
 
@@ -242,28 +245,13 @@ export default function EditUserPage() {
                     <label className="field-label">
                       Committee <FieldTooltip text={FIELD_HELP.committee} />
                     </label>
-                    <Select options={committeeOptions} value={form.committee} onChange={(v) => set("committee", v)} placeholder="— None —" disabled={saving} />
+                    <MultiSelect options={committeeOptions} value={form.committees} onChange={(v) => set("committees", v)} placeholder="— None —" disabled={saving} />
                   </div>
                 ) : (
-                  target.committee && (
+                  form.committees.length > 0 && (
                     <div className="field">
                       <label className="field-label">Committee</label>
-                      <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{target.committee}</p>
-                    </div>
-                  )
-                )}
-                {canEditRole ? (
-                  <div className="field">
-                    <label className="field-label">
-                      Accounts Committee <FieldTooltip text={FIELD_HELP.accountsCommittee} />
-                    </label>
-                    <Select options={[{ value: "no", label: "No" }, { value: "yes", label: "Yes" }]} value={form.accounts_committee ? "yes" : "no"} onChange={(v) => set("accounts_committee", v === "yes")} disabled={saving} />
-                  </div>
-                ) : (
-                  target.accounts_committee && (
-                    <div className="field">
-                      <label className="field-label">Accounts Committee</label>
-                      <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>Member</p>
+                      <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{form.committees.join(", ")}</p>
                     </div>
                   )
                 )}

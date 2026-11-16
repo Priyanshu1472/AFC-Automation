@@ -20,7 +20,11 @@ function client(opts: {
   updated?: unknown[];
 }) {
   const routes: Record<string, FakeResult[]> = {
-    afc_users: [{ data: opts.caller, error: null }, { data: { accounts_committee: opts.member ?? false, is_active: true }, error: null }],
+    afc_users: [{ data: opts.caller, error: null }, { data: { is_active: true }, error: null }],
+    afc_user_committees: [
+      { data: [], error: null }, // caller's own committees (getCallerProfile) — irrelevant here
+      { data: (opts.member ?? false) ? { user_id: (opts.caller as { id: string }).id } : null, error: null }, // isAccountsMember's membership check
+    ],
     proposal_preparations: [{ data: { id: "prop-1", lead_id: "lead-1", locked: true, client_response: opts.response ?? "rejected" }, error: null }],
     leads: [{ data: LEAD, error: null }],
     proposal_emd_tracking: [{ data: opts.tracking ?? null, error: null }, { data: opts.updated ?? [{ id: "t-1" }], error: null }],

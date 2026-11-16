@@ -12,7 +12,11 @@ function client(opts: { member?: boolean; note?: Record<string, unknown>; update
   return createFakeAdminClient({
     afc_users: [
       { data: caller, error: null },
-      { data: { accounts_committee: opts.member ?? true, is_active: true }, error: null },
+      { data: { is_active: true }, error: null },
+    ],
+    afc_user_committees: [
+      { data: [], error: null }, // caller's own committees (getCallerProfile) — irrelevant here
+      { data: (opts.member ?? true) ? { user_id: ACC_ID } : null, error: null }, // isAccountsMember's membership check
     ],
     fee_notes: [
       { data: opts.note ?? { id: "fee-1", proposal_id: "prop-1", status: "approved", payment_status: "pending" }, error: null },

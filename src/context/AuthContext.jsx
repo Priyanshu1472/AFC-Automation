@@ -8,17 +8,7 @@ const ACTIVE_TEAM_STORAGE_PREFIX = "afc_active_team_";
 const PROFILE_COLUMNS = "id, full_name, email, role, team, office, committee, is_active, must_change_password, pin_updated_at, signature_path, avatar_path";
 
 async function fetchProfile(userId) {
-  // accounts_committee (Proposals' Accounts Committee) is requested
-  // separately-tolerant: if a database hasn't had that migration yet, the
-  // profile still loads without it instead of locking everyone out.
-  let { data, error } = await supabase
-    .from("afc_users")
-    .select(`${PROFILE_COLUMNS}, accounts_committee`)
-    .eq("id", userId)
-    .maybeSingle();
-  if (error && /accounts_committee/.test(error.message || "")) {
-    ({ data, error } = await supabase.from("afc_users").select(PROFILE_COLUMNS).eq("id", userId).maybeSingle());
-  }
+  const { data, error } = await supabase.from("afc_users").select(PROFILE_COLUMNS).eq("id", userId).maybeSingle();
 
   if (error) throw error;
   if (!data) return data;
@@ -37,7 +27,19 @@ async function fetchProfile(userId) {
       ? [data.team]
       : [];
 
-  return { ...data, teams };
+  // Same pattern for committees — a person can now hold more than one
+  // (e.g. PMT and Accounts). Every `profile.committee === "X"` check in the
+  // app should move to `profile.committees?.includes("X")` so a secondary
+  // committee isn't silently invisible.
+  const { data: committeeRows } = await supabase.from("afc_user_committees").select("committee").eq("user_id", userId);
+  const committeeSet = (committeeRows || []).map((r) => r.committee);
+  const committees = committeeSet.length
+    ? [data.committee, ...committeeSet.filter((c) => c !== data.committee)].filter(Boolean)
+    : data.committee
+      ? [data.committee]
+      : [];
+
+  return { ...data, teams, committees };
 }
 
 function loadStoredActiveTeam(userId, teams) {

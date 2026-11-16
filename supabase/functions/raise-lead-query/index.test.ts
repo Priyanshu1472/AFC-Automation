@@ -20,6 +20,7 @@ function buildClient(opts: {
 }) {
   return createFakeAdminClient({
     afc_users: [{ data: opts.caller ?? callerRow(), error: null }, { data: [{ id: "pmt-member-1" }], error: null }],
+    afc_user_committees: [{ data: [], error: null }, { data: [{ user_id: "pmt-member-1" }], error: null }],
     leads: [{ data: opts.lead ?? leadRow(), error: null }, { data: { id: LEAD_ID }, error: null }],
     lead_queries: [{ data: opts.existingOpen === undefined ? null : opts.existingOpen, error: null }, { data: null, error: null }],
   });

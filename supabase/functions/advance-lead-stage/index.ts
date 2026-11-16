@@ -550,7 +550,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       // membership alone authorizes the action, regardless of the lead's
       // team or the member's own team.
       case "pmt_approve": {
-        if (caller.committee !== "PMT") return forbidden("Only a PMT committee member can act on this lead.");
+        if (!caller.committees.includes("PMT")) return forbidden("Only a PMT committee member can act on this lead.");
         const mdHolders = await getOrgWideHolders(adminClient, { role: "md" });
         notifyTargetIds = mdHolders;
         notifyTitle = "Lead awaiting MD approval";
@@ -560,7 +560,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "pmt_decline": {
-        if (caller.committee !== "PMT") return forbidden("Only a PMT committee member can act on this lead.");
+        if (!caller.committees.includes("PMT")) return forbidden("Only a PMT committee member can act on this lead.");
         extraFields = { declined_from_status: leadRow.status };
         notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
         notifyTitle = "Lead returned by PMT";

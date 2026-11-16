@@ -30,7 +30,7 @@ import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import PinInput from "../ui/PinInput";
 import Select from "../ui/Select";
-import { ROLE_LABELS } from "../../lib/roles";
+import { ROLE_LABELS, hasCommittee } from "../../lib/roles";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import "../../styles/LeadQueryPanel.css";
 
@@ -141,11 +141,11 @@ export default function LeadQueryPanel({ leadId, leadTeam, leadStatus, onLeadTra
   // scoped to just this viewer.
   const anyOpenQuery = queries.find((q) => q.status === "open" || q.status === "transfer_pending");
   const canRaise = QUERY_RAISER_ROLES.includes(profile?.role) && !profile?.teams?.includes(leadTeam) && !anyOpenQuery;
-  const isPmt = profile?.committee === "PMT" || ["md", "admin"].includes(profile?.role);
+  const isPmt = hasCommittee(profile, "PMT") || ["md", "admin"].includes(profile?.role);
   // The actual PMT committee tag, distinct from isPmt above (which also
   // covers MD/admin viewing an open query) — only a true PMT member can
   // escalate to G3.
-  const isTruePmt = profile?.committee === "PMT";
+  const isTruePmt = hasCommittee(profile, "PMT");
   // MD transfers outright; everyone else on the PMT side only requests it.
   const isMd = profile?.role === "md";
 

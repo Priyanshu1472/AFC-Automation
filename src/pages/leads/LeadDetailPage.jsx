@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
-import { LEAD_PA_TIER_ROLES, can } from "../../lib/roles";
+import { LEAD_PA_TIER_ROLES, can, hasCommittee } from "../../lib/roles";
 import { canOpenProposal } from "../../lib/proposalPrep";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -374,7 +374,7 @@ export default function LeadDetailPage() {
         case "pmt_approve":
         case "pmt_decline":
         case "pmt_escalate_g3":
-          return profile?.committee === "PMT";
+          return hasCommittee(profile, "PMT");
         case "md_approve":
         case "md_decline":
           return profile?.role === "md";

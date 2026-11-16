@@ -1,4 +1,4 @@
-import { LEAD_PA_TIER_ROLES, can } from "./roles";
+import { LEAD_PA_TIER_ROLES, can, hasCommittee } from "./roles";
 import { isLeadOverdue, overdueEditorId } from "../components/leads/leadStatus";
 
 // Lead-specific action predicates, mirroring the server-side authorization
@@ -86,7 +86,7 @@ export const leadCan = {
   // (leadRow.recommending_authority_id), not a role or team match. This is
   // what makes the chain work at offices with no DGM (e.g. Head Office).
   recommendingAuthorityReview: (profile, lead) => lead.status === "recommending_authority_review" && profile?.id === lead.recommending_authority_id,
-  pmtReview: (profile, lead) => lead.status === "pmt_review" && profile?.committee === "PMT",
+  pmtReview: (profile, lead) => lead.status === "pmt_review" && hasCommittee(profile, "PMT"),
   mdReview: (profile, lead) => lead.status === "md_review" && profile?.role === "md",
   // A safety valve for editing the Business Partner right after a lead has
   // left pa_review — returns it to pa_review, it is NOT a drop. Only
@@ -125,7 +125,7 @@ export function isTeamLead(profile, lead) {
   if (!profile) return false;
   if (can.viewAllTeams(profile.role)) return true;
   if (["dgm", "general_manager", "agm", "srm"].includes(profile.role)) return true;
-  if (profile.committee === "PMT") return true;
+  if (hasCommittee(profile, "PMT")) return true;
   return !!profile.teams?.includes(lead.team);
 }
 

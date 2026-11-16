@@ -5,9 +5,12 @@
 // client's response (proposal-emd-action) — plus the notifications that
 // tie the lead's team and the Accounts Committee together.
 //
-// Accounts membership is read here, not in getCallerProfile(), so a
-// database without the accounts_committee column (migration not yet
-// promoted) can never break every other edge function's caller lookup.
+// Accounts membership is just "Accounts" in the same multi-committee set
+// as PMT/G3 (afc_user_committees) — read here rather than off
+// getCallerProfile()'s own `committees`, since the two edge functions that
+// need this (mark-fee-note-paid, proposal-emd-action) look it up for
+// users OTHER than the caller too (getAccountsMemberIds, for notification
+// fan-out), not just the caller's own membership.
 
 import { createAdminClient } from "./auth.ts";
 import { notifyUsers, type NotifyPayload } from "./notify.ts";
@@ -32,26 +35,35 @@ export type ProposalRow = { id: string; lead_id: string; locked: boolean; client
 
 export async function isAccountsMember(admin: AdminClient, userId: string): Promise<boolean> {
   try {
-    const { data, error } = await admin.from("afc_users").select("accounts_committee, is_active").eq("id", userId).maybeSingle();
+    const { data: user, error: userErr } = await admin.from("afc_users").select("is_active").eq("id", userId).maybeSingle();
+    if (userErr || !user?.is_active) return false;
+    const { data, error } = await admin.from("afc_user_committees").select("user_id").eq("user_id", userId).eq("committee", "Accounts").maybeSingle();
     if (error) {
-      console.error("accounts_committee lookup failed:", error.message);
+      console.error("Accounts committee lookup failed:", error.message);
       return false;
     }
-    return !!data?.is_active && data?.accounts_committee === true;
+    return !!data;
   } catch (err) {
-    console.error("accounts_committee lookup failed:", (err as Error).message);
+    console.error("Accounts committee lookup failed:", (err as Error).message);
     return false;
   }
 }
 
 export async function getAccountsMemberIds(admin: AdminClient): Promise<string[]> {
   try {
-    const { data, error } = await admin.from("afc_users").select("id").eq("accounts_committee", true).eq("is_active", true);
+    const { data: committeeRows, error } = await admin.from("afc_user_committees").select("user_id").eq("committee", "Accounts");
     if (error) {
       console.error("Accounts Committee lookup failed:", error.message);
       return [];
     }
-    return Array.isArray(data) ? data.map((u: { id: string }) => u.id).filter(Boolean) : [];
+    const ids = [...new Set((committeeRows || []).map((r: { user_id: string }) => r.user_id).filter(Boolean))];
+    if (!ids.length) return [];
+    const { data: activeRows, error: activeErr } = await admin.from("afc_users").select("id").in("id", ids).eq("is_active", true);
+    if (activeErr) {
+      console.error("Accounts Committee lookup failed:", activeErr.message);
+      return [];
+    }
+    return (activeRows || []).map((u: { id: string }) => u.id);
   } catch (err) {
     console.error("Accounts Committee lookup failed:", (err as Error).message);
     return [];

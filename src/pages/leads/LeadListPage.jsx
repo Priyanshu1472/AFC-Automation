@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { leadCan, isActionRequiredForViewer, isMyLead, isTeamLead } from "../../lib/leadPermissions";
-import { can } from "../../lib/roles";
+import { can, hasCommittee } from "../../lib/roles";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -119,7 +119,7 @@ export default function LeadListPage() {
   // gives them an explicit tab to browse it, with a Team filter, instead of
   // only ever seeing their own active team under "Team Leads" (and, for
   // PMT, only pmt_review-stage leads under their own committee tab).
-  const hasAllLeadsTab = ["dgm", "general_manager"].includes(profile?.role) || profile?.committee === "PMT";
+  const hasAllLeadsTab = ["dgm", "general_manager"].includes(profile?.role) || hasCommittee(profile, "PMT");
   // A viewer only ever holds one committee (afc_users.committee), so this is
   // at most a single extra tab, only for a member of that committee.
   const committeeTab = profile?.committee ? { key: profile.committee, label: `${profile.committee} Leads` } : null;

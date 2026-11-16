@@ -1,4 +1,5 @@
 // Shared constants/helpers for the Proposal Preparation module.
+import { hasCommittee } from "./roles";
 
 // The Bid Payment Requisition Note is one note per proposal carrying any
 // combination of these three fee lines. EMD is refundable; the other two
@@ -76,7 +77,7 @@ export function canOpenProposal(lead, profile) {
 }
 
 export function isAccountsCommittee(profile) {
-  return profile?.accounts_committee === true;
+  return hasCommittee(profile, "Accounts");
 }
 
 // What still stands between a proposal and "Lock Proposal" — mirrored by

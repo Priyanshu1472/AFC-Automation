@@ -7,12 +7,13 @@ import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
 import TeamMultiSelect from "../../components/ui/TeamMultiSelect";
+import MultiSelect from "../../components/ui/MultiSelect";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import "../../styles/CreateUserPage.css";
 import BackButton from "../../components/ui/BackButton";
 
-const EMPTY_FORM = { full_name: "", email: "", role: "", teams: [], office: "", committee: "", accounts_committee: false };
+const EMPTY_FORM = { full_name: "", email: "", role: "", teams: [], office: "", committees: [] };
 const SIGNATURE_TYPES = ["image/png", "image/jpeg"];
 
 // Each team has one "home" office — picking a team auto-fills Office with
@@ -87,8 +88,7 @@ export default function CreateUserPage() {
             role: form.role,
             teams: form.teams,
             office: form.office || null,
-            committee: form.committee || null,
-            accounts_committee: form.accounts_committee,
+            committees: form.committees,
           },
         });
 
@@ -231,22 +231,11 @@ export default function CreateUserPage() {
                   <label className="field-label">
                     Committee
                   </label>
-                  <Select
-                    options={[{ value: "", label: "— None —" }, ...committeeOptions]}
-                    value={form.committee}
-                    onChange={(v) => set("committee", v)}
+                  <MultiSelect
+                    options={committeeOptions}
+                    value={form.committees}
+                    onChange={(v) => set("committees", v)}
                     placeholder="— None —"
-                    disabled={saving}
-                  />
-                </div>
-                <div className="field">
-                  <label className="field-label">
-                    Accounts Committee
-                  </label>
-                  <Select
-                    options={[{ value: "no", label: "No" }, { value: "yes", label: "Yes" }]}
-                    value={form.accounts_committee ? "yes" : "no"}
-                    onChange={(v) => set("accounts_committee", v === "yes")}
                     disabled={saving}
                   />
                 </div>

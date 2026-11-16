@@ -126,6 +126,35 @@ Deno.test("update-staff-user - a multi-team `teams` array replaces afc_user_team
   ]);
 });
 
+Deno.test("update-staff-user - a multi-committee `committees` array replaces afc_user_committees, and committees[0] becomes the primary afc_users.committee", async () => {
+  const c = client({ id: CALLER_ID, role: "admin", is_active: true }, { id: TARGET_ID, role: "project_officer", team: "BPDD" });
+  const res = await handleRequest(
+    req({ user_id: TARGET_ID, full_name: "Name", committees: ["PMT", "Accounts"] }),
+    c as never,
+  );
+  assertEquals(res.status, 200);
+
+  const log = (c as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+  const profileUpdateLog = log.filter((l) => l.table === "afc_users").find((l) => l.calls[0]?.[0] === "update")!;
+  const updatedFields = JSON.parse(profileUpdateLog.calls[0][1]);
+  assertEquals(updatedFields.committee, "PMT");
+
+  const committeesInsertLog = log.filter((l) => l.table === "afc_user_committees").find((l) => l.calls[0]?.[0] === "insert")!;
+  const insertedCommittees = JSON.parse(committeesInsertLog.calls[0][1]);
+  assertEquals(insertedCommittees, [
+    { user_id: TARGET_ID, committee: "PMT" },
+    { user_id: TARGET_ID, committee: "Accounts" },
+  ]);
+});
+
+Deno.test("update-staff-user - rejects an unknown committee value", async () => {
+  const res = await handleRequest(
+    req({ user_id: TARGET_ID, full_name: "Name", committees: ["NotACommittee"] }),
+    client({ id: CALLER_ID, role: "admin", is_active: true }, { id: TARGET_ID, role: "srm", team: "BPDD" }) as never,
+  );
+  assertEquals(res.status, 400);
+});
+
 Deno.test("update-staff-user - a singular `team` field (no `teams` array) still syncs afc_user_teams to one entry", async () => {
   const c = client({ id: CALLER_ID, role: "admin", is_active: true }, { id: TARGET_ID, role: "dgm", team: "BPDD" });
   const res = await handleRequest(
