@@ -5,6 +5,11 @@
 // (see 20260820040000_proposal_preparation_schema.sql). An awarded
 // proposal continues in Monitoring (monitoring_projects, opened by a DB
 // trigger the moment the outcome is recorded).
+//
+// After the MD approves the Bid Payment Requisition Note, the Accounts
+// Committee opens this same page to make the payment, and later to verify
+// the EMD refund / PBG (EmdPanel) — they see a trimmed page with only the
+// money-related cards.
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
@@ -21,8 +26,9 @@ import ProposalDocumentsPanel from "../../components/proposals/ProposalDocuments
 import ProposalLockPanel from "../../components/proposals/ProposalLockPanel";
 import ProposalValuePanel from "../../components/proposals/ProposalValuePanel";
 import ProposalChatPanel from "../../components/proposals/ProposalChatPanel";
+import EmdPanel from "../../components/proposals/EmdPanel";
 import { FileTextIcon, UsersIcon } from "../../components/icons";
-import { isProposalLocked } from "../../lib/proposalPrep";
+import { isProposalLocked, isAccountsCommittee, lockBlockers } from "../../lib/proposalPrep";
 import "../../styles/ApplicationReviewPage.css";
 import "../../styles/ProposalPreparationPage.css";
 import BackButton from "../../components/ui/BackButton";
@@ -43,6 +49,9 @@ export default function ProposalPreparationPage() {
   const [baItems, setBaItems] = useState([]);
   const [monitoringProjectId, setMonitoringProjectId] = useState(null);
   const [documents, setDocuments] = useState([]);
+  const [emdTracking, setEmdTracking] = useState(null);
+  const [financeFiles, setFinanceFiles] = useState([]);
+  const [financeEvents, setFinanceEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -67,12 +76,18 @@ export default function ProposalPreparationPage() {
       { data: baItemRows },
       { data: monitoringRow },
       { data: docRows },
+      { data: emdRow },
+      { data: financeFileRows },
+      { data: financeEventRows },
     ] = await Promise.all([
       supabase.from("proposal_preparations").select("*, locker:locked_by(full_name), responder:client_response_by(full_name)").eq("id", proposalId).maybeSingle(),
-      supabase.from("fee_notes").select("*").eq("proposal_id", proposalId),
+      supabase.from("fee_notes").select("*, payer:payment_done_by(full_name)").eq("proposal_id", proposalId),
       supabase.from("proposal_document_requests").select("*").eq("proposal_id", proposalId).order("created_at"),
       supabase.from("monitoring_projects").select("id").eq("proposal_id", proposalId).maybeSingle(),
       supabase.from("proposal_documents").select("*").eq("proposal_id", proposalId),
+      supabase.from("proposal_emd_tracking").select("*, forwarder:forwarded_by(full_name), completer:completed_by(full_name)").eq("proposal_id", proposalId).maybeSingle(),
+      supabase.from("proposal_finance_files").select("*").eq("proposal_id", proposalId),
+      supabase.from("proposal_finance_events").select("*, actor:actor_id(full_name)").eq("proposal_id", proposalId).order("created_at"),
     ]);
     if (proposalErr || !proposalRow) {
       setError(proposalErr?.message || "This proposal could not be loaded. It may have just been created — try refreshing.");
@@ -85,6 +100,9 @@ export default function ProposalPreparationPage() {
     setBaItems(baItemRows || []);
     setMonitoringProjectId(monitoringRow?.id || null);
     setDocuments(docRows || []);
+    setEmdTracking(emdRow || null);
+    setFinanceFiles(financeFileRows || []);
+    setFinanceEvents(financeEventRows || []);
     setLoading(false);
   }, [leadId]);
 
@@ -96,6 +114,7 @@ export default function ProposalPreparationPage() {
       .channel(`proposal-${proposal.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "proposal_preparations", filter: `id=eq.${proposal.id}` }, () => fetchAll())
       .on("postgres_changes", { event: "*", schema: "public", table: "fee_notes", filter: `proposal_id=eq.${proposal.id}` }, () => fetchAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "proposal_emd_tracking", filter: `proposal_id=eq.${proposal.id}` }, () => fetchAll())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,6 +148,13 @@ export default function ProposalPreparationPage() {
   // override.
   const canManageDocs = profile && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
   const locked = isProposalLocked(proposal, lead);
+  const isAccounts = isAccountsCommittee(profile);
+  // An Accounts Committee member who isn't otherwise on this lead sees only
+  // the money-related cards.
+  const accountsOnly = isAccounts && !canManage && !isMd;
+  const approvedNote = feeNotes.find((n) => n.status === "approved") || null;
+  const blockers = lockBlockers({ proposal, feeNote: feeNotes[0], documents });
+  const showEmd = proposal.client_response !== "pending" && Number(approvedNote?.emd_amount) > 0;
   const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date() && !proposal.locked;
 
   return (
@@ -156,15 +182,17 @@ export default function ProposalPreparationPage() {
             </Card.Body>
           </Card>
 
-          <ProposalChatPanel
-            proposalId={proposal.id}
-            chatOpenedAt={proposal.chat_opened_at}
-            locked={locked}
-          />
+          {!accountsOnly && (
+            <ProposalChatPanel
+              proposalId={proposal.id}
+              chatOpenedAt={proposal.chat_opened_at}
+              locked={locked}
+            />
+          )}
 
           {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
-          {!proposal.locked && pastDeadline && (
+          {!proposal.locked && pastDeadline && !accountsOnly && (
             <Alert variant="warning">
               The submission deadline ({fmtDate(lead.submission_deadline)}) has passed, so Fee Notes, BP Documents and Proposal Documents are now read-only. Lock the proposal below to record the client's response.
             </Alert>
@@ -202,8 +230,22 @@ export default function ProposalPreparationPage() {
             pastDeadline={pastDeadline}
             canManage={canManage}
             monitoringProjectId={monitoringProjectId}
+            blockers={blockers}
             onChanged={fetchAll}
           />
+
+          {showEmd && (
+            <EmdPanel
+              proposal={proposal}
+              feeNote={approvedNote}
+              tracking={emdTracking}
+              financeFiles={financeFiles}
+              events={financeEvents}
+              isTeam={canManage}
+              isAccounts={isAccounts}
+              onChanged={fetchAll}
+            />
+          )}
 
           <FeeNotesPanel
             proposalId={proposal.id}
@@ -211,10 +253,14 @@ export default function ProposalPreparationPage() {
             lead={lead}
             profile={profile}
             isMd={isMd}
+            isAccounts={isAccounts}
+            financeFiles={financeFiles}
             locked={locked}
             onChanged={fetchAll}
           />
 
+          {!accountsOnly && (
+          <>
           <BaDocumentRequestsPanel
             proposalId={proposal.id}
             proposal={proposal}
@@ -233,6 +279,9 @@ export default function ProposalPreparationPage() {
             locked={locked}
             onChanged={fetchAll}
           />
+
+          </>
+          )}
 
           <ProposalValuePanel proposal={proposal} canManage={canManage} onChanged={fetchAll} />
         </div>

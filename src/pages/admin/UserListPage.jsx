@@ -86,6 +86,14 @@ function EditButton({ user, isSelf, onEdit }) {
   );
 }
 
+// Proposals' Accounts Committee is a separate flag, not a `committee` value.
+const ACCOUNTS_FILTER = "__accounts";
+function applyCommitteeFilter(query, committee) {
+  if (committee === "all") return query;
+  if (committee === ACCOUNTS_FILTER) return query.eq("accounts_committee", true);
+  return query.eq("committee", committee);
+}
+
 export default function UserListPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -132,7 +140,7 @@ export default function UserListPage() {
   const teams = useTeamOptions();
   const teamFilterOptions = useMemo(() => [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))], [teams]);
   const committeeFilterOptions = useMemo(
-    () => [{ value: "all", label: "All Committees" }, ...COMMITTEE_OPTIONS.map((c) => ({ value: c, label: c }))],
+    () => [{ value: "all", label: "All Committees" }, ...COMMITTEE_OPTIONS.map((c) => ({ value: c, label: c })), { value: ACCOUNTS_FILTER, label: "Accounts Committee" }],
     []
   );
 
@@ -148,7 +156,7 @@ export default function UserListPage() {
     if (trimmed) query = query.or(`full_name.ilike.%${trimmed}%,email.ilike.%${trimmed}%`);
     if (currentTeam !== "all") query = query.eq("team", currentTeam);
     if (currentRole !== "all") query = query.eq("role", currentRole);
-    if (currentCommittee !== "all") query = query.eq("committee", currentCommittee);
+    query = applyCommitteeFilter(query, currentCommittee);
 
     const from = currentPage * PAGE_SIZE;
     query = query.range(from, from + PAGE_SIZE - 1);
@@ -167,7 +175,7 @@ export default function UserListPage() {
     const trimmed = currentSearch.trim();
     if (trimmed) query = query.or(`full_name.ilike.%${trimmed}%,email.ilike.%${trimmed}%`);
     if (currentRole !== "all") query = query.eq("role", currentRole);
-    if (currentCommittee !== "all") query = query.eq("committee", currentCommittee);
+    query = applyCommitteeFilter(query, currentCommittee);
     return query;
   }, []);
 

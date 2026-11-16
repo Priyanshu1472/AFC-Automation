@@ -24,6 +24,7 @@ const FIELD_HELP = {
   role: "Changing a role controls what this person can see and do going forward. Only Admin and MD can change a role.",
   team: "The working group this person belongs to (e.g. BPDD, BIID). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
   office: "The physical office this person is based out of.",
+  accountsCommittee: "Proposals’ Accounts Committee — members make the payment on MD-approved Bid Payment Requisition Notes and verify EMD refunds / PBG. Only Admin can change this.",
   committee: "Optional Lead Generation review committee (PMT) — membership grants PMT-stage review/approval on leads, org-wide. Only Admin and MD can change this.",
 };
 
@@ -56,7 +57,7 @@ export default function EditUserPage() {
     }
     return base;
   }, [target]);
-  const [form, setForm] = useState({ full_name: "", role: "", teams: [], office: "", committee: "" });
+  const [form, setForm] = useState({ full_name: "", role: "", teams: [], office: "", committee: "", accounts_committee: false });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState("");
@@ -68,11 +69,12 @@ export default function EditUserPage() {
 
   const fetchUser = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("afc_users")
-      .select("id, full_name, email, role, team, office, committee, pin_updated_at, signature_path")
-      .eq("id", id)
-      .maybeSingle();
+    const cols = "id, full_name, email, role, team, office, committee, pin_updated_at, signature_path";
+    let { data, error } = await supabase.from("afc_users").select(`${cols}, accounts_committee`).eq("id", id).maybeSingle();
+    // Tolerates a database that doesn't have accounts_committee yet.
+    if (error && /accounts_committee/.test(error.message || "")) {
+      ({ data, error } = await supabase.from("afc_users").select(cols).eq("id", id).maybeSingle());
+    }
     if (error || !data) {
       setNotFound(true);
       setLoading(false);
@@ -86,7 +88,7 @@ export default function EditUserPage() {
       : data.team
         ? [data.team]
         : [];
-    setForm({ full_name: data.full_name || "", role: data.role || "", teams: assignedTeams, office: data.office || "", committee: data.committee || "" });
+    setForm({ full_name: data.full_name || "", role: data.role || "", teams: assignedTeams, office: data.office || "", committee: data.committee || "", accounts_committee: data.accounts_committee === true });
     setSignatureUrl(null);
     if (data.signature_path) {
       const { data: signed } = await supabase.functions.invoke("get-user-signature-url", { body: { user_id: id } });
@@ -125,7 +127,7 @@ export default function EditUserPage() {
           full_name: form.full_name.trim(),
           teams: form.teams,
           office: form.office || null,
-          ...(canEditRole ? { role: form.role, committee: form.committee || null } : {}),
+          ...(canEditRole ? { role: form.role, committee: form.committee || null, accounts_committee: form.accounts_committee } : {}),
         },
       });
 
@@ -247,6 +249,21 @@ export default function EditUserPage() {
                     <div className="field">
                       <label className="field-label">Committee</label>
                       <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{target.committee}</p>
+                    </div>
+                  )
+                )}
+                {canEditRole ? (
+                  <div className="field">
+                    <label className="field-label">
+                      Accounts Committee <FieldTooltip text={FIELD_HELP.accountsCommittee} />
+                    </label>
+                    <Select options={[{ value: "no", label: "No" }, { value: "yes", label: "Yes" }]} value={form.accounts_committee ? "yes" : "no"} onChange={(v) => set("accounts_committee", v === "yes")} disabled={saving} />
+                  </div>
+                ) : (
+                  target.accounts_committee && (
+                    <div className="field">
+                      <label className="field-label">Accounts Committee</label>
+                      <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>Member</p>
                     </div>
                   )
                 )}

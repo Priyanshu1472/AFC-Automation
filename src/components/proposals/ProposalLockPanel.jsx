@@ -1,8 +1,9 @@
 // Lock & Client Response — one card that walks the proposal through
 // Preparation → Submitted & Locked → Client Response → Monitoring, with the
 // single action due at each step shown inline (no overlay). A proposal
-// locks manually once submitted (lock-proposal, which also requires the
-// proposed value); the deadline passing only blocks edits via
+// locks manually once submitted (lock-proposal, which requires the Bid
+// Payment Requisition Note approved, the proposal documents uploaded and
+// the proposed value entered — see lockBlockers()); the deadline passing only blocks edits via
 // can_edit_proposal(), so someone still confirms the lock before the
 // outcome can be recorded. The outcome is recorded once
 // (set-proposal-outcome); "Awarded" opens the project in Monitoring.
@@ -21,7 +22,7 @@ function fmtDateTime(d) {
   return new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-export default function ProposalLockPanel({ proposal, pastDeadline, canManage, monitoringProjectId, onChanged }) {
+export default function ProposalLockPanel({ proposal, pastDeadline, canManage, monitoringProjectId, blockers = [], onChanged }) {
   const navigate = useNavigate();
   const [confirm, setConfirm] = useState(null); // 'lock' | 'outcome'
   const [busy, setBusy] = useState(false);
@@ -68,7 +69,7 @@ export default function ProposalLockPanel({ proposal, pastDeadline, canManage, m
     }
   }
 
-  const needsValue = proposal.proposed_value == null;
+  const canLock = blockers.length === 0;
 
   return (
     <Card className="pp-flow-card">
@@ -98,14 +99,27 @@ export default function ProposalLockPanel({ proposal, pastDeadline, canManage, m
           <div className="pp-flow-action">
             <div className="pp-flow-action-text">
               <strong>{pastDeadline ? "The submission deadline has passed." : "Submitted the proposal to the client?"}</strong>
-              <span>
-                {needsValue
-                  ? "Enter the proposed value in the Financial section first — it's needed to lock."
-                  : `Proposed value ${formatINR(proposal.proposed_value)}. Locking stops all further edits.`}
-              </span>
+              {canLock ? (
+                <span>Proposed value {formatINR(proposal.proposed_value)}. Locking stops all further edits.</span>
+              ) : (
+                <>
+                  <span>Still needed before the proposal can be locked:</span>
+                  <ul className="pp-lock-blockers">
+                    {blockers.map((b) => <li key={b}>{b}</li>)}
+                  </ul>
+                </>
+              )}
             </div>
             {canManage && (
-              <Button variant="danger" icon={<LockIcon />} disabled={needsValue} onClick={() => setConfirm("lock")}>Lock Proposal</Button>
+              <Button
+                variant="danger"
+                icon={<LockIcon />}
+                disabled={!canLock}
+                title={canLock ? undefined : "Complete the items listed first"}
+                onClick={() => setConfirm("lock")}
+              >
+                Lock Proposal
+              </Button>
             )}
           </div>
         )}
