@@ -162,6 +162,7 @@ site_url = "http://localhost:5173"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = [
   "http://localhost:5173/**",
+  "https://pmisafc.in/**",
   "https://staging--pmis-afc.netlify.app/**",
   "https://deploy-preview-*--pmis-afc.netlify.app/**",
 ]
