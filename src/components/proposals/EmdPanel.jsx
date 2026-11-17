@@ -20,9 +20,10 @@ import Button from "../ui/Button";
 import Alert from "../ui/Alert";
 import FinanceFiles from "./FinanceFiles";
 import FinanceActionModal from "./FinanceActionModal";
+import FinanceTimeline from "./FinanceTimeline";
 import { RupeeIcon, InfoIcon, CheckCircleIcon, RotateCcwIcon, FileTextIcon } from "../icons";
 import { formatINR } from "../../lib/monitoring";
-import { EMD_TRACK_LABELS, EMD_STATUS_LABELS, EMD_STATUS_VARIANTS, FINANCE_EVENT_LABELS } from "../../lib/proposalPrep";
+import { EMD_TRACK_LABELS, EMD_STATUS_LABELS, EMD_STATUS_VARIANTS } from "../../lib/proposalPrep";
 
 function fmtDateTime(d) {
   if (!d) return "";
@@ -304,15 +305,8 @@ export default function EmdPanel({ proposal, feeNote, tracking, financeFiles, ev
 
         {emdEvents.length > 0 && (
           <div className="pp-fin-history">
-            <span className="pp-fin-sub">History</span>
-            <ul>
-              {emdEvents.map((ev) => (
-                <li key={ev.id}>
-                  <span>{FINANCE_EVENT_LABELS[ev.action] || ev.action}{ev.actor?.full_name ? ` — ${ev.actor.full_name}` : ""}{ev.remark ? `: “${ev.remark}”` : ""}</span>
-                  <time>{fmtDateTime(ev.created_at)}</time>
-                </li>
-              ))}
-            </ul>
+            <span className="pp-fin-sub">Timeline</span>
+            <FinanceTimeline events={emdEvents} />
           </div>
         )}
       </Collapsible>

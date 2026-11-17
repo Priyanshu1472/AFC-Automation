@@ -91,7 +91,7 @@ export default function ProposalPreparationPage() {
       supabase.from("proposal_additional_responsibles").select("user_id, user:user_id(full_name)").eq("proposal_id", proposalId).order("created_at"),
       supabase.from("proposal_emd_tracking").select("*, forwarder:forwarded_by(full_name), completer:completed_by(full_name)").eq("proposal_id", proposalId).maybeSingle(),
       supabase.from("proposal_finance_files").select("*").eq("proposal_id", proposalId),
-      supabase.from("proposal_finance_events").select("*, actor:actor_id(full_name)").eq("proposal_id", proposalId).order("created_at"),
+      supabase.from("proposal_finance_events").select("*, actor:actor_id(full_name, role)").eq("proposal_id", proposalId).order("created_at"),
     ]);
     if (proposalErr || !proposalRow) {
       setError(proposalErr?.message || "This proposal could not be loaded. It may have just been created — try refreshing.");
