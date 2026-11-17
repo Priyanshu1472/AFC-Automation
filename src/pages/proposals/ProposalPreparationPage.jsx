@@ -269,6 +269,9 @@ export default function ProposalPreparationPage() {
           {showEmd && (
             <EmdPanel
               proposal={proposal}
+              lead={lead}
+              profile={profile}
+              additionalResponsibleIds={additionalResponsibleIds}
               feeNote={approvedNote}
               tracking={emdTracking}
               pbgNote={pbgNote}
@@ -293,7 +296,9 @@ export default function ProposalPreparationPage() {
             onChanged={fetchAll}
           />
 
-          {proposal.client_response === "awarded" && (
+          {/* With an EMD the PBG Note sits inside the EMD card; on its own
+              card only when the proposal had no EMD. */}
+          {proposal.client_response === "awarded" && !showEmd && (
             <PbgNotePanel
               proposal={proposal}
               lead={lead}
