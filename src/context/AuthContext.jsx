@@ -1,5 +1,8 @@
 import { createContext, useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { markRecoveryInProgress, clearRecoveryFlag, isRecoveryInProgress } from "../lib/passwordRecoveryFlag";
+
+export { clearRecoveryFlag };
 
 export const AuthContext = createContext(null);
 
@@ -10,48 +13,19 @@ const ACTIVE_TEAM_STORAGE_PREFIX = "afc_active_team_";
 // supabase-js mirrors the session into localStorage, every OTHER already-
 // open tab of this app picks it up too, via the SDK's own cross-tab sync,
 // and (without this) would quietly show the user as logged in before
-// they've actually set anything. The fix: a recovery-in-progress flag,
-// shared across tabs via localStorage, that tells every tab's
-// onAuthStateChange to ignore whatever session just appeared until the
-// flow actually finishes (useSetNewPassword clears it right on success).
-// It auto-expires rather than just being a plain boolean, so an abandoned
-// reset (tab closed without submitting) can't wedge every tab logged-out
-// forever. An explicit, deliberate login (useLogin's handleLogin) is
-// unaffected either way — it calls refreshProfile() directly, which this
-// flag never gates, only the passive getSession()/onAuthStateChange path.
-const RECOVERY_FLAG_KEY = "afc_password_recovery_until";
-const RECOVERY_WINDOW_MS = 5 * 60 * 1000;
-
-function markRecoveryInProgress() {
-  try {
-    localStorage.setItem(RECOVERY_FLAG_KEY, String(Date.now() + RECOVERY_WINDOW_MS));
-  } catch {
-    // localStorage unavailable — the cross-tab leak just can't be
-    // suppressed in this browsing mode; nothing else to fall back to.
-  }
-}
-
-export function clearRecoveryFlag() {
-  try {
-    localStorage.removeItem(RECOVERY_FLAG_KEY);
-  } catch {
-    // Nothing to clear if storage isn't available in the first place.
-  }
-}
-
-function isRecoveryInProgress() {
-  try {
-    const until = Number(localStorage.getItem(RECOVERY_FLAG_KEY));
-    if (!until) return false;
-    if (Date.now() > until) {
-      clearRecoveryFlag();
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
+// they've actually set anything. lib/supabase.js already set the
+// recovery flag synchronously from the URL, before the Supabase client
+// (and any of its cross-tab broadcasting) even existed — the
+// PASSWORD_RECOVERY branch below is a second, redundant trigger for it
+// (harmless either way; belt-and-suspenders in case the URL marker was
+// ever missed). Every tab's onAuthStateChange ignores whatever session is
+// present while the flag is active; useSetNewPassword clears it right on
+// a successful submit. It auto-expires rather than being a plain boolean,
+// so an abandoned reset (tab closed without submitting) can't wedge every
+// tab logged-out forever. An explicit, deliberate login (useLogin's
+// handleLogin) is unaffected either way — it calls refreshProfile()
+// directly, which this flag never gates, only the passive
+// getSession()/onAuthStateChange path.
 
 const PROFILE_COLUMNS = "id, full_name, email, role, team, office, committee, is_active, must_change_password, pin_updated_at, signature_path, avatar_path";
 

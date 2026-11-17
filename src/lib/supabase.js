@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { markRecoveryInProgressIfUrlSaysSo } from "./passwordRecoveryFlag";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -6,6 +7,11 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 if (!supabaseUrl || !supabaseKey) {
   throw new Error("Missing Supabase environment variables. Check your .env.local file.");
 }
+
+// Must run before createClient() below — see passwordRecoveryFlag.js for
+// why this has to win a race against the SDK's own cross-tab session
+// broadcast, not just react to it afterward.
+markRecoveryInProgressIfUrlSaysSo();
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
