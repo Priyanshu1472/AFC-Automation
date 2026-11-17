@@ -60,20 +60,18 @@ export const CLIENT_RESPONSE_VARIANTS = {
   rejected: "danger",
 };
 
-// Who gets "Open Proposal" — md/admin, or the lead's three assignees
-// (Person Responsible, Reviewer, and Recommending Authority/authorised
-// signatory, who locks the proposal and records the client's outcome).
-// Shared by LeadListPage/LeadDetailPage's row action and ProposalsListPage
-// so the rule can't drift between entry points.
-//
-// The Accounts Committee can open a proposal too, but only ever sees ones
-// whose Bid Payment Requisition Note the MD has approved (RLS returns no
-// other rows to them), so seeing the row is enough here.
+// Who gets "Open Proposal" — md/admin, the lead's three assignees (Person
+// Responsible, Reviewer, and Recommending Authority/authorised signatory,
+// who locks the proposal and records the client's outcome), or any other
+// internal (non-Business Partner) user, org-wide — RLS/create-proposal-
+// preparation grant the same rule (see 20261117010000_org_wide_internal_
+// proposal_view.sql). Shared by LeadListPage/LeadDetailPage's row action
+// and ProposalsListPage so the rule can't drift between entry points.
 export function canOpenProposal(lead, profile) {
   if (!profile || !lead) return false;
   if (["md", "admin"].includes(profile.role)) return true;
   if ([lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id)) return true;
-  return isAccountsCommittee(profile);
+  return profile.role !== "business_associate";
 }
 
 export function isAccountsCommittee(profile) {

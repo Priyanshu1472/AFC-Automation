@@ -84,6 +84,14 @@ export function isLeadTeam(lead: ProposalLead, callerId: string): boolean {
   return teamIds(lead).includes(callerId);
 }
 
+// Every internal user — i.e. not a Business Partner, an outside identity —
+// gets view access to any proposal (actions stay gated to the lead's own
+// named assignees or md/admin); see 20261117010000_org_wide_internal_
+// proposal_view.sql for the matching RLS-side change.
+export function isInternalRole(caller: { role: string }): boolean {
+  return caller.role !== "business_associate";
+}
+
 // "AFC/TEAM 1/L/26/022 — "Title"" — the shape notificationDisplay.js
 // parses into a lead reference + subject.
 export function leadRef(lead: ProposalLead): string {

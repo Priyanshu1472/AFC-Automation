@@ -93,10 +93,10 @@ Deno.test("preview-fee-note - fee_note_id is required", async () => {
   assertEquals(res.status, 400);
 });
 
-Deno.test("preview-fee-note - a caller with no relation to the lead is forbidden", async () => {
+Deno.test("preview-fee-note - a Business Partner is forbidden", async () => {
   const res = await handleRequest(
     req({ fee_note_id: FEE_NOTE_ID }, fakeJwt({ sub: "stranger-1" })),
-    client({ caller: { id: "stranger-1", role: "project_officer", is_active: true, email: "x@afc.com" } }) as never,
+    client({ caller: { id: "stranger-1", role: "business_associate", is_active: true, email: "x@afc.com" } }) as never,
   );
   assertEquals(res.status, 403);
 });
@@ -132,6 +132,19 @@ Deno.test("preview-fee-note - md/admin can preview even without being named on t
     const res = await handleRequest(
       req({ fee_note_id: FEE_NOTE_ID }, fakeJwt({ sub: "md-1" })),
       client({ caller: { id: "md-1", role: "md", is_active: true, email: "md@afc.com" } }) as never,
+    );
+    assertEquals(res.status, 200);
+  });
+});
+
+// Every other internal user gets org-wide view access, even with no
+// relation to the lead — see 20261117010000_org_wide_internal_proposal_
+// view.sql.
+Deno.test("preview-fee-note - an internal caller with no relation to the lead is still authorized", async () => {
+  await withStubbedAssetFetch(async () => {
+    const res = await handleRequest(
+      req({ fee_note_id: FEE_NOTE_ID }, fakeJwt({ sub: "stranger-2" })),
+      client({ caller: { id: "stranger-2", role: "project_officer", is_active: true, email: "x@afc.com" } }) as never,
     );
     assertEquals(res.status, 200);
   });

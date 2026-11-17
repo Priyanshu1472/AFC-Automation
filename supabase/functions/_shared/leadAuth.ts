@@ -118,6 +118,11 @@ type ViewableLead = {
 //     PO loses access to a lead on their own team the moment they assign
 //     it away via po_assign (see 20261001030000_lead_pa_tier_team_wide_
 //     visibility.sql).
+//   - Any other internal (non-Business Partner) user: every lead org-wide
+//     once it's md_approved — the only status a proposal ever exists at
+//     (see 20261117010000_org_wide_internal_proposal_view.sql). Business
+//     Partners are an outside identity and keep their narrower,
+//     assigned-lead-only rule below instead.
 const PA_TIER_TEAM_WIDE_ROLES = ["project_officer", "area_manager", "regional_manager", "associate_consultant", "project_assistant"];
 
 export function canViewLead(caller: ViewerCaller, lead: ViewableLead): boolean {
@@ -128,6 +133,7 @@ export function canViewLead(caller: ViewerCaller, lead: ViewableLead): boolean {
   const callerTeams = caller.teams ?? (caller.team ? [caller.team] : []);
   if (caller.id === lead.created_by && callerTeams.includes(lead.team)) return true;
   if (PA_TIER_TEAM_WIDE_ROLES.includes(caller.role) && callerTeams.includes(lead.team)) return true;
-  if (caller.role === "business_associate" && lead.assigned_ba_id === caller.id) return true;
+  if (caller.role === "business_associate") return lead.assigned_ba_id === caller.id;
+  if (lead.status === "md_approved") return true;
   return false;
 }
