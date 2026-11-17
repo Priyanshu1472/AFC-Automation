@@ -39,21 +39,11 @@ export default function EscalateToG3Dialog({ leadId, queryId, requireConflictLea
       .order("team")
       .order("lead_number")
       .then(({ data }) => setConflictLeadOptions(data || []));
-    // Reads straight off afc_users.committee (the "primary" committee,
-    // still kept in sync for backward compat — see afc_user_committees)
-    // rather than the full multi-committee set: RLS only opens up another
-    // user's row this way when THEIR OWN committee column matches, so
-    // someone whose G3 membership is a secondary committee (primary is
-    // something else, e.g. Accounts) won't show up in this picker. The
-    // escalate-lead-to-g3 backend itself does check the full set, so
-    // picking such a person (e.g. via a future fix here) would still work
-    // — this is a listing-completeness gap, not a security one.
+    // Through an RPC rather than a direct afc_users read: it lists everyone
+    // who holds G3 in their full committee set (primary or secondary), and
+    // a lead owner can't read afc_user_committees to look that up itself.
     supabase
-      .from("afc_users")
-      .select("id, full_name, team")
-      .eq("committee", "G3")
-      .eq("is_active", true)
-      .order("full_name")
+      .rpc("get_g3_escalation_candidates")
       .then(({ data }) => setG3MemberOptions(data || []));
   }, [leadId]);
 

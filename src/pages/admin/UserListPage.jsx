@@ -89,13 +89,41 @@ function EditButton({ user, isSelf, onEdit }) {
   );
 }
 
-// Accounts is now an ordinary committee value, same as PMT/G3 — filters on
-// the scalar `committee` (the "primary" one), same known limitation as
-// filtering by PMT/G3 already had: someone whose Accounts membership is a
-// secondary committee won't match. Good enough for a list filter.
-function applyCommitteeFilter(query, committee) {
+// A user can hold several committees (afc_user_committees is the full set;
+// afc_users.committee is only the "primary" one). The filter matches either,
+// so someone whose PMT/G3/Accounts membership is a secondary committee still
+// shows up. `ids` is everyone the full set says holds it — only populated for
+// an Admin, whose RLS can read other users' committee rows; for anyone else it
+// is empty and the primary column alone is used, as before.
+function applyCommitteeFilter(query, committee, ids = []) {
   if (committee === "all") return query;
+  if (ids.length) return query.or(`committee.eq.${committee},id.in.(${ids.join(",")})`);
   return query.eq("committee", committee);
+}
+
+async function fetchCommitteeMemberIds(committee) {
+  if (committee === "all") return [];
+  const { data } = await supabase.from("afc_user_committees").select("user_id").eq("committee", committee);
+  return (data || []).map((r) => r.user_id);
+}
+
+// Every committee a user holds — the full set when it could be loaded, else
+// just their primary one.
+function userCommittees(u) {
+  if (u.committees?.length) return u.committees;
+  return u.committee ? [u.committee] : [];
+}
+
+function CommitteeBadges({ user }) {
+  const list = userCommittees(user);
+  if (!list.length) return "—";
+  return (
+    <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
+      {list.map((c) => (
+        <Badge key={c} variant="neutral">{c}</Badge>
+      ))}
+    </span>
+  );
 }
 
 export default function UserListPage() {
@@ -148,7 +176,7 @@ export default function UserListPage() {
     []
   );
 
-  const fetchUsersFlat = useCallback(async (currentPage, currentSearch, currentTeam, currentRole, currentCommittee) => {
+  const fetchUsersFlat = useCallback(async (currentPage, currentSearch, currentTeam, currentRole, currentCommittee, committeeIds) => {
     // RLS scopes the visible rows automatically: md/cfo/cs see everyone,
     // dgm sees their own team, everyone else sees only themselves.
     let query = supabase
@@ -160,7 +188,7 @@ export default function UserListPage() {
     if (trimmed) query = query.or(`full_name.ilike.%${trimmed}%,email.ilike.%${trimmed}%`);
     if (currentTeam !== "all") query = query.eq("team", currentTeam);
     if (currentRole !== "all") query = query.eq("role", currentRole);
-    query = applyCommitteeFilter(query, currentCommittee);
+    query = applyCommitteeFilter(query, currentCommittee, committeeIds);
 
     const from = currentPage * PAGE_SIZE;
     query = query.range(from, from + PAGE_SIZE - 1);
@@ -169,7 +197,7 @@ export default function UserListPage() {
 
   // Grouped view needs every matching row at once (to group + count
   // accurately per team) rather than one page at a time.
-  const fetchUsersGrouped = useCallback(async (currentSearch, currentRole, currentCommittee) => {
+  const fetchUsersGrouped = useCallback(async (currentSearch, currentRole, currentCommittee, committeeIds) => {
     let query = supabase
       .from("afc_users")
       .select("id, full_name, email, role, team, office, committee, is_active", { count: "exact" })
@@ -179,20 +207,33 @@ export default function UserListPage() {
     const trimmed = currentSearch.trim();
     if (trimmed) query = query.or(`full_name.ilike.%${trimmed}%,email.ilike.%${trimmed}%`);
     if (currentRole !== "all") query = query.eq("role", currentRole);
-    query = applyCommitteeFilter(query, currentCommittee);
+    query = applyCommitteeFilter(query, currentCommittee, committeeIds);
     return query;
   }, []);
 
   const fetchUsers = useCallback(
     async (currentPage, currentSearch, currentTeam, currentRole, currentCommittee) => {
       setLoading(true);
+      const committeeIds = await fetchCommitteeMemberIds(currentCommittee);
       const { data, error, count } =
         profile?.role === "md" && currentTeam === "all"
-          ? await fetchUsersGrouped(currentSearch, currentRole, currentCommittee)
-          : await fetchUsersFlat(currentPage, currentSearch, currentTeam, currentRole, currentCommittee);
+          ? await fetchUsersGrouped(currentSearch, currentRole, currentCommittee, committeeIds)
+          : await fetchUsersFlat(currentPage, currentSearch, currentTeam, currentRole, currentCommittee, committeeIds);
       if (error) setBanner(error.message);
       else {
-        setUsers(data || []);
+        const rows = data || [];
+        // Attach each user's full committee set for the badges. Silently
+        // empty for a viewer whose RLS can't read other users' rows — the
+        // primary `committee` column is the fallback (see userCommittees).
+        const byUser = {};
+        if (rows.length) {
+          const { data: committeeRows } = await supabase
+            .from("afc_user_committees")
+            .select("user_id, committee")
+            .in("user_id", rows.map((u) => u.id));
+          for (const r of committeeRows || []) (byUser[r.user_id] ||= []).push(r.committee);
+        }
+        setUsers(rows.map((u) => ({ ...u, committees: byUser[u.id] || [] })));
         setTotalCount(count || 0);
       }
       setLoading(false);
@@ -357,7 +398,7 @@ export default function UserListPage() {
                             </Tooltip>
                           </td>
                           <td>{u.office ? OFFICE_LABELS[u.office] || u.office : "—"}</td>
-                          <td>{u.committee ? <Badge variant="neutral">{u.committee}</Badge> : "—"}</td>
+                          <td><CommitteeBadges user={u} /></td>
                           <td><Badge variant={u.is_active ? "success" : "danger"} dot>{u.is_active ? "Active" : "Inactive"}</Badge></td>
                           {canManage && (
                             <td onClick={(e) => e.stopPropagation()}>
@@ -399,7 +440,7 @@ export default function UserListPage() {
                             <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_ABBR[u.role] || u.role}</Badge>
                           </Tooltip>
                           {u.office && <span className="text-xs text-tertiary">{OFFICE_LABELS[u.office] || u.office}</span>}
-                          {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
+                          {userCommittees(u).map((c) => <Badge key={c} variant="neutral">{c}</Badge>)}
                         </div>
                         {canManage && (
                           <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }} onClick={(e) => e.stopPropagation()}>
@@ -450,7 +491,7 @@ export default function UserListPage() {
                         </td>
                         <td>{u.office ? OFFICE_LABELS[u.office] || u.office : "—"}</td>
                         <td>{u.team || "—"}</td>
-                        <td>{u.committee ? <Badge variant="neutral">{u.committee}</Badge> : "—"}</td>
+                        <td><CommitteeBadges user={u} /></td>
                         <td>
                           <Badge variant={u.is_active ? "success" : "danger"} dot>
                             {u.is_active ? "Active" : "Inactive"}
@@ -493,7 +534,7 @@ export default function UserListPage() {
                       </Tooltip>
                       {u.office && <span className="text-xs text-tertiary">{OFFICE_LABELS[u.office] || u.office}</span>}
                       {u.team && <span className="text-xs text-tertiary">{u.team}</span>}
-                      {u.committee && <Badge variant="neutral">{u.committee}</Badge>}
+                      {userCommittees(u).map((c) => <Badge key={c} variant="neutral">{c}</Badge>)}
                     </div>
                     {canManage && (
                       <div className="ul-mobile-card-actions" style={{ display: "flex", gap: 8 }} onClick={(e) => e.stopPropagation()}>

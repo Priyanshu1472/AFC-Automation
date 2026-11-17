@@ -81,8 +81,8 @@ export default function LeadListPage() {
   // they're a chat participant on — powers the badge on the chat icon.
   const [unreadCounts, setUnreadCounts] = useState({});
   // "mine" (My Leads), "team" (Team Leads), or a committee name ("PMT") —
-  // the last is only ever one extra tab, for a viewer who holds that
-  // committee (see committeeTab below). MD is org-wide and never a lead's
+  // the last is one extra tab per committee the viewer holds (see
+  // committeeTabs below). MD is org-wide and never a lead's
   // creator/Person Responsible, so "My Leads" would just be empty for
   // them — the page always opens on Team Leads for that role, ignoring
   // whatever tab was last open (never restored from sessionStorage either).
@@ -120,9 +120,12 @@ export default function LeadListPage() {
   // only ever seeing their own active team under "Team Leads" (and, for
   // PMT, only pmt_review-stage leads under their own committee tab).
   const hasAllLeadsTab = ["dgm", "general_manager"].includes(profile?.role) || hasCommittee(profile, "PMT");
-  // A viewer only ever holds one committee (afc_users.committee), so this is
-  // at most a single extra tab, only for a member of that committee.
-  const committeeTab = profile?.committee ? { key: profile.committee, label: `${profile.committee} Leads` } : null;
+  // One extra tab per committee the viewer holds that actually has a lead
+  // stage of its own (COMMITTEE_STAGE_STATUS) — a viewer can hold several,
+  // and a committee with no stage here (G3, Accounts) has nothing to list.
+  const committeeTabs = (profile?.committees || [])
+    .filter((c) => COMMITTEE_STAGE_STATUS[c])
+    .map((c) => ({ key: c, label: `${c} Leads` }));
 
   // Switching tabs starts clean — quick/status filters, search, and page
   // never carry over from the other tab, so each one's tiles/filters are
@@ -296,17 +299,18 @@ export default function LeadListPage() {
                   All Leads
                 </button>
               )}
-              {committeeTab && (
+              {committeeTabs.map((tab) => (
                 <button
+                  key={tab.key}
                   type="button"
                   role="tab"
-                  aria-selected={view === committeeTab.key}
-                  className={`ll-view-tab${view === committeeTab.key ? " ll-view-tab-active" : ""}`}
-                  onClick={() => selectView(committeeTab.key)}
+                  aria-selected={view === tab.key}
+                  className={`ll-view-tab${view === tab.key ? " ll-view-tab-active" : ""}`}
+                  onClick={() => selectView(tab.key)}
                 >
-                  {committeeTab.label}
+                  {tab.label}
                 </button>
-              )}
+              ))}
             </div>
             {canCreate && <Button variant="primary" onClick={() => navigate("/leads/create")}>+ Add Lead</Button>}
           </div>

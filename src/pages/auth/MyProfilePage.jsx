@@ -134,7 +134,10 @@ export default function MyProfilePage() {
   const tags = [
     teamsLabel && { label: profile.teams?.length > 1 ? "Teams" : "Team", value: teamsLabel },
     profile.office && { label: "Office", value: OFFICE_LABELS[profile.office] || profile.office },
-    profile.committee && { label: "Committee", value: profile.committee },
+    (profile.committees?.length || profile.committee) && {
+      label: profile.committees?.length > 1 ? "Committees" : "Committee",
+      value: profile.committees?.length ? profile.committees.join(", ") : profile.committee,
+    },
   ].filter(Boolean);
 
   return (
