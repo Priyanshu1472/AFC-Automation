@@ -177,30 +177,40 @@ export default function EmdPanel({
         </div>
 
         {/* ── Choose: awarded only ───────────────────────────────── */}
-        {awarded && (!track || teamEditable) && (
-          isTeam ? (
-            <div className="pp-emd-choose">
-              <span className="pp-fin-sub">{track ? "What happens to the EMD" : "Choose what happens to the EMD"}</span>
-              <div className="pp-choice-row" role="radiogroup" aria-label="EMD outcome">
-                {CHOICES.map((c) => (
+        {/* Always visible on an awarded proposal so everyone can see which
+            way the EMD went; only the lead's team can change it, and only
+            until it's forwarded / the PBG Note has left draft. */}
+        {awarded && (
+          <div className="pp-emd-choose">
+            <span className="pp-fin-sub">What happens to the EMD</span>
+            <div className="pp-choice-row" role="radiogroup" aria-label="EMD outcome">
+              {CHOICES.map((c) => {
+                const canChange = isTeam && (!track || teamEditable);
+                return (
                   <button
                     key={c.track}
                     type="button"
                     role="radio"
                     aria-checked={track === c.track}
-                    className={`pp-choice${track === c.track ? " is-selected" : ""}`}
-                    disabled={!!busy}
+                    className={`pp-choice${track === c.track ? " is-selected" : ""}${canChange ? "" : " is-readonly"}`}
+                    disabled={!!busy || !canChange}
                     onClick={() => choose(c.track)}
                   >
                     {c.icon}
                     <span>{c.title}</span>
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          ) : (
-            !track && <p className="pp-fin-wait">Waiting for the team to choose EMD Refund, Converted to PBG or On Completion.</p>
-          )
+            {!isTeam && (
+              <span className="pp-choice-note">
+                {track ? "Only the lead's Person Responsible, Reviewer or Recommending Authority can change this." : "Waiting for the lead's Person Responsible, Reviewer or Recommending Authority to choose."}
+              </span>
+            )}
+            {isTeam && track && !teamEditable && (
+              <span className="pp-choice-note">Locked — it has already gone forward for approval.</span>
+            )}
+          </div>
         )}
 
         {/* Not awarded, but recorded before EMD tracking existed. */}
