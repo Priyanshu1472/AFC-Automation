@@ -39,14 +39,19 @@ const QUICK_FILTERS = {
 function accountsPendingOf(l) {
   if (l.feeNote?.status === "approved" && l.feeNote?.payment_status !== "paid") return "Payment Due";
   if (l.emd?.status === "pending_accounts") return l.emd.track === "pbg" ? "PBG with Accounts" : "EMD Verification";
+  if (l.pbgNote?.status === "pending_accounts") return "PBG Note Review";
+  if (l.pbgNote?.status === "pending_payment") return "PBG Payment Due";
   return null;
 }
 
 // What the EMD is waiting on, for the lead's own team.
 function emdBadgeOf(l) {
+  if (l.pbgNote?.status === "completed") return { label: "PBG Done", variant: "success" };
+  if (l.pbgNote && ["pending_ra", "pending_md"].includes(l.pbgNote.status)) return { label: "PBG Note in Approval", variant: "warning" };
   if (!l.emd) return null;
   if (l.emd.status === "completed") return { label: l.emd.track === "pbg" ? "PBG Done" : "EMD Refunded", variant: "success" };
   if (l.emd.status === "pending") return { label: "EMD Refund Pending", variant: "warning" };
+  if (l.emd.status === "awaiting_completion") return { label: "EMD on Completion", variant: "neutral" };
   return null;
 }
 
@@ -76,6 +81,7 @@ export default function ProposalsListPage() {
   const [monitoringByProposal, setMonitoringByProposal] = useState({});
   const [feeNoteByProposal, setFeeNoteByProposal] = useState({});
   const [emdByProposal, setEmdByProposal] = useState({});
+  const [pbgByProposal, setPbgByProposal] = useState({});
   const [additionalByLead, setAdditionalByLead] = useState({});
   const [unreadCounts, setUnreadCounts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -119,13 +125,15 @@ export default function ProposalsListPage() {
     setProposalByLead(propByLead);
 
     const proposalIds = (proposalRows || []).map((p) => p.id);
-    const [{ data: noteRows }, { data: emdRows }, { data: additionalRows }] = proposalIds.length
+    const [{ data: noteRows }, { data: emdRows }, { data: additionalRows }, { data: pbgRows }] = proposalIds.length
       ? await Promise.all([
         supabase.from("fee_notes").select("proposal_id, status, payment_status").in("proposal_id", proposalIds),
         supabase.from("proposal_emd_tracking").select("proposal_id, track, status").in("proposal_id", proposalIds),
         supabase.from("proposal_additional_responsibles").select("proposal_id, user_id").in("proposal_id", proposalIds),
+        supabase.from("proposal_pbg_notes").select("proposal_id, status").in("proposal_id", proposalIds),
       ])
-      : [{ data: [] }, { data: [] }, { data: [] }];
+      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+    setPbgByProposal(Object.fromEntries((pbgRows || []).map((n) => [n.proposal_id, n])));
     setFeeNoteByProposal(Object.fromEntries((noteRows || []).map((n) => [n.proposal_id, n])));
     setEmdByProposal(Object.fromEntries((emdRows || []).map((t) => [t.proposal_id, t])));
 
@@ -165,6 +173,7 @@ export default function ProposalsListPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "proposal_preparations" }, () => fetchAll())
       .on("postgres_changes", { event: "*", schema: "public", table: "fee_notes" }, () => fetchAll())
       .on("postgres_changes", { event: "*", schema: "public", table: "proposal_emd_tracking" }, () => fetchAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "proposal_pbg_notes" }, () => fetchAll())
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "proposal_chat_messages" }, () => fetchUnreadCounts())
       .subscribe();
     return () => supabase.removeChannel(channel);
@@ -176,9 +185,15 @@ export default function ProposalsListPage() {
   const merged = useMemo(
     () => leads.map((l) => {
       const proposal = proposalByLead[l.id] || null;
-      return { ...l, proposal, feeNote: proposal ? feeNoteByProposal[proposal.id] || null : null, emd: proposal ? emdByProposal[proposal.id] || null : null };
+      return {
+        ...l,
+        proposal,
+        feeNote: proposal ? feeNoteByProposal[proposal.id] || null : null,
+        emd: proposal ? emdByProposal[proposal.id] || null : null,
+        pbgNote: proposal ? pbgByProposal[proposal.id] || null : null,
+      };
     }),
-    [leads, proposalByLead, feeNoteByProposal, emdByProposal]
+    [leads, proposalByLead, feeNoteByProposal, emdByProposal, pbgByProposal]
   );
 
   // My Proposals / Team Proposals / Organization Proposals — a plain

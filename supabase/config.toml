@@ -721,6 +721,21 @@ verify_jwt = true
 import_map = "./functions/proposal-emd-action/deno.json"
 entrypoint = "./functions/proposal-emd-action/index.ts"
 
+[functions.proposal-pbg-note]
+enabled = true
+verify_jwt = true
+import_map = "./functions/proposal-pbg-note/deno.json"
+entrypoint = "./functions/proposal-pbg-note/index.ts"
+
+# Called once a day by pg_cron (run_proposal_finance_daily) with the
+# x-cron-secret header — not a user JWT, so the gateway check is off and
+# the function verifies the secret itself.
+[functions.proposal-finance-daily]
+enabled = true
+verify_jwt = false
+import_map = "./functions/proposal-finance-daily/deno.json"
+entrypoint = "./functions/proposal-finance-daily/index.ts"
+
 [functions.preview-pbg-note]
 enabled = true
 verify_jwt = true

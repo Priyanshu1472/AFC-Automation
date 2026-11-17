@@ -9,7 +9,8 @@
 // When the approved Bid Payment Requisition Note carried an EMD, the EMD's
 // own follow-up starts here: a not-awarded proposal opens an EMD refund
 // (pending until the team marks it received — reminded every 14 days); an
-// awarded one asks the team to choose EMD refund or conversion to PBG
+// awarded one asks the team to choose EMD refund, conversion to PBG or
+// refund on completion
 // (proposal-emd-action).
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -121,7 +122,7 @@ async function startEmdFollowUp(
     } else {
       await notifyUsers(adminClient, teamIds(lead), {
         title: "Choose what happens to the EMD",
-        sub_text: `${leadRef(lead)} was awarded. Choose EMD Refund or Converted to PBG for the EMD of ${rupees(emd)}.`,
+        sub_text: `${leadRef(lead)} was awarded. Choose EMD Refund, Converted to PBG or On Completion for the EMD of ${rupees(emd)}, and prepare the PBG Note if a PBG is required.`,
         type: "action_required",
         link,
         kind: KIND_EMD,

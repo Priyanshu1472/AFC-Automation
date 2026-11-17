@@ -9,7 +9,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
-import { notifyUsers } from "../_shared/notify.ts";
 import { addLeadChatParticipants, getTargetUser } from "../_shared/leadAuth.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
 
@@ -64,18 +63,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     .maybeSingle();
   if (existing) return jsonRes(req, 400, { error: "They're already in this chat." });
 
-  await addLeadChatParticipants(adminClient, lead_id, [user_id], "added");
+  // The roster insert trigger posts "X was added by Y" in the chat and
+  // notifies the person added (20261118010000_chat_member_added_lines.sql).
+  await addLeadChatParticipants(adminClient, lead_id, [user_id], "added", caller.id);
 
   const { data: names } = await adminClient.from("afc_users").select("id, full_name").in("id", [caller.id, user_id]);
   const nameOf = (id: string) => (names || []).find((n: { id: string }) => n.id === id)?.full_name || "Someone";
 
   await logLeadActivity(adminClient, lead_id, caller.id, "pmt", "chat_member_added", lead.status, lead.status, `Added ${nameOf(user_id)} to the discussion.`);
-
-  await notifyUsers(adminClient, [user_id], {
-    title: `${nameOf(caller.id)} added you to the discussion on ${lead.lead_number} — "${lead.title}"`,
-    type: "info",
-    link: `/leads/${lead_id}`,
-  });
 
   return jsonRes(req, 200, { success: true });
 }

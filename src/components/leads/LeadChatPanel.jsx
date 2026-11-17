@@ -4,17 +4,13 @@ import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import MentionInput from "../shared/MentionInput";
-import { renderWithMentions } from "../../lib/mentions";
+import ChatMessageList from "../shared/ChatMessageList";
 import { ChatIcon, CloseIcon, SendIcon, UserPlusIcon, UsersIcon } from "../icons";
 import { ROLE_LABELS, hasCommittee } from "../../lib/roles";
 // Reuses the generic ar-* card/field styles already defined for the Lead/
 // Empanelment review pages, plus a handful of chat-bubble-specific classes
 // added alongside them in the same file.
 import "../../styles/ApplicationReviewPage.css";
-
-function fmtTime(v) {
-  return new Date(v).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
 
 // Renders nothing at all until the lead's chat has actually opened
 // (chat_opened_at is set by advance-lead-stage once DGM clears the lead and
@@ -51,8 +47,6 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const widgetRef = useRef(null);
-
-  const participantNames = Object.fromEntries(participants.map((p) => [p.user_id, p.full_name]));
 
   const fetchMessages = useCallback(async () => {
     if (!chatOpenedAt) return;
@@ -295,31 +289,7 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
               ))}
             </div>
           ) : (
-          <div className="ar-chat-messages">
-            {loading ? (
-              <p className="ar-empty-text">Loading messages…</p>
-            ) : messages.length === 0 ? (
-              <p className="ar-empty-text">No messages yet.</p>
-            ) : (
-              messages.map((m) => {
-                const isOwn = m.sender_id === profile?.id;
-                return (
-                  <div key={m.id} className={`ar-chat-msg${isOwn ? " ar-chat-msg-own" : ""}`}>
-                    <div className="ar-chat-bubble">
-                      {/* A null sender_id is a system/bot announcement
-                          (e.g. a G3 escalation notice) — never "Unknown",
-                          which is reserved for a real but unresolved
-                          sender. */}
-                      <span className="ar-chat-sender">{m.sender_id ? participantNames[m.sender_id] || "Unknown" : "AFC Bot"}</span>
-                      <p className="ar-chat-text">{renderWithMentions(m.message, participants)}</p>
-                      <span className="ar-chat-time">{fmtTime(m.created_at)}</span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-            <div ref={bottomRef} />
-          </div>
+          <ChatMessageList messages={messages} participants={participants} selfId={profile?.id} loading={loading} bottomRef={bottomRef} />
           )}
 
           {view !== "chat" ? null : locked ? (

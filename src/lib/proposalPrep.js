@@ -78,6 +78,14 @@ export function isAccountsCommittee(profile) {
   return hasCommittee(profile, "Accounts");
 }
 
+// The lead's own team on a proposal: Person Responsible / Reviewer /
+// Recommending Authority, or an additional Person Responsible.
+export function isProposalTeam(profile, lead, additionalResponsibleIds = []) {
+  if (!profile || !lead) return false;
+  return [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id)
+    || additionalResponsibleIds.includes(profile.id);
+}
+
 // What still stands between a proposal and "Lock Proposal" — mirrored by
 // lock-proposal's own server-side checks. Empty array = ready to lock.
 export function lockBlockers({ proposal, feeNote, documents }) {
@@ -89,35 +97,65 @@ export function lockBlockers({ proposal, feeNote, documents }) {
 }
 
 // ── EMD after the client's response (proposal_emd_tracking) ─────────
-export const EMD_TRACK_LABELS = { refund: "EMD Refund", pbg: "Converted to PBG" };
-
+export const EMD_TRACK_LABELS = { refund: "EMD Refund", pbg: "Converted to PBG", on_completion: "On Completion" };
 export const EMD_STATUS_LABELS = {
-  draft: "Draft",
+  draft: "In PBG Note",
   pending: "Refund Pending",
   received: "Refund Received",
   pending_accounts: "With Accounts",
   completed: "Completed",
+  awaiting_completion: "Refund on Completion",
 };
-
 export const EMD_STATUS_VARIANTS = {
   draft: "neutral",
   pending: "warning",
   received: "info",
   pending_accounts: "warning",
   completed: "success",
+  awaiting_completion: "neutral",
 };
+
+// ── PBG Note (proposal_pbg_notes) ───────────────────────────────────
+export const PBG_NOTE_STATUS_LABELS = {
+  draft: "Draft",
+  pending_ra: "Pending Recommending Authority",
+  pending_md: "Pending MD Approval",
+  pending_accounts: "With Accounts",
+  pending_payment: "Payment Pending",
+  completed: "PBG Done",
+};
+export const PBG_NOTE_STATUS_VARIANTS = {
+  draft: "neutral",
+  pending_ra: "warning",
+  pending_md: "warning",
+  pending_accounts: "warning",
+  pending_payment: "info",
+  completed: "success",
+};
+// Who a Clarification Request came from, keyed by the stage it was raised at.
+export const PBG_STAGE_LABELS = { pending_ra: "Recommending Authority", pending_md: "MD", pending_accounts: "Accounts" };
 
 export const FINANCE_EVENT_LABELS = {
   payment_done: "Payment made by Accounts",
   refund_opened: "EMD refund opened",
   chose_refund: "Chose EMD Refund",
   chose_pbg: "Chose Converted to PBG",
+  chose_on_completion: "Chose EMD refund On Completion",
   refund_received: "Marked refund received",
-  refund_pending: "Marked refund pending",
+  refund_pending: "Marked refund pending (proofs removed)",
   forwarded_to_accounts: "Forwarded to Accounts",
   refund_verified: "Accounts verified the EMD refund",
   pbg_processed: "Accounts processed the PBG",
-  returned_by_accounts: "Sent back by Accounts",
+  returned_by_accounts: "Clarification requested by Accounts",
+  clarification_requested: "Clarification requested by Accounts",
+  pbg_note_created: "PBG Note created",
+  pbg_forwarded: "Forwarded to the Recommending Authority",
+  pbg_clarified: "Clarification answered and forwarded again",
+  pbg_ra_approved: "Approved by the Recommending Authority",
+  pbg_md_approved: "Approved by the MD",
+  pbg_accounts_approved: "Reviewed by Accounts",
+  pbg_clarification_requested: "Clarification requested",
+  pbg_paid: "PBG paid — PBG Done",
 };
 
 // Proof uploads for payment / refund / PBG.

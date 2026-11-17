@@ -68,8 +68,10 @@ export async function getOrgWideHolders(admin: AdminClient, opts: { role?: strin
 // an error. Called from advance-lead-stage whenever a lead enters a
 // committee stage; every current member of that committee is added at
 // once, not just whoever eventually acts.
-export async function addLeadChatParticipants(admin: AdminClient, leadId: string, userIds: string[], roleAtAdd: string): Promise<void> {
-  const rows = [...new Set(userIds)].filter(Boolean).map((user_id) => ({ lead_id: leadId, user_id, role_at_add: roleAtAdd }));
+// `addedBy` (optional) is who added them — shown in the chat's "X was added
+// by Y" line (see 20261118010000_chat_member_added_lines.sql).
+export async function addLeadChatParticipants(admin: AdminClient, leadId: string, userIds: string[], roleAtAdd: string, addedBy: string | null = null): Promise<void> {
+  const rows = [...new Set(userIds)].filter(Boolean).map((user_id) => ({ lead_id: leadId, user_id, role_at_add: roleAtAdd, added_by: addedBy }));
   if (!rows.length) return;
   const { error } = await admin.from("lead_chat_participants").upsert(rows, { onConflict: "lead_id,user_id", ignoreDuplicates: true });
   if (error) console.error("addLeadChatParticipants failed:", error.message);

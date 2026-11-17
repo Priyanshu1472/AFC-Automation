@@ -12,7 +12,7 @@ import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { notifyUsers } from "../_shared/notify.ts";
 import {
-  KIND_ACCOUNTS, isAccountsMember, loadProposalAndLead, teamIds, leadRef, proposalLink,
+  KIND_ACCOUNTS, KIND_FEE_PROOF, isAccountsMember, loadProposalAndLead, teamIds, leadRef, proposalLink,
   clearPendingAlerts, logFinanceEvent, cleanRemark,
 } from "../_shared/proposalFinance.ts";
 
@@ -84,6 +84,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const link = proposalLink(lead);
     await clearPendingAlerts(adminClient, link, KIND_ACCOUNTS);
+    await clearPendingAlerts(adminClient, link, KIND_FEE_PROOF);
     await notifyUsers(adminClient, teamIds(lead), {
       title: "Payment made by Accounts",
       sub_text: `${leadRef(lead)}: Accounts has made the payment on the ${NOTE_LABEL}.${reference ? ` Ref: ${reference}.` : ""}`,

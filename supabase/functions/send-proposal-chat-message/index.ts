@@ -2,17 +2,13 @@
 // JWT must be ON. Posts one message into a proposal's group chat. Reads are
 // governed entirely by RLS (proposal_chat_messages_select, see the
 // 20260909000000_proposal_chat migration); this function only needs to gate
-// the write: the chat must actually be open, not yet closed by the proposal
-// being locked, and the caller must already be on that proposal's roster
-// (proposal_chat_participants — bulk-added once at creation, in
-// create-proposal-preparation, never by this function itself).
+// the write: the chat must actually be open and the caller must already be
+// on that proposal's roster (proposal_chat_participants).
 //
-// "Locked" mirrors isProposalLocked() (src/lib/proposalPrep.js) and the DB's
-// can_edit_proposal(): true either because someone locked it manually
-// (proposal_preparations.locked) or because the lead's own
-// submission_deadline has passed — both make the rest of the page
-// read-only, so the chat closes on the same condition, not just the
-// manual-lock flag alone.
+// The chat stays open after the proposal is locked (2026-11-18): the money
+// side of a proposal — Accounts paying the Bid Payment Requisition Note,
+// the EMD refund, the PBG Note — mostly happens after submission, and the
+// Accounts Committee uses this chat to clear doubts with the team.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -59,10 +55,6 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   if (!proposal.chat_opened_at) return jsonRes(req, 400, { error: "Chat isn't open for this proposal yet." });
   const lead = proposal.lead as { submission_deadline: string | null; lead_number: string | null; title: string | null } | null;
-  const deadlinePassed = !!lead?.submission_deadline && new Date(lead.submission_deadline) < new Date();
-  if (proposal.locked || deadlinePassed) {
-    return jsonRes(req, 400, { error: "This proposal is locked — the chat is closed." });
-  }
 
   const { data: participant } = await adminClient
     .from("proposal_chat_participants")

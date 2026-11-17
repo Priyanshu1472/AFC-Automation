@@ -8,8 +8,9 @@
 //
 // After the MD approves the Bid Payment Requisition Note, the Accounts
 // Committee opens this same page to make the payment, and later to verify
-// the EMD refund / PBG (EmdPanel) — they see a trimmed page with only the
-// money-related cards.
+// the EMD refund (EmdPanel) and review/pay the PBG (PbgNotePanel) — they see
+// a trimmed page with only the money-related cards, plus the proposal chat
+// they're added to when work reaches them.
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
@@ -28,8 +29,9 @@ import ProposalValuePanel from "../../components/proposals/ProposalValuePanel";
 import ProposalChatPanel from "../../components/proposals/ProposalChatPanel";
 import AdditionalResponsiblesPanel from "../../components/proposals/AdditionalResponsiblesPanel";
 import EmdPanel from "../../components/proposals/EmdPanel";
+import PbgNotePanel from "../../components/proposals/PbgNotePanel";
 import { FileTextIcon, UsersIcon } from "../../components/icons";
-import { isProposalLocked, isAccountsCommittee, lockBlockers } from "../../lib/proposalPrep";
+import { isProposalLocked, isAccountsCommittee, isProposalTeam, lockBlockers } from "../../lib/proposalPrep";
 import "../../styles/ApplicationReviewPage.css";
 import "../../styles/ProposalPreparationPage.css";
 import BackButton from "../../components/ui/BackButton";
@@ -52,6 +54,7 @@ export default function ProposalPreparationPage() {
   const [documents, setDocuments] = useState([]);
   const [additionalResponsibles, setAdditionalResponsibles] = useState([]);
   const [emdTracking, setEmdTracking] = useState(null);
+  const [pbgNote, setPbgNote] = useState(null);
   const [financeFiles, setFinanceFiles] = useState([]);
   const [financeEvents, setFinanceEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +85,7 @@ export default function ProposalPreparationPage() {
       { data: emdRow },
       { data: financeFileRows },
       { data: financeEventRows },
+      { data: pbgNoteRow },
     ] = await Promise.all([
       supabase.from("proposal_preparations").select("*, locker:locked_by(full_name), responder:client_response_by(full_name)").eq("id", proposalId).maybeSingle(),
       supabase.from("fee_notes").select("*, payer:payment_done_by(full_name)").eq("proposal_id", proposalId),
@@ -92,6 +96,7 @@ export default function ProposalPreparationPage() {
       supabase.from("proposal_emd_tracking").select("*, forwarder:forwarded_by(full_name), completer:completed_by(full_name)").eq("proposal_id", proposalId).maybeSingle(),
       supabase.from("proposal_finance_files").select("*").eq("proposal_id", proposalId),
       supabase.from("proposal_finance_events").select("*, actor:actor_id(full_name, role)").eq("proposal_id", proposalId).order("created_at"),
+      supabase.from("proposal_pbg_notes").select("*, payer:payment_done_by(full_name)").eq("proposal_id", proposalId).maybeSingle(),
     ]);
     if (proposalErr || !proposalRow) {
       setError(proposalErr?.message || "This proposal could not be loaded. It may have just been created — try refreshing.");
@@ -108,6 +113,7 @@ export default function ProposalPreparationPage() {
     setEmdTracking(emdRow || null);
     setFinanceFiles(financeFileRows || []);
     setFinanceEvents(financeEventRows || []);
+    setPbgNote(pbgNoteRow || null);
     setLoading(false);
   }, [leadId]);
 
@@ -120,6 +126,8 @@ export default function ProposalPreparationPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "proposal_preparations", filter: `id=eq.${proposal.id}` }, () => fetchAll())
       .on("postgres_changes", { event: "*", schema: "public", table: "fee_notes", filter: `proposal_id=eq.${proposal.id}` }, () => fetchAll())
       .on("postgres_changes", { event: "*", schema: "public", table: "proposal_emd_tracking", filter: `proposal_id=eq.${proposal.id}` }, () => fetchAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "proposal_pbg_notes", filter: `proposal_id=eq.${proposal.id}` }, () => fetchAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "proposal_finance_files", filter: `proposal_id=eq.${proposal.id}` }, () => fetchAll())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,6 +167,9 @@ export default function ProposalPreparationPage() {
   );
   const locked = isProposalLocked(proposal, lead);
   const isAccounts = isAccountsCommittee(profile);
+  // The lead's own team (PR / Reviewer / RA / additional PR), without the
+  // md/admin override canManage carries.
+  const isTeam = isProposalTeam(profile, lead, additionalResponsibleIds);
   // An Accounts Committee member who isn't otherwise on this lead sees only
   // the money-related cards.
   const accountsOnly = isAccounts && !canManage && !isMd;
@@ -192,13 +203,9 @@ export default function ProposalPreparationPage() {
             </Card.Body>
           </Card>
 
-          {!accountsOnly && (
-            <ProposalChatPanel
-              proposalId={proposal.id}
-              chatOpenedAt={proposal.chat_opened_at}
-              locked={locked}
-            />
-          )}
+          {/* Shown to anyone on the chat roster — the panel checks that
+              itself — including Accounts once work reaches them. */}
+          <ProposalChatPanel proposalId={proposal.id} chatOpenedAt={proposal.chat_opened_at} />
 
           {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
@@ -264,6 +271,7 @@ export default function ProposalPreparationPage() {
               proposal={proposal}
               feeNote={approvedNote}
               tracking={emdTracking}
+              pbgNote={pbgNote}
               financeFiles={financeFiles}
               events={financeEvents}
               isTeam={canManage}
@@ -279,10 +287,25 @@ export default function ProposalPreparationPage() {
             profile={profile}
             isMd={isMd}
             isAccounts={isAccounts}
+            isTeam={isTeam}
             financeFiles={financeFiles}
             locked={locked}
             onChanged={fetchAll}
           />
+
+          {proposal.client_response === "awarded" && (
+            <PbgNotePanel
+              proposal={proposal}
+              lead={lead}
+              note={pbgNote}
+              financeFiles={financeFiles}
+              events={financeEvents}
+              profile={profile}
+              isAccounts={isAccounts}
+              additionalResponsibleIds={additionalResponsibleIds}
+              onChanged={fetchAll}
+            />
+          )}
 
           {!accountsOnly && (
           <>

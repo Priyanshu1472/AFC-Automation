@@ -148,7 +148,7 @@ export function formatRupees(amount: number): string {
 }
 
 // ── Build input ───────────────────────────────────────────────────
-type Signer = { name: string | null; designation: string; signatureBytes: Uint8Array | null };
+export type Signer = { name: string | null; designation: string; signatureBytes: Uint8Array | null };
 
 export type FeeLine = {
   key: FeeKey;
@@ -310,7 +310,7 @@ function buildCoverParagraphs(input: FeeNoteBuildInput): { intro: Segment[][]; f
 // as "Encl. as above" rather than stacked below every other signature —
 // matching the reference note, where "Encl. as above" reads as sitting
 // right above/alongside the MD's signature, not underneath it.
-async function drawSignatureBlock(e: PageEngine, leftSigners: Signer[], md: Signer) {
+export async function drawSignatureBlock(e: PageEngine, leftSigners: Signer[], md: Signer, enclLabel = "Encl. as above") {
   const size = 10;
   const sigGap = 48;   // blank space above each name, sized to hold the signature image without it touching the name line
   const imgPad = 3;    // clearance kept above and below the image within that blank space
@@ -357,7 +357,7 @@ async function drawSignatureBlock(e: PageEngine, leftSigners: Signer[], md: Sign
   }
 
   const mdStartY = e.y;
-  await sdPara(e, [plain("Encl. as above")], size);
+  if (enclLabel) await sdPara(e, [plain(enclLabel)], size);
   const yAfterEncl = e.y;
 
   const yAfterMd = drawRow(md, mdImg, (w) => e.RIGHT_EDGE - w, mdStartY);
@@ -375,7 +375,7 @@ async function drawCenteredLine(e: PageEngine, text: string, size: number, isBol
 }
 
 // deno-lint-ignore no-explicit-any
-async function drawFeeNoteHeader(pdf: any, page: any, logoBytes: Uint8Array, _fonts: unknown, H: number) {
+export async function drawFeeNoteHeader(pdf: any, page: any, logoBytes: Uint8Array, _fonts: unknown, H: number) {
   if (!logoBytes.length) return;
   const logo = await embedImageAuto(pdf, logoBytes).catch(() => null);
   if (!logo) return;
@@ -385,7 +385,7 @@ async function drawFeeNoteHeader(pdf: any, page: any, logoBytes: Uint8Array, _fo
   page.drawImage(logo, { x: 40, y: H - 40 - logoH, width: logoW, height: logoH });
 }
 
-function drawFeeNoteFooter() {}
+export function drawFeeNoteFooter() {}
 
 // ── Page 2: the requisition format table ──────────────────────────
 function buildRequisitionRows(input: FeeNoteBuildInput): { label: string; value: string }[] {
@@ -487,7 +487,7 @@ export async function generateFeeNotePDF(
 // ── Data assembly ────────────────────────────────────────────────
 type UserRow = { full_name?: string | null; role?: string | null; signature_path?: string | null } | null;
 
-async function resolveSigner(
+export async function resolveSigner(
   admin: AdminClient,
   opts: { nominalId: string | null; actualId: string | null; signed: boolean; designationOverride?: string },
 ): Promise<Signer> {

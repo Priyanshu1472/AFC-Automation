@@ -834,7 +834,7 @@ Deno.test("pmt_approve - bulk-adds every MD holder to the chat roster", async ()
   const participantCalls = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log.filter((l) => l.table === "lead_chat_participants");
   assertEquals(participantCalls.length, 1);
   const rows = JSON.parse(participantCalls[0].calls.find((c) => c[0] === "upsert")![1]);
-  assertEquals(rows, [{ lead_id: LEAD_ID, user_id: "md-1", role_at_add: "md" }]);
+  assertEquals(rows, [{ lead_id: LEAD_ID, user_id: "md-1", role_at_add: "md", added_by: null }]);
 });
 
 Deno.test("pmt_decline - success moves to pa_action_required with a reason", async () => {

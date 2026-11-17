@@ -17,10 +17,13 @@ function client(opts: {
   tracking?: Record<string, unknown> | null;
   note?: Record<string, unknown> | null;
   fileCount?: number;
+  files?: unknown[];
   updated?: unknown[];
+  mds?: unknown[];
 }) {
   const routes: Record<string, FakeResult[]> = {
-    afc_users: [{ data: opts.caller, error: null }, { data: { is_active: true }, error: null }],
+    // caller (getCallerProfile), isAccountsMember's active check, then the MD lookup.
+    afc_users: [{ data: opts.caller, error: null }, { data: { is_active: true }, error: null }, { data: opts.mds ?? [], error: null }],
     afc_user_committees: [
       { data: [], error: null }, // caller's own committees (getCallerProfile) — irrelevant here
       { data: (opts.member ?? false) ? { user_id: (opts.caller as { id: string }).id } : null, error: null }, // isAccountsMember's membership check
@@ -29,7 +32,7 @@ function client(opts: {
     leads: [{ data: LEAD, error: null }],
     proposal_emd_tracking: [{ data: opts.tracking ?? null, error: null }, { data: opts.updated ?? [{ id: "t-1" }], error: null }],
     fee_notes: [{ data: opts.note === undefined ? { emd_amount: 50000, status: "approved" } : opts.note, error: null }],
-    proposal_finance_files: [{ data: null, error: null, count: opts.fileCount ?? 0 }],
+    proposal_finance_files: [{ data: opts.files ?? null, error: null, count: opts.fileCount ?? 0 }],
   };
   return createFakeAdminClient(routes);
 }
@@ -99,10 +102,44 @@ Deno.test("proposal-emd-action - received refund with proof goes to Accounts", a
   assertMatch(writeOf(fake, "proposal_emd_tracking")![1], /"status":"pending_accounts"/);
 });
 
-Deno.test("proposal-emd-action - PBG forward needs the PBG amount", async () => {
+Deno.test("proposal-emd-action - a converted EMD goes to Accounts through the PBG Note, not here", async () => {
   const tracking = { id: "t-1", track: "pbg", status: "draft", emd_amount: 50000, pbg_amount: null };
-  const res = await handleRequest(req("pr-1", { action: "forward" }), client({ caller: await userRow("pr-1"), response: "awarded", tracking, fileCount: 1 }) as never);
+  const res = await handleRequest(req("pr-1", { action: "forward", remark: "x" }), client({ caller: await userRow("pr-1"), response: "awarded", tracking, fileCount: 1 }) as never);
   assertEquals(res.status, 400);
+});
+
+Deno.test("proposal-emd-action - On Completion only for an awarded proposal", async () => {
+  const res = await handleRequest(req("pr-1", { action: "choose_track", track: "on_completion" }), client({ caller: await userRow("pr-1"), response: "rejected" }) as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("proposal-emd-action - awarded proposal can hold the EMD until completion", async () => {
+  const fake = client({ caller: await userRow("pr-1"), response: "awarded" });
+  const res = await handleRequest(req("pr-1", { action: "choose_track", track: "on_completion" }), fake as never);
+  assertEquals(res.status, 200);
+  const write = writeOf(fake, "proposal_emd_tracking");
+  assertMatch(write![1], /"track":"on_completion"/);
+  assertMatch(write![1], /"status":"awaiting_completion"/);
+});
+
+Deno.test("proposal-emd-action - On Completion can switch to EMD Refund when the client returns it early", async () => {
+  const tracking = { id: "t-1", track: "on_completion", status: "awaiting_completion", emd_amount: 50000 };
+  const fake = client({ caller: await userRow("pr-1"), response: "awarded", tracking });
+  const res = await handleRequest(req("pr-1", { action: "choose_track", track: "refund" }), fake as never);
+  assertEquals(res.status, 200);
+  const write = writeOf(fake, "proposal_emd_tracking");
+  assertMatch(write![1], /"track":"refund"/);
+  assertMatch(write![1], /"status":"pending"/);
+});
+
+Deno.test("proposal-emd-action - back to Pending removes the uploaded refund proofs", async () => {
+  const tracking = { id: "t-1", track: "refund", status: "received", emd_amount: 50000 };
+  const fake = client({ caller: await userRow("pr-1"), tracking, files: [{ id: "f-1", file_path: "prop-1/emd_refund/a.pdf" }] });
+  const res = await handleRequest(req("pr-1", { action: "set_refund_received", received: false }), fake as never);
+  assertEquals(res.status, 200);
+  const fileCalls = fake.__log.filter((l) => l.table === "proposal_finance_files").flatMap((l) => l.calls);
+  assertEquals(fileCalls.some((c) => c[0] === "delete"), true);
+  assertMatch(writeOf(fake, "proposal_emd_tracking")![1], /"status":"pending"/);
 });
 
 Deno.test("proposal-emd-action - only Accounts can verify", async () => {
@@ -111,14 +148,17 @@ Deno.test("proposal-emd-action - only Accounts can verify", async () => {
   assertEquals(res.status, 403);
 });
 
-Deno.test("proposal-emd-action - Accounts verifies with PIN", async () => {
+Deno.test("proposal-emd-action - Accounts verifies with PIN, and the MD is told", async () => {
   const tracking = { id: "t-1", track: "refund", status: "pending_accounts", emd_amount: 50000 };
-  const fake = client({ caller: await userRow("acc-1"), tracking, member: true });
+  const fake = client({ caller: await userRow("acc-1"), tracking, member: true, mds: [{ id: "md-1" }] });
   const res = await handleRequest(req("acc-1", { action: "verify", pin: PIN, remark: "Checked bank statement" }), fake as never);
   assertEquals(res.status, 200);
   const write = writeOf(fake, "proposal_emd_tracking");
   assertMatch(write![1], /"status":"completed"/);
   assertMatch(write![1], /"completed_by":"acc-1"/);
+  const notified = fake.__log.filter((l) => l.table === "notifications").flatMap((l) => l.calls).find((c) => c[0] === "insert");
+  assertMatch(notified![1], /"user_id":"md-1"/);
+  assertMatch(notified![1], /"user_id":"pr-1"/);
 });
 
 Deno.test("proposal-emd-action - send back needs a remark", async () => {
@@ -133,4 +173,15 @@ Deno.test("proposal-emd-action - send back returns a PBG to draft", async () => 
   const res = await handleRequest(req("acc-1", { action: "send_back", remark: "Proof is unreadable" }), fake as never);
   assertEquals(res.status, 200);
   assertMatch(writeOf(fake, "proposal_emd_tracking")![1], /"status":"draft"/);
+});
+
+Deno.test("proposal-emd-action - Clarification Request sends a refund back to the team", async () => {
+  const tracking = { id: "t-1", track: "refund", status: "pending_accounts", emd_amount: 50000 };
+  const fake = client({ caller: await userRow("acc-1"), tracking, member: true });
+  const res = await handleRequest(req("acc-1", { action: "request_clarification", remark: "Which bank account?" }), fake as never);
+  assertEquals(res.status, 200);
+  assertMatch(writeOf(fake, "proposal_emd_tracking")![1], /"status":"received"/);
+  const notified = fake.__log.filter((l) => l.table === "notifications").flatMap((l) => l.calls).find((c) => c[0] === "insert");
+  assertMatch(notified![1], /Clarification requested by Accounts/);
+  assertMatch(notified![1], /"user_id":"ra-1"/);
 });

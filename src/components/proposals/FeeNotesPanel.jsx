@@ -8,9 +8,13 @@
 // final approval — mirroring the eye-icon + PDF pattern shipped for
 // Empanelment letters.
 //
-// Once the MD approves it, the note goes to the Accounts Committee, who
+// Once the MD approves it, the note goes straight to the Accounts Committee
+// (who also join the proposal chat to clear doubts with the team), who
 // check the signatures, upload the payment proof and record the payment
-// (mark-fee-note-paid, PIN-gated).
+// (mark-fee-note-paid, PIN-gated). The lead's own team can upload the
+// payment proof too, in case it's with them; until a proof is uploaded a
+// reminder goes out daily up to the submission date, and on that date the
+// PR / Reviewer / RA get an email (proposal-finance-daily).
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
@@ -43,7 +47,7 @@ function fmtDateTime(d) {
   return new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-export default function FeeNotesPanel({ proposalId, feeNotes, lead, profile, isMd, isAccounts = false, financeFiles = [], locked, onChanged }) {
+export default function FeeNotesPanel({ proposalId, feeNotes, lead, profile, isMd, isAccounts = false, isTeam = false, financeFiles = [], locked, onChanged }) {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const note = feeNotes[0] || null;
@@ -185,16 +189,25 @@ export default function FeeNotesPanel({ proposalId, feeNotes, lead, profile, isM
                     {note.payment_reference ? ` · Ref: ${note.payment_reference}` : ""}
                   </span>
                 ) : (
-                  <span className="pp-fin-wait">{isAccounts ? "Check the signatures on the note (eye icon above), upload the payment proof and mark it done." : "Approved — waiting for the Accounts Committee to make the payment."}</span>
+                  <span className="pp-fin-wait">
+                    {isAccounts
+                      ? "Check the signatures on the note (eye icon above), upload the payment proof and mark it done."
+                      : isTeam
+                        ? "Approved — with the Accounts Committee for payment. If the payment proof is with you, upload it here."
+                        : "Approved — waiting for the Accounts Committee to make the payment."}
+                  </span>
                 )}
               </div>
               {note.payment_remark && <p className="pp-fee-note-justification">“{note.payment_remark}”</p>}
-              {(note.payment_status === "paid" || isAccounts) && (
+              {note.payment_status !== "paid" && (isAccounts || isTeam) && financeFiles.every((f) => f.purpose !== "fee_payment") && (
+                <p className="pp-note-bar-text pp-fin-hint"><InfoIcon /> Until a payment proof is uploaded, a reminder goes out every day up to the submission date.</p>
+              )}
+              {(note.payment_status === "paid" || isAccounts || isTeam) && (
                 <FinanceFiles
                   proposalId={proposalId}
                   purpose="fee_payment"
                   files={financeFiles}
-                  canManage={isAccounts && note.payment_status !== "paid"}
+                  canManage={(isAccounts || isTeam) && note.payment_status !== "paid"}
                   emptyText={note.payment_status === "paid" ? "No payment proof was attached." : "No payment proof uploaded yet."}
                   onChanged={onChanged}
                 />

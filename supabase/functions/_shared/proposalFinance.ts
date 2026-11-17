@@ -21,6 +21,8 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 // cleared for everyone once someone has acted on it.
 export const KIND_ACCOUNTS = "proposal_accounts";
 export const KIND_EMD = "proposal_emd";
+export const KIND_PBG = "proposal_pbg";
+export const KIND_FEE_PROOF = "proposal_fee_proof";
 
 export type ProposalLead = {
   id: string;
@@ -84,6 +86,64 @@ export function isLeadTeam(lead: ProposalLead, callerId: string): boolean {
   return teamIds(lead).includes(callerId);
 }
 
+// Additional Persons Responsible on the proposal itself
+// (proposal_additional_responsibles) — same access as the Person
+// Responsible, so they act and get notified alongside the named three.
+export async function getAdditionalResponsibleIds(admin: AdminClient, proposalId: string): Promise<string[]> {
+  try {
+    const { data, error } = await admin.from("proposal_additional_responsibles").select("user_id").eq("proposal_id", proposalId);
+    if (error) {
+      console.error("additional responsibles lookup failed:", error.message);
+      return [];
+    }
+    return Array.isArray(data) ? data.map((r: { user_id: string }) => r.user_id).filter(Boolean) : [];
+  } catch (err) {
+    console.error("additional responsibles lookup failed:", (err as Error).message);
+    return [];
+  }
+}
+
+// PR / Reviewer / RA plus any additional Person Responsible.
+export async function proposalTeamIds(admin: AdminClient, proposalId: string, lead: ProposalLead): Promise<string[]> {
+  return [...new Set([...teamIds(lead), ...(await getAdditionalResponsibleIds(admin, proposalId))])];
+}
+
+export async function getMdIds(admin: AdminClient): Promise<string[]> {
+  try {
+    const { data, error } = await admin.from("afc_users").select("id").eq("role", "md").eq("is_active", true);
+    if (error) {
+      console.error("MD lookup failed:", error.message);
+      return [];
+    }
+    return Array.isArray(data) ? data.map((u: { id: string }) => u.id) : [];
+  } catch (err) {
+    console.error("MD lookup failed:", (err as Error).message);
+    return [];
+  }
+}
+
+// Removes every proof of one purpose on a proposal — rows and the stored
+// files. Best-effort on storage: the rows going is what the page reads.
+export async function deleteFinanceFiles(admin: AdminClient, proposalId: string, purpose: string): Promise<void> {
+  const { data: rows, error } = await admin.from("proposal_finance_files").select("id, file_path").eq("proposal_id", proposalId).eq("purpose", purpose);
+  if (error) throw new Error(error.message);
+  const list = Array.isArray(rows) ? rows as { id: string; file_path: string }[] : [];
+  if (!list.length) return;
+  const { error: delErr } = await admin.from("proposal_finance_files").delete().eq("proposal_id", proposalId).eq("purpose", purpose);
+  if (delErr) throw new Error(delErr.message);
+  try {
+    await admin.storage.from("proposal-finance").remove(list.map((r) => r.file_path));
+  } catch (err) {
+    console.error("proof file removal from storage failed:", (err as Error).message);
+  }
+}
+
+export async function countFinanceFiles(admin: AdminClient, proposalId: string, purpose: string): Promise<number> {
+  const { count } = await admin.from("proposal_finance_files").select("id", { count: "exact", head: true })
+    .eq("proposal_id", proposalId).eq("purpose", purpose);
+  return count || 0;
+}
+
 // Every internal user — i.e. not a Business Partner, an outside identity —
 // gets view access to any proposal (actions stay gated to the lead's own
 // named assignees or md/admin); see 20261117010000_org_wide_internal_
@@ -115,7 +175,7 @@ export async function clearPendingAlerts(admin: AdminClient, link: string, kind:
 
 export async function logFinanceEvent(
   admin: AdminClient,
-  row: { proposal_id: string; scope: "fee_payment" | "emd"; action: string; remark?: string | null; actor_id: string },
+  row: { proposal_id: string; scope: "fee_payment" | "emd" | "pbg"; action: string; remark?: string | null; actor_id: string },
 ) {
   const { error } = await admin.from("proposal_finance_events").insert({ ...row, remark: row.remark || null });
   if (error) console.error("proposal_finance_events insert failed:", error.message);
