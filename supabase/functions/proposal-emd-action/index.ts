@@ -11,7 +11,7 @@
 //     set_refund_received   refund: pending <-> received
 //     save_pbg              pbg draft: PBG amount + remarks
 //     forward               refund received / pbg draft -> pending_accounts
-//                           (needs at least one proof file)
+//                           (needs at least one proof file and a remark)
 //   Accounts Committee:
 //     verify                pending_accounts -> completed  (PIN + remark)
 //     send_back             pending_accounts -> received / draft (remark)
@@ -177,6 +177,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       const { count } = await adminClient.from("proposal_finance_files").select("id", { count: "exact", head: true })
         .eq("proposal_id", proposalId).eq("purpose", purpose);
       if ((count || 0) === 0) return jsonRes(req, 400, { error: "Upload at least one proof before forwarding." });
+      if (!remark) return jsonRes(req, 400, { error: "Add a remark before forwarding." });
 
       const { data: upd, error } = await adminClient.from("proposal_emd_tracking")
         .update({

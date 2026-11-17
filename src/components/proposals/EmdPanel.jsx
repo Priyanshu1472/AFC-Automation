@@ -194,11 +194,18 @@ export default function EmdPanel({ proposal, feeNote, tracking, financeFiles, ev
                 {isTeam && (
                   <>
                     <div className="field">
-                      <label className="field-label" htmlFor="emd-refund-remarks">Remarks</label>
+                      <label className="field-label" htmlFor="emd-refund-remarks">Remarks <span className="required">*</span></label>
                       <textarea id="emd-refund-remarks" className="input" rows={2} maxLength={2000} value={remarksDraft} onChange={(e) => setRemarksDraft(e.target.value)} disabled={!!busy} />
                     </div>
                     <div className="pp-fin-actions">
-                      <Button variant="primary" size="sm" disabled={!!busy || proofCount === 0} title={proofCount === 0 ? "Upload at least one proof first" : undefined} loading={busy === "forward"} onClick={() => act("forward", { remark: remarksDraft.trim() }, "Forwarded to Accounts for verification.")}>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={!!busy || proofCount === 0 || !remarksDraft.trim()}
+                        title={proofCount === 0 ? "Upload at least one proof first" : !remarksDraft.trim() ? "Add a remark first" : undefined}
+                        loading={busy === "forward"}
+                        onClick={() => act("forward", { remark: remarksDraft.trim() }, "Forwarded to Accounts for verification.")}
+                      >
                         Forward to Accounts for Verification
                       </Button>
                     </div>
@@ -231,7 +238,7 @@ export default function EmdPanel({ proposal, feeNote, tracking, financeFiles, ev
                   </div>
                 </div>
                 <div className="field">
-                  <label className="field-label" htmlFor="pbg-remarks">Remarks</label>
+                  <label className="field-label" htmlFor="pbg-remarks">Remarks <span className="required">*</span></label>
                   <textarea id="pbg-remarks" className="input" rows={2} maxLength={2000} value={remarksDraft} onChange={(e) => setRemarksDraft(e.target.value)} disabled={!!busy} />
                 </div>
                 <div className="pp-fin-actions">
@@ -241,8 +248,8 @@ export default function EmdPanel({ proposal, feeNote, tracking, financeFiles, ev
                   <Button
                     variant="primary"
                     size="sm"
-                    disabled={!!busy || tracking?.pbg_amount == null || pbgDirty || proofCount === 0}
-                    title={tracking?.pbg_amount == null || pbgDirty ? "Create the PBG note first" : proofCount === 0 ? "Upload at least one proof first" : undefined}
+                    disabled={!!busy || tracking?.pbg_amount == null || pbgDirty || proofCount === 0 || !remarksDraft.trim()}
+                    title={tracking?.pbg_amount == null || pbgDirty ? "Create the PBG note first" : proofCount === 0 ? "Upload at least one proof first" : !remarksDraft.trim() ? "Add a remark first" : undefined}
                     loading={busy === "forward"}
                     onClick={() => act("forward", { remark: remarksDraft.trim() }, "Forwarded to Accounts.")}
                   >

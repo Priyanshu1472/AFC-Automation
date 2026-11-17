@@ -85,6 +85,12 @@ Deno.test("proposal-emd-action - forwarding needs a proof", async () => {
   assertEquals(res.status, 400);
 });
 
+Deno.test("proposal-emd-action - forwarding needs a remark even with a proof uploaded", async () => {
+  const tracking = { id: "t-1", track: "refund", status: "received", emd_amount: 50000 };
+  const res = await handleRequest(req("pr-1", { action: "forward" }), client({ caller: await userRow("pr-1"), tracking, fileCount: 2 }) as never);
+  assertEquals(res.status, 400);
+});
+
 Deno.test("proposal-emd-action - received refund with proof goes to Accounts", async () => {
   const tracking = { id: "t-1", track: "refund", status: "received", emd_amount: 50000 };
   const fake = client({ caller: await userRow("pr-1"), tracking, fileCount: 2 });
