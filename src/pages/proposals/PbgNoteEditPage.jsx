@@ -42,6 +42,14 @@ function fmtNoteDate(d) {
   return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
+// PBG amount from consultancy fees × PBG %.
+function amountFromPercent(fee, pct) {
+  const f = Number(fee);
+  const p = Number(pct);
+  if (!(f > 0) || !(p > 0)) return null;
+  return String(Math.round(f * p) / 100);
+}
+
 function suggestedPercent(pbg, fee) {
   const p = Number(pbg);
   const f = Number(fee);
@@ -64,7 +72,9 @@ export default function PbgNoteEditPage() {
   const [pbgAmount, setPbgAmount] = useState("");
   const [consultancyFee, setConsultancyFee] = useState("");
   const [fields, setFields] = useState(EMPTY_FIELDS);
-  const [pctDirty, setPctDirty] = useState(false);
+  // Which of PBG amount / PBG % the user typed last — that one stays put and
+  // the other is worked out from it (and from the consultancy fees).
+  const [driver, setDriver] = useState("amount");
   const [subject, setSubject] = useState("");
   const [paragraphs, setParagraphs] = useState({});
   const [enclosures, setEnclosures] = useState("");
@@ -111,8 +121,12 @@ export default function PbgNoteEditPage() {
     const content = note?.content || {};
     setPbgAmount(note ? String(note.pbg_amount) : parseAmount(lead.approval_note_data?.financial_requirement?.pbg));
     setConsultancyFee(note ? (note.consultancy_fee != null ? String(note.consultancy_fee) : "") : parseAmount(proposal.proposed_value));
-    setFields({ ...EMPTY_FIELDS, ...(content.fields || {}) });
-    setPctDirty(!!content.fields?.pbg_percent);
+    const initialAmount = note ? String(note.pbg_amount) : parseAmount(lead.approval_note_data?.financial_requirement?.pbg);
+    const initialFee = note ? (note.consultancy_fee != null ? String(note.consultancy_fee) : "") : parseAmount(proposal.proposed_value);
+    const savedFields = { ...EMPTY_FIELDS, ...(content.fields || {}) };
+    if (!savedFields.pbg_percent) savedFields.pbg_percent = suggestedPercent(initialAmount, initialFee);
+    setFields(savedFields);
+    setDriver(content.dirty?.pbg_percent ? "pct" : "amount");
     setSubject(content.subject || "");
     setParagraphs(content.paragraphs || {});
     setEnclosures(content.enclosures || "");
@@ -139,11 +153,28 @@ export default function PbgNoteEditPage() {
   const emdAdjusted = ctx ? emdAdjustedFor(ctx.track, emdAmount, pbgNum) : 0;
   const emdContext = emdContextOf(ctx?.track, emdAmount, emdAdjusted);
 
-  // PBG % follows PBG ÷ consultancy fee until the user types their own.
-  useEffect(() => {
-    if (pctDirty) return;
-    setFields((f) => ({ ...f, pbg_percent: suggestedPercent(pbgAmount, consultancyFee) }));
-  }, [pbgAmount, consultancyFee, pctDirty]);
+  function onAmountChange(v) {
+    setPbgAmount(v);
+    setDriver("amount");
+    setFields((f) => ({ ...f, pbg_percent: suggestedPercent(v, consultancyFee) }));
+  }
+
+  function onPercentChange(v) {
+    setDriver("pct");
+    setFields((f) => ({ ...f, pbg_percent: v }));
+    const amount = amountFromPercent(consultancyFee, v);
+    if (amount !== null) setPbgAmount(amount);
+  }
+
+  function onFeeChange(v) {
+    setConsultancyFee(v);
+    if (driver === "pct") {
+      const amount = amountFromPercent(v, fields.pbg_percent);
+      if (amount !== null) setPbgAmount(amount);
+    } else {
+      setFields((f) => ({ ...f, pbg_percent: suggestedPercent(pbgAmount, v) }));
+    }
+  }
 
   const suggested = useMemo(() => {
     if (!ctx) return null;
@@ -202,7 +233,7 @@ export default function PbgNoteEditPage() {
           action: "save",
           pbg_amount: pbgNum,
           consultancy_fee: feeNum || null,
-          content: { subject, paragraphs, enclosures, fields, dirty: { ...dirty, pbg_percent: pctDirty } },
+          content: { subject, paragraphs, enclosures, fields, dirty: { ...dirty, pbg_percent: driver === "pct" } },
         },
       });
       if (fnError) { setError(await extractFunctionErrorMessage(fnError, "Failed to save the PBG Note.")); return; }
@@ -286,15 +317,15 @@ export default function PbgNoteEditPage() {
                   <div className="pp-pbg-grid">
                     <div className="field">
                       <label className="field-label" htmlFor="pbg-amount">PBG amount (₹) <span className="required">*</span></label>
-                      <input id="pbg-amount" className="input" type="number" min="0" step="0.01" inputMode="decimal" value={pbgAmount} onChange={(e) => setPbgAmount(e.target.value)} disabled={saving} placeholder="From the Lead Approval Note, if filled there" />
+                      <input id="pbg-amount" className="input" type="number" min="0" step="0.01" inputMode="decimal" value={pbgAmount} onChange={(e) => onAmountChange(e.target.value)} disabled={saving} placeholder="From the Lead Approval Note, if filled there" />
                     </div>
                     <div className="field">
                       <label className="field-label" htmlFor="pbg-fee">Consultancy fees (₹, incl. GST)</label>
-                      <input id="pbg-fee" className="input" type="number" min="0" step="0.01" inputMode="decimal" value={consultancyFee} onChange={(e) => setConsultancyFee(e.target.value)} disabled={saving} />
+                      <input id="pbg-fee" className="input" type="number" min="0" step="0.01" inputMode="decimal" value={consultancyFee} onChange={(e) => onFeeChange(e.target.value)} disabled={saving} />
                     </div>
                     <div className="field">
                       <label className="field-label" htmlFor="pbg-pct">PBG % of fees</label>
-                      <input id="pbg-pct" className="input" value={fields.pbg_percent} onChange={(e) => { setPctDirty(e.target.value.trim() !== ""); setField("pbg_percent", e.target.value); }} disabled={saving} placeholder="e.g. 10" />
+                      <input id="pbg-pct" className="input" type="number" min="0" max="100" step="0.01" inputMode="decimal" value={fields.pbg_percent} onChange={(e) => onPercentChange(e.target.value)} disabled={saving} placeholder="e.g. 10" />
                     </div>
                   </div>
                   <div className="pp-pbg-emd-summary">
