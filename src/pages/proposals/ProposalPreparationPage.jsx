@@ -8,8 +8,8 @@
 //
 // After the MD approves the Bid Payment Requisition Note, the Accounts
 // Committee opens this same page to make the payment, and later to verify
-// the EMD refund (EmdPanel) and review/pay the PBG (PbgNotePanel) — they see
-// a trimmed page with only the money-related cards, plus the proposal chat
+// the EMD refund (EmdPanel) and review/pay the PBG (PbgNotePanel). They see
+// the whole page (read-only outside those steps), plus the proposal chat
 // they're added to when work reaches them.
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -170,8 +170,9 @@ export default function ProposalPreparationPage() {
   // The lead's own team (PR / Reviewer / RA / additional PR), without the
   // md/admin override canManage carries.
   const isTeam = isProposalTeam(profile, lead, additionalResponsibleIds);
-  // An Accounts Committee member who isn't otherwise on this lead sees only
-  // the money-related cards.
+  // An Accounts Committee member who isn't otherwise on this lead: sees every
+  // card (read-only outside the money steps), just not the "deadline passed,
+  // lock it" nudge meant for the team.
   const accountsOnly = isAccounts && !canManage && !isMd;
   const approvedNote = feeNotes.find((n) => n.status === "approved") || null;
   const blockers = lockBlockers({ proposal, feeNote: feeNotes[0], documents });
@@ -312,8 +313,6 @@ export default function ProposalPreparationPage() {
             />
           )}
 
-          {!accountsOnly && (
-          <>
           <BaDocumentRequestsPanel
             proposalId={proposal.id}
             proposal={proposal}
@@ -332,9 +331,6 @@ export default function ProposalPreparationPage() {
             locked={locked}
             onChanged={fetchAll}
           />
-
-          </>
-          )}
 
           <ProposalValuePanel proposal={proposal} canManage={canManage} onChanged={fetchAll} />
         </div>
