@@ -242,10 +242,12 @@ export function isValidRole(role) {
 // former G3/DGM-initial gate is now the named Recommending Authority
 // instead). See leadPermissions.js for the actual can()-style predicates.
 //
-// "Accounts" is assignable here but deliberately wired to nothing yet —
-// no page, panel or server-side check anywhere treats committee ===
-// "Accounts" as special. It exists purely so it can be set on a user now
-// and given real permissions later, the same way PMT/G3 already work.
+// "Accounts" is a real committee, not just an assignable placeholder:
+// is_accounts_committee_member()/isAccountsCommittee() (proposalPrep.js)
+// gate the Bid Payment Requisition Note payment step and the EMD refund/
+// PBG verification step (FeeNotesPanel, EmdPanel), and can_view_lead()
+// grants every internal (non-Business Partner) user — Accounts included —
+// org-wide view of any md_approved proposal (20261117010000).
 export const COMMITTEES = ["PMT", "G3", "Accounts"];
 
 // The tier eligible to be Person Responsible for a lead (owns its
