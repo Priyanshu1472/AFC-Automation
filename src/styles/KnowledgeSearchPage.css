@@ -589,3 +589,28 @@
 
 /* Mobile card wrap for positioning */
 .kr-mobile-card-wrap { position: relative; }.kr-table .kr-missing-btn { white-space: nowrap; }
+
+/* ── Pagination (20 projects per page) ── */
+.kr-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.kr-pagination-count {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.kr-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.kr-pagination-page {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}

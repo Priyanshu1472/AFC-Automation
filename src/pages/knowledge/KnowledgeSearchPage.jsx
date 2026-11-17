@@ -7,12 +7,20 @@ import ShortlistModal from "../../components/knowledge/ShortlistModal";
 import MissingDetailsModal from "../../components/knowledge/MissingDetailsModal";
 import { getMissingProjectFields } from "../../lib/projectCompleteness";
 import FindExperiencePanel from "../../components/knowledge/FindExperiencePanel";
-import RebuildIndexPanel from "../../components/knowledge/RebuildIndexPanel";
 import AppHeader from "../../components/shared/AppHeader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
-import { can } from "../../lib/roles";
 import { croreToLakh } from "../../lib/projectValue";
+import Button from "../../components/ui/Button";
 import "../../styles/KnowledgeSearchPage.css";
+
+const PAGE_SIZE = 20;
+
+function paginate(list, page) {
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const current = Math.min(Math.max(1, page), totalPages);
+  const start = (current - 1) * PAGE_SIZE;
+  return { items: list.slice(start, start + PAGE_SIZE), current, totalPages, start, total: list.length };
+}
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -64,7 +72,6 @@ export default function KnowledgeSearchPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState("table");
   const [searchMode, setSearchMode] = useState("projects"); // "projects" | "experience"
-  const [showRebuildIndex, setShowRebuildIndex] = useState(false);
 
   // Folder drill-down position lives in the URL (not plain state) so that
   // navigating to a project's details and back restores the exact
@@ -84,6 +91,16 @@ export default function KnowledgeSearchPage() {
     if (next.year != null) params.year = String(next.year);
     if (next.month != null) params.month = String(next.month);
     setSearchParams(params);
+  }
+  // Current page also lives in the URL for the same reason — coming back
+  // from a project lands on the page you left. Any setNav() (including the
+  // filter-change reset) drops it, so changing filters starts at page 1.
+  const page = Number(searchParams.get("page")) || 1;
+  function setPage(n) {
+    const params = Object.fromEntries(searchParams.entries());
+    if (n > 1) params.page = String(n); else delete params.page;
+    setSearchParams(params);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const [slProject, setSlProject] = useState(null);
@@ -288,11 +305,13 @@ export default function KnowledgeSearchPage() {
     }
 
     if (nav.level === "projects") {
-      const projs = byYear[nav.year]?.[nav.month] || [];
-      if (!projs.length) return <div className="kr-empty"><p>No projects this month.</p></div>;
+      const monthProjs = byYear[nav.year]?.[nav.month] || [];
+      if (!monthProjs.length) return <div className="kr-empty"><p>No projects this month.</p></div>;
+      const pg = paginate(monthProjs, page);
       return (
+        <>
         <div className="kr-file-grid">
-          {projs.map((p) => {
+          {pg.items.map((p) => {
             const shortlisted = isInAnyShortlist(p.id);
             return (
               <button key={p.id} className="kr-file-item" onClick={() => navigate(`/knowledge/${p.id}`)}>
@@ -322,9 +341,30 @@ export default function KnowledgeSearchPage() {
             );
           })}
         </div>
+        <Pager pg={pg} />
+        </>
       );
     }
   };
+
+  const Pager = ({ pg }) => (
+    pg.total === 0 ? null : (
+      <div className="kr-pagination">
+        <p className="kr-pagination-count">
+          Showing {pg.start + 1}–{pg.start + pg.items.length} of {pg.total} project{pg.total !== 1 ? "s" : ""}
+        </p>
+        {pg.totalPages > 1 && (
+          <div className="kr-pagination-controls">
+            <Button variant="secondary" size="sm" disabled={pg.current <= 1} onClick={() => setPage(pg.current - 1)}>← Previous</Button>
+            <span className="kr-pagination-page">Page {pg.current} of {pg.totalPages}</span>
+            <Button variant="secondary" size="sm" disabled={pg.current >= pg.totalPages} onClick={() => setPage(pg.current + 1)}>Next →</Button>
+          </div>
+        )}
+      </div>
+    )
+  );
+
+  const tablePg = paginate(filtered, page);
 
   const renderTable = () => (
     <>
@@ -340,7 +380,7 @@ export default function KnowledgeSearchPage() {
           <tbody>
             {filtered.length === 0 ? (
               <tr><td colSpan={8} style={{ textAlign: "center", padding: "48px 16px", color: "var(--text-secondary)" }}>No projects found.</td></tr>
-            ) : filtered.map((p, i) => {
+            ) : tablePg.items.map((p, i) => {
               const shortlisted = isInAnyShortlist(p.id);
               return (
                 <tr
@@ -350,7 +390,7 @@ export default function KnowledgeSearchPage() {
                   onClick={() => navigate(`/knowledge/${p.id}`)}
                   onKeyDown={(e) => { if (e.target === e.currentTarget && e.key === "Enter") navigate(`/knowledge/${p.id}`); }}
                 >
-                  <td className="kr-td-num">{i + 1}</td>
+                  <td className="kr-td-num">{tablePg.start + i + 1}</td>
                   <td title={p.shortform ? `${p.title} (${p.shortform})` : p.title}><div className="kr-td-title">{p.title}</div>{p.shortform && <div className="kr-td-shortform">{p.shortform}</div>}</td>
                   <td title={p.client || ""}><div className="kr-td-client">{p.client || <span className="kr-td-muted">—</span>}</div></td>
                   <td title={p.location || ""}>{p.location ? <span className="kr-td-loc"><IconPin /> <span className="kr-td-ellipsis">{p.location}</span></span> : <span className="kr-td-muted">—</span>}</td>
@@ -370,13 +410,13 @@ export default function KnowledgeSearchPage() {
       </div>
 
       <div className="kr-mobile-list">
-        {filtered.map((p, i) => {
+        {tablePg.items.map((p, i) => {
           const shortlisted = isInAnyShortlist(p.id);
           return (
             <div key={p.id} className="kr-mobile-card-wrap">
               <button className="kr-mobile-card" onClick={() => navigate(`/knowledge/${p.id}`)}>
                 <div className="kr-mc-header">
-                  <span className="kr-mc-num">{i + 1}</span>
+                  <span className="kr-mc-num">{tablePg.start + i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="kr-mc-title">{p.title.length > 65 ? p.title.slice(0, 65) + "…" : p.title}{p.shortform && <span className="kr-mc-shortform">{p.shortform}</span>}</div>
                     {p.client && <div className="kr-mc-client">{p.client.length > 50 ? p.client.slice(0, 50) + "…" : p.client}</div>}
@@ -402,6 +442,7 @@ export default function KnowledgeSearchPage() {
           );
         })}
       </div>
+      <Pager pg={tablePg} />
     </>
   );
 
@@ -442,12 +483,6 @@ export default function KnowledgeSearchPage() {
                   <span className="kr-btn-label">Shortlists</span>
                   {shortlists.length > 0 && <span className="kr-btn-shortlists-count">{shortlists.length}</span>}
                 </button>
-                {can.manageSearchIndex(profile?.role) && (
-                  <button className="kr-btn-shortlists" onClick={() => setShowRebuildIndex(true)}>
-                    <span className="kr-btn-icon"><IconSparkle /></span>
-                    <span className="kr-btn-label">Search Index</span>
-                  </button>
-                )}
                 {canAdd && (
                   <button className="kr-btn-add" onClick={() => navigate("/knowledge/add")}>
                     <span className="kr-btn-icon"><IconPlus /></span>
@@ -566,7 +601,6 @@ export default function KnowledgeSearchPage() {
           </>
           )}
 
-          {showRebuildIndex && <RebuildIndexPanel onClose={() => setShowRebuildIndex(false)} />}
 
           {missingDetailsProject && (
             <MissingDetailsModal
