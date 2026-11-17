@@ -102,7 +102,7 @@ export default function SetPasswordForm({ heading, subheading, submitLabel = "Se
     return (
       <Card className="mp-section-card">
         <form onSubmit={submit} noValidate>
-          <Card.Header title={heading} subtitle={subheading} />
+          <Card.Header title={heading} />
           <Card.Body>
             {alerts}
             {fields}

@@ -8,6 +8,7 @@ import {
   getRemainingAttempts,
 } from "../lib/rateLimit";
 import { useAuth } from "./useAuth";
+import { clearRecoveryFlag } from "../context/AuthContext";
 
 function isValidEmail(val) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
@@ -72,6 +73,12 @@ export function useLogin() {
           );
           return;
         }
+
+        // A deliberate, successful sign-in always wins over any stray
+        // password-recovery suppression flag left over from an abandoned
+        // reset-link flow elsewhere (see AuthContext) — harmless no-op if
+        // there wasn't one.
+        clearRecoveryFlag();
 
         // Pull the fresh afc_users row synchronously so we can reject
         // inactive/invalid accounts right here. We deliberately don't

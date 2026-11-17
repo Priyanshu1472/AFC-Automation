@@ -376,7 +376,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
       <div className="lf-main">
         {header}
         <Card className="lf-section">
-          <SectionHead step={1} title="Lead Type & Source" subtitle={isEdit ? "Locked once a lead is created — cannot be changed." : "What kind of opportunity is this, and where did it come from?"} />
+          <SectionHead step={1} title="Lead Type & Source" subtitle={isEdit ? "Locked once a lead is created — cannot be changed." : undefined} />
           <Card.Body className="lf-body">
             <div className="lf-source-grid" role="radiogroup" aria-label="Lead source">
               {SOURCE_CHOICES.map((s) => (
@@ -426,7 +426,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
         </Card>
 
         <Card className="lf-section">
-          <SectionHead step={2} title={isSuoMoto ? "Proposal Details" : "Assignment Details"} subtitle="The basics — name, client, portal and key dates." />
+          <SectionHead step={2} title={isSuoMoto ? "Proposal Details" : "Assignment Details"} />
           <Card.Body className="lf-body">
             <Input
               label={isSuoMoto ? "Name of the Proposal" : "Name of Assignment"}
@@ -576,7 +576,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
         </Card>
 
         <Card className="lf-section">
-          <SectionHead step={3} title="Business Partner" subtitle={isLogisticsOnlyEdit ? "Locked once a lead has moved past PR review." : "Every empanelled BP across all teams — search to find one."} />
+          <SectionHead step={3} title="Business Partner" subtitle={isLogisticsOnlyEdit ? "Locked once a lead has moved past PR review." : undefined} />
           <Card.Body className="lf-body">
             {isLogisticsOnlyEdit ? (
               <Alert variant="info">
@@ -605,7 +605,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
 
         {!isLogisticsOnlyEdit && (
           <Card className="lf-section">
-            <SectionHead step={4} title="Assignment" subtitle={isPoRouted ? "Who should assign the team for this lead?" : "Who works on, reviews and recommends this lead."} />
+            <SectionHead step={4} title="Assignment" />
             <Card.Body className="lf-body">
               {isPoRouted ? (
                 <>
@@ -749,7 +749,6 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
         <div className="card lf-summary">
           <div className="lf-summary-head">
             <h2>{isEdit ? "Edit Summary" : "Lead Summary"}</h2>
-            <p>Updates as you fill the form.</p>
           </div>
           <dl className="lf-summary-list">
             {summaryRows.map((r) => (

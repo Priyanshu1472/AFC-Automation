@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
-import { LEAD_PA_TIER_ROLES, can } from "../../lib/roles";
+import { LEAD_PA_TIER_ROLES, can, hasCommittee } from "../../lib/roles";
 import { canOpenProposal } from "../../lib/proposalPrep";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
@@ -17,6 +17,7 @@ import LeadTimeline from "../../components/leads/LeadTimeline";
 import LeadChatPanel from "../../components/leads/LeadChatPanel";
 import LeadQueryPanel from "../../components/leads/LeadQueryPanel";
 import LeadG3Panel from "../../components/leads/LeadG3Panel";
+import EditDueDatePanel from "../../components/leads/EditDueDatePanel";
 import MdTransferLeadDialog from "../../components/leads/MdTransferLeadDialog";
 import EscalateToG3Dialog from "../../components/leads/EscalateToG3Dialog";
 import LeadDuplicatesTable from "../../components/leads/LeadDuplicatesTable";
@@ -373,7 +374,7 @@ export default function LeadDetailPage() {
         case "pmt_approve":
         case "pmt_decline":
         case "pmt_escalate_g3":
-          return profile?.committee === "PMT";
+          return hasCommittee(profile, "PMT");
         case "md_approve":
         case "md_decline":
           return profile?.role === "md";
@@ -802,6 +803,14 @@ export default function LeadDetailPage() {
                   isn't part of an open G3 escalation. Sits above the
                   cross-team query panel — time-critical, MD-specific. */}
               <LeadG3Panel leadId={lead.id} leadStatus={lead.status} onResolved={fetchLead} />
+
+              {/* The one thing still editable past md_approved — a
+                  standalone card, not a slot in the "Your Action" card
+                  below, since that one is suppressed outright for every
+                  terminal status (isTerminal), md_approved included. */}
+              {lead.status === "md_approved" && profile?.id === lead.person_responsible_id && (
+                <EditDueDatePanel leadId={lead.id} submissionDeadline={lead.submission_deadline} onChanged={fetchLead} />
+              )}
 
               {profile?.role !== "admin" && (
                 <LeadQueryPanel

@@ -326,6 +326,11 @@ export async function openProjectDocument(storagePath) {
 //    project is created and has an id to prefix the path with.
 export function DocumentUpload({ projectId, documents, onAdd, onRemove }) {
   const [docType, setDocType] = useState(DOC_TYPES[0]);
+  // "Other" asks for the document's own name, which is what gets saved and
+  // shown (instead of the generic word "Other").
+  const [otherName, setOtherName] = useState("");
+  const isOther = docType === "Other";
+  const docName = isOther ? otherName.trim() : docType;
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -333,6 +338,7 @@ export function DocumentUpload({ projectId, documents, onAdd, onRemove }) {
 
   async function handleUpload() {
     if (!file) return;
+    if (!docName) { setError("Enter the document name."); return; }
     setUploading(true);
     setError("");
     try {
@@ -342,7 +348,7 @@ export function DocumentUpload({ projectId, documents, onAdd, onRemove }) {
         if (upErr) throw upErr;
         const { data: inserted, error: insErr } = await supabase
           .from("project_documents")
-          .insert({ project_id: projectId, name: docType, file_name: file.name, storage_path: path })
+          .insert({ project_id: projectId, name: docName, file_name: file.name, storage_path: path })
           .select()
           .single();
         if (insErr) {
@@ -353,9 +359,10 @@ export function DocumentUpload({ projectId, documents, onAdd, onRemove }) {
       } else {
         // Deferred — nothing uploaded yet, just held for the parent to
         // persist once the project exists.
-        onAdd({ name: docType, file_name: file.name, file, pending: true });
+        onAdd({ name: docName, file_name: file.name, file, pending: true });
       }
       setFile(null);
+      setOtherName("");
       if (fileRef.current) fileRef.current.value = "";
     } catch (err) {
       setError("Upload failed. Try again.");
@@ -377,13 +384,26 @@ export function DocumentUpload({ projectId, documents, onAdd, onRemove }) {
       <div className="efp-doc-upload-row">
         <div className="efp-doc-field">
           <label className="efp-doc-label">Document Type</label>
-          <CustomSelect value={docType} onChange={setDocType} options={DOC_TYPES} placeholder="Select type" />
+          <CustomSelect value={docType} onChange={(v) => { setDocType(v); setError(""); }} options={DOC_TYPES} placeholder="Select type" />
         </div>
+        {isOther && (
+          <div className="efp-doc-field">
+            <label className="efp-doc-label">Document Name <span className="efp-doc-required">*</span></label>
+            <input
+              type="text"
+              className="efp-doc-text-input"
+              value={otherName}
+              maxLength={120}
+              placeholder="e.g. Performance Certificate"
+              onChange={(e) => { setOtherName(e.target.value); setError(""); }}
+            />
+          </div>
+        )}
         <div className="efp-doc-file-wrap">
           <label className="efp-doc-label">Select File</label>
           <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="efp-doc-file-input" onChange={(e) => { setFile(e.target.files[0] || null); setError(""); }} />
         </div>
-        <button type="button" onClick={handleUpload} disabled={!file || uploading} className="efp-doc-upload-btn">
+        <button type="button" onClick={handleUpload} disabled={!file || !docName || uploading} className="efp-doc-upload-btn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
           {uploading ? "Uploading…" : "Upload"}
         </button>

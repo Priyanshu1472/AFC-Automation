@@ -225,8 +225,12 @@ Deno.test("ra_approve - bulk-adds the named trio plus every PMT holder to the ch
   const client = createFakeAdminClient({
     afc_users: [
       { data: callerRow(), error: null },
-      { data: [{ id: "pmt-1" }, { id: "pmt-2" }], error: null }, // getOrgWideHolders(committee: PMT)
+      { data: [{ id: "pmt-1" }, { id: "pmt-2" }], error: null }, // getOrgWideHolders(committee: PMT)'s own active-status filter
       { data: [{ id: "md-1" }], error: null }, // getOrgWideHolders(role: md) — chat_opened_at was null
+    ],
+    afc_user_committees: [
+      { data: [], error: null }, // caller's own committees (getCallerProfile)
+      { data: [{ user_id: "pmt-1" }, { user_id: "pmt-2" }], error: null }, // getOrgWideHolders(committee: PMT)
     ],
     leads: [{ data: raLead(), error: null }, { data: { id: LEAD_ID }, error: null }],
   });

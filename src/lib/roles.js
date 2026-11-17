@@ -190,6 +190,20 @@ export const can = {
   manageSearchIndex: (role) => role === "admin",
 };
 
+// A person can hold more than one committee (PMT/G3/Accounts) at once —
+// `profile.committees` (from AuthContext's fetchProfile) is the full set;
+// `profile.committee` is just the "primary" one. Every "is this person on
+// committee X" check should go through this, not a direct `=== ` on either
+// field, so a secondary committee is never silently invisible. Falls back
+// to the scalar when `committees` hasn't been populated (e.g. a test
+// fixture or caller-side object built by hand), same convention as the
+// edge functions' own `caller.committees ?? [caller.committee]`.
+export function hasCommittee(profile, committee) {
+  if (!profile) return false;
+  if (Array.isArray(profile.committees)) return profile.committees.includes(committee);
+  return profile.committee === committee;
+}
+
 export function isTeamUser(role) {
   return ["dgm", "general_manager", "agm", "srm", "project_officer", "area_manager", "regional_manager", "associate_consultant", "project_assistant"].includes(role);
 }
@@ -227,7 +241,12 @@ export function isValidRole(role) {
 // 20260928000000_lead_committee_and_status_simplification.sql — the
 // former G3/DGM-initial gate is now the named Recommending Authority
 // instead). See leadPermissions.js for the actual can()-style predicates.
-export const COMMITTEES = ["PMT", "G3"];
+//
+// "Accounts" is assignable here but deliberately wired to nothing yet —
+// no page, panel or server-side check anywhere treats committee ===
+// "Accounts" as special. It exists purely so it can be set on a user now
+// and given real permissions later, the same way PMT/G3 already work.
+export const COMMITTEES = ["PMT", "G3", "Accounts"];
 
 // The tier eligible to be Person Responsible for a lead (owns its
 // PA_REVIEW accept/drop step) and to claim a dropped one. SRM has the same

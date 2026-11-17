@@ -49,7 +49,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
 
-  if (caller.committee !== "PMT" && !["md", "admin"].includes(caller.role)) {
+  if (!caller.committees.includes("PMT") && !["md", "admin"].includes(caller.role)) {
     return jsonRes(req, 403, { error: "Only a PMT committee member can respond to a lead query." });
   }
 

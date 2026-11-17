@@ -38,7 +38,7 @@ export default function BpInvoiceRequestsCard() {
 
   return (
     <Card className="mon-bp-card">
-      <Card.Header title="Invoices" subtitle="AFC asks for your invoice here once the client has paid. Upload it in your own format." />
+      <Card.Header title="Invoices" />
       <Card.Body>
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         <ul className="mon-bp-list">

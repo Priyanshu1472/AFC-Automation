@@ -102,7 +102,7 @@ openai_api_key = "env(OPENAI_API_KEY)"
 
 # Email testing server. Emails sent with the local dev setup are not actually sent - rather, they
 # are monitored, and you can view the emails that would have been sent from the web interface.
-[inbucket]
+[local_smtp]
 enabled = true
 # Port to use for the email testing server web interface.
 port = 54324
@@ -690,3 +690,39 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/monitoring-pdf/deno.json"
 entrypoint = "./functions/monitoring-pdf/index.ts"
+
+[functions.add-proposal-responsible]
+enabled = true
+verify_jwt = true
+import_map = "./functions/add-proposal-responsible/deno.json"
+entrypoint = "./functions/add-proposal-responsible/index.ts"
+
+[functions.remove-proposal-responsible]
+enabled = true
+verify_jwt = true
+import_map = "./functions/remove-proposal-responsible/deno.json"
+entrypoint = "./functions/remove-proposal-responsible/index.ts"
+
+[functions.update-lead-due-date]
+enabled = true
+verify_jwt = true
+import_map = "./functions/update-lead-due-date/deno.json"
+entrypoint = "./functions/update-lead-due-date/index.ts"
+
+[functions.mark-fee-note-paid]
+enabled = true
+verify_jwt = true
+import_map = "./functions/mark-fee-note-paid/deno.json"
+entrypoint = "./functions/mark-fee-note-paid/index.ts"
+
+[functions.proposal-emd-action]
+enabled = true
+verify_jwt = true
+import_map = "./functions/proposal-emd-action/deno.json"
+entrypoint = "./functions/proposal-emd-action/index.ts"
+
+[functions.preview-pbg-note]
+enabled = true
+verify_jwt = true
+import_map = "./functions/preview-pbg-note/deno.json"
+entrypoint = "./functions/preview-pbg-note/index.ts"

@@ -175,7 +175,7 @@ export default function FinancialsPage() {
 
           {toInvoice.length > 0 && (
             <Card className="mon-alerts-card">
-              <Collapsible title="Ready to Invoice" subtitle="Completed billable milestones and deliverables with no client invoice yet." icon={<BellIcon />}>
+              <Collapsible title="Ready to Invoice" icon={<BellIcon />}>
                 <ul className="mon-alerts">
                   {toInvoice.map((i) => {
                     const p = projectsById[i.project_id];

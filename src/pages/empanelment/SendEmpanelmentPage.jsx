@@ -264,7 +264,7 @@ export default function SendEmpanelmentPage() {
           {step === 0 && (
             <div className="sef-layout">
               <Card className="sef-main-card">
-                <Card.Header title="Send Empanelment Form" subtitle={`Select a ${reviewerLabel} and enter the BP's email address.`} action={<Badge variant="brand">Step 1 of 2</Badge>} />
+                <Card.Header title="Send Empanelment Form" action={<Badge variant="brand">Step 1 of 2</Badge>} />
                 <Card.Body className="sef-card-body">
                   <SenderInfoRow profile={profile} team={team} advisorName={advisedByName} />
                   <div className="sef-divider" />

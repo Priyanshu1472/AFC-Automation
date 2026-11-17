@@ -74,7 +74,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
 
-  if (caller.committee !== "PMT") return jsonRes(req, 403, { error: "Only a PMT committee member can escalate a lead to G3." });
+  if (!caller.committees.includes("PMT")) return jsonRes(req, 403, { error: "Only a PMT committee member can escalate a lead to G3." });
 
   let body: Record<string, unknown>;
   try {
@@ -133,14 +133,26 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       query = queryRow;
     }
 
-    const { data: g3Users, error: g3Err } = await adminClient
+    // G3 membership now lives in afc_user_committees (the multi-committee
+    // set), so active status and committee membership are two separate
+    // lookups rather than one filtered afc_users query.
+    const { data: activeTargets, error: activeErr } = await adminClient
       .from("afc_users")
       .select("id")
       .in("id", assignedG3Ids)
-      .eq("committee", "G3")
       .eq("is_active", true);
+    if (activeErr) return jsonRes(req, 500, { error: "Failed to validate the selected G3 members." });
+    const activeIds = new Set((activeTargets || []).map((u: { id: string }) => u.id));
+
+    const { data: g3Rows, error: g3Err } = await adminClient
+      .from("afc_user_committees")
+      .select("user_id")
+      .eq("committee", "G3")
+      .in("user_id", assignedG3Ids);
     if (g3Err) return jsonRes(req, 500, { error: "Failed to validate the selected G3 members." });
-    if ((g3Users || []).length !== assignedG3Ids.length) {
+    const g3Ids = new Set((g3Rows || []).map((r: { user_id: string }) => r.user_id));
+
+    if (assignedG3Ids.some((id) => !activeIds.has(id) || !g3Ids.has(id))) {
       return jsonRes(req, 400, { error: "One or more selected G3 members are no longer valid." });
     }
 

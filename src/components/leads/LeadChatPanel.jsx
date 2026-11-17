@@ -6,7 +6,7 @@ import { useToast } from "../../hooks/useToast";
 import MentionInput from "../shared/MentionInput";
 import { renderWithMentions } from "../../lib/mentions";
 import { ChatIcon, CloseIcon, SendIcon, UserPlusIcon, UsersIcon } from "../icons";
-import { ROLE_LABELS } from "../../lib/roles";
+import { ROLE_LABELS, hasCommittee } from "../../lib/roles";
 // Reuses the generic ar-* card/field styles already defined for the Lead/
 // Empanelment review pages, plus a handful of chat-bubble-specific classes
 // added alongside them in the same file.
@@ -47,7 +47,7 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
   const [candidates, setCandidates] = useState(null);
   const [candidateQuery, setCandidateQuery] = useState("");
   const [addingId, setAddingId] = useState(null);
-  const canAddMembers = profile?.committee === "PMT" && !locked;
+  const canAddMembers = hasCommittee(profile, "PMT") && !locked;
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const widgetRef = useRef(null);

@@ -41,6 +41,11 @@ export type CallerProfile = {
   // this whole set, not just the primary team, for both read (RLS mirrors
   // this via is_current_user_team()) and write-side checks below.
   teams: string[];
+  // Full assigned-committee membership (primary `committee` included) —
+  // a user can now hold more than one (e.g. PMT and Accounts), so every
+  // "is this caller on committee X" check should use this, not
+  // `caller.committee === "X"` — that only ever sees the primary one.
+  committees: string[];
 };
 
 // Is the caller a member of `team` at all — every write-side "only this
@@ -85,5 +90,9 @@ export async function getCallerProfile(
   const teamSet = (teamRows || []).map((r: { team: string }) => r.team);
   const teams = teamSet.length ? teamSet : (caller.team ? [caller.team] : []);
 
-  return { ok: true, caller: { ...caller, teams } };
+  const { data: committeeRows } = await adminClient.from("afc_user_committees").select("committee").eq("user_id", caller.id);
+  const committeeSet = (committeeRows || []).map((r: { committee: string }) => r.committee);
+  const committees = committeeSet.length ? committeeSet : (caller.committee ? [caller.committee] : []);
+
+  return { ok: true, caller: { ...caller, teams, committees } };
 }

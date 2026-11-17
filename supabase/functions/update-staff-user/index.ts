@@ -11,10 +11,10 @@ import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 
 const ADMIN_CREATABLE_ROLES = ["admin", "md", "executive_director", "cfo", "cs", "general_manager", "dgm", "agm", "srm", "regional_manager", "area_manager", "project_officer", "associate_consultant", "project_assistant"];
 
-// Lead Generation review committees — same admin-only gate as `role`
-// itself, since committee membership grants review/approval permission
-// just like a role does.
-const LEAD_COMMITTEES = ["PMT", "PMT Extended", "G3"];
+// Lead Generation / Proposals review committees — same admin-only gate as
+// `role` itself, since committee membership grants review/approval
+// permission just like a role does. A person can hold more than one.
+const LEAD_COMMITTEES = ["PMT", "G3", "Accounts"];
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
@@ -35,13 +35,24 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     return jsonRes(req, 400, { error: "Invalid JSON body." });
   }
 
-  const { user_id, full_name, team, teams, office, role, committee } = body;
+  const { user_id, full_name, team, teams, office, role, committee, committees } = body;
   if (!user_id || typeof user_id !== "string") return jsonRes(req, 400, { error: "user_id is required." });
   if (!full_name || typeof full_name !== "string" || full_name.trim().length < 2) {
     return jsonRes(req, 400, { error: "Full name is required." });
   }
   if (user_id === caller.id) return jsonRes(req, 400, { error: "You cannot edit your own account here." });
-  if (committee !== undefined && committee !== null && !LEAD_COMMITTEES.includes(committee as string)) {
+
+  // `committees` (plural) is the full set, same convention as `teams` below
+  // — a person can hold more than one committee at once. Falls back to the
+  // singular `committee` field alone when `committees` isn't sent.
+  const rawCommittees = Array.isArray(committees) ? committees : null;
+  const committeeSet = rawCommittees
+    ? rawCommittees.filter((c): c is string => typeof c === "string" && c.trim().length > 0).map((c) => c.trim())
+    : null;
+  if (committeeSet && committeeSet.some((c) => !LEAD_COMMITTEES.includes(c))) {
+    return jsonRes(req, 400, { error: `Committee must be one of: ${LEAD_COMMITTEES.join(", ")}.` });
+  }
+  if (!committeeSet && committee !== undefined && committee !== null && !LEAD_COMMITTEES.includes(committee as string)) {
     return jsonRes(req, 400, { error: `Committee must be one of: ${LEAD_COMMITTEES.join(", ")}.` });
   }
 
@@ -66,7 +77,14 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     }
     update.role = role;
   }
-  if (committee !== undefined) update.committee = (committee as string) || null;
+  let finalCommittee: string | null | undefined;
+  if (committeeSet) {
+    finalCommittee = committeeSet[0] || null;
+    update.committee = finalCommittee;
+  } else if (committee !== undefined) {
+    finalCommittee = (committee as string) || null;
+    update.committee = finalCommittee;
+  }
   if (office !== undefined) update.office = (office as string) || null;
 
   // `teams` (plural) is the full assignment set for team-scoped roles —
@@ -107,6 +125,25 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         .from("afc_user_teams")
         .insert([{ user_id, team: finalTeam }]);
       if (teamsErr) console.error("Failed to update afc_user_teams:", teamsErr.message);
+    }
+  }
+
+  // Same full-replace convention as afc_user_teams above.
+  if (committeeSet) {
+    await adminClient.from("afc_user_committees").delete().eq("user_id", user_id);
+    if (committeeSet.length) {
+      const { error: committeesErr } = await adminClient
+        .from("afc_user_committees")
+        .insert(committeeSet.map((c) => ({ user_id, committee: c })));
+      if (committeesErr) console.error("Failed to update afc_user_committees:", committeesErr.message);
+    }
+  } else if (finalCommittee !== undefined) {
+    await adminClient.from("afc_user_committees").delete().eq("user_id", user_id);
+    if (finalCommittee) {
+      const { error: committeesErr } = await adminClient
+        .from("afc_user_committees")
+        .insert([{ user_id, committee: finalCommittee }]);
+      if (committeesErr) console.error("Failed to update afc_user_committees:", committeesErr.message);
     }
   }
 

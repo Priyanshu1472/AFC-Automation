@@ -178,7 +178,6 @@ export default function AddProjectPage() {
             <div className="page-title-row">
               <div>
                 <h1>Add Project</h1>
-                <p>Fill in the project details and save to the Knowledge Repository.</p>
               </div>
             </div>
           </div>
@@ -298,7 +297,6 @@ export default function AddProjectPage() {
             <div className="card-header">
               <div>
                 <h3>Keywords *</h3>
-                <p style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", marginTop: 2 }}>Search existing keywords or type to add a new one.</p>
               </div>
             </div>
             <div className="card-body">
@@ -310,7 +308,6 @@ export default function AddProjectPage() {
             <div className="card-header">
               <div>
                 <h3>Documents</h3>
-                <p style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", marginTop: 2 }}>Attach Work Order, Completion Certificate, MoU, etc. (optional)</p>
               </div>
             </div>
             <div className="card-body">

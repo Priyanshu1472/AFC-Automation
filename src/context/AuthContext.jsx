@@ -5,12 +5,58 @@ export const AuthContext = createContext(null);
 
 const ACTIVE_TEAM_STORAGE_PREFIX = "afc_active_team_";
 
+// Clicking a "reset your password" emailed link hands the tab that opens
+// it a genuine, valid Supabase session (type=recovery) — and since
+// supabase-js mirrors the session into localStorage, every OTHER already-
+// open tab of this app picks it up too, via the SDK's own cross-tab sync,
+// and (without this) would quietly show the user as logged in before
+// they've actually set anything. The fix: a recovery-in-progress flag,
+// shared across tabs via localStorage, that tells every tab's
+// onAuthStateChange to ignore whatever session just appeared until the
+// flow actually finishes (useSetNewPassword clears it right on success).
+// It auto-expires rather than just being a plain boolean, so an abandoned
+// reset (tab closed without submitting) can't wedge every tab logged-out
+// forever. An explicit, deliberate login (useLogin's handleLogin) is
+// unaffected either way — it calls refreshProfile() directly, which this
+// flag never gates, only the passive getSession()/onAuthStateChange path.
+const RECOVERY_FLAG_KEY = "afc_password_recovery_until";
+const RECOVERY_WINDOW_MS = 5 * 60 * 1000;
+
+function markRecoveryInProgress() {
+  try {
+    localStorage.setItem(RECOVERY_FLAG_KEY, String(Date.now() + RECOVERY_WINDOW_MS));
+  } catch {
+    // localStorage unavailable — the cross-tab leak just can't be
+    // suppressed in this browsing mode; nothing else to fall back to.
+  }
+}
+
+export function clearRecoveryFlag() {
+  try {
+    localStorage.removeItem(RECOVERY_FLAG_KEY);
+  } catch {
+    // Nothing to clear if storage isn't available in the first place.
+  }
+}
+
+function isRecoveryInProgress() {
+  try {
+    const until = Number(localStorage.getItem(RECOVERY_FLAG_KEY));
+    if (!until) return false;
+    if (Date.now() > until) {
+      clearRecoveryFlag();
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const PROFILE_COLUMNS = "id, full_name, email, role, team, office, committee, is_active, must_change_password, pin_updated_at, signature_path, avatar_path";
+
 async function fetchProfile(userId) {
-  const { data, error } = await supabase
-    .from("afc_users")
-    .select("id, full_name, email, role, team, office, committee, is_active, must_change_password, pin_updated_at, signature_path, avatar_path")
-    .eq("id", userId)
-    .maybeSingle();
+  const { data, error } = await supabase.from("afc_users").select(PROFILE_COLUMNS).eq("id", userId).maybeSingle();
 
   if (error) throw error;
   if (!data) return data;
@@ -29,7 +75,19 @@ async function fetchProfile(userId) {
       ? [data.team]
       : [];
 
-  return { ...data, teams };
+  // Same pattern for committees — a person can now hold more than one
+  // (e.g. PMT and Accounts). Every `profile.committee === "X"` check in the
+  // app should move to `profile.committees?.includes("X")` so a secondary
+  // committee isn't silently invisible.
+  const { data: committeeRows } = await supabase.from("afc_user_committees").select("committee").eq("user_id", userId);
+  const committeeSet = (committeeRows || []).map((r) => r.committee);
+  const committees = committeeSet.length
+    ? [data.committee, ...committeeSet.filter((c) => c !== data.committee)].filter(Boolean)
+    : data.committee
+      ? [data.committee]
+      : [];
+
+  return { ...data, teams, committees };
 }
 
 function loadStoredActiveTeam(userId, teams) {
@@ -118,6 +176,12 @@ export function AuthProvider({ children }) {
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mountedRef.current) return;
+      if (isRecoveryInProgress()) {
+        setUser(null);
+        await loadProfile(null);
+        setLoading(false);
+        return;
+      }
       setUser(session?.user ?? null);
       await loadProfile(session?.user ?? null);
       if (mountedRef.current) setLoading(false);
@@ -125,8 +189,15 @@ export function AuthProvider({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mountedRef.current) return;
+      if (event === "PASSWORD_RECOVERY") markRecoveryInProgress();
+      if (isRecoveryInProgress()) {
+        setUser(null);
+        await loadProfile(null);
+        setLoading(false);
+        return;
+      }
       setUser(session?.user ?? null);
       await loadProfile(session?.user ?? null);
       setLoading(false);

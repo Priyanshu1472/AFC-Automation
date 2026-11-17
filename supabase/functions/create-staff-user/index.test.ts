@@ -81,6 +81,36 @@ Deno.test("create-staff-user - DGM can no longer create any accounts", async () 
   assertEquals(res.status, 403);
 });
 
+Deno.test("create-staff-user - rejects an unknown committee value", async () => {
+  const res = await handleRequest(req({ email: "new@afc.com", full_name: "New Person", role: "cfo", committees: ["NotACommittee"] }), client({}) as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("create-staff-user - a multi-committee `committees` array is written to afc_user_committees, and committees[0] becomes the primary afc_users.committee", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = okFetch;
+  try {
+    const c = client({});
+    const res = await handleRequest(
+      req({ email: "new@afc.com", full_name: "New Person", role: "project_officer", committees: ["PMT", "Accounts"] }),
+      c as never,
+    );
+    assertEquals(res.status, 200);
+
+    const log = (c as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+    const profileInsert = JSON.parse(log.filter((l) => l.table === "afc_users").find((l) => l.calls[0][0] === "insert")!.calls[0][1])[0];
+    assertEquals(profileInsert.committee, "PMT");
+
+    const committeesInsert = JSON.parse(log.filter((l) => l.table === "afc_user_committees").find((l) => l.calls[0][0] === "insert")!.calls[0][1]);
+    assertEquals(committeesInsert, [
+      { user_id: "new-user-1", committee: "PMT" },
+      { user_id: "new-user-1", committee: "Accounts" },
+    ]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("create-staff-user - rejects an invalid email", async () => {
   const res = await handleRequest(req({ email: "not-an-email", full_name: "New Person", role: "cfo" }), client({}) as never);
   assertEquals(res.status, 400);

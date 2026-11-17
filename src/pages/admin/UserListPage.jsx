@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { ROLE_LABELS, ROLE_ABBR, OFFICE_LABELS, can } from "../../lib/roles";
+import { ROLE_LABELS, ROLE_ABBR, OFFICE_LABELS, COMMITTEES, can } from "../../lib/roles";
 import { useAuth } from "../../hooks/useAuth";
 import { useTeamOptions } from "../../hooks/useTeamOptions";
 import AppHeader from "../../components/shared/AppHeader";
@@ -36,7 +36,10 @@ const ROLE_VARIANT = {
 
 const PAGE_SIZE = 25;
 
-const COMMITTEE_OPTIONS = ["PMT"];
+// Was its own hardcoded ["PMT"] list, which drifted out of sync the moment
+// G3 was added to lib/roles.js's COMMITTEES — sourcing from there instead
+// means this filter can never fall behind again.
+const COMMITTEE_OPTIONS = COMMITTEES;
 
 // Restores search/filter/page state after a trip out to a user's Edit page
 // and back — "Back to Users" (EditUserPage.jsx) pushes a bare /users, so
@@ -84,6 +87,15 @@ function EditButton({ user, isSelf, onEdit }) {
       </Button>
     </Tooltip>
   );
+}
+
+// Accounts is now an ordinary committee value, same as PMT/G3 — filters on
+// the scalar `committee` (the "primary" one), same known limitation as
+// filtering by PMT/G3 already had: someone whose Accounts membership is a
+// secondary committee won't match. Good enough for a list filter.
+function applyCommitteeFilter(query, committee) {
+  if (committee === "all") return query;
+  return query.eq("committee", committee);
 }
 
 export default function UserListPage() {
@@ -148,7 +160,7 @@ export default function UserListPage() {
     if (trimmed) query = query.or(`full_name.ilike.%${trimmed}%,email.ilike.%${trimmed}%`);
     if (currentTeam !== "all") query = query.eq("team", currentTeam);
     if (currentRole !== "all") query = query.eq("role", currentRole);
-    if (currentCommittee !== "all") query = query.eq("committee", currentCommittee);
+    query = applyCommitteeFilter(query, currentCommittee);
 
     const from = currentPage * PAGE_SIZE;
     query = query.range(from, from + PAGE_SIZE - 1);
@@ -167,7 +179,7 @@ export default function UserListPage() {
     const trimmed = currentSearch.trim();
     if (trimmed) query = query.or(`full_name.ilike.%${trimmed}%,email.ilike.%${trimmed}%`);
     if (currentRole !== "all") query = query.eq("role", currentRole);
-    if (currentCommittee !== "all") query = query.eq("committee", currentCommittee);
+    query = applyCommitteeFilter(query, currentCommittee);
     return query;
   }, []);
 
@@ -280,7 +292,6 @@ export default function UserListPage() {
           <div className="page-title-row">
             <div>
               <h1>Users</h1>
-              <p>{can.viewAllTeams(profile?.role) ? "All staff accounts." : "Your team's staff accounts."}</p>
             </div>
             {canCreate && (
               <Tooltip text="Create a new staff account. A temporary password is generated and emailed automatically.">

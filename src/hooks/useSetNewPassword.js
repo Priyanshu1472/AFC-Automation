@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./useAuth";
+import { clearRecoveryFlag } from "../context/AuthContext";
 
 const MIN_LENGTH = 8;
 const STRONG_PASSWORD = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
@@ -92,6 +93,9 @@ export function useSetNewPassword({ requireMarkChanged = true, redirectTo = "/ho
           }
         }
 
+        // Done with whatever recovery-link flow was suppressing auth state
+        // across tabs (see AuthContext) — a no-op if this wasn't one.
+        clearRecoveryFlag();
         await refreshProfile();
         setCurrentPassword("");
         setPassword("");

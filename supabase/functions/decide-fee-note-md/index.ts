@@ -15,6 +15,7 @@ import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { notifyUsers } from "../_shared/notify.ts";
+import { notifyAccountsCommittee, leadRef } from "../_shared/proposalFinance.ts";
 
 const NOTE_LABEL = "Bid Payment Requisition Note";
 
@@ -68,7 +69,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .maybeSingle();
     const { data: lead } = await adminClient
       .from("leads")
-      .select("title, person_responsible_id, reviewer_id, recommending_authority_id")
+      .select("id, lead_number, title, person_responsible_id, reviewer_id, recommending_authority_id")
       .eq("id", proposal?.lead_id)
       .maybeSingle();
 
@@ -94,6 +95,17 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       type: decision === "approved" ? "info" : "action_required",
       link: proposal?.lead_id ? `/proposals/${proposal.lead_id}` : "/proposals",
     });
+
+    // The approved note goes to the Accounts Committee, who check the
+    // signatures and make the payment (mark-fee-note-paid).
+    if (decision === "approved" && lead) {
+      await notifyAccountsCommittee(adminClient, {
+        title: "Bid Payment Requisition Note approved — payment due",
+        sub_text: `${leadRef(lead)}: the MD approved the ${noteLabel}. Check the signatures and make the payment.`,
+        type: "action_required",
+        link: `/proposals/${lead.id}`,
+      });
+    }
 
     return jsonRes(req, 200, { success: true });
   } catch (err) {

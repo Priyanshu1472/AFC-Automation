@@ -12,7 +12,7 @@ import { createAdminClient } from "./auth.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-export type Committee = "PMT" | "G3";
+export type Committee = "PMT" | "G3" | "Accounts";
 
 // The tier eligible to be Person Responsible for a lead (owns its
 // PA_REVIEW accept/drop step) and to claim a dropped one. SRM has the same
@@ -32,11 +32,28 @@ export async function getTargetUser(admin: AdminClient, userId: string): Promise
 }
 
 // Org-wide role or committee holders — PMT and 'md' are both org-wide, so
-// this is the only lookup notify fan-out needs.
+// this is the only lookup notify fan-out needs. Committee membership goes
+// through afc_user_committees (the authoritative multi-value set), not
+// afc_users.committee — a user whose PRIMARY committee is something else
+// but who also holds this one must still show up here.
 export async function getOrgWideHolders(admin: AdminClient, opts: { role?: string; committee?: Committee }): Promise<string[]> {
+  if (opts.committee) {
+    const { data, error } = await admin.from("afc_user_committees").select("user_id").eq("committee", opts.committee);
+    if (error) {
+      console.error("getOrgWideHolders lookup failed:", error.message);
+      return [];
+    }
+    const ids = [...new Set((data || []).map((r: { user_id: string }) => r.user_id))];
+    if (!ids.length) return [];
+    const { data: activeRows, error: activeErr } = await admin.from("afc_users").select("id").in("id", ids).eq("is_active", true);
+    if (activeErr) {
+      console.error("getOrgWideHolders lookup failed:", activeErr.message);
+      return [];
+    }
+    return (activeRows || []).map((u: { id: string }) => u.id);
+  }
   let query = admin.from("afc_users").select("id").eq("is_active", true);
   if (opts.role) query = query.eq("role", opts.role);
-  if (opts.committee) query = query.eq("committee", opts.committee);
   const { data, error } = await query;
   if (error) {
     console.error("getOrgWideHolders lookup failed:", error.message);
@@ -69,7 +86,7 @@ export async function getPaTierHolders(admin: AdminClient, team: string): Promis
   return (data || []).map((u: { id: string }) => u.id);
 }
 
-type ViewerCaller = { id: string; role: string; team: string | null; teams?: string[]; committee: string | null };
+type ViewerCaller = { id: string; role: string; team: string | null; teams?: string[]; committee: string | null; committees?: string[] };
 type ViewableLead = {
   status: string;
   team: string;
@@ -105,7 +122,8 @@ const PA_TIER_TEAM_WIDE_ROLES = ["project_officer", "area_manager", "regional_ma
 
 export function canViewLead(caller: ViewerCaller, lead: ViewableLead): boolean {
   if (["md", "admin", "cfo", "cs", "dgm", "general_manager", "agm", "srm"].includes(caller.role)) return true;
-  if (caller.committee === "PMT") return true;
+  const callerCommittees = caller.committees ?? (caller.committee ? [caller.committee] : []);
+  if (callerCommittees.includes("PMT")) return true;
   if ([lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id, lead.handled_by_dgm_id].includes(caller.id)) return true;
   const callerTeams = caller.teams ?? (caller.team ? [caller.team] : []);
   if (caller.id === lead.created_by && callerTeams.includes(lead.team)) return true;

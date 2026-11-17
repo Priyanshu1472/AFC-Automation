@@ -29,10 +29,16 @@ function conflictLeadRow(overrides: Record<string, unknown> = {}) {
 }
 
 // afc_users is consumed: [0] caller (getCallerProfile), [1] the
-// assigned_g3_ids validation lookup, [2] MD holders, [3] PMT holders (in
-// that call order) — the fake repeats the last entry once exhausted, which
-// also harmlessly backs regenerateApprovalNote's own best-effort internal
+// assigned_g3_ids active-status check, [2] MD holders, [3] the active-
+// status filter on PMT committee holders (getOrgWideHolders' own
+// afc_user_committees lookup feeds into that last one) — in that call
+// order. The fake repeats the last entry once exhausted, which also
+// harmlessly backs regenerateApprovalNote's own best-effort internal
 // lookups.
+//
+// afc_user_committees is consumed: [0] the caller's own committees
+// (getCallerProfile), [1] the assigned_g3_ids G3-membership check, [2]
+// getOrgWideHolders({committee: "PMT"})'s own lookup.
 function queryRow(overrides: Record<string, unknown> = {}) {
   return { id: "query-1", lead_id: LEAD_ID, raised_by_id: "raiser-1", raised_by_team: "Team 2", status: "open", ...overrides };
 }
@@ -53,6 +59,15 @@ function buildClient(opts: {
     ...(routes.afc_users || []),
   ];
   routes.afc_user_teams = routes.afc_user_teams || [{ data: [], error: null }];
+  routes.afc_user_committees = [
+    // Empty so getCallerProfile falls back to the caller row's own scalar
+    // `committee` — lets tests override the caller's committee (e.g. to
+    // null, for the non-PMT-caller case) without this masking it.
+    { data: [], error: null },
+    { data: opts.g3Validation === undefined ? [{ user_id: "g3-1" }] : opts.g3Validation.map((u) => ({ user_id: (u as { id: string }).id })), error: null },
+    { data: [{ user_id: CALLER_ID }], error: null },
+    ...(routes.afc_user_committees || []),
+  ];
   routes.leads = [
     { data: opts.leads ?? [primaryLeadRow(), conflictLeadRow()], error: null },
     { data: [{ id: LEAD_ID }], error: null },

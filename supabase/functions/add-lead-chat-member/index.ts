@@ -27,7 +27,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });
   const caller = callerResult.caller;
 
-  if (caller.committee !== "PMT") return jsonRes(req, 403, { error: "Only PMT members can add people to the chat." });
+  if (!caller.committees.includes("PMT")) return jsonRes(req, 403, { error: "Only PMT members can add people to the chat." });
 
   let body: Record<string, unknown>;
   try {
