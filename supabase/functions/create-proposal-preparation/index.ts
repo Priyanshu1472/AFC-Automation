@@ -1,12 +1,12 @@
 // supabase/functions/create-proposal-preparation/index.ts
 // JWT must be ON. Idempotent create/fetch of the proposal_preparations row
-// for an approved lead — "Open Proposal" calls this on first visit.
-// Creating the row the first time is still limited to the lead's Person
-// Responsible, Reviewer, or Recommending Authority (the authorised
-// signatory needs to reach the page too, to lock/decide outcome later), or
-// md/admin — mirrors create-lead's shape. Opening an EXISTING proposal is
-// open to any internal (non-Business Partner) user org-wide — actions
-// elsewhere stay gated to those same named assignees.
+// for an approved lead — "Open Proposal" calls this on every visit.
+// Any internal (non-Business Partner) user can open any approved lead's
+// proposal, org-wide — including one its team hasn't opened yet, in which
+// case it's set up here exactly as if the team had (the chat roster comes
+// from the lead's own assignees + MD, never from whoever opened it).
+// Every action on the page stays gated to the lead's named assignees /
+// md/admin. Business Partners can't open proposals here.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -44,17 +44,10 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
-    const canCreate =
+    const isNamed =
       ["md", "admin"].includes(caller.role) ||
       [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(caller.id);
-    if (!canCreate) {
-      // Any other internal (non-Business Partner) user gets view-only
-      // access to an existing proposal — never creates one, never touches
-      // the chat roster.
-      if (isInternalRole(caller)) {
-        const { data: existingForViewer } = await adminClient.from("proposal_preparations").select("id").eq("lead_id", leadId).maybeSingle();
-        if (existingForViewer) return jsonRes(req, 200, { success: true, proposal_id: existingForViewer.id });
-      }
+    if (!isNamed && !isInternalRole(caller)) {
       return jsonRes(req, 403, { error: "You do not have access to this lead's proposal." });
     }
 
