@@ -17,6 +17,8 @@ import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import "../../styles/EmpanelmentListPage.css";
 
+import { formatSectors, MultilineText, AssignmentsTable, hasAssignments, hasText } from "./baDisplay";
+
 function fmt(val) { return val === null || val === undefined || val === "" ? "—" : val; }
 function fmtDate(val) { if (!val) return "—"; return new Date(val).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
 function fmtMoney(val) { if (val === null || val === undefined || val === "") return "—"; return "INR " + Number(val).toLocaleString("en-IN"); }
@@ -230,13 +232,13 @@ function BADetailModal({ ba, appRow, invReviewerRole, invAdvisorRole, canReview,
             <DetailField label="Director KYC" value={fmt(ba.director_kyc)} />
           </DetailSection>
           <DetailSection title="Business Profile">
-            <DetailField label="Core Expertise" value={fmt(ba.core_expertise)} />
-            <DetailField label="Sectors Served" value={Array.isArray(ba.sectors_served) ? ba.sectors_served.join(", ") : fmt(ba.sectors_served)} />
+            <DetailField label="Core Expertise" value={hasText(ba.core_expertise) ? <MultilineText text={ba.core_expertise} /> : null} />
+            <DetailField label="Sectors Served" value={formatSectors(ba)} />
             <DetailField label="Team Size" value={fmt(ba.team_size)} />
             <DetailField label="Years Experience" value={fmt(ba.years_experience)} />
             <DetailField label="Certifications" value={fmt(ba.certifications)} />
             <DetailField label="Govt. Empanelments" value={fmt(ba.govt_empanelments)} />
-            <DetailField label="Assignments" value={fmtJsonb(ba.assignments)} />
+            <DetailField label="Major Assignments (Last 5 Years)" value={hasAssignments(ba.assignments) ? <AssignmentsTable value={ba.assignments} /> : null} />
           </DetailSection>
           <DetailSection title="Bank Details">
             <DetailField label="Bank Name" value={fmt(ba.bank_name)} />

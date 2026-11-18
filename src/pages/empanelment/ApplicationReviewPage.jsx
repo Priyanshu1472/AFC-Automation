@@ -31,6 +31,8 @@ const SLOT_LABELS = {
   workOrders: "Work Orders / Completion Certificates",
 };
 
+import { formatSectors, MultilineText, AssignmentsTable, hasAssignments, hasText } from "./baDisplay";
+
 function fmt(val) { return val === null || val === undefined || val === "" ? "—" : val; }
 function fmtDate(val) { if (!val) return "—"; return new Date(val).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
 function fmtMoney(val) { if (!val) return "—"; return "INR " + Number(val).toLocaleString("en-IN"); }
@@ -47,9 +49,9 @@ function XIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="
 function DocumentIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>; }
 function EyeIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>; }
 
-function Row({ label, value }) {
+function Row({ label, value, stacked = false }) {
   if (!value || value === "—") return null;
-  return <div className="ar-row"><span className="ar-row-label">{label}</span><span className="ar-row-value">{value}</span></div>;
+  return <div className="ar-row" style={stacked ? { flexDirection: "column", gap: "var(--space-2)" } : undefined}><span className="ar-row-label">{label}</span><span className="ar-row-value">{value}</span></div>;
 }
 
 function CommentCard({ label, text, colorClass }) {
@@ -462,13 +464,13 @@ export default function ApplicationReviewPage() {
                       <Row label="Director KYC" value={fmt(baData.director_kyc)} />
                     </>)}
                     {activeTab === "business" && (<>
-                      <Row label="Core Expertise" value={fmt(baData.core_expertise)} />
-                      <Row label="Sectors Served" value={Array.isArray(baData.sectors_served) ? baData.sectors_served.join(", ") : fmt(baData.sectors_served)} />
+                      <Row label="Core Expertise" value={hasText(baData.core_expertise) ? <MultilineText text={baData.core_expertise} /> : null} />
+                      <Row label="Sectors Served" value={formatSectors(baData)} />
                       <Row label="Team Size" value={fmt(baData.team_size)} />
                       <Row label="Years Experience" value={fmt(baData.years_experience)} />
                       <Row label="Certifications" value={fmt(baData.certifications)} />
                       <Row label="Govt. Empanelments" value={fmt(baData.govt_empanelments)} />
-                      <Row label="Assignments" value={fmtJsonb(baData.assignments)} />
+                      <Row stacked label="Major Assignments (Last 5 Years)" value={hasAssignments(baData.assignments) ? <AssignmentsTable value={baData.assignments} /> : null} />
                     </>)}
                     {activeTab === "bank" && (<>
                       <Row label="Bank Name" value={fmt(baData.bank_name)} />
