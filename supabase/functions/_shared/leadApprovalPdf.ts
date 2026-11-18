@@ -72,6 +72,7 @@ type LeadForNote = {
   client_name: string | null;
   submission_deadline: string | null;
   assigned_ba_id: string | null;
+  manual_ba_id?: string | null;
 };
 
 // (group key -> the advance-lead-stage action names that resolve it, in
@@ -333,12 +334,13 @@ export async function buildLeadApprovalNotePdf(opts: {
     scopeText ? `\nScope of Work:\n${scopeText}` : "",
   ].filter(Boolean).join("\n") || "—";
 
-  const implementationArrangement = opts.lead.assigned_ba_id ? "Business Partner" : "In-house";
+  const hasBp = !!(opts.lead.assigned_ba_id || opts.lead.manual_ba_id);
+  const implementationArrangement = hasBp ? "Business Partner" : "In-house";
   // BA selection is optional at submission (see LeadApprovalNotePreviewPage
   // / advance-lead-stage's "accept" case) — the row always shows, printing
   // "Yet to be Decided" until one is actually assigned, rather than
   // silently disappearing.
-  const baNameValue = opts.lead.assigned_ba_id ? opts.baOrgName || "—" : "Yet to be Decided";
+  const baNameValue = hasBp ? opts.baOrgName || "—" : "Yet to be Decided";
 
   const rows = [
     { label: "Nature of Lead", value: data.nature_of_lead || "—" },
@@ -602,7 +604,7 @@ async function regenerateApprovalNoteInner(
 ): Promise<{ ok: true; document: LeadDocument } | { ok: false; error: string }> {
   const { data: lead, error: leadErr } = await admin
     .from("leads")
-    .select("id, lead_number, title, status, client_name, submission_deadline, assigned_ba_id, person_responsible_id, team, documents, approval_note_data, approval_note_pr_reviewed")
+    .select("id, lead_number, title, status, client_name, submission_deadline, assigned_ba_id, manual_ba_id, person_responsible_id, team, documents, approval_note_data, approval_note_pr_reviewed")
     .eq("id", leadId)
     .maybeSingle();
   if (leadErr || !lead) return { ok: false, error: "Lead not found." };
@@ -618,6 +620,9 @@ async function regenerateApprovalNoteInner(
     const { data: baList } = await admin.rpc("get_empanelled_business_partners");
     const match = ((baList || []) as Row[]).find((b) => b.id === lead.assigned_ba_id);
     baOrgName = match?.org_name || null;
+  } else if (lead.manual_ba_id) {
+    const { data: manual } = await admin.from("manual_business_partners").select("org_name").eq("id", lead.manual_ba_id).maybeSingle();
+    baOrgName = (manual?.org_name as string) || null;
   }
 
   const { data: activityRows } = await admin
@@ -653,6 +658,7 @@ async function regenerateApprovalNoteInner(
       client_name: lead.client_name,
       submission_deadline: lead.submission_deadline,
       assigned_ba_id: lead.assigned_ba_id,
+      manual_ba_id: lead.manual_ba_id,
     },
     approvalNoteData: lead.approval_note_data,
     personResponsibleName: pr?.full_name || "—",

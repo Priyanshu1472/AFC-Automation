@@ -14,7 +14,7 @@ import DatePickerCalendar from "../../components/ui/DatePickerCalendar";
 import { DELIVERY_TYPE_LABELS } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 import { ROLE_LABELS } from "../../lib/roles";
-import BusinessPartnerPicker from "../../components/leads/BusinessPartnerPicker";
+import BusinessPartnerPicker, { NEW_BP_PREFIX, MANUAL_BP_PREFIX } from "../../components/leads/BusinessPartnerPicker";
 import SectionHead from "../../components/leads/SectionHead";
 import "../../styles/LeadForm.css";
 
@@ -110,7 +110,10 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
     presentation_date: lead?.presentation_date || "",
     followup_date: lead?.followup_date || "",
     remark: lead?.remark || "",
-    assigned_ba_id: lead?.assigned_ba_id || "",
+    // One picker value for both kinds of BP: an on-PMIS BP's afc_users id,
+    // "manual:<id>" for one added by name earlier, or "new:<name>" for a
+    // name typed just now (see BusinessPartnerPicker).
+    assigned_ba_id: lead?.assigned_ba_id || (lead?.manual_ba_id ? MANUAL_BP_PREFIX + lead.manual_ba_id : ""),
     forwarded_to_id: "",
     // Not defaulted to the creator's own id — left blank so they have to
     // deliberately pick someone, same as Reviewer/Recommending Authority.
@@ -193,9 +196,17 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
     // Business Partner is also locked for a logistics-only overdue edit —
     // see isLogisticsOnlyEdit above.
     if (isLogisticsOnlyEdit) return;
-    supabase
-      .rpc("get_empanelled_business_partners")
-      .then(({ data }) => setBaOptions((data || []).map((u) => ({ value: u.id, label: u.org_name, team: u.team }))));
+    // Plus every BP added manually by name (empanelled before PMIS — no BP
+    // account behind it), so a name typed on one lead is offered on the next.
+    Promise.all([
+      supabase.rpc("get_empanelled_business_partners"),
+      supabase.from("manual_business_partners").select("id, org_name, team").order("org_name"),
+    ]).then(([{ data: pmis }, { data: manual }]) =>
+      setBaOptions([
+        ...(pmis || []).map((u) => ({ value: u.id, label: u.org_name, team: u.team })),
+        ...(manual || []).map((m) => ({ value: MANUAL_BP_PREFIX + m.id, label: m.org_name, team: m.team, manual: true })),
+      ])
+    );
   }, [isLogisticsOnlyEdit]);
 
   // "Forward to:" — every user on the team, any role (see create-lead's
@@ -314,7 +325,12 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
       fd.set("presentation_date", form.presentation_date);
       fd.set("followup_date", form.followup_date);
       fd.set("remark", form.remark);
-      fd.set("assigned_ba_id", form.assigned_ba_id === YET_TO_BE_DECIDED ? "" : form.assigned_ba_id);
+      const ba = form.assigned_ba_id === YET_TO_BE_DECIDED ? "" : form.assigned_ba_id;
+      const isManual = ba.startsWith(MANUAL_BP_PREFIX);
+      const isNew = ba.startsWith(NEW_BP_PREFIX);
+      fd.set("assigned_ba_id", isManual || isNew ? "" : ba);
+      fd.set("manual_ba_id", isManual ? ba.slice(MANUAL_BP_PREFIX.length) : "");
+      fd.set("manual_ba_name", isNew ? ba.slice(NEW_BP_PREFIX.length) : "");
       fd.set("person_responsible_id", form.person_responsible_id);
       fd.set("reviewer_id", form.reviewer_id);
       fd.set("recommending_authority_id", form.recommending_authority_id);
@@ -352,7 +368,11 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
   }
 
   const labelOf = (opts, v) => opts.find((o) => o.value === v)?.label;
-  const baSummary = form.assigned_ba_id === YET_TO_BE_DECIDED ? "Yet to be Decided" : labelOf(baOptions, form.assigned_ba_id);
+  const baSummary = form.assigned_ba_id === YET_TO_BE_DECIDED
+    ? "Yet to be Decided"
+    : form.assigned_ba_id.startsWith(NEW_BP_PREFIX)
+      ? `${form.assigned_ba_id.slice(NEW_BP_PREFIX.length)} (new)`
+      : labelOf(baOptions, form.assigned_ba_id);
   const summaryRows = [
     { label: "Type", value: isSuoMoto ? "Suo Moto" : `${form.lead_type.toUpperCase()} · ${SOURCE_CHOICES.find((s) => s.value === form.source)?.label}` },
     { label: isSuoMoto ? "Proposal" : "Assignment", value: form.title.trim() },

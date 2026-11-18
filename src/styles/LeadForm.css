@@ -412,6 +412,46 @@
   color: var(--text-tertiary);
 }
 
+/* A manually added BP (empanelled before PMIS) / a typed name not yet saved. */
+.bpp-tag {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.bpp-tag-new {
+  color: var(--input-border-focus);
+  border-color: color-mix(in srgb, var(--input-border-focus) 55%, transparent);
+}
+
+.bpp-item-add {
+  border: 1px dashed color-mix(in srgb, var(--input-border-focus) 45%, transparent);
+}
+
+.bpp-item-add .bpp-name {
+  color: var(--input-border-focus);
+}
+
+.bpp-avatar-add {
+  font-size: var(--text-base, 16px);
+  color: var(--input-border-focus);
+  background: color-mix(in srgb, var(--input-border-focus) 11%, transparent);
+}
+
+.bpp-hint {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
 /* ── Documents drop zone ───────────────────────────────────── */
 .lf-drop {
   display: flex;

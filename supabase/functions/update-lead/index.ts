@@ -20,6 +20,7 @@ import { notifyUser } from "../_shared/notify.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
   validateRecommendingAuthority, validateBusinessAssociate, clampText,
+  resolveManualBusinessPartner,
 } from "../_shared/leadEligibility.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -99,11 +100,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   };
 
   const assignedBaId = get("assigned_ba_id") || null;
+  // See create-lead: a BP not on PMIS, picked from the manual list or typed.
+  const manualBaId = assignedBaId ? null : get("manual_ba_id") || null;
+  const manualBaName = assignedBaId || manualBaId ? "" : (get("manual_ba_name") || "").trim();
 
   try {
     const { data: lead, error: leadErr } = await adminClient
       .from("leads")
-      .select("id, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, forwarded_to_id, lead_number, documents, title, portal_name, bid_number, submission_deadline, assigned_ba_id, possible_duplicate_ids")
+      .select("id, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, forwarded_to_id, lead_number, documents, title, portal_name, bid_number, submission_deadline, assigned_ba_id, manual_ba_id, possible_duplicate_ids")
       .eq("id", leadId)
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -156,6 +160,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     let finalReviewerId = lead.reviewer_id as string;
     let finalRecommendingAuthorityId = lead.recommending_authority_id as string;
     let finalAssignedBaId = lead.assigned_ba_id as string | null;
+    let finalManualBaId = lead.manual_ba_id as string | null;
 
     if (allowReassignment) {
       const { data: personResponsible, error: prErr } = await adminClient
@@ -186,6 +191,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       finalReviewerId = input.reviewer_id;
       finalRecommendingAuthorityId = input.recommending_authority_id;
       finalAssignedBaId = assignedBaId;
+      finalManualBaId = null;
+      if (manualBaId || manualBaName) {
+        const manual = await resolveManualBusinessPartner(adminClient, { manualBaId, manualBaName, team, createdBy: caller.id });
+        if (manual.error) return jsonRes(req, 400, { error: manual.error });
+        finalManualBaId = manual.id;
+      }
     }
 
     const files = formData.getAll("document").filter((f): f is File => f instanceof File && f.size > 0);
@@ -231,6 +242,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         reviewer_id: finalReviewerId,
         recommending_authority_id: finalRecommendingAuthorityId,
         assigned_ba_id: finalAssignedBaId,
+        manual_ba_id: finalManualBaId,
       })
       .eq("id", lead.id)
       .eq("status", fromStatus);

@@ -69,8 +69,8 @@ function NotePreview({ lead, baOrgName, form }) {
       ),
     },
     { label: "Project Timeline", value: form.project_timeline.trim() || "—" },
-    { label: "Proposed Implementation Arrangements* (In-house/BP)", value: lead.assigned_ba_id ? "Business Partner" : "In-house" },
-    { label: "Name of BP*", value: lead.assigned_ba_id ? baOrgName || "—" : "Yet to be Decided" },
+    { label: "Proposed Implementation Arrangements* (In-house/BP)", value: lead.assigned_ba_id || lead.manual_ba_id ? "Business Partner" : "In-house" },
+    { label: "Name of BP*", value: lead.assigned_ba_id || lead.manual_ba_id ? baOrgName || "—" : "Yet to be Decided" },
     {
       label: "Financial Requirement*",
       value: [
@@ -204,6 +204,9 @@ export default function LeadApprovalNoteForm() {
     if (data?.assigned_ba_id && data?.team) {
       const { data: baList } = await supabase.rpc("get_empanelled_business_partners");
       setBaOrgName((baList || []).find((b) => b.id === data.assigned_ba_id)?.org_name || null);
+    } else if (data?.manual_ba_id) {
+      const { data: manual } = await supabase.from("manual_business_partners").select("org_name").eq("id", data.manual_ba_id).maybeSingle();
+      setBaOrgName(manual?.org_name || null);
     }
     setLoading(false);
   }, [id]);
@@ -354,7 +357,7 @@ export default function LeadApprovalNoteForm() {
                     </div>
                     <div className="lan-info-item">
                       <dt>Implementation</dt>
-                      <dd>{lead.assigned_ba_id ? "Business Partner" : "In-house"}</dd>
+                      <dd>{lead.assigned_ba_id || lead.manual_ba_id ? "Business Partner" : "In-house"}</dd>
                     </div>
                     <div className="lan-info-item lan-info-wide">
                       <dt>Title of Proposed Assignment</dt>
@@ -368,7 +371,7 @@ export default function LeadApprovalNoteForm() {
                       <dt>Last Date for Submission</dt>
                       <dd>{lead.submission_deadline ? fmtDate(lead.submission_deadline) : "Not set"}</dd>
                     </div>
-                    {lead.assigned_ba_id && (
+                    {(lead.assigned_ba_id || lead.manual_ba_id) && (
                       <div className="lan-info-item lan-info-wide">
                         <dt>Name of BP</dt>
                         <dd>{baOrgName || "—"}</dd>

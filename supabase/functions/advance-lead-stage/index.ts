@@ -34,6 +34,7 @@ type LeadRow = {
   recommending_authority_id: string;
   handled_by_dgm_id: string | null;
   assigned_ba_id: string | null;
+  manual_ba_id: string | null;
   forwarded_to_id: string | null;
   declined_from_status: string | null;
   approval_note_data: unknown;
@@ -213,7 +214,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   const { data: lead, error: leadErr } = await adminClient
     .from("leads")
-    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, handled_by_dgm_id, assigned_ba_id, forwarded_to_id, declined_from_status, approval_note_data, approval_note_pr_reviewed, approval_note_pending_pr_review, documents, chat_opened_at, submission_deadline")
+    .select("id, lead_number, title, status, team, created_by, person_responsible_id, reviewer_id, recommending_authority_id, handled_by_dgm_id, assigned_ba_id, manual_ba_id, forwarded_to_id, declined_from_status, approval_note_data, approval_note_pr_reviewed, approval_note_pending_pr_review, documents, chat_opened_at, submission_deadline")
     .eq("id", lead_id)
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
@@ -334,7 +335,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         // open to a later choice once the PR edits the lead again (only
         // possible at pa_review/pa_action_required — see leadEligibility's
         // BA lock). Only actually validate/set it if one was submitted.
-        if (!leadRow.assigned_ba_id) {
+        if (!leadRow.assigned_ba_id && !leadRow.manual_ba_id) {
           const baId = typeof body.assigned_ba_id === "string" ? body.assigned_ba_id : "";
           if (baId) {
             const baErr = await validateBusinessAssociate(adminClient, baId, leadRow.team);
