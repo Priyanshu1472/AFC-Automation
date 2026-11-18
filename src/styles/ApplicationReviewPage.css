@@ -548,6 +548,8 @@
 }
 
 .ar-row-value {
+  flex: 1;
+  min-width: 0;
   color: var(--text-primary);
   font-weight: 600;
   word-break: break-word;
