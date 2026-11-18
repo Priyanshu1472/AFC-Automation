@@ -244,7 +244,7 @@ export default function LeadDetailPage() {
     const { data } = await supabase
       .from("leads")
       .select(
-        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name, role), reviewer:reviewer_id(full_name), authority:recommending_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name), forwarded:forwarded_to_id(full_name)"
+        "*, creator:created_by(full_name), assignee:person_responsible_id(full_name, role), reviewer:reviewer_id(full_name), authority:recommending_authority_id(full_name), dgm:handled_by_dgm_id(full_name), ba:assigned_ba_id(full_name), manual_ba:manual_ba_id(org_name), forwarded:forwarded_to_id(full_name)"
       )
       .eq("id", id)
       .maybeSingle();
@@ -771,7 +771,7 @@ export default function LeadDetailPage() {
                   <Row label="Person Responsible" value={fmt(lead.assignee?.full_name)} />
                   <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
                   <Row label="Recommending Authority" value={fmt(lead.authority?.full_name)} />
-                  <Row label="Business Partner" value={lead.ba?.full_name || "Yet to be Decided"} />
+                  <Row label="Business Partner" value={lead.ba?.full_name || (lead.manual_ba?.org_name ? `${lead.manual_ba.org_name} (added manually)` : "Yet to be Decided")} />
                   {lead.transferred_from_team && <Row label="Transferred From" value={lead.transferred_from_team} />}
                 </Card.Body>
               </Card>

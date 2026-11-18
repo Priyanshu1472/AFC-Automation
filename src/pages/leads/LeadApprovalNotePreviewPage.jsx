@@ -40,7 +40,7 @@ export default function LeadApprovalNotePreviewPage() {
     setLead(data);
     setLoading(false);
     const isResubmittable = data?.status === "pa_action_required";
-    if ((data?.status === "pa_review" || isResubmittable) && !data.assigned_ba_id && data.team) {
+    if ((data?.status === "pa_review" || isResubmittable) && !data.assigned_ba_id && !data.manual_ba_id && data.team) {
       supabase.rpc("get_empanelled_business_partners").then(({ data: list }) => setBaOptions(list || []));
     }
     return data;
@@ -75,7 +75,7 @@ export default function LeadApprovalNotePreviewPage() {
   // the lead actually leaves pa_review/pa_action_required (see
   // leadEligibility's BA lock and advance-lead-stage's "withdraw_
   // submission" for changing it after that point).
-  const needsBaSelection = (lead?.status === "pa_review" || isResubmit) && !lead?.assigned_ba_id;
+  const needsBaSelection = (lead?.status === "pa_review" || isResubmit) && !lead?.assigned_ba_id && !lead?.manual_ba_id;
 
   async function submitForDgmApproval() {
     if (!/^\d{4}$/.test(pin)) {

@@ -552,7 +552,7 @@ export async function buildFeeNotePdfForNote(
 
   const { data: lead, error: leadErr } = await admin
     .from("leads")
-    .select("title, client_name, portal_name, bid_number, lead_type, delivery_type, submission_deadline, source, assigned_ba_id, person_responsible_id, recommending_authority_id, approval_note_data")
+    .select("title, client_name, portal_name, bid_number, lead_type, delivery_type, submission_deadline, source, assigned_ba_id, manual_ba_id, person_responsible_id, recommending_authority_id, approval_note_data")
     .eq("id", proposal.lead_id)
     .maybeSingle();
   if (leadErr || !lead) return { ok: false, error: "Lead not found." };
@@ -561,15 +561,17 @@ export async function buildFeeNotePdfForNote(
   // them together instead of paying for the logo's network round trip
   // (usually a cache hit after the first call, but not on a cold start)
   // before even starting the signer queries.
-  const anyBp = note.emd_borne_by === "bp" || note.tender_fee_borne_by === "bp" || note.processing_fee_borne_by === "bp";
   const [logoBytes, personResponsible, recommendingAuthority, md, baRow] = await Promise.all([
     fetchLogoBytes(),
     resolveSigner(admin, { nominalId: lead.person_responsible_id, actualId: note.pr_signed_by, signed: !!note.pr_signed_at }),
     resolveSigner(admin, { nominalId: lead.recommending_authority_id, actualId: note.ra_signed_by, signed: !!note.ra_signed_at }),
     resolveSigner(admin, { nominalId: null, actualId: note.md_decided_by, signed: !!note.md_decided_at, designationOverride: "Managing Director" }),
-    (anyBp || lead.assigned_ba_id)
+    lead.assigned_ba_id
       ? admin.from("afc_users").select("full_name").eq("id", lead.assigned_ba_id).maybeSingle()
-      : Promise.resolve({ data: null }),
+      : lead.manual_ba_id
+        // A BP not on PMIS (added by name on the lead form).
+        ? admin.from("manual_business_partners").select("full_name:org_name").eq("id", lead.manual_ba_id).maybeSingle()
+        : Promise.resolve({ data: null }),
   ]);
   if (!logoBytes) return { ok: false, error: "Could not load the AFC letterhead logo. Please try again." };
 

@@ -17,6 +17,7 @@ import { addLeadChatParticipants, getOrgWideHolders } from "../_shared/leadAuth.
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
   validateRecommendingAuthority, validateBusinessAssociate, validateForwardedTo, clampText,
+  resolveManualBusinessPartner,
 } from "../_shared/leadEligibility.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -108,12 +109,18 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   }
 
   const assignedBaId = get("assigned_ba_id") || null;
-  if (input.source === "ba" && !assignedBaId) {
+  // A BP that isn't on PMIS (empanelled before PMIS) — either one already
+  // added manually (manual_ba_id) or a newly typed name (manual_ba_name).
+  // Ignored when an on-PMIS BP was picked; a lead has at most one.
+  const manualBaId = assignedBaId ? null : get("manual_ba_id") || null;
+  const manualBaName = assignedBaId || manualBaId ? "" : (get("manual_ba_name") || "").trim();
+  const hasAnyBa = !!(assignedBaId || manualBaId || manualBaName);
+  if (input.source === "ba" && !hasAnyBa) {
     return jsonRes(req, 400, { error: "Select a Business Partner for a BP Source lead." });
   }
   // Name of BP is mandatory for a Suo Moto lead too, per product decision —
   // unlike In-House, where it's optional.
-  if (input.source === "suo_moto" && !assignedBaId) {
+  if (input.source === "suo_moto" && !hasAnyBa) {
     return jsonRes(req, 400, { error: "Select a Business Partner for a Suo Moto lead." });
   }
 
@@ -209,6 +216,18 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       documents,
     });
 
+    // Resolved last, right before the insert, so a lead that fails
+    // validation above doesn't leave a stray name in the manual BP list.
+    let resolvedManualBaId: string | null = null;
+    if (manualBaId || manualBaName) {
+      const manual = await resolveManualBusinessPartner(adminClient, { manualBaId, manualBaName, team, createdBy: caller.id });
+      if (manual.error) {
+        if (uploadedPaths.length) await adminClient.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
+        return jsonRes(req, 400, { error: manual.error });
+      }
+      resolvedManualBaId = manual.id;
+    }
+
     const { data: lead, error: insertErr } = await adminClient
       .from("leads")
       .insert({
@@ -237,6 +256,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         reviewer_id: isPoRouted ? null : input.reviewer_id,
         recommending_authority_id: isPoRouted ? null : input.recommending_authority_id,
         assigned_ba_id: assignedBaId,
+        manual_ba_id: resolvedManualBaId,
         forwarded_to_id: isPoRouted ? forwardedToId : null,
         status: isPoRouted ? "po_assignment" : "pa_review",
         // Chat opens the moment Person Responsible/Reviewer/Recommending

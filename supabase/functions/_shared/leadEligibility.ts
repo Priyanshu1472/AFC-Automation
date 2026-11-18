@@ -134,3 +134,40 @@ export async function validateBusinessAssociate(admin: AdminClient, baId: string
   }
   return null;
 }
+
+// A Business Partner that isn't on PMIS (empanelled before PMIS existed) —
+// either one already in manual_business_partners (manualBaId) or a name
+// typed on the lead form (manualBaName). A typed name reuses the existing
+// row with the same name (case-insensitive) rather than adding a duplicate.
+export async function resolveManualBusinessPartner(
+  admin: AdminClient,
+  opts: { manualBaId?: string | null; manualBaName?: string | null; team?: string | null; createdBy: string },
+): Promise<{ id: string | null; error?: string }> {
+  if (opts.manualBaId) {
+    const { data } = await admin.from("manual_business_partners").select("id").eq("id", opts.manualBaId).maybeSingle();
+    if (!data) return { id: null, error: "Selected Business Partner not found." };
+    return { id: data.id as string };
+  }
+  const name = (opts.manualBaName || "").replace(/\s+/g, " ").trim();
+  if (!name) return { id: null };
+  if (name.length < 2 || name.length > 300) return { id: null, error: "Business Partner name must be 2–300 characters." };
+
+  const findExisting = async () => {
+    const { data } = await admin.from("manual_business_partners").select("id, org_name").ilike("org_name", name.replace(/[\\%_]/g, "\\$&"));
+    return ((data || []) as Array<{ id: string; org_name: string }>).find((r) => r.org_name.trim().toLowerCase() === name.toLowerCase()) || null;
+  };
+  const existing = await findExisting();
+  if (existing) return { id: existing.id };
+
+  const { data: inserted, error } = await admin
+    .from("manual_business_partners")
+    .insert({ org_name: name, team: opts.team || null, created_by: opts.createdBy })
+    .select("id")
+    .single();
+  if (inserted) return { id: inserted.id as string };
+  // Lost a race with someone adding the same name at the same moment.
+  const raced = await findExisting();
+  if (raced) return { id: raced.id };
+  console.error("Manual BP insert failed:", error?.message);
+  return { id: null, error: "Could not save the Business Partner name. Please try again." };
+}

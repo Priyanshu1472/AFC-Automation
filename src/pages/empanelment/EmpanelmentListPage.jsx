@@ -17,6 +17,7 @@ import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import "../../styles/EmpanelmentListPage.css";
 
+import ManualBusinessPartnersList from "../../components/empanelment/ManualBusinessPartnersList";
 import { formatSectors, MultilineText, AssignmentsTable, hasAssignments, hasText } from "./baDisplay";
 
 function fmt(val) { return val === null || val === undefined || val === "" ? "—" : val; }
@@ -294,6 +295,13 @@ export default function EmpanelmentListPage() {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [teamFilter, setTeamFilter] = useState("all");
   const [page, setPage] = useState(1);
+  // "applications" = PMIS empanelment applications; "manual" = BPs empanelled
+  // before PMIS, added by name on the lead form.
+  const [listKind, setListKind] = useState("applications");
+  const [manualCount, setManualCount] = useState(null);
+  useEffect(() => {
+    supabase.rpc("get_manual_business_partners").then(({ data }) => setManualCount((data || []).length));
+  }, []);
 
   const fetchApplications = useCallback(async () => {
     // RLS (can_view_empanelment_application) scopes the visible rows
@@ -442,90 +450,105 @@ export default function EmpanelmentListPage() {
             </div>
           </div>
 
-          <div className="bl-stats-grid">
-            <StatCard label="Total" value={stats.total} colorClass="blue" loading={loading} active={quickFilter === "all"} onClick={() => selectQuickFilter("all")} />
-            <StatCard label="In Review" value={stats.inReview} colorClass="purple" loading={loading} active={quickFilter === "in_review"} onClick={() => selectQuickFilter("in_review")} />
-            <StatCard label="Accepted" value={stats.accepted} colorClass="green" loading={loading} active={quickFilter === "accepted"} onClick={() => selectQuickFilter("accepted")} />
-            <StatCard label={INELIGIBLE_LABEL} value={stats.rejected} colorClass="red" loading={loading} active={quickFilter === "rejected"} onClick={() => selectQuickFilter("rejected")} />
+          <div className="ll-view-tabs bl-kind-tabs" role="tablist" style={{ marginBottom: "var(--space-4)" }}>
+            <button type="button" role="tab" aria-selected={listKind === "applications"} className={`ll-view-tab${listKind === "applications" ? " ll-view-tab-active" : ""}`} onClick={() => setListKind("applications")}>
+              Empanelled via PMIS
+            </button>
+            <button type="button" role="tab" aria-selected={listKind === "manual"} className={`ll-view-tab${listKind === "manual" ? " ll-view-tab-active" : ""}`} onClick={() => setListKind("manual")}>
+              Manually Added{manualCount !== null ? ` (${manualCount})` : ""}
+            </button>
           </div>
 
-          <Card className="bl-filter-card">
-            <Card.Body className="bl-filters">
-              <div className="bl-search-wrapper">
-                <span className="bl-search-icon"><SearchIcon /></span>
-                <input type="text" className="input bl-search" placeholder="Search by email, organisation, contact, app code, sector, expertise…" value={search} onChange={(e) => setSearch(e.target.value)} />
-              </div>
-              <div className="bl-filter-right">
-                {canFilterTeam && (
-                  <div style={{ minWidth: 160 }}>
-                    <Select options={teamOptions} value={teamFilter} onChange={selectTeamFilter} placeholder="All Teams" />
-                  </div>
-                )}
-                <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={(statusFilter !== "all" ? 1 : 0) + (dateFilter !== "all" ? 1 : 0)} />
-              </div>
-            </Card.Body>
-          </Card>
+          {listKind === "manual" ? (
+            <ManualBusinessPartnersList onCount={setManualCount} />
+          ) : (
+            <>
+            <div className="bl-stats-grid">
+              <StatCard label="Total" value={stats.total} colorClass="blue" loading={loading} active={quickFilter === "all"} onClick={() => selectQuickFilter("all")} />
+              <StatCard label="In Review" value={stats.inReview} colorClass="purple" loading={loading} active={quickFilter === "in_review"} onClick={() => selectQuickFilter("in_review")} />
+              <StatCard label="Accepted" value={stats.accepted} colorClass="green" loading={loading} active={quickFilter === "accepted"} onClick={() => selectQuickFilter("accepted")} />
+              <StatCard label={INELIGIBLE_LABEL} value={stats.rejected} colorClass="red" loading={loading} active={quickFilter === "rejected"} onClick={() => selectQuickFilter("rejected")} />
+            </div>
 
-          <Card>
-            {filtered.length === 0 ? (
-              <div className="bl-empty"><p>No records found.</p></div>
-            ) : (
-              <div className="bl-table-scroll">
-                <table className="table bl-table">
-                  <thead>
-                    <tr>
-                      <th className="bl-col-code">App Code</th><th>BP Email</th><th>Organisation</th>
-                      <th className="bl-col-contact">Contact</th>{canFilterTeam && <th className="bl-col-team">Team</th>}<th className="bl-col-date">Sent On</th><th className="bl-col-status">Status</th><th className="bl-col-actions">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paged.map((a) => (
-                      <tr
-                        key={a.id}
-                        className={a.ba_reg ? "bl-row-clickable" : undefined}
-                        onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedAppId(a.id); setSelectedAppRow(a); setSelectedReviewerRole(a.po?.role || null); setSelectedAdvisorRole(a.dgm?.role || null); } : undefined}
-                      >
-                        <td className="bl-col-code"><span className="bl-app-code">{a.application_code || "—"}</span></td>
-                        <td className="bl-email" title={a.ba_email || ""}>{fmt(a.ba_email)}</td>
-                        <td>{a.ba_reg?.org_name ? <span className="bl-org" title={a.ba_reg.org_name}>{fmt(a.ba_reg.org_name)}</span> : <span className="bl-not-filled">Not filled yet</span>}</td>
-                        <td className="bl-contact bl-col-contact" title={a.ba_reg?.contact_person || ""}>{fmt(a.ba_reg?.contact_person)}</td>
-                        {canFilterTeam && <td className="bl-col-team">{a.team ? <Badge variant="neutral" className="bl-team-badge">{a.team}</Badge> : "—"}</td>}
-                        <td className="bl-date bl-col-date">{fmtDate(a.created_at)}</td>
-                        <td className="bl-col-status"><StatusBadge status={a.status} csReviewed={a.cs_reviewed} reviewerRole={a.po?.role} advisorRole={a.dgm?.role} /></td>
-                        <td className="bl-col-actions" onClick={(e) => e.stopPropagation()}>
-                          <div className="bl-actions">
-                            {a.ba_reg && canReview && (
-                              <Tooltip text="View application">
-                                <button type="button" className="bl-icon-btn" aria-label="View application" onClick={() => navigate(`/empanelment/${a.id}`)}><EyeIcon /></button>
-                              </Tooltip>
-                            )}
-                            <LetterIcons app={a} />
-                          </div>
-                        </td>
+            <Card className="bl-filter-card">
+              <Card.Body className="bl-filters">
+                <div className="bl-search-wrapper">
+                  <span className="bl-search-icon"><SearchIcon /></span>
+                  <input type="text" className="input bl-search" placeholder="Search by email, organisation, contact, app code, sector, expertise…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
+                <div className="bl-filter-right">
+                  {canFilterTeam && (
+                    <div style={{ minWidth: 160 }}>
+                      <Select options={teamOptions} value={teamFilter} onChange={selectTeamFilter} placeholder="All Teams" />
+                    </div>
+                  )}
+                  <FilterButton onClick={() => setFilterDrawerOpen(true)} activeCount={(statusFilter !== "all" ? 1 : 0) + (dateFilter !== "all" ? 1 : 0)} />
+                </div>
+              </Card.Body>
+            </Card>
+
+            <Card>
+              {filtered.length === 0 ? (
+                <div className="bl-empty"><p>No records found.</p></div>
+              ) : (
+                <div className="bl-table-scroll">
+                  <table className="table bl-table">
+                    <thead>
+                      <tr>
+                        <th className="bl-col-code">App Code</th><th>BP Email</th><th>Organisation</th>
+                        <th className="bl-col-contact">Contact</th>{canFilterTeam && <th className="bl-col-team">Team</th>}<th className="bl-col-date">Sent On</th><th className="bl-col-status">Status</th><th className="bl-col-actions">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
+                    </thead>
+                    <tbody>
+                      {paged.map((a) => (
+                        <tr
+                          key={a.id}
+                          className={a.ba_reg ? "bl-row-clickable" : undefined}
+                          onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedAppId(a.id); setSelectedAppRow(a); setSelectedReviewerRole(a.po?.role || null); setSelectedAdvisorRole(a.dgm?.role || null); } : undefined}
+                        >
+                          <td className="bl-col-code"><span className="bl-app-code">{a.application_code || "—"}</span></td>
+                          <td className="bl-email" title={a.ba_email || ""}>{fmt(a.ba_email)}</td>
+                          <td>{a.ba_reg?.org_name ? <span className="bl-org" title={a.ba_reg.org_name}>{fmt(a.ba_reg.org_name)}</span> : <span className="bl-not-filled">Not filled yet</span>}</td>
+                          <td className="bl-contact bl-col-contact" title={a.ba_reg?.contact_person || ""}>{fmt(a.ba_reg?.contact_person)}</td>
+                          {canFilterTeam && <td className="bl-col-team">{a.team ? <Badge variant="neutral" className="bl-team-badge">{a.team}</Badge> : "—"}</td>}
+                          <td className="bl-date bl-col-date">{fmtDate(a.created_at)}</td>
+                          <td className="bl-col-status"><StatusBadge status={a.status} csReviewed={a.cs_reviewed} reviewerRole={a.po?.role} advisorRole={a.dgm?.role} /></td>
+                          <td className="bl-col-actions" onClick={(e) => e.stopPropagation()}>
+                            <div className="bl-actions">
+                              {a.ba_reg && canReview && (
+                                <Tooltip text="View application">
+                                  <button type="button" className="bl-icon-btn" aria-label="View application" onClick={() => navigate(`/empanelment/${a.id}`)}><EyeIcon /></button>
+                                </Tooltip>
+                              )}
+                              <LetterIcons app={a} />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
 
-          <div className="bl-pagination">
-            <p className="bl-record-count">
-              Showing {filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} records
-            </p>
-            {totalPages > 1 && (
-              <div className="bl-pagination-controls">
-                <Button variant="secondary" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
-                  ← Previous
-                </Button>
-                <span className="bl-pagination-page">Page {currentPage} of {totalPages}</span>
-                <Button variant="secondary" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
-                  Next →
-                </Button>
-              </div>
-            )}
-          </div>
+            <div className="bl-pagination">
+              <p className="bl-record-count">
+                Showing {filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} records
+              </p>
+              {totalPages > 1 && (
+                <div className="bl-pagination-controls">
+                  <Button variant="secondary" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+                    ← Previous
+                  </Button>
+                  <span className="bl-pagination-page">Page {currentPage} of {totalPages}</span>
+                  <Button variant="secondary" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+                    Next →
+                  </Button>
+                </div>
+              )}
+            </div>
+            </>
+          )}
         </div>
       </div>
 

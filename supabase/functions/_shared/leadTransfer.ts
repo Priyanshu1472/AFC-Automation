@@ -83,6 +83,7 @@ export async function performLeadTransfer(
       reviewer_id: null,
       recommending_authority_id: null,
       assigned_ba_id: null,
+      manual_ba_id: null,
       forwarded_to_id: forwardedToId,
       handled_by_dgm_id: null,
       declined_from_status: null,

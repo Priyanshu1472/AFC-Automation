@@ -312,7 +312,7 @@ const REPORTS = [
     id: "ba_distribution", group: "Source & Type", title: "BP-wise Distribution",
     desc: "Leads sourced through each Business Partner.",
     build: ({ leads }) => {
-      const withBa = leads.filter((l) => l.assigned_ba_id);
+      const withBa = leads.filter((l) => l.assigned_ba_id || l.manual_ba_id);
       const rows = [...groupBy(withBa, (l) => l.ba_org_name || "—")].map(([ba, arr]) => {
         const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
         return { ba, total: arr.length, approved: app, declined: dec, rate: pct(app, app + dec) };
@@ -671,7 +671,7 @@ export default function LeadReportsPage() {
         // RLS scopes rows automatically per role/team/committee.
         const { data: leadRows, error: leadErr } = await supabase
           .from("leads")
-          .select("*, creator:created_by(full_name), assignee:person_responsible_id(full_name)")
+          .select("*, creator:created_by(full_name), assignee:person_responsible_id(full_name), manual_ba:manual_ba_id(org_name)")
           .order("created_at", { ascending: false })
           .limit(2000);
         if (leadErr) throw leadErr;
@@ -686,7 +686,7 @@ export default function LeadReportsPage() {
           (data || []).forEach((b) => { baNameById[b.id] = b.org_name; });
         }
 
-        setLeads(list.map((l) => ({ ...l, ba_org_name: l.assigned_ba_id ? baNameById[l.assigned_ba_id] : null })));
+        setLeads(list.map((l) => ({ ...l, ba_org_name: l.assigned_ba_id ? baNameById[l.assigned_ba_id] : l.manual_ba?.org_name || null })));
 
         // Latest decline/reject reason per lead — powers Action Required
         // and Declined/Dropped reports, since the lead row only holds
