@@ -1,0 +1,31 @@
+/* LocationPicker — lead "State / Location" field (see LocationPicker.jsx).
+   Built on MultiSelect + the shared tms-chip styles; this only adds the
+   "Others" add row and spacing. */
+
+.lp {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Text box + Add button, same height so they line up exactly. */
+.lp-other {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.lp-other .input {
+  flex: 1;
+  min-width: 0;
+}
+.lp-add {
+  flex-shrink: 0;
+  min-width: 72px;
+  justify-content: center;
+}
+
+/* A place typed under Others — dashed so it reads as "outside India". */
+.lp-chip-other {
+  border-style: dashed;
+}

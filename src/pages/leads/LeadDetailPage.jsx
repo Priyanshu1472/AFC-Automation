@@ -743,6 +743,7 @@ export default function LeadDetailPage() {
                   {lead.source === "suo_moto" ? (
                     <>
                       <Row label="Client / Ministry / Department" value={fmt(lead.client_name)} />
+                      <Row label="State" value={fmt(lead.state)} />
                       <Row label="Date of Submission" value={fmtDate(lead.submission_deadline)} />
                       <Row label="Date of Presentation" value={fmtDate(lead.presentation_date)} />
                       <Row label="Date of follow-up" value={fmtDate(lead.followup_date)} />

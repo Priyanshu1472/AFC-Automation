@@ -969,3 +969,9 @@
     width: 100%;
   }
 }
+
+/* Row where one side can grow (State chips) — keep both fields pinned to
+   the top so the Client input and State dropdown stay on one line. */
+.lf-grid-top {
+  align-items: start;
+}

@@ -16,7 +16,9 @@ import "../../styles/TeamMultiSelect.css";
 // be sorted by group when `group` is used (see Select.jsx's identical
 // convention) — a group heading is rendered once above the first option of
 // each run with that group.
-export default function MultiSelect({ options = [], value = [], onChange, placeholder = "Select…", disabled = false }) {
+// hideChips: the caller renders its own chips (e.g. below the field, so the
+// input stays level with its neighbour in a two-column row).
+export default function MultiSelect({ options = [], value = [], onChange, placeholder = "Select…", disabled = false, hideChips = false, error = false }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [rect, setRect] = useState(null);
@@ -81,7 +83,7 @@ export default function MultiSelect({ options = [], value = [], onChange, placeh
 
   return (
     <div className="tms-wrap">
-      {selectedOptions.length > 0 && (
+      {!hideChips && selectedOptions.length > 0 && (
         <div className="tms-chips">
           {selectedOptions.map((o) => (
             <span key={o.value} className="tms-chip">
@@ -109,6 +111,7 @@ export default function MultiSelect({ options = [], value = [], onChange, placeh
             className={[
               "csl-trigger", "csl-trigger-input",
               open     ? "csl-trigger-open"     : "",
+              error    ? "csl-trigger-error"    : "",
               disabled ? "csl-trigger-disabled" : "",
             ].filter(Boolean).join(" ")}
             placeholder={placeholder}
