@@ -229,7 +229,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         portal_name: clampText(get("portal_name"), 200),
         bid_number: clampText(get("bid_number"), 200),
         client_name: clampText(get("client_name"), 300),
-        state: clampText(get("state"), 100),
+        state: clampText(get("state"), 1000),
         submission_deadline: get("submission_deadline") || null,
         delivery_type: input.delivery_type,
         presentation_date: get("presentation_date") || null,

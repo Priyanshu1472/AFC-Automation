@@ -3,10 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
-import { PORTALS, INDIAN_STATES } from "../../lib/portal_table";
+import { PORTALS } from "../../lib/portal_table";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
+import LocationPicker, { parseLocation, serializeLocation, isLocationEmpty } from "../../components/leads/LocationPicker";
 import Button from "../../components/ui/Button";
 import Alert from "../../components/ui/Alert";
 import Modal from "../../components/ui/Modal";
@@ -20,8 +21,6 @@ import "../../styles/LeadForm.css";
 
 const DELIVERY_TYPE_OPTIONS = Object.entries(DELIVERY_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 const PORTAL_OPTIONS = PORTALS.map((p) => ({ value: p.name, label: p.name }));
-const STATE_OPTIONS = INDIAN_STATES.map((s) => ({ value: s, label: s }));
-
 // A sentinel, not a real BA id — same wording the Lead Approval Note
 // already prints when assigned_ba_id is null (see leadApprovalPdf.ts),
 // just now an explicit, selectable choice instead of only ever an implicit
@@ -104,7 +103,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
     portal_name: lead?.portal_name || "",
     bid_number: lead?.bid_number || "",
     client_name: lead?.client_name || "",
-    state: lead?.state || "",
+    location: parseLocation(lead?.state),
     submission_deadline: lead?.submission_deadline || "",
     delivery_type: lead?.delivery_type || "",
     presentation_date: lead?.presentation_date || "",
@@ -261,10 +260,18 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
       if (!form.portal_name) errs.portal_name = "Portal / Source of Information is required.";
       if (!form.bid_number.trim()) errs.bid_number = `${bidNumberLabel} is required.`;
       if (!form.client_name.trim()) errs.client_name = "Client / Department is required.";
-      if (!form.state) errs.state = "State is required.";
+      if (isLocationEmpty(form.location)) {
+        errs.state = form.location.showOther ? "Type the place and press Add." : "State / Location is required.";
+      }
       if (!form.submission_deadline) errs.submission_deadline = "Last Date of Submission is required.";
       if (!form.delivery_type) errs.delivery_type = "Delivery Type is required.";
       if (!form.remark.trim()) errs.remark = "Remark is required.";
+    } else {
+      if (!form.client_name.trim()) errs.client_name = "Client / Ministry / Department is required.";
+      if (isLocationEmpty(form.location)) {
+        errs.state = form.location.showOther ? "Type the place and press Add." : "State is required.";
+      }
+      if (!form.submission_deadline) errs.submission_deadline = "Date of Submission is required.";
     }
     if (!isPoRouted && !isLogisticsOnlyEdit) {
       if (!form.person_responsible_id) errs.person_responsible_id = "Person Responsible is required.";
@@ -319,7 +326,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
       fd.set("portal_name", form.portal_name);
       fd.set("bid_number", form.bid_number);
       fd.set("client_name", form.client_name);
-      fd.set("state", form.state);
+      fd.set("state", serializeLocation(form.location));
       fd.set("submission_deadline", form.submission_deadline);
       fd.set("delivery_type", form.delivery_type);
       fd.set("presentation_date", form.presentation_date);
@@ -377,6 +384,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
     { label: "Type", value: isSuoMoto ? "Suo Moto" : `${form.lead_type.toUpperCase()} · ${SOURCE_CHOICES.find((s) => s.value === form.source)?.label}` },
     { label: isSuoMoto ? "Proposal" : "Assignment", value: form.title.trim() },
     { label: "Client", value: form.client_name.trim() },
+    { label: "State", value: serializeLocation(form.location) },
     { label: isSuoMoto ? "Submission" : "Last Date", value: fmtSummaryDate(form.submission_deadline) },
     ...(isLogisticsOnlyEdit ? [] : [{ label: "Business Partner", value: baSummary }]),
     ...(isLogisticsOnlyEdit ? [] : isPoRouted
@@ -500,20 +508,37 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
 
             {isSuoMoto ? (
               <>
-                <div className="grid-2 lf-grid">
+                <div className="grid-2 lf-grid lf-grid-top">
                   <Input
                     label="Client / Ministry / Department"
+                    required
                     value={form.client_name}
                     onChange={(e) => set("client_name", e.target.value)}
                     placeholder="Enter client / ministry / department"
                     disabled={submitting}
+                    error={errors.client_name}
                   />
                   <div className="field">
-                    <label className="field-label">Date of Submission</label>
-                    <DatePickerCalendar value={form.submission_deadline} onChange={(v) => set("submission_deadline", v)} placeholder="Select submission date" />
+                    <label className="field-label">
+                      State<span className="required" aria-hidden="true"> *</span>
+                    </label>
+                    <LocationPicker
+                      value={form.location}
+                      onChange={(v) => set("location", v)}
+                      disabled={submitting}
+                      error={errors.state}
+                    />
+                    {errors.state && <span className="field-error">{errors.state}</span>}
                   </div>
                 </div>
-                <div className="grid-2 lf-grid">
+                <div className="grid-3 lf-grid">
+                  <div className="field">
+                    <label className="field-label">
+                      Date of Submission<span className="required" aria-hidden="true"> *</span>
+                    </label>
+                    <DatePickerCalendar value={form.submission_deadline} onChange={(v) => set("submission_deadline", v)} placeholder="Select submission date" />
+                    {errors.submission_deadline && <span className="field-error">{errors.submission_deadline}</span>}
+                  </div>
                   <div className="field">
                     <label className="field-label">Date of Presentation</label>
                     <DatePickerCalendar value={form.presentation_date} onChange={(v) => set("presentation_date", v)} placeholder="Select presentation date" />
@@ -526,7 +551,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
               </>
             ) : (
               <>
-                <div className="grid-2 lf-grid">
+                <div className="grid-2 lf-grid lf-grid-top">
                   <Input
                     label="Client / Department"
                     required
@@ -540,13 +565,10 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
                     <label className="field-label">
                       State<span className="required" aria-hidden="true"> *</span>
                     </label>
-                    <Select
-                      options={STATE_OPTIONS}
-                      value={form.state}
-                      onChange={(v) => set("state", v)}
-                      placeholder="Select state"
+                    <LocationPicker
+                      value={form.location}
+                      onChange={(v) => set("location", v)}
                       disabled={submitting}
-                      searchable
                       error={errors.state}
                     />
                     {errors.state && <span className="field-error">{errors.state}</span>}
