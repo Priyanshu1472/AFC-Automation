@@ -37,6 +37,7 @@ import { composeFeeNotePreview, composeImplementationArrangements, portalRefLabe
 import "../../styles/LeadForm.css";
 import "../../styles/ProposalPreparationPage.css";
 import BackButton from "../../components/ui/BackButton";
+import { isDeadlinePassed } from "../../lib/deadline";
 
 const PAYMENT_MODE_OPTIONS = Object.entries(PAYMENT_MODE_LABELS).map(([value, label]) => ({ value, label }));
 
@@ -122,7 +123,7 @@ export default function FeeNoteEditPage() {
       [lead.person_responsible_id, lead.reviewer_id].includes(profile?.id);
     if (!canManage) { setBlocked("Only the Person Responsible or Reviewer can edit this note."); setLoading(false); return; }
 
-    const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date();
+    const pastDeadline = !!lead.submission_deadline && isDeadlinePassed(lead.submission_deadline);
     if (proposal.locked || pastDeadline) { setBlocked("This proposal is locked and can no longer be edited."); setLoading(false); return; }
 
     const { data: note } = await supabase

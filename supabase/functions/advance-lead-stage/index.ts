@@ -17,6 +17,7 @@ import { PA_TIER_ROLES, addLeadChatParticipants, getOrgWideHolders, getTargetUse
 import { validateBusinessAssociate, validateAssignment, validateReviewer, validateRecommendingAuthority } from "../_shared/leadEligibility.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { LeadDocument, regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
+import { isDeadlinePassed } from "../_shared/deadline.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -225,7 +226,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   // assigned yet, e.g. a po_assignment lead) editing the lead via
   // update-lead to push the date into the future, which silently
   // reactivates whatever status it's frozen at.
-  if (!TERMINAL_STATUSES.has(leadRow.status) && leadRow.submission_deadline && new Date(leadRow.submission_deadline) < new Date()) {
+  if (!TERMINAL_STATUSES.has(leadRow.status) && leadRow.submission_deadline && isDeadlinePassed(leadRow.submission_deadline)) {
     return jsonRes(req, 403, {
       error: "This lead's submission deadline has passed. Only the Person Responsible (or the creator, if none is assigned yet) can edit it to update the date — no other action is available until then.",
     });

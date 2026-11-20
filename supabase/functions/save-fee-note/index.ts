@@ -17,6 +17,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
+import { isDeadlinePassed } from "../_shared/deadline.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -106,7 +107,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       [lead.person_responsible_id, lead.reviewer_id].includes(caller.id);
     if (!authorized) return jsonRes(req, 403, { error: "Only the Person Responsible or Reviewer can edit this note." });
 
-    const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date();
+    const pastDeadline = !!lead.submission_deadline && isDeadlinePassed(lead.submission_deadline);
     if (proposal.locked || pastDeadline) {
       return jsonRes(req, 400, { error: "This proposal is locked and can no longer be edited." });
     }

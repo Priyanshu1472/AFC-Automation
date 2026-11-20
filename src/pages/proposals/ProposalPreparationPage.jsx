@@ -35,6 +35,7 @@ import { isProposalLocked, isAccountsCommittee, isProposalTeam, lockBlockers } f
 import "../../styles/ApplicationReviewPage.css";
 import "../../styles/ProposalPreparationPage.css";
 import BackButton from "../../components/ui/BackButton";
+import { isDeadlinePassed } from "../../lib/deadline";
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -177,7 +178,7 @@ export default function ProposalPreparationPage() {
   const approvedNote = feeNotes.find((n) => n.status === "approved") || null;
   const blockers = lockBlockers({ proposal, feeNote: feeNotes[0], documents });
   const showEmd = proposal.client_response !== "pending" && Number(approvedNote?.emd_amount) > 0;
-  const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date() && !proposal.locked;
+  const pastDeadline = !!lead.submission_deadline && isDeadlinePassed(lead.submission_deadline) && !proposal.locked;
 
   return (
     <div className="app-shell">

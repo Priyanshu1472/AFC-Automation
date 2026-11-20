@@ -22,6 +22,7 @@ import {
   validateRecommendingAuthority, validateBusinessAssociate, clampText,
   resolveManualBusinessPartner,
 } from "../_shared/leadEligibility.ts";
+import { isDeadlinePassed } from "../_shared/deadline.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -119,7 +120,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // person it was forwarded to) can still use to push the date into the
     // future and silently reactivate whatever status the lead is frozen at.
     const isOverdue = !TERMINAL_STATUSES.has(lead.status as string) &&
-      !!lead.submission_deadline && new Date(lead.submission_deadline as string) < new Date();
+      !!lead.submission_deadline && isDeadlinePassed(lead.submission_deadline);
     // The normal pre-commitment edit window — full-form editing (including
     // reassigning PR/Reviewer/Recommending Authority/BP) only ever applies
     // here. An overdue edit at a later stage may only touch logistics

@@ -20,6 +20,7 @@ import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/Fil
 import { ChatIcon, ArrowRightIcon, ActivityIcon } from "../../components/icons";
 import { CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS, canOpenProposal, isAccountsCommittee, isMyProposal, isTeamProposal } from "../../lib/proposalPrep";
 import "../../styles/ProposalPreparationPage.css";
+import { isDeadlinePassed } from "../../lib/deadline";
 
 // "In Preparation" covers both "no proposal_preparations row yet" and "row
 // exists but the client hasn't responded" — i.e. everything that isn't yet
@@ -355,7 +356,7 @@ export default function ProposalsListPage() {
                   <tbody>
                     {filtered.map((l) => {
                       const proposal = l.proposal;
-                      const overdue = !!l.submission_deadline && new Date(l.submission_deadline) < new Date() && !proposal?.locked;
+                      const overdue = !!l.submission_deadline && isDeadlinePassed(l.submission_deadline) && !proposal?.locked;
                       const canOpen = canOpenProposal(l, profile);
                       return (
                         <tr key={l.id} className="pp-row-clickable" onClick={() => navigate(`/proposals/${l.id}`)}>
