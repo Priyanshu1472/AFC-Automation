@@ -11,6 +11,7 @@
 
 import { BLACK, GREEN, PageEngine, RULE_GRAY, drawGridTable, drawKeyValueTable, drawSimpleFooter, drawSimpleHeader, embedImageAuto, formatDateDDMMYYYY, newPdfDoc, wrapMultiline } from "./letterPdf.ts";
 import { createAdminClient } from "./auth.ts";
+import { pdfSafe } from "./clientInvoicePdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -170,32 +171,77 @@ function drawSectionHeading(e: PageEngine, text: string) {
   e.y -= 18;
 }
 
+// Word-wraps free text (a PMT/MD remark) to the full content width, then
+// hard-splits any single "word" still wider than the line (a pasted URL,
+// a long unbroken string) — wrapMultiline alone never breaks inside a word,
+// so such a token used to run straight off the right edge of the page.
+// The text is also passed through pdfSafe first: the standard fonts can't
+// encode Devanagari/emoji/etc., and one such character used to make the
+// whole note regeneration throw.
 // deno-lint-ignore no-explicit-any
-async function signatureBlock(e: PageEngine, x: number, width: number, opts: { title: string; name?: string | null; roleLine?: string; date?: string | null; signatureImage?: any | null }) {
+function wrapRemark(font: any, text: string, size: number, maxWidth: number): string[] {
+  const out: string[] = [];
+  for (const line of wrapMultiline(font, pdfSafe(text.replace(/\r\n?/g, "\n")), size, maxWidth)) {
+    if (font.widthOfTextAtSize(line, size) <= maxWidth) { out.push(line); continue; }
+    let cur = "";
+    for (const ch of line) {
+      if (cur && font.widthOfTextAtSize(cur + ch, size) > maxWidth) { out.push(cur); cur = ch; }
+      else cur += ch;
+    }
+    if (cur) out.push(cur);
+  }
+  return out;
+}
+
+const REMARK_SIZE = 9;
+const REMARK_LINE_H = 13;
+
+// Draws a remark paragraph at e.y across the full content width, breaking
+// onto a new page line by line when it runs past the footer.
+async function drawRemarkText(e: PageEngine, text: string) {
+  for (const line of wrapRemark(e.fonts.reg, text, REMARK_SIZE, e.MAX_W)) {
+    if (e.y < e.FOOTER_SAFE) await e.newPage();
+    e.currentPage.drawText(line, { x: e.LEFT, y: e.y, size: REMARK_SIZE, font: e.fonts.reg, color: BLACK });
+    e.y -= REMARK_LINE_H;
+  }
+}
+
+const SIG_MAX_H = 34;
+const SIG_MAX_W = 130;
+
+// deno-lint-ignore no-explicit-any
+function fitSignature(img: any): { w: number; h: number } {
+  const dims = img.scale(1);
+  const scale = Math.min(SIG_MAX_W / dims.width, SIG_MAX_H / dims.height, 1);
+  return { w: dims.width * scale, h: dims.height * scale };
+}
+
+// A stacked signature block drawn at x, starting at e.y: signature image
+// (if any) on top, then "Name & Signature", name, role, date and the green
+// title. The whole block is measured first and moved to a new page if it
+// wouldn't fit, so an image is never split from its name or drawn over the
+// footer. Leaves e.y just below the block.
+// deno-lint-ignore no-explicit-any
+async function signatureBlock(e: PageEngine, x: number, opts: { title: string; name?: string | null; roleLine?: string; date?: string | null; signatureImage?: any | null }) {
   const size = 9;
   const lineH = 12;
-  let y = e.y;
+  const sig = opts.signatureImage ? fitSignature(opts.signatureImage) : null;
+  const textLines = 1 + (opts.roleLine ? 1 : 0) + (opts.date ? 1 : 0) + 1;
+  const blockH = (sig ? sig.h + 6 : 0) + textLines * lineH + 4;
+  if (e.y - blockH < e.FOOTER_SAFE) await e.newPage();
 
-  if (opts.signatureImage) {
-    const dims = opts.signatureImage.scale(1);
-    const maxH = 34;
-    const maxW = Math.min(width, 130);
-    const scale = Math.min(maxW / dims.width, maxH / dims.height, 1);
-    const imgW = dims.width * scale;
-    const imgH = dims.height * scale;
-    e.currentPage.drawImage(opts.signatureImage, { x, y: y - imgH + 8, width: imgW, height: imgH });
-    y -= maxH + 2;
+  let top = e.y;
+  if (sig) {
+    e.currentPage.drawImage(opts.signatureImage, { x, y: top - sig.h, width: sig.w, height: sig.h });
+    top -= sig.h + 6;
   }
+  let y = top - size; // first text baseline
 
-  const label = opts.name ? "Name & Signature" : "Name & Signature (pending)";
-  e.currentPage.drawText(label, { x, y, size, font: e.fonts.reg, color: BLACK });
+  // No "Name & Signature" caption — the signature and name speak for
+  // themselves; an unsigned block just says "Pending".
+  if (opts.name) e.currentPage.drawText(pdfSafe(opts.name), { x, y, size, font: e.fonts.bold, color: BLACK });
+  else e.currentPage.drawText("Pending", { x, y, size, font: e.fonts.reg, color: BLACK });
   y -= lineH;
-  if (opts.name) {
-    e.currentPage.drawText(opts.name, { x, y, size, font: e.fonts.bold, color: BLACK });
-    y -= lineH;
-  } else {
-    y -= lineH;
-  }
   if (opts.roleLine) {
     e.currentPage.drawText(opts.roleLine, { x, y, size: 8.5, font: e.fonts.reg, color: BLACK });
     y -= lineH;
@@ -205,7 +251,7 @@ async function signatureBlock(e: PageEngine, x: number, width: number, opts: { t
     y -= lineH;
   }
   e.currentPage.drawText(opts.title, { x, y, size, font: e.fonts.bold, color: GREEN });
-  void width;
+  e.y = y - lineH;
 }
 
 function centeredText(e: PageEngine, text: string, xCenter: number, y: number, size: number, bold: boolean) {
@@ -294,6 +340,11 @@ export async function buildLeadApprovalNotePdf(opts: {
   personResponsibleDesignation: string;
   personResponsibleSignatureBytes?: Uint8Array | null;
   raSignatureBytes?: Uint8Array | null;
+  // Whoever most recently acted at PMT / MD (same row the name and date
+  // come from) — without these the PMT "Nodal Officer" and MD "Approval By
+  // Competent Authority" blocks only ever printed a name, never a signature.
+  pmtSignatureBytes?: Uint8Array | null;
+  mdSignatureBytes?: Uint8Array | null;
   baOrgName: string | null;
   team: string;
   activityRows: ActivityRow[];
@@ -322,6 +373,8 @@ export async function buildLeadApprovalNotePdf(opts: {
 
   const prSignatureImage = opts.personResponsibleSignatureBytes ? await embedImageAuto(pdf, opts.personResponsibleSignatureBytes).catch(() => null) : null;
   const raSignatureImage = opts.raSignatureBytes ? await embedImageAuto(pdf, opts.raSignatureBytes).catch(() => null) : null;
+  const pmtSignatureImage = opts.pmtSignatureBytes ? await embedImageAuto(pdf, opts.pmtSignatureBytes).catch(() => null) : null;
+  const mdSignatureImage = opts.mdSignatureBytes ? await embedImageAuto(pdf, opts.mdSignatureBytes).catch(() => null) : null;
 
   // ── Page 1: Business Lead Approval Note ──────────────────────────
   await e.newPage();
@@ -448,20 +501,16 @@ export async function buildLeadApprovalNotePdf(opts: {
     drawSectionHeading(e, stageNumerals[i]);
     e.currentPage.drawText(`Remarks/ Recommendation by ${stage.label}:`, { x: e.LEFT, y: e.y, size: 9.5, font: e.fonts.reg, color: BLACK });
     e.y -= 16;
-    const remarkLines = row?.comment ? row.comment.split("\n") : ["Pending."];
-    for (const line of remarkLines) {
-      if (e.y < e.FOOTER_SAFE) await e.newPage();
-      e.currentPage.drawText(line, { x: e.LEFT, y: e.y, size: 9, font: e.fonts.reg, color: BLACK });
-      e.y -= 13;
-    }
-    e.y -= 10;
-    await signatureBlock(e, e.RIGHT_EDGE - 200, 200, {
+    await drawRemarkText(e, row?.comment?.trim() || "Pending.");
+    e.y -= 14;
+    await signatureBlock(e, e.RIGHT_EDGE - 200, {
       title: "Nodal Officer",
       name: row?.actor_full_name || null,
       roleLine: row ? stage.label : undefined,
       date: row ? fmtDate(row.created_at) : null,
+      signatureImage: row ? pmtSignatureImage : null,
     });
-    e.y -= 30;
+    e.y -= 20;
   }
 
   // ── MD remarks & approval (final mode only) ───────────────────────
@@ -479,18 +528,25 @@ export async function buildLeadApprovalNotePdf(opts: {
     e.y -= 26;
 
     drawSectionHeading(e, "Remarks/ Recommendation by Managing Director:");
-    const mdRemarkLines = mdRow?.comment ? mdRow.comment.split("\n") : ["—"];
-    for (const line of mdRemarkLines) {
-      if (e.y < e.FOOTER_SAFE) await e.newPage();
-      e.currentPage.drawText(line, { x: e.LEFT, y: e.y, size: 9, font: e.fonts.reg, color: BLACK });
-      e.y -= 13;
-    }
+    // "-" not "—": the em dash is fine in WinAnsi but a plain hyphen matches
+    // the rest of the form's placeholders.
+    await drawRemarkText(e, mdRow?.comment?.trim() || "-");
     e.y -= 20;
 
+    // Heading + signature + name + 3 caption lines kept together on one page.
+    const mdSig = mdRow && mdSignatureImage ? fitSignature(mdSignatureImage) : null;
+    const approvalBlockH = 28 + (mdSig ? mdSig.h + 6 : 0) + 14 + 13 * 3;
+    if (e.y - approvalBlockH < e.FOOTER_SAFE) await e.newPage();
     drawSectionHeading(e, "Approval By Competent Authority:");
-    e.y -= 10;
+    e.y -= 4;
+    if (mdSig) {
+      e.currentPage.drawImage(mdSignatureImage, { x: e.LEFT, y: e.y - mdSig.h, width: mdSig.w, height: mdSig.h });
+      e.y -= mdSig.h + 6 + 10; // + baseline drop for the name below
+    } else {
+      e.y -= 10;
+    }
     if (mdRow?.actor_full_name) {
-      e.currentPage.drawText(mdRow.actor_full_name, { x: e.LEFT, y: e.y, size: 10, font: e.fonts.bold, color: BLACK });
+      e.currentPage.drawText(pdfSafe(mdRow.actor_full_name), { x: e.LEFT, y: e.y, size: 10, font: e.fonts.bold, color: BLACK });
       e.y -= 14;
     }
     e.currentPage.drawText("Managing Director", { x: e.LEFT, y: e.y, size: 9.5, font: e.fonts.reg, color: BLACK });
@@ -645,9 +701,13 @@ async function regenerateApprovalNoteInner(
   // this note themselves — set once they generate/edit it directly, or
   // explicitly Accept a draft the creator produced (pr_review_accept in
   // advance-lead-stage). Never auto-stamped just because a note exists.
-  const [personResponsibleSignatureBytes, raSignatureBytes] = await Promise.all([
+  const pmtActivityRow = latestByAction(flatActivity, STAGE_GROUPS[1].actions);
+  const mdActivityRow = latestByAction(flatActivity, STAGE_GROUPS[2].actions);
+  const [personResponsibleSignatureBytes, raSignatureBytes, pmtSignatureBytes, mdSignatureBytes] = await Promise.all([
     lead.approval_note_pr_reviewed ? fetchSignatureBytes(admin, pr?.signature_path) : Promise.resolve(null),
     fetchSignatureBytes(admin, raActivityRow?.actor_signature_path),
+    fetchSignatureBytes(admin, pmtActivityRow?.actor_signature_path),
+    fetchSignatureBytes(admin, mdActivityRow?.actor_signature_path),
   ]);
 
   const pdfBytes = await buildLeadApprovalNotePdf({
@@ -665,6 +725,8 @@ async function regenerateApprovalNoteInner(
     personResponsibleDesignation: humanizeRole(pr?.role),
     personResponsibleSignatureBytes,
     raSignatureBytes,
+    pmtSignatureBytes,
+    mdSignatureBytes,
     baOrgName,
     team: lead.team,
     activityRows: flatActivity,
