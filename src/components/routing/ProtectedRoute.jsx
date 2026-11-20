@@ -33,7 +33,9 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     return <Navigate to="/change-password" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(profile.role)) {
+  // profile.role is "admin" for a Super Admin; actualRole lets a
+  // super_admin-only route (Module Settings) still match.
+  if (allowedRoles && !allowedRoles.includes(profile.role) && !allowedRoles.includes(profile.actualRole)) {
     return <Navigate to="/home" replace />;
   }
 

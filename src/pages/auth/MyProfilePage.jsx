@@ -60,7 +60,7 @@ export default function MyProfilePage() {
 
   if (!profile) return null;
 
-  const roleLabel = ROLE_LABELS[profile.role] || profile.role;
+  const roleLabel = ROLE_LABELS[profile.actualRole || profile.role] || profile.role;
 
   // Picking a file only opens the crop dialog; the upload happens once the
   // user confirms the framing there (handleCropConfirm).

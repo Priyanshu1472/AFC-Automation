@@ -435,7 +435,7 @@ function SuperAdminCard() {
 export default function HomePage() {
   const { profile } = useAuth();
   const isBa = profile?.role === "business_associate";
-  const isSuperAdmin = MODULE_SETTINGS_ROLES.includes(profile?.role);
+  const isSuperAdmin = MODULE_SETTINGS_ROLES.includes(profile?.actualRole);
 
   return (
     <div className="app-shell">
@@ -447,7 +447,7 @@ export default function HomePage() {
         {isBa && <BaStatusCard />}
         {isBa && <BpInvoiceRequestsCard />}
         {isSuperAdmin && <SuperAdminCard />}
-        {!isBa && !isSuperAdmin && <PendingActionsPanel />}
+        {!isBa && <PendingActionsPanel />}
       </div>
     </div>
   );

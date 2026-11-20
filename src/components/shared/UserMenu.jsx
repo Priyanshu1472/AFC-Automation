@@ -26,7 +26,7 @@ export default function UserMenu({ compact = false, onOpenSupport }) {
 
   if (!profile) return null;
 
-  const roleLabel = ROLE_LABELS[profile.role] || profile.role;
+  const roleLabel = ROLE_LABELS[profile.actualRole || profile.role] || profile.role;
 
   function goToProfile() {
     setOpen(false);

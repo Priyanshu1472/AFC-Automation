@@ -202,6 +202,7 @@ export default function LeadDetailPage() {
   const [showDuplicates, setShowDuplicates] = useState(false);
   useEffect(() => setShowDuplicates(false), [id]);
   const [loading, setLoading] = useState(true);
+  const [rebuildingNote, setRebuildingNote] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
   const [reason, setReason] = useState("");
   const [pin, setPin] = useState("");
@@ -296,6 +297,27 @@ export default function LeadDetailPage() {
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [id, fetchLead]);
+
+  // Admin / Super Admin only: rebuild the Approval Note PDF(s) so they
+  // pick up signatures uploaded after the decision. No workflow change.
+  async function handleRebuildNote() {
+    setRebuildingNote(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("rebuild-lead-approval-note", { body: { lead_id: id } });
+      if (error) {
+        showToast(await extractFunctionErrorMessage(error, "Rebuild failed."), "danger");
+        return;
+      }
+      if (!data?.success) {
+        showToast(data?.error || "Rebuild failed.", "danger");
+        return;
+      }
+      showToast(`Rebuilt: ${(data.rebuilt || []).join(", ")}`, "success");
+      fetchLead();
+    } finally {
+      setRebuildingNote(false);
+    }
+  }
 
   function availableActions() {
     if (!lead) return [];
@@ -718,7 +740,16 @@ export default function LeadDetailPage() {
           <div className="ar-grid">
             <div className="ar-left">
               <Card>
-                <Card.Header title="Lead Records" />
+                <Card.Header
+                  title="Lead Records"
+                  action={
+                    profile?.role === "admin" && leadRecords.some((d) => d.category === "approval_note" || d.category === "final_approval_note") ? (
+                      <Button size="sm" variant="secondary" onClick={handleRebuildNote} disabled={rebuildingNote} title="Regenerate the Approval Note PDF(s) with everyone's current signatures">
+                        {rebuildingNote ? "Rebuilding…" : "Rebuild Approval Note"}
+                      </Button>
+                    ) : null
+                  }
+                />
                 <Card.Body>
                   {leadRecords.length === 0 ? (
                     <p className="ar-empty-text">No documents uploaded.</p>

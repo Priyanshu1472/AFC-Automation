@@ -726,3 +726,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/preview-pbg-note/deno.json"
 entrypoint = "./functions/preview-pbg-note/index.ts"
+
+[functions.rebuild-lead-approval-note]
+enabled = true
+verify_jwt = true
+import_map = "./functions/rebuild-lead-approval-note/deno.json"
+entrypoint = "./functions/rebuild-lead-approval-note/index.ts"

@@ -29,7 +29,10 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 
 export type CallerProfile = {
   id: string;
+  // Effective role for permission checks — "admin" for a Super Admin.
   role: string;
+  // The afc_users.role as stored ("super_admin" for a Super Admin).
+  actual_role?: string;
   team: string | null;
   office: string | null;
   committee: string | null;
@@ -94,5 +97,13 @@ export async function getCallerProfile(
   const committeeSet = (committeeRows || []).map((r: { committee: string }) => r.committee);
   const committees = committeeSet.length ? committeeSet : (caller.committee ? [caller.committee] : []);
 
-  return { ok: true, caller: { ...caller, teams, committees } };
+  // Super Admin has every Admin power (plus Module Settings), so every
+  // `caller.role === "admin"` / `["md","admin"].includes(caller.role)`
+  // check here treats them as Admin — same mapping as the DB's
+  // current_afc_role() (20261120000000_super_admin_has_admin_powers.sql).
+  // `actual_role` keeps the real value for anything that must tell them apart.
+  const actual_role = caller.role;
+  const role = caller.role === "super_admin" ? "admin" : caller.role;
+
+  return { ok: true, caller: { ...caller, role, actual_role, teams, committees } };
 }

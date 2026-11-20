@@ -243,7 +243,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     if (callerErr || !caller) return jsonRes(req, 403, { error: "Caller account not found." });
     if (!caller.is_active) return jsonRes(req, 403, { error: "Your account is deactivated." });
-    if (caller.role !== "admin") {
+    // Super Admin has every Admin power (see _shared/auth.ts getCallerProfile).
+    if (caller.role !== "admin" && caller.role !== "super_admin") {
       return jsonRes(req, 403, { error: "Forbidden. Only Admin can create user accounts." });
     }
 
