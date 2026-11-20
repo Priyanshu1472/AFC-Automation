@@ -12,6 +12,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { escapeHtml, wrapEmailBody, sendResendEmail } from "../_shared/email.ts";
+import { isDeadlinePassed } from "../_shared/deadline.ts";
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
@@ -55,7 +56,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     const authorized = [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(caller.id);
     if (!authorized) return jsonRes(req, 403, { error: "Only the lead's Person Responsible, Reviewer, or Recommending Authority can send this to the BP." });
 
-    const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date();
+    const pastDeadline = !!lead.submission_deadline && isDeadlinePassed(lead.submission_deadline);
     if (proposal.locked || pastDeadline) {
       return jsonRes(req, 400, { error: "This proposal is locked and can no longer be edited." });
     }

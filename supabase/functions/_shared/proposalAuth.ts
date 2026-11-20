@@ -7,6 +7,7 @@
 // DELETE policies the way a plain client write would.
 
 import { createAdminClient } from "./auth.ts";
+import { isDeadlinePassed } from "./deadline.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -47,7 +48,7 @@ export async function checkCanEditProposal(
     .maybeSingle();
   if (proposalErr || !proposal) return { ok: false, status: 404, error: "Proposal not found. Open it first." };
 
-  const deadlinePassed = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date();
+  const deadlinePassed = !!lead.submission_deadline && isDeadlinePassed(lead.submission_deadline);
   if (proposal.locked || deadlinePassed) return { ok: false, status: 400, error: "This proposal is locked." };
 
   const isNamed =

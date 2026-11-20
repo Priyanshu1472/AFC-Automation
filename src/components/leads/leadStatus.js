@@ -1,3 +1,4 @@
+import { isDeadlinePassed } from "../../lib/deadline";
 // Shared lead-status display config — used by LeadListPage and
 // LeadDetailPage so the label/color for a given status never drifts
 // between the two.
@@ -72,7 +73,7 @@ export const TERMINAL_STATUSES = ["md_approved", "md_declined", "pa_dropped"];
 // it was frozen at — nothing here ever changes `status` itself.
 export function isLeadOverdue(lead) {
   if (!lead || TERMINAL_STATUSES.includes(lead.status)) return false;
-  return !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date();
+  return !!lead.submission_deadline && isDeadlinePassed(lead.submission_deadline);
 }
 
 // Who's allowed to edit an overdue lead: the named Person Responsible, or —

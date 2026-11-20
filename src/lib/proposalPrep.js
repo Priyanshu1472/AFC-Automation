@@ -1,5 +1,6 @@
 // Shared constants/helpers for the Proposal Preparation module.
 import { hasCommittee } from "./roles";
+import { isDeadlinePassed } from "./deadline";
 
 // The Bid Payment Requisition Note is one note per proposal carrying any
 // combination of these three fee lines. EMD is refundable; the other two
@@ -133,7 +134,7 @@ export const FINANCE_FILE_TYPES = /\.(pdf|docx?|jpe?g|png)$/i;
 // side, so the UI never shows an action that the backend would reject.
 export function isProposalLocked(proposal, lead) {
   if (proposal?.locked) return true;
-  if (lead?.submission_deadline && new Date(lead.submission_deadline) < new Date()) return true;
+  if (lead?.submission_deadline && isDeadlinePassed(lead.submission_deadline)) return true;
   return false;
 }
 

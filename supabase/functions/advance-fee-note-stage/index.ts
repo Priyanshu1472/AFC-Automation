@@ -26,6 +26,7 @@ import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { notifyRole, notifyUsers } from "../_shared/notify.ts";
+import { isDeadlinePassed } from "../_shared/deadline.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -87,7 +88,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
-    const pastDeadline = !!lead.submission_deadline && new Date(lead.submission_deadline) < new Date();
+    const pastDeadline = !!lead.submission_deadline && isDeadlinePassed(lead.submission_deadline);
     if (proposal.locked || pastDeadline) {
       return jsonRes(req, 400, { error: "This proposal is locked and can no longer be edited." });
     }
