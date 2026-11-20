@@ -519,13 +519,9 @@ export async function buildLeadApprovalNotePdf(opts: {
   // starting a new one — same conditional-break reasoning as above.
   if (opts.mode === "final") {
     const mdRow = latestByAction(opts.activityRows, STAGE_GROUPS[2].actions);
+    // PMT's signature is followed directly by MD's remarks — no separate
+    // DGM forwarding block / "Submitted for kind perusal" line.
     if (e.y < e.FOOTER_SAFE + 150) await e.newPage();
-    e.currentPage.drawText("Deputy General Manager", { x: e.RIGHT_EDGE - 140, y: e.y, size: 9.5, font: e.fonts.bold, color: BLACK });
-    e.y -= 12;
-    e.currentPage.drawText(opts.team, { x: e.RIGHT_EDGE - 140, y: e.y, size: 9, font: e.fonts.reg, color: BLACK });
-    e.y -= 26;
-    e.currentPage.drawText("Submitted for kind perusal and approval please", { x: e.LEFT, y: e.y, size: 9.5, font: e.fonts.reg, color: BLACK });
-    e.y -= 26;
 
     drawSectionHeading(e, "Remarks/ Recommendation by Managing Director:");
     // "-" not "—": the em dash is fine in WinAnsi but a plain hyphen matches

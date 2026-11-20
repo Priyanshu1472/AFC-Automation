@@ -61,7 +61,14 @@ async function fetchProfile(userId) {
       ? [data.committee]
       : [];
 
-  return { ...data, teams, committees };
+  // Super Admin has every Admin power (plus Module Settings): `role` is the
+  // effective role every `profile.role === "admin"` / roles-list check reads,
+  // `actualRole` keeps the stored one (label, Module Settings). Same mapping
+  // as the DB's current_afc_role() and the edge functions' getCallerProfile.
+  const actualRole = data.role;
+  const role = actualRole === "super_admin" ? "admin" : actualRole;
+
+  return { ...data, role, actualRole, teams, committees };
 }
 
 function loadStoredActiveTeam(userId, teams) {

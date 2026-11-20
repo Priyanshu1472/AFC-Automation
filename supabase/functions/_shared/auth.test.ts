@@ -66,5 +66,13 @@ Deno.test("getCallerProfile - active caller -> ok with profile", async () => {
   const token = fakeJwt({ sub: "user-1" });
   const result = await getCallerProfile(reqWithAuth(`Bearer ${token}`), client as never);
   // No afc_user_teams/afc_user_committees rows and no primary team/committee -> empty lists.
-  assertEquals(result, { ok: true, caller: { ...caller, teams: [], committees: [] } });
+  assertEquals(result, { ok: true, caller: { ...caller, actual_role: "md", teams: [], committees: [] } });
+});
+
+Deno.test("getCallerProfile - Super Admin acts as Admin, real role kept in actual_role", async () => {
+  const caller = { id: "user-9", role: "super_admin", team: null, office: null, committee: null, is_active: true, email: "sa@afc.com", pin_hash: null };
+  const client = createFakeAdminClient({ afc_users: [{ data: caller, error: null }] });
+  const token = fakeJwt({ sub: "user-9" });
+  const result = await getCallerProfile(reqWithAuth(`Bearer ${token}`), client as never);
+  assertEquals(result, { ok: true, caller: { ...caller, role: "admin", actual_role: "super_admin", teams: [], committees: [] } });
 });

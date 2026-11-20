@@ -116,7 +116,9 @@ export const USERS_PAGE_ROLES = ["admin"];
 export const USERS_VIEW_ROLES = ["admin", "md"];
 
 // ─── Module Settings (switch modules ON/OFF / "Coming Soon") — Super
-// Admin only. Mirrors app_modules' RLS update policy.
+// Admin only. Mirrors app_modules' RLS update policy. Checked against
+// profile.actualRole (profile.role reads "admin" for a Super Admin — see
+// AuthContext fetchProfile).
 export const MODULE_SETTINGS_ROLES = ["super_admin"];
 
 // ─── Audit log — Admin only. ──────────────────────────────────────────
@@ -217,9 +219,10 @@ export const TEAMS = ["BPDD", "BIID"];
 
 // ─── Whitelist of valid roles — validate any role value from the DB before trusting it ──
 // super_admin is valid but deliberately NOT in ROLES above: it isn't part
-// of the hierarchy, can't be created from Create/Edit User, and must not
-// leak into any Object.keys(ROLES)-derived permission list. Its only power
-// is the Module Settings page (MODULE_SETTINGS_ROLES).
+// of the hierarchy and can't be created from Create/Edit User. It has every
+// Admin power (profile.role is mapped to "admin" in AuthContext, the DB's
+// current_afc_role() and the edge functions' getCallerProfile) plus the
+// Module Settings page (MODULE_SETTINGS_ROLES).
 export const VALID_ROLES = new Set([...Object.keys(ROLES), "super_admin"]);
 export function isValidRole(role) {
   return VALID_ROLES.has(role);

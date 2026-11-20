@@ -132,7 +132,7 @@ export default function AppHeader() {
   const canSeeProposals = LEAD_GENERATION_NAV_ROLES.includes(profile.role) && isEnabled("proposals");
   const canSeeMonitoring = MONITORING_ROLES.includes(profile.role) && isEnabled("monitoring");
   const canSeeFinancials = FINANCIALS_ROLES.includes(profile.role) && isEnabled("financials");
-  const canSeeModuleSettings = MODULE_SETTINGS_ROLES.includes(profile.role);
+  const canSeeModuleSettings = MODULE_SETTINGS_ROLES.includes(profile.actualRole);
   const navItems = [
     { to: "/home", label: "Home", icon: <HomeIcon />, show: true },
     { to: "/knowledge", label: "Knowledge Repository", icon: <BookIcon />, show: canSeeKnowledge },
@@ -145,7 +145,7 @@ export default function AppHeader() {
     { to: "/audit-logs", label: "Audit Logs", icon: <ClipboardListIcon />, show: canSeeAuditLogs },
     { to: "/settings/modules", label: "Module Settings", icon: <ListChecksIcon />, show: canSeeModuleSettings },
   ].filter((it) => it.show);
-  const roleLabel = ROLE_LABELS[profile.role] || profile.role;
+  const roleLabel = ROLE_LABELS[profile.actualRole || profile.role] || profile.role;
   const teams = profile.teams || [];
 
   return (

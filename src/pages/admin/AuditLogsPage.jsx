@@ -18,6 +18,7 @@ const ACTION_META = {
   user_activated:            { label: "User Activated",     variant: "success" },
   user_deactivated:          { label: "User Deactivated",   variant: "danger" },
   password_changed:          { label: "Password Changed",   variant: "info" },
+  approval_note_rebuilt:     { label: "Approval Note Rebuilt", variant: "info" },
 };
 
 const ACTION_OPTIONS = [
