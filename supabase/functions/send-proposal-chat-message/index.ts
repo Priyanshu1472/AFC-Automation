@@ -19,6 +19,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { notifyUsers, bumpChatNotifications } from "../_shared/notify.ts";
+import { isDeadlinePassed } from "../_shared/deadline.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -59,7 +60,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
   if (!proposal.chat_opened_at) return jsonRes(req, 400, { error: "Chat isn't open for this proposal yet." });
   const lead = proposal.lead as { submission_deadline: string | null; lead_number: string | null; title: string | null } | null;
-  const deadlinePassed = !!lead?.submission_deadline && new Date(lead.submission_deadline) < new Date();
+  const deadlinePassed = !!lead?.submission_deadline && isDeadlinePassed(lead.submission_deadline);
   if (proposal.locked || deadlinePassed) {
     return jsonRes(req, 400, { error: "This proposal is locked — the chat is closed." });
   }
