@@ -47,7 +47,7 @@ const STEPS = [
   { key: "completed", label: "Done" },
 ];
 
-export default function PbgNotePanel({ proposal, lead, note, financeFiles, events, profile, isAccounts, additionalResponsibleIds = [], embedded = false, onChanged }) {
+export default function PbgNotePanel({ bare = false, proposal, lead, note, financeFiles, events, profile, isAccounts, additionalResponsibleIds = [], embedded = false, onChanged }) {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [viewing, setViewing] = useState(false);
@@ -287,8 +287,8 @@ export default function PbgNotePanel({ proposal, lead, note, financeFiles, event
   }
 
   return (
-    <Card>
-      <Collapsible
+    <Card className={bare ? "pp-bare" : ""}>
+      <Collapsible expandable={!bare}
         title="PBG Note"
         icon={<ShieldIcon />}
         action={

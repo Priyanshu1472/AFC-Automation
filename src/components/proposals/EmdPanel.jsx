@@ -7,7 +7,9 @@
 //                   proof + remarks and forwards it to Accounts, who verify
 //                   it (PIN) or raise a Clarification Request. Setting it
 //                   back to Pending removes the uploaded proofs.
-//   Awarded      -> EMD Refund (as above) / Converted to PBG (adjusted in
+//   Moves to RFP / Tender (EOI) or Empanelled -> EMD Refund, as above (no
+//                   project to hold it against).
+//   Project awarded -> EMD Refund (as above) / Converted to PBG (adjusted in
 //                   the PBG Note) / On Completion (refunded when the project
 //                   completes, no reminders — switch to EMD Refund if it
 //                   comes back earlier).
@@ -31,7 +33,7 @@ import FinanceTimelineDrawer from "./FinanceTimelineDrawer";
 import PbgNotePanel from "./PbgNotePanel";
 import { RupeeIcon, CheckCircleIcon, RotateCcwIcon, FileTextIcon, CalendarIcon, ShieldIcon, ClockIcon } from "../icons";
 import { formatINR } from "../../lib/monitoring";
-import { EMD_TRACK_LABELS, EMD_STATUS_LABELS, EMD_STATUS_VARIANTS, PBG_NOTE_STATUS_LABELS } from "../../lib/proposalPrep";
+import { EMD_TRACK_LABELS, EMD_STATUS_LABELS, EMD_STATUS_VARIANTS, PBG_NOTE_STATUS_LABELS, isProjectAward, outcomeLabel } from "../../lib/proposalPrep";
 
 function fmtDateTime(d) {
   if (!d) return "";
@@ -50,7 +52,7 @@ const CHOSEN_TOAST = {
   on_completion: "EMD will be refunded on completion of the project.",
 };
 
-export default function EmdPanel({
+export default function EmdPanel({ bare = false,
   proposal, lead, profile, feeNote, tracking, pbgNote, financeFiles, events, isTeam, isAccounts,
   additionalResponsibleIds = [], onChanged,
 }) {
@@ -63,7 +65,9 @@ export default function EmdPanel({
   const [timelineOpen, setTimelineOpen] = useState(false);
 
   const emd = Number(tracking?.emd_amount ?? feeNote?.emd_amount ?? 0);
-  const awarded = proposal.client_response === "awarded";
+  // Only a project award can convert the EMD to a PBG or hold it until
+  // completion; every other result simply refunds it.
+  const awarded = isProjectAward(proposal);
   const track = tracking?.track || null;
   const status = tracking?.status || null;
   const isRefund = track === "refund";
@@ -151,13 +155,13 @@ export default function EmdPanel({
   );
 
   return (
-    <Card>
-      <Collapsible title={awarded ? "EMD & PBG" : "EMD Refund"} icon={<RupeeIcon />} action={headerAction}>
+    <Card className={bare ? "pp-bare" : ""}>
+      <Collapsible expandable={!bare} title={awarded ? "EMD & PBG" : "EMD Refund"} icon={<RupeeIcon />} action={headerAction}>
         {/* ── Summary + quick buttons ─────────────────────────────── */}
         <div className="pp-emd-top">
           <div className="pp-emd-stats">
             <div><span>EMD deposited</span><strong>{formatINR(emd)}</strong></div>
-            <div><span>Client response</span><strong className={awarded ? "is-good" : ""}>{awarded ? "Awarded" : "Not awarded"}</strong></div>
+            <div><span>Client response</span><strong className={proposal.client_response === "awarded" ? "is-good" : ""}>{outcomeLabel(proposal)}</strong></div>
           </div>
           <div className="pp-chip-row">
             {feeNote && (
@@ -213,7 +217,8 @@ export default function EmdPanel({
           </div>
         )}
 
-        {/* Not awarded, but recorded before EMD tracking existed. */}
+        {/* No choice to make (not a project award), but recorded before EMD
+            tracking existed. */}
         {!awarded && !track && (
           isTeam ? (
             <div className="pp-fin-actions" style={{ justifyContent: "flex-start" }}>

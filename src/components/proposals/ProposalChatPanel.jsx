@@ -20,9 +20,10 @@ import "../../styles/ApplicationReviewPage.css";
 //
 // Only rendered for people on the roster (is_proposal_chat_participant) —
 // anyone else who can view the proposal org-wide doesn't get a bubble.
-// Stays open after the proposal is locked: the Accounts side (payment,
-// EMD refund, PBG) mostly happens after submission.
-export default function ProposalChatPanel({ proposalId, chatOpenedAt }) {
+// Closes when the proposal is locked (not when the deadline passes): the
+// history stays readable, but nobody can post — send-proposal-chat-message
+// enforces the same rule.
+export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked = false }) {
   const { profile } = useAuth();
   const { showToast } = useToast();
 
@@ -192,7 +193,11 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt }) {
             <ChatMessageList messages={messages} participants={participants} selfId={profile?.id} loading={loading} bottomRef={bottomRef} />
           )}
 
-          {view === "chat" && (
+          {view === "chat" && locked && (
+            <p className="ar-chat-locked">Chat closed — this proposal has been locked.</p>
+          )}
+
+          {view === "chat" && !locked && (
             <div className="ar-chat-input-row">
               <MentionInput
                 ref={inputRef}

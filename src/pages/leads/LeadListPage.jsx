@@ -86,7 +86,15 @@ export default function LeadListPage() {
   // creator/Person Responsible, so "My Leads" would just be empty for
   // them — the page always opens on Team Leads for that role, ignoring
   // whatever tab was last open (never restored from sessionStorage either).
-  const [view, setView] = useState(() => (profile?.role === "md" ? "team" : loadStoredFilters().view || "mine"));
+  // MD / Admin / Super Admin / CFO / CS oversee the whole organisation, so
+  // they get no My Leads / Team Leads split — just every lead, org-wide
+  // (plus any committee tab they hold).
+  const orgWideViewer = can.viewAllTeams(profile?.role);
+  const [view, setView] = useState(() => {
+    const stored = loadStoredFilters().view;
+    if (orgWideViewer) return stored && stored !== "mine" && stored !== "team" ? stored : "all";
+    return stored || "mine";
+  });
   const [search, setSearch] = useState(() => loadStoredFilters().search || "");
   const [quickFilter, setQuickFilter] = useState(() => loadStoredFilters().quickFilter || "all");
   const [statusFilter, setStatusFilter] = useState(() => loadStoredFilters().statusFilter || "all");
@@ -270,25 +278,29 @@ export default function LeadListPage() {
         <div className="page-header">
           <div className="page-title-row">
             <div className="ll-view-tabs" role="tablist">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === "mine"}
-                className={`ll-view-tab${view === "mine" ? " ll-view-tab-active" : ""}`}
-                onClick={() => selectView("mine")}
-              >
-                My Leads
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === "team"}
-                className={`ll-view-tab${view === "team" ? " ll-view-tab-active" : ""}`}
-                onClick={() => selectView("team")}
-              >
-                Team Leads
-              </button>
-              {hasAllLeadsTab && (
+              {!orgWideViewer && (
+                <>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={view === "mine"}
+                    className={`ll-view-tab${view === "mine" ? " ll-view-tab-active" : ""}`}
+                    onClick={() => selectView("mine")}
+                  >
+                    My Leads
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={view === "team"}
+                    className={`ll-view-tab${view === "team" ? " ll-view-tab-active" : ""}`}
+                    onClick={() => selectView("team")}
+                  >
+                    Team Leads
+                  </button>
+                </>
+              )}
+              {(hasAllLeadsTab || orgWideViewer) && (
                 <button
                   type="button"
                   role="tab"

@@ -168,3 +168,18 @@ Deno.test("a proposal with no assigned Business Partner still rosters just the t
   const namedRows = JSON.parse(participantCalls[0].calls.find((c) => c[0] === "upsert")![1]);
   assertEquals(namedRows.map((r: { user_id: string }) => r.user_id).sort(), [PR_ID, REVIEWER_ID, AUTHORITY_ID].sort());
 });
+
+Deno.test("two opens racing: the loser of the insert reuses the row the winner created", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [{ data: callerRow({ id: "pr-1", role: "associate_consultant" }), error: null }, { data: [], error: null }],
+    leads: [{ data: leadRow(), error: null }],
+    proposal_preparations: [
+      { data: null, error: null },
+      { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint \"proposal_preparations_lead_id_key\"" } },
+      { data: { id: "winner-prop" }, error: null },
+    ],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).proposal_id, "winner-prop");
+});

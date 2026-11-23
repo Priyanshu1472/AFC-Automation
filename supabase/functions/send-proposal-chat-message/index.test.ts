@@ -79,8 +79,15 @@ Deno.test("chat not yet opened -> 400", async () => {
   assertEquals((await res.json()).error, "Chat isn't open for this proposal yet.");
 });
 
-Deno.test("still open once the proposal is locked — Accounts and the team keep talking about payments", async () => {
-  const client = buildClient({ proposal: proposalRow({ locked: true, lead: { submission_deadline: "2020-01-01T00:00:00Z", lead_number: "L-1", title: "Test Lead" } }) });
+Deno.test("closed once the proposal is locked", async () => {
+  const client = buildClient({ proposal: proposalRow({ locked: true }) });
+  const res = await handleRequest(req({ proposal_id: PROPOSAL_ID, message: "hi" }), client as never);
+  assertEquals(res.status, 400);
+  assertEquals((await res.json()).error, "This proposal is locked, so its chat is closed.");
+});
+
+Deno.test("still open after the deadline while the proposal isn't locked", async () => {
+  const client = buildClient({ proposal: proposalRow({ locked: false, lead: { submission_deadline: "2020-01-01T00:00:00Z", lead_number: "L-1", title: "Test Lead" } }) });
   const res = await handleRequest(req({ proposal_id: PROPOSAL_ID, message: "hi" }), client as never);
   assertEquals(res.status, 200);
 });

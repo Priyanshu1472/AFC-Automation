@@ -29,7 +29,7 @@ function client(opts: { member?: boolean; note?: Record<string, unknown>; update
 
 const req = (body: Record<string, unknown>) => authedReq("https://x.com/mark-fee-note-paid", { token: fakeJwt({ sub: ACC_ID }), body });
 
-Deno.test("mark-fee-note-paid - only an Accounts Committee member", async () => {
+Deno.test("mark-fee-note-paid - only Accounts or the Person Responsible", async () => {
   const res = await handleRequest(req({ fee_note_id: "fee-1", pin: PIN }), client({ member: false }) as never);
   assertEquals(res.status, 403);
 });
@@ -68,4 +68,31 @@ Deno.test("mark-fee-note-paid - records the payment", async () => {
 Deno.test("mark-fee-note-paid - a concurrent payment returns 409", async () => {
   const res = await handleRequest(req({ fee_note_id: "fee-1", pin: PIN }), client({ updated: [] }) as never);
   assertEquals(res.status, 409);
+});
+
+Deno.test("mark-fee-note-paid - the Person Responsible can record it too", async () => {
+  const prHash = await hashPin(PIN, "pr-1");
+  const fake = createFakeAdminClient({
+    afc_users: [
+      { data: { id: "pr-1", role: "associate_consultant", is_active: true, email: "pr@afc.com", pin_hash: prHash }, error: null },
+      { data: { is_active: true }, error: null },
+    ],
+    afc_user_committees: [
+      { data: [], error: null },
+      { data: null, error: null }, // not in Accounts
+    ],
+    fee_notes: [
+      { data: { id: "fee-1", proposal_id: "prop-1", status: "approved", payment_status: "pending" }, error: null },
+      { data: [{ id: "fee-1" }], error: null },
+    ],
+    proposal_preparations: [{ data: { id: "prop-1", lead_id: "lead-1", locked: true, client_response: "pending" }, error: null }],
+    leads: [{ data: { id: "lead-1", lead_number: "AFC/TEAM 1/L/26/001", title: "DPR", person_responsible_id: "pr-1", reviewer_id: "rev-1", recommending_authority_id: "ra-1" }, error: null }],
+  });
+  const res = await handleRequest(
+    authedReq("https://x.com/mark-fee-note-paid", { token: fakeJwt({ sub: "pr-1" }), body: { fee_note_id: "fee-1", pin: PIN } }),
+    fake as never,
+  );
+  assertEquals(res.status, 200);
+  const update = fake.__log.filter((l) => l.table === "fee_notes").flatMap((l) => l.calls).find((c) => c[0] === "update");
+  assertMatch(update![1], /"payment_done_by":"pr-1"/);
 });

@@ -55,6 +55,45 @@ export const CLIENT_RESPONSE_LABELS = {
   rejected: "Rejected",
 };
 
+// What "Awarded" meant (proposal_preparations.award_kind). Only a project
+// award opens Monitoring and can carry a PBG / EMD-on-completion.
+export const AWARD_KIND_LABELS = {
+  project: "Awarded",
+  next_stage: "Moves to RFP / Tender",
+  empanelled: "Empanelled",
+};
+
+export function isProjectAward(proposal) {
+  return proposal?.client_response === "awarded" && (proposal.award_kind || "project") === "project";
+}
+
+// The outcome as one short label for badges and lists.
+export function outcomeLabel(proposal) {
+  if (proposal?.client_response === "awarded") return AWARD_KIND_LABELS[proposal.award_kind || "project"];
+  return CLIENT_RESPONSE_LABELS[proposal?.client_response || "pending"];
+}
+
+export function isEoiLead(lead) {
+  return lead?.source !== "suo_moto" && lead?.lead_type === "eoi";
+}
+
+// The lead's document type as a short label: RFP / EOI / Suo Moto.
+export function leadTypeLabel(lead) {
+  if (lead?.source === "suo_moto") return "Suo Moto";
+  return isEoiLead(lead) ? "EOI" : "RFP";
+}
+
+// Is the proposed value needed before locking? Mirrors lock-proposal's
+// proposedValueRule():
+//   "none"      marked Empanelment only — no proposed value at all
+//   "optional"  EOI — enter one if the client asked for it
+//   "required"  RFP / Suo Moto
+export function proposedValueRule(lead, proposal) {
+  if (proposal?.empanelment_only) return "none";
+  if (isEoiLead(lead)) return "optional";
+  return "required";
+}
+
 export const CLIENT_RESPONSE_VARIANTS = {
   pending: "neutral",
   awarded: "success",
@@ -89,11 +128,13 @@ export function isProposalTeam(profile, lead, additionalResponsibleIds = []) {
 
 // What still stands between a proposal and "Lock Proposal" — mirrored by
 // lock-proposal's own server-side checks. Empty array = ready to lock.
-export function lockBlockers({ proposal, feeNote, documents }) {
+export function lockBlockers({ proposal, lead, feeNote, documents }) {
   const out = [];
   if (feeNote?.status !== "approved") out.push(`${FEE_NOTE_TITLE} approved by the MD`);
   if (!documents?.length) out.push("Proposal documents uploaded");
-  if (proposal?.proposed_value == null) out.push("Proposed value entered in Financial");
+  if (proposedValueRule(lead, proposal) === "required" && proposal?.proposed_value == null) {
+    out.push("Proposed value entered in Financial (or marked Empanelment only)");
+  }
   return out;
 }
 

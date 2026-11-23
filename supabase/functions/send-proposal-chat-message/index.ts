@@ -5,10 +5,10 @@
 // the write: the chat must actually be open and the caller must already be
 // on that proposal's roster (proposal_chat_participants).
 //
-// The chat stays open after the proposal is locked (2026-11-18): the money
-// side of a proposal — Accounts paying the Bid Payment Requisition Note,
-// the EMD refund, the PBG Note — mostly happens after submission, and the
-// Accounts Committee uses this chat to clear doubts with the team.
+// The chat closes when — and only when — the proposal is locked (2026-11-23,
+// user's call). The submission deadline passing does not close it; until
+// someone locks the proposal people can keep talking. After locking the
+// history stays readable (RLS), but nobody can post.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -54,6 +54,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (proposalErr || !proposal) return jsonRes(req, 404, { error: "Proposal not found." });
 
   if (!proposal.chat_opened_at) return jsonRes(req, 400, { error: "Chat isn't open for this proposal yet." });
+  if (proposal.locked) return jsonRes(req, 400, { error: "This proposal is locked, so its chat is closed." });
   const lead = proposal.lead as { submission_deadline: string | null; lead_number: string | null; title: string | null } | null;
 
   const { data: participant } = await adminClient

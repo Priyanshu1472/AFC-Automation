@@ -42,12 +42,21 @@ function EditIcon() {
 
 const RETURN_ACTIONS = new Set(["returned_by_ra", "md_rejected"]);
 
+// Draft -> RA -> MD -> Approved -> Paid, drawn like the PBG Note's tracker.
+const NOTE_STEPS = [
+  { key: "draft", label: "Draft" },
+  { key: "ra", label: "RA" },
+  { key: "md", label: "MD" },
+  { key: "approved", label: "Approved" },
+  { key: "paid", label: "Paid" },
+];
+
 function fmtDateTime(d) {
   if (!d) return "";
   return new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-export default function FeeNotesPanel({ proposalId, feeNotes, lead, profile, isMd, isAccounts = false, isTeam = false, financeFiles = [], locked, onChanged }) {
+export default function FeeNotesPanel({ bare = false, proposalId, feeNotes, lead, profile, isMd, isAccounts = false, canMarkPaid = false, isTeam = false, financeFiles = [], locked, defaultOpen = true, onChanged }) {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const note = feeNotes[0] || null;
@@ -105,6 +114,12 @@ export default function FeeNotesPanel({ proposalId, feeNotes, lead, profile, isM
   }
 
   const activeLines = note ? FEE_LINES.filter((f) => note[`${f.key}_amount`] != null) : [];
+  const feeTotal = activeLines.reduce((sum, f) => sum + (Number(note[`${f.key}_amount`]) || 0), 0);
+  const noteStepIndex = !note ? -1
+    : note.status === "draft" || note.status === "rejected" ? 0
+      : note.status === "pending_recommending_authority" ? 1
+        : note.status === "pending_md" ? 2
+          : note.payment_status === "paid" ? 5 : 4;
   const showReturnBanner = note && note.status === "draft" && latestEvent && RETURN_ACTIONS.has(latestEvent.action);
 
   const headerAction = (
@@ -138,50 +153,92 @@ export default function FeeNotesPanel({ proposalId, feeNotes, lead, profile, isM
   );
 
   return (
-    <Card>
-      <Collapsible title={FEE_NOTE_TITLE} icon={<ReceiptIcon />} action={headerAction}>
+    <Card className={bare ? "pp-bare" : ""}>
+      <Collapsible expandable={!bare} title={FEE_NOTE_TITLE} defaultOpen={defaultOpen} icon={<ReceiptIcon />} action={headerAction}>
         <>
-          <div>
-            {!note && <p className="pp-fee-note-justification">Not created yet.</p>}
-            {note && (
-              <>
-                {activeLines.length > 0 && (
-                  <div className="pp-table-wrap">
-                    <table className="pp-table">
-                      <thead>
-                        <tr>
-                          <th>Fee Line</th>
-                          <th>Amount (₹)</th>
-                          <th>Borne By</th>
-                          <th>Payment Mode</th>
+          {!note && (
+            <p className="pp-empty-line">
+              Not created yet.{isPR && !locked ? " Create it to start the approval: Recommending Authority, then the MD, then Accounts pays." : ""}
+            </p>
+          )}
+
+          {note && (
+            <>
+              <ol className="pp-steps pp-steps-tight" aria-label="Note progress">
+                {NOTE_STEPS.map((s, i) => (
+                  <li key={s.key} className={i < noteStepIndex ? "is-done" : i === noteStepIndex ? "is-current" : ""}>
+                    <span className="pp-steps-dot" aria-hidden="true" />
+                    <span className="pp-steps-label">{s.label}</span>
+                  </li>
+                ))}
+              </ol>
+
+              {showReturnBanner && (
+                <div className="pp-callout is-warning">
+                  <strong>Sent back by {latestEvent.action === "md_rejected" ? "the MD" : "the Recommending Authority"}</strong>
+                  <span>{latestEvent.remark || "No remark given."}</span>
+                </div>
+              )}
+
+              {activeLines.length > 0 && (
+                <div className="pp-table-wrap pp-fee-table">
+                  <table className="pp-table">
+                    <thead>
+                      <tr>
+                        <th>Fee</th>
+                        <th>Borne By</th>
+                        <th>Payment Mode</th>
+                        <th className="pp-num">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeLines.map((f) => (
+                        <tr key={f.key}>
+                          <td>{f.label}</td>
+                          <td>{BORNE_BY_LABELS[note[`${f.key}_borne_by`]] || "AFC"}</td>
+                          <td>{note[`${f.key}_payment_mode`] ? PAYMENT_MODE_LABELS[note[`${f.key}_payment_mode`]] : "—"}</td>
+                          <td className="pp-num">₹{Number(note[`${f.key}_amount`]).toLocaleString("en-IN")}</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {activeLines.map((f) => (
-                          <tr key={f.key}>
-                            <td>{f.label}</td>
-                            <td>{Number(note[`${f.key}_amount`]).toLocaleString("en-IN")}</td>
-                            <td>{BORNE_BY_LABELS[note[`${f.key}_borne_by`]] || "AFC"}</td>
-                            <td>{note[`${f.key}_payment_mode`] ? PAYMENT_MODE_LABELS[note[`${f.key}_payment_mode`]] : "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {note.justification && <p className="pp-fee-note-justification">{note.justification}</p>}
-                {showReturnBanner && (
-                  <p className="pp-fee-note-remark">
-                    Sent back by {latestEvent.action === "md_rejected" ? "MD" : "Recommending Authority"}: {latestEvent.remark}
-                  </p>
-                )}
-              </>
-            )}
-          </div>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={3}>Total</td>
+                        <td className="pp-num">₹{feeTotal.toLocaleString("en-IN")}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+
+              {(note.justification || note.submit_to) && (
+                <div className="pp-kv-grid">
+                  {note.justification && (
+                    <div className="pp-kv pp-kv-wide">
+                      <span>Justification</span>
+                      <p>{note.justification}</p>
+                    </div>
+                  )}
+                  {note.submit_to && (
+                    <div className="pp-kv">
+                      <span>Submit To</span>
+                      <p>{note.submit_to}</p>
+                    </div>
+                  )}
+                  {note.status === "approved" && note.md_remark && (
+                    <div className="pp-kv">
+                      <span>MD Remark</span>
+                      <p>{note.md_remark}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
 
           {note && note.status === "approved" && (
-            <div className="pp-fin-block">
-              <div className="pp-fin-block-head">
+            <div className="pp-subsection">
+              <div className="pp-subsection-head">
                 <strong>Payment by Accounts</strong>
                 {note.payment_status === "paid" ? (
                   <span className="pp-fin-done">
@@ -189,18 +246,14 @@ export default function FeeNotesPanel({ proposalId, feeNotes, lead, profile, isM
                     {note.payment_reference ? ` · Ref: ${note.payment_reference}` : ""}
                   </span>
                 ) : (
-                  <span className="pp-fin-wait">
-                    {isAccounts
-                      ? "Check the signatures on the note (eye icon above), upload the payment proof and mark it done."
-                      : isTeam
-                        ? "Approved — with the Accounts Committee for payment. If the payment proof is with you, upload it here."
-                        : "Approved — waiting for the Accounts Committee to make the payment."}
-                  </span>
+                  <Badge variant="warning">Pending</Badge>
                 )}
               </div>
-              {note.payment_remark && <p className="pp-fee-note-justification">“{note.payment_remark}”</p>}
+              {note.payment_remark && (
+                <div className="pp-kv"><span>Accounts Remark</span><p>{note.payment_remark}</p></div>
+              )}
               {note.payment_status !== "paid" && (isAccounts || isTeam) && financeFiles.every((f) => f.purpose !== "fee_payment") && (
-                <p className="pp-note-bar-text pp-fin-hint"><InfoIcon /> Until a payment proof is uploaded, a reminder goes out every day up to the submission date.</p>
+                <p className="pp-hint"><InfoIcon /> Until a payment proof is uploaded, a reminder goes out every day up to the submission date.</p>
               )}
               {(note.payment_status === "paid" || isAccounts || isTeam) && (
                 <FinanceFiles
@@ -212,47 +265,34 @@ export default function FeeNotesPanel({ proposalId, feeNotes, lead, profile, isM
                   onChanged={onChanged}
                 />
               )}
-              {isAccounts && note.payment_status !== "paid" && (
-                <div className="pp-fin-actions">
-                  <Button variant="primary" size="sm" onClick={() => setPayOpen(true)}>Mark Payment Done</Button>
-                </div>
-              )}
             </div>
           )}
 
+          {/* Just the buttons for whoever acts next; nothing for anyone else. */}
           {note && canForwardAsPR && note.status === "draft" && !locked && (
-            <div style={{ marginTop: "var(--space-4)" }}>
-              <Button variant="primary" size="sm" onClick={() => setPinAction({ feeNoteId: note.id, action: "pr_forward" })}>
-                Forward to Recommending Authority
-              </Button>
+            <div className="pp-action-row">
+              <Button variant="secondary" size="sm" onClick={() => navigate(`/proposals/${lead.id}/fee-note`)}>Edit</Button>
+              <Button variant="primary" size="sm" onClick={() => setPinAction({ feeNoteId: note.id, action: "pr_forward" })}>Forward to RA</Button>
             </div>
           )}
 
-          {note && isRA && note.status === "pending_recommending_authority" && !locked && (
-            <div className="pp-note-bar">
-              <span className="pp-note-bar-text"><InfoIcon /> This note is pending your review. Forward it to the MD, or send it back.</span>
-              <div className="pp-icon-btn-row">
-                <Button variant="secondary" size="sm" onClick={() => setSendBackAction({ feeNoteId: note.id, action: "ra_send_back" })}>
-                  Send Back
-                </Button>
-                <Button variant="primary" size="sm" onClick={() => setPinAction({ feeNoteId: note.id, action: "ra_forward" })}>
-                  Forward to MD
-                </Button>
-              </div>
+          {note && note.status === "pending_recommending_authority" && !locked && isRA && (
+            <div className="pp-action-row">
+              <Button variant="secondary" size="sm" onClick={() => setSendBackAction({ feeNoteId: note.id, action: "ra_send_back" })}>Send Back</Button>
+              <Button variant="primary" size="sm" onClick={() => setPinAction({ feeNoteId: note.id, action: "ra_forward" })}>Forward to MD</Button>
             </div>
           )}
 
-          {note && isMd && note.status === "pending_md" && !locked && (
-            <div className="pp-note-bar">
-              <span className="pp-note-bar-text"><InfoIcon /> This note is awaiting your final approval.</span>
-              <div className="pp-icon-btn-row">
-                <Button variant="secondary" size="sm" onClick={() => setSendBackAction({ feeNoteId: note.id, action: "md_reject" })}>
-                  Send Back
-                </Button>
-                <Button variant="primary" size="sm" onClick={() => setPinAction({ feeNoteId: note.id, action: "md_approve" })}>
-                  Approve
-                </Button>
-              </div>
+          {note && note.status === "pending_md" && !locked && isMd && (
+            <div className="pp-action-row">
+              <Button variant="secondary" size="sm" onClick={() => setSendBackAction({ feeNoteId: note.id, action: "md_reject" })}>Send Back</Button>
+              <Button variant="primary" size="sm" onClick={() => setPinAction({ feeNoteId: note.id, action: "md_approve" })}>Approve</Button>
+            </div>
+          )}
+
+          {note && note.status === "approved" && note.payment_status !== "paid" && canMarkPaid && (
+            <div className="pp-action-row">
+              <Button variant="primary" size="sm" onClick={() => setPayOpen(true)}>Mark Payment Done</Button>
             </div>
           )}
         </>

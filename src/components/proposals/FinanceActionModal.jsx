@@ -68,7 +68,7 @@ export default function FinanceActionModal({
             <textarea id="fin-remark" className="input" rows={3} value={remark} maxLength={2000} onChange={(e) => setRemark(e.target.value)} disabled={busy} />
           </div>
           {withPin && (
-            <PinInput label="Your Action PIN" required value={pin} onChange={setPin} disabled={busy} hint="Confirms it's really you" />
+            <PinInput label="Your Action PIN" required value={pin} onChange={setPin} disabled={busy} />
           )}
         </div>
       </Modal.Body>

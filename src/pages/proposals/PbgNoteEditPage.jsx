@@ -28,6 +28,7 @@ import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import BackButton from "../../components/ui/BackButton";
 import { formatINR } from "../../lib/monitoring";
+import { isProjectAward } from "../../lib/proposalPrep";
 import {
   INSTRUMENT_OPTIONS, PARAGRAPHS, composePbgDefaults, emdAdjustedFor, emdContextOf, parseAmount, pbgCalculationRows,
 } from "../../lib/pbgNoteDraft";
@@ -65,7 +66,8 @@ export default function PbgNoteEditPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  // Per-field validation messages: "pbg" / "fee".
+  const [fieldErrors, setFieldErrors] = useState({});
   const [blocked, setBlocked] = useState("");
   const [ctx, setCtx] = useState(null); // { proposalId, lead, emdAmount, track }
 
@@ -98,11 +100,11 @@ export default function PbgNoteEditPage() {
 
     const { data: proposal } = await supabase
       .from("proposal_preparations")
-      .select("id, client_response, proposed_value")
+      .select("id, client_response, award_kind, proposed_value")
       .eq("lead_id", leadId)
       .maybeSingle();
     if (!proposal) { setBlocked("This proposal hasn't been opened yet."); setLoading(false); return; }
-    if (proposal.client_response !== "awarded") { setBlocked("A PBG Note is only raised once the proposal is awarded."); setLoading(false); return; }
+    if (!isProjectAward(proposal)) { setBlocked("A PBG Note is only raised once the project itself is awarded."); setLoading(false); return; }
 
     const [{ data: additional }, { data: feeNote }, { data: tracking }, { data: note }] = await Promise.all([
       supabase.from("proposal_additional_responsibles").select("user_id").eq("proposal_id", proposal.id),
@@ -222,10 +224,19 @@ export default function PbgNoteEditPage() {
 
   async function handleSave(e) {
     e.preventDefault();
-    if (!(pbgNum > 0)) { setError("Enter the PBG amount."); return; }
-    if (consultancyFee && !(feeNum > 0)) { setError("Enter a valid consultancy fee, or leave it blank."); return; }
+    const errs = {};
+    if (!(pbgNum > 0)) errs.pbg = "Enter the PBG amount (more than ₹0).";
+    if (consultancyFee && !(feeNum > 0)) errs.fee = "Enter a valid consultancy fee, or leave it blank.";
+    setFieldErrors(errs);
+    const keys = Object.keys(errs);
+    if (keys.length) {
+      showToast(keys.length === 1 ? errs[keys[0]] : `${keys.length} fields need fixing. They're highlighted in red.`, "danger");
+      const el = document.getElementById(keys[0] === "pbg" ? "pbg-amount" : "pbg-fee");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.focus({ preventScroll: true });
+      return;
+    }
     setSaving(true);
-    setError("");
     try {
       const { data, error: fnError } = await supabase.functions.invoke("proposal-pbg-note", {
         body: {
@@ -236,8 +247,8 @@ export default function PbgNoteEditPage() {
           content: { subject, paragraphs, enclosures, fields, dirty: { ...dirty, pbg_percent: driver === "pct" } },
         },
       });
-      if (fnError) { setError(await extractFunctionErrorMessage(fnError, "Failed to save the PBG Note.")); return; }
-      if (!data?.success) { setError(data?.error || "Failed to save the PBG Note."); return; }
+      if (fnError) { showToast(await extractFunctionErrorMessage(fnError, "Failed to save the PBG Note."), "danger"); return; }
+      if (!data?.success) { showToast(data?.error || "Failed to save the PBG Note.", "danger"); return; }
 
       try {
         const { data: pdfData, error: pdfError } = await supabase.functions.invoke("preview-pbg-note", { body: { proposal_id: ctx.proposalId } });
@@ -255,7 +266,7 @@ export default function PbgNoteEditPage() {
       showToast("PBG Note saved. Upload the proof and forward it from the proposal page.", "success");
       navigate(`/proposals/${leadId}`);
     } catch (err) {
-      setError(err.message || "Something went wrong.");
+      showToast(err.message || "Something went wrong.", "danger");
     } finally {
       setSaving(false);
     }
@@ -309,7 +320,6 @@ export default function PbgNoteEditPage() {
         {!blocked && ctx && (
           <form onSubmit={handleSave} noValidate className="pp-fnp-layout">
             <div className="pp-fnp-form">
-              {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
               <Card>
                 <Card.Header title="Amounts" />
@@ -317,11 +327,13 @@ export default function PbgNoteEditPage() {
                   <div className="pp-pbg-grid">
                     <div className="field">
                       <label className="field-label" htmlFor="pbg-amount">PBG amount (₹) <span className="required">*</span></label>
-                      <input id="pbg-amount" className="input" type="number" min="0" step="0.01" inputMode="decimal" value={pbgAmount} onChange={(e) => onAmountChange(e.target.value)} disabled={saving} placeholder="From the Lead Approval Note, if filled there" />
+                      <input id="pbg-amount" className={`input${fieldErrors.pbg ? " input-error" : ""}`} aria-invalid={!!fieldErrors.pbg} type="number" min="0" step="0.01" inputMode="decimal" value={pbgAmount} onChange={(e) => { onAmountChange(e.target.value); setFieldErrors((p) => ({ ...p, pbg: undefined })); }} disabled={saving} placeholder="From the Lead Approval Note, if filled there" />
+                      {fieldErrors.pbg && <span className="field-error" role="alert">{fieldErrors.pbg}</span>}
                     </div>
                     <div className="field">
                       <label className="field-label" htmlFor="pbg-fee">Consultancy fees (₹, incl. GST)</label>
-                      <input id="pbg-fee" className="input" type="number" min="0" step="0.01" inputMode="decimal" value={consultancyFee} onChange={(e) => onFeeChange(e.target.value)} disabled={saving} />
+                      <input id="pbg-fee" className={`input${fieldErrors.fee ? " input-error" : ""}`} aria-invalid={!!fieldErrors.fee} type="number" min="0" step="0.01" inputMode="decimal" value={consultancyFee} onChange={(e) => { onFeeChange(e.target.value); setFieldErrors((p) => ({ ...p, fee: undefined })); }} disabled={saving} />
+                      {fieldErrors.fee && <span className="field-error" role="alert">{fieldErrors.fee}</span>}
                     </div>
                     <div className="field">
                       <label className="field-label" htmlFor="pbg-pct">PBG % of fees</label>

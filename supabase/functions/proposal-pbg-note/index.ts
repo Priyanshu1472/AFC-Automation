@@ -36,7 +36,7 @@ import { addProposalChatParticipants } from "../_shared/proposalChat.ts";
 import {
   KIND_ACCOUNTS, KIND_PBG, isAccountsMember, loadProposalAndLead, notifyAccountsCommittee, getAccountsMemberIds,
   leadRef, proposalLink, clearPendingAlerts, logFinanceEvent, cleanRemark, rupees,
-  proposalTeamIds, getAdditionalResponsibleIds, getMdIds, countFinanceFiles,
+  proposalTeamIds, getAdditionalResponsibleIds, getMdIds, countFinanceFiles, isProjectAward,
 } from "../_shared/proposalFinance.ts";
 
 const ACTIONS = new Set(["save", "forward", "ra_approve", "md_approve", "accounts_approve", "mark_paid", "request_clarification"]);
@@ -102,7 +102,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     const ctx = await loadProposalAndLead(adminClient, proposalId);
     if (!ctx.ok) return jsonRes(req, ctx.status, { error: ctx.error });
     const { proposal, lead } = ctx;
-    if (proposal.client_response !== "awarded") return jsonRes(req, 400, { error: "A PBG Note is only raised once the proposal is awarded." });
+    if (!isProjectAward(proposal)) return jsonRes(req, 400, { error: "A PBG Note is only raised once the project itself is awarded." });
 
     const link = proposalLink(lead);
     const ref = leadRef(lead);

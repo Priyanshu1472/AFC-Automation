@@ -39,7 +39,7 @@ import { addProposalChatParticipants } from "../_shared/proposalChat.ts";
 import {
   KIND_ACCOUNTS, KIND_EMD, isAccountsMember, loadProposalAndLead, notifyAccountsCommittee, getAccountsMemberIds,
   leadRef, proposalLink, clearPendingAlerts, logFinanceEvent, cleanRemark, rupees,
-  proposalTeamIds, getMdIds, deleteFinanceFiles, countFinanceFiles,
+  proposalTeamIds, getMdIds, deleteFinanceFiles, countFinanceFiles, isProjectAward,
 } from "../_shared/proposalFinance.ts";
 
 const TEAM_ACTIONS = new Set(["choose_track", "set_refund_received", "forward"]);
@@ -105,8 +105,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     if (action === "choose_track") {
       const track = body.track;
       if (typeof track !== "string" || !TRACKS.has(track)) return jsonRes(req, 400, { error: "Choose EMD Refund, Converted to PBG or On Completion." });
-      if (track !== "refund" && proposal.client_response !== "awarded") {
-        return jsonRes(req, 400, { error: "Only an awarded proposal can convert its EMD into a PBG or hold it until completion." });
+      if (track !== "refund" && !isProjectAward(proposal)) {
+        return jsonRes(req, 400, { error: "Only a proposal awarded for the project itself can convert its EMD into a PBG or hold it until completion." });
       }
       const { data: note } = await adminClient
         .from("fee_notes")

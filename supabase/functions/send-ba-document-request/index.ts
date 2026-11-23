@@ -109,6 +109,14 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .eq("id", proposalId);
     if (countErr) throw new Error(countErr.message);
 
+    // Timeline: one line per send (the trigger can't see who sent it).
+    await adminClient.rpc("log_proposal_activity", {
+      p_proposal_id: proposalId,
+      p_action: isFirstSend ? "bp_docs_sent" : "bp_docs_reminded",
+      p_actor: caller.id,
+      p_detail: `${items.length} item${items.length === 1 ? "" : "s"}`,
+    }).then(({ error }) => { if (error) console.error("timeline log failed:", error.message); });
+
     const itemsHtml = items.map((it) => `
       <li style="margin-bottom:12px;">
         <strong>${escapeHtml(it.item_name)}</strong>

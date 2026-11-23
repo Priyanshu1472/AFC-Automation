@@ -35,7 +35,7 @@ function fmtDateTime(d) {
   return new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 }
 
-export default function BaDocumentRequestsPanel({ proposalId, proposal, items, profile, canManage, locked, hasBa, onChanged }) {
+export default function BaDocumentRequestsPanel({ bare = false, proposalId, proposal, items, profile, canManage, locked, hasBa, defaultOpen = true, onChanged }) {
   const [name, setName] = useState("");
   const [justification, setJustification] = useState("");
   const [adding, setAdding] = useState(false);
@@ -180,8 +180,9 @@ export default function BaDocumentRequestsPanel({ proposalId, proposal, items, p
   }
 
   return (
-    <Card>
-      <Collapsible
+    <Card className={bare ? "pp-bare" : ""}>
+      <Collapsible expandable={!bare}
+        defaultOpen={defaultOpen}
         title="Documents Required from Business Partner"
         icon={<PaperclipIcon />}
         action={items.length > 0 && <Badge variant="neutral">{sent.length} / {items.length} Sent</Badge>}

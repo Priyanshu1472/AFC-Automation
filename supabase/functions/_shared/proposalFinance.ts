@@ -33,7 +33,15 @@ export type ProposalLead = {
   recommending_authority_id: string | null;
 };
 
-export type ProposalRow = { id: string; lead_id: string; locked: boolean; client_response: string };
+export type ProposalRow = { id: string; lead_id: string; locked: boolean; client_response: string; award_kind?: string | null };
+
+// Awarded for the project itself (not an EOI moving to the RFP stage, nor an
+// empanelment-only award). Only these carry a PBG / EMD-on-completion, and
+// only these open a Monitoring project. Rows recorded before award_kind
+// existed count as project awards.
+export function isProjectAward(proposal: { client_response: string; award_kind?: string | null }): boolean {
+  return proposal.client_response === "awarded" && (proposal.award_kind ?? "project") === "project";
+}
 
 export async function isAccountsMember(admin: AdminClient, userId: string): Promise<boolean> {
   try {
@@ -187,7 +195,7 @@ export async function loadProposalAndLead(
 ): Promise<{ ok: true; proposal: ProposalRow; lead: ProposalLead } | { ok: false; status: number; error: string }> {
   const { data: proposal, error: propErr } = await admin
     .from("proposal_preparations")
-    .select("id, lead_id, locked, client_response")
+    .select("id, lead_id, locked, client_response, award_kind")
     .eq("id", proposalId)
     .maybeSingle();
   if (propErr || !proposal) return { ok: false, status: 404, error: "Proposal not found." };

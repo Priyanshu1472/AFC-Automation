@@ -78,8 +78,21 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         .insert({ lead_id: leadId, created_by: caller.id, chat_opened_at: new Date().toISOString() })
         .select("id")
         .single();
-      if (insertErr) throw new Error(insertErr.message);
-      proposalId = created.id;
+      if (insertErr) {
+        // Two "open" calls raced (page load + a realtime re-fetch, or two
+        // people opening it together): the other one created the row a
+        // moment ago. Use that row instead of failing.
+        if (insertErr.code !== "23505") throw new Error(insertErr.message);
+        const { data: raced, error: racedErr } = await adminClient
+          .from("proposal_preparations")
+          .select("id")
+          .eq("lead_id", leadId)
+          .maybeSingle();
+        if (racedErr || !raced) throw new Error(insertErr.message);
+        proposalId = raced.id;
+      } else {
+        proposalId = created.id;
+      }
 
       // Fee notes (EMD / Tender Fee / Processing Fee) are deliberately NOT
       // created here — an eagerly-created stub could end up with a blank

@@ -18,7 +18,7 @@ import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import { ChatIcon, ArrowRightIcon, ActivityIcon } from "../../components/icons";
-import { CLIENT_RESPONSE_LABELS, CLIENT_RESPONSE_VARIANTS, canOpenProposal, isAccountsCommittee, isMyProposal, isTeamProposal } from "../../lib/proposalPrep";
+import { CLIENT_RESPONSE_VARIANTS, outcomeLabel, canOpenProposal, isAccountsCommittee, isMyProposal, isTeamProposal } from "../../lib/proposalPrep";
 import "../../styles/ProposalPreparationPage.css";
 import { isDeadlinePassed } from "../../lib/deadline";
 
@@ -383,7 +383,7 @@ export default function ProposalsListPage() {
                           </td>
                           <td>
                             {proposal ? (
-                              <Badge className="pp-outcome-badge" variant={CLIENT_RESPONSE_VARIANTS[proposal.client_response]}>{CLIENT_RESPONSE_LABELS[proposal.client_response]}</Badge>
+                              <Badge className="pp-outcome-badge" variant={CLIENT_RESPONSE_VARIANTS[proposal.client_response]}>{outcomeLabel(proposal)}</Badge>
                             ) : (
                               <span className="pp-td-muted">—</span>
                             )}
