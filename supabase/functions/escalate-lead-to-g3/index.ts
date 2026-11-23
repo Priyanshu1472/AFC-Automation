@@ -214,7 +214,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       if (pmtHolders.length) {
         await adminClient.from("lead_chat_participants").delete().eq("lead_id", lead.id).in("user_id", pmtHolders);
       }
-      await addLeadChatParticipants(adminClient, lead.id, assignedG3Ids, "g3");
+      await addLeadChatParticipants(adminClient, lead.id, assignedG3Ids, "g3", caller.id);
       await addLeadChatParticipants(adminClient, lead.id, mdHolders, "md");
 
       if (lead.chat_opened_at) {

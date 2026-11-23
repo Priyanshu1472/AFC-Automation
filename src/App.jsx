@@ -50,6 +50,7 @@ const LeadReportsPage = lazy(() => import("./pages/leads/LeadReportsPage"));
 const ProposalsListPage = lazy(() => import("./pages/proposals/ProposalsListPage"));
 const ProposalPreparationPage = lazy(() => import("./pages/proposals/ProposalPreparationPage"));
 const FeeNoteEditPage = lazy(() => import("./pages/proposals/FeeNoteEditPage"));
+const PbgNoteEditPage = lazy(() => import("./pages/proposals/PbgNoteEditPage"));
 const MonitoringListPage = lazy(() => import("./pages/monitoring/MonitoringListPage"));
 const MonitoringProjectPage = lazy(() => import("./pages/monitoring/MonitoringProjectPage"));
 const ClientInvoiceEditorPage = lazy(() => import("./pages/monitoring/ClientInvoiceEditorPage"));
@@ -320,6 +321,14 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
                       <FeeNoteEditPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/proposals/:leadId/pbg-note"
+                  element={
+                    <ProtectedRoute allowedRoles={LEAD_GENERATION_NAV_ROLES}>
+                      <PbgNoteEditPage />
                     </ProtectedRoute>
                   }
                 />

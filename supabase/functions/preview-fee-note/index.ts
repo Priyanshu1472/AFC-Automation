@@ -2,11 +2,11 @@
 // JWT must be ON. Renders the Bid Payment Requisition Note PDF
 // as base64 — the eye-icon "view" action in FeeNotesPanel, and also what
 // FeeNotePinActionModal shows before a forward/approve is confirmed with a
-// PIN. Read-only: no status change, no signature persisted. Access mirrors
-// the existing authorized set for a proposal's fee notes (the lead's Person
-// Responsible / Reviewer / Recommending Authority, or md/admin) — the same PDF
-// is shown at every stage, with signature slots filling in as the workflow
-// progresses.
+// PIN. Read-only: no status change, no signature persisted. Any internal
+// (non-Business Partner) user can view it, org-wide — same rule as
+// can_view_lead()'s md_approved clause (see 20261117010000_org_wide_
+// internal_proposal_view.sql) — the same PDF is shown at every stage, with
+// signature slots filling in as the workflow progresses.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -14,7 +14,7 @@ import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { bytesToBase64 } from "../_shared/letterPdf.ts";
 import { buildFeeNotePdfForNote } from "../_shared/feeNotePdf.ts";
-import { isAccountsMember } from "../_shared/proposalFinance.ts";
+import { isInternalRole } from "../_shared/proposalFinance.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -53,20 +53,10 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .maybeSingle();
     if (propErr || !proposal) return jsonRes(req, 404, { error: "Proposal not found." });
 
-    const { data: lead, error: leadErr } = await adminClient
-      .from("leads")
-      .select("person_responsible_id, reviewer_id, recommending_authority_id")
-      .eq("id", proposal.lead_id)
-      .maybeSingle();
+    const { data: lead, error: leadErr } = await adminClient.from("leads").select("id").eq("id", proposal.lead_id).maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
-    // The Accounts Committee checks the signed note before paying, so they
-    // can open it once the MD has approved it.
-    const authorized =
-      ["md", "admin"].includes(caller.role) ||
-      [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(caller.id) ||
-      (note.status === "approved" && (await isAccountsMember(adminClient, caller.id)));
-    if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this proposal." });
+    if (!isInternalRole(caller)) return jsonRes(req, 403, { error: "You do not have access to this proposal." });
 
     const built = await buildFeeNotePdfForNote(adminClient, feeNoteId);
     if (!built.ok) return jsonRes(req, 500, { error: built.error });

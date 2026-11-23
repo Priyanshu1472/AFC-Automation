@@ -71,7 +71,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   // chat upsert just means they'd need re-adding to post there.
   await adminClient
     .from("proposal_chat_participants")
-    .upsert({ proposal_id: proposal.id, user_id, role_at_add: "additional_pr" }, { onConflict: "proposal_id,user_id", ignoreDuplicates: true });
+    .upsert({ proposal_id: proposal.id, user_id, role_at_add: "additional_pr", added_by: caller.id }, { onConflict: "proposal_id,user_id", ignoreDuplicates: true });
 
   const { data: callerRow } = await adminClient.from("afc_users").select("full_name").eq("id", caller.id).maybeSingle();
 

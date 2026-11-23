@@ -80,7 +80,8 @@ export default function FeeNoteEditPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  // Per-field validation messages, keyed like "emd.amount" / "justification".
+  const [fieldErrors, setFieldErrors] = useState({});
   const [blocked, setBlocked] = useState("");
   const [ctx, setCtx] = useState(null); // { proposalId, lead, isNew, hasBa }
 
@@ -104,7 +105,7 @@ export default function FeeNoteEditPage() {
     const { data: lead } = await supabase
       .from("leads")
       .select(
-        "id, lead_number, title, client_name, portal_name, bid_number, lead_type, assigned_ba_id, submission_deadline, person_responsible_id, reviewer_id, recommending_authority_id, approval_note_data, " +
+        "id, lead_number, title, client_name, portal_name, bid_number, lead_type, assigned_ba_id, bp_names, bp_list, submission_deadline, person_responsible_id, reviewer_id, recommending_authority_id, approval_note_data, " +
         "ba:assigned_ba_id(full_name), pr:person_responsible_id(full_name, role), aa:recommending_authority_id(full_name, role)",
       )
       .eq("id", leadId)
@@ -188,7 +189,8 @@ export default function FeeNoteEditPage() {
     return composeFeeNotePreview({
       lead: ctx.lead,
       feeLines: composeLines,
-      bpName: ctx.lead.ba?.full_name || null,
+      bpName: ctx.lead.bp_names || ctx.lead.ba?.full_name || null,
+      bpList: ctx.lead.bp_list || null,
       submitTo,
       refLabel: portalRefLabel(ctx.lead.portal_name),
     });
@@ -201,31 +203,64 @@ export default function FeeNoteEditPage() {
     if (!ctx || implementationDirty) return;
     const composeLines = activeComposeLines(lines);
     setImplementation(composeLines.length
-      ? composeImplementationArrangements({ feeLines: composeLines, bpName: ctx.lead.ba?.full_name || null })
+      ? composeImplementationArrangements({ feeLines: composeLines, bpName: ctx.lead.bp_names || ctx.lead.ba?.full_name || null, bpList: ctx.lead.bp_list || null })
       : "");
   }, [ctx, lines, implementationDirty]);
 
   function setLine(key, patch) {
     setLines((p) => ({ ...p, [key]: { ...p[key], ...patch } }));
+    const touched = Object.keys(patch).map((k) => `${key}.${k}`);
+    if (patch.enabled !== undefined) touched.push("lines", `${key}.amount`, `${key}.ddInFavourOf`, `${key}.ddPayableAt`);
+    clearErrors(...touched);
+  }
+
+  function clearErrors(...keys) {
+    setFieldErrors((prev) => {
+      if (!keys.some((k) => prev[k])) return prev;
+      const next = { ...prev };
+      for (const k of keys) delete next[k];
+      return next;
+    });
+  }
+
+  // Check everything at once: highlight every bad box, jump to the first.
+  function validate() {
+    const errs = {};
+    const activeLines = FEE_LINES.filter((f) => lines[f.key]?.enabled);
+    if (!activeLines.length) errs.lines = "Tick at least one of EMD, Tender Fee or Processing Fee.";
+    for (const f of activeLines) {
+      const l = lines[f.key];
+      const amt = Number(l.amount);
+      if (!l.amount || !Number.isFinite(amt) || amt <= 0) errs[`${f.key}.amount`] = `Enter the ${f.label} amount (more than ₹0).`;
+      if (needsPayeeDetails(l.paymentMode)) {
+        if (!l.ddInFavourOf.trim()) errs[`${f.key}.ddInFavourOf`] = "Who the instrument is in favour of.";
+        if (!l.ddPayableAt.trim()) errs[`${f.key}.ddPayableAt`] = "Where it's payable.";
+      }
+    }
+    if (!justification.trim()) errs.justification = "Write why this requisition is needed.";
+    return errs;
+  }
+
+  function focusField(key) {
+    const el = document.querySelector(`[data-field="${key}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const input = el.matches("input, textarea") ? el : el.querySelector("input, textarea, button");
+    input?.focus({ preventScroll: true });
   }
 
   async function handleGenerate(e) {
     e.preventDefault();
-    const activeLines = FEE_LINES.filter((f) => lines[f.key]?.enabled);
-    if (!activeLines.length) { setError("Include at least one of EMD, Tender Fee, or Processing Fee."); return; }
-    for (const f of activeLines) {
-      const l = lines[f.key];
-      const amt = Number(l.amount);
-      if (!l.amount || !Number.isFinite(amt) || amt <= 0) { setError(`Enter a valid amount for ${f.label}.`); return; }
-      if (needsPayeeDetails(l.paymentMode) && (!l.ddInFavourOf.trim() || !l.ddPayableAt.trim())) {
-        setError(`For ${f.label}, fill in "in favour of" and "payable at".`);
-        return;
-      }
+    const errs = validate();
+    const keys = Object.keys(errs);
+    setFieldErrors(errs);
+    if (keys.length) {
+      showToast(keys.length === 1 ? errs[keys[0]] : `${keys.length} fields need fixing. They're highlighted in red.`, "danger");
+      focusField(keys[0]);
+      return;
     }
-    if (!justification.trim()) { setError("Justification is required."); return; }
 
     setSaving(true);
-    setError("");
     try {
       const feeFields = {};
       for (const f of FEE_LINES) {
@@ -249,8 +284,8 @@ export default function FeeNoteEditPage() {
           justification: justification.trim(),
         },
       });
-      if (fnError) { setError(await extractFunctionErrorMessage(fnError, "Failed to save this note.")); return; }
-      if (!data?.success) { setError(data?.error || "Failed to save this note."); return; }
+      if (fnError) { showToast(await extractFunctionErrorMessage(fnError, "Failed to save this note."), "danger"); return; }
+      if (!data?.success) { showToast(data?.error || "Failed to save this note.", "danger"); return; }
 
       try {
         const { data: pdfData, error: pdfError } = await supabase.functions.invoke("preview-fee-note", { body: { fee_note_id: data.fee_note_id } });
@@ -269,7 +304,7 @@ export default function FeeNoteEditPage() {
       showToast("Bid Payment Requisition Note saved.", "success");
       navigate(`/proposals/${leadId}`);
     } catch (err) {
-      setError(err.message || "Something went wrong.");
+      showToast(err.message || "Something went wrong.", "danger");
     } finally {
       setSaving(false);
     }
@@ -296,13 +331,16 @@ export default function FeeNoteEditPage() {
         {!blocked && ctx && (
           <form onSubmit={handleGenerate} noValidate className="pp-fnp-layout">
             <div className="pp-fnp-form">
-              {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
               <Card>
                 <Card.Header title="Fees to Requisition" subtitle="Tick each fee that applies to this bid, and how it's being paid." />
                 <Card.Body>
+                  {fieldErrors.lines && (
+                    <span className="field-error" data-field="lines" role="alert">{fieldErrors.lines}</span>
+                  )}
                   {FEE_LINES.map((f) => {
                     const l = lines[f.key] || {};
+                    const fe = (k) => fieldErrors[`${f.key}.${k}`];
                     return (
                       <div key={f.key} className="pp-fee-line">
                         <label className="pp-fee-note-check">
@@ -314,7 +352,17 @@ export default function FeeNoteEditPage() {
                             <div className="pp-fee-line-inputs">
                               <div className="field">
                                 <label className="field-label">Amount (₹)</label>
-                                <input type="number" min="0" step="0.01" className="input" value={l.amount} onChange={(ev) => setLine(f.key, { amount: ev.target.value })} disabled={saving} placeholder="Amount" />
+                                <input
+                                  type="number" min="0" step="0.01"
+                                  className={`input${fe("amount") ? " input-error" : ""}`}
+                                  aria-invalid={!!fe("amount")}
+                                  data-field={`${f.key}.amount`}
+                                  value={l.amount}
+                                  onChange={(ev) => setLine(f.key, { amount: ev.target.value })}
+                                  disabled={saving}
+                                  placeholder="Amount"
+                                />
+                                {fe("amount") && <span className="field-error" role="alert">{fe("amount")}</span>}
                               </div>
                               <div className="field">
                                 <label className="field-label">Borne by</label>
@@ -340,7 +388,8 @@ export default function FeeNoteEditPage() {
                               {needsPayeeDetails(l.paymentMode) && (
                                 <div className="field">
                                   <label className="field-label">In favour of</label>
-                                  <input className="input" value={l.ddInFavourOf} onChange={(ev) => setLine(f.key, { ddInFavourOf: ev.target.value })} disabled={saving} placeholder="e.g. Additional PCCF, CAMPA" />
+                                  <input className={`input${fe("ddInFavourOf") ? " input-error" : ""}`} aria-invalid={!!fe("ddInFavourOf")} data-field={`${f.key}.ddInFavourOf`} value={l.ddInFavourOf} onChange={(ev) => setLine(f.key, { ddInFavourOf: ev.target.value })} disabled={saving} placeholder="e.g. Additional PCCF, CAMPA" />
+                                  {fe("ddInFavourOf") && <span className="field-error" role="alert">{fe("ddInFavourOf")}</span>}
                                 </div>
                               )}
                             </div>
@@ -348,7 +397,8 @@ export default function FeeNoteEditPage() {
                               <div className="pp-fee-line-inputs">
                                 <div className="field">
                                   <label className="field-label">Payable at</label>
-                                  <input className="input" value={l.ddPayableAt} onChange={(ev) => setLine(f.key, { ddPayableAt: ev.target.value })} disabled={saving} placeholder="e.g. Ranchi" />
+                                  <input className={`input${fe("ddPayableAt") ? " input-error" : ""}`} aria-invalid={!!fe("ddPayableAt")} data-field={`${f.key}.ddPayableAt`} value={l.ddPayableAt} onChange={(ev) => setLine(f.key, { ddPayableAt: ev.target.value })} disabled={saving} placeholder="e.g. Ranchi" />
+                                  {fe("ddPayableAt") && <span className="field-error" role="alert">{fe("ddPayableAt")}</span>}
                                 </div>
                               </div>
                             )}
@@ -409,7 +459,17 @@ export default function FeeNoteEditPage() {
                   </div>
                   <div className="field">
                     <label className="field-label">Justification <span className="required">*</span></label>
-                    <textarea className="input" rows={3} value={justification} onChange={(e) => setJustification(e.target.value)} disabled={saving} placeholder="Why this requisition is needed for this project" />
+                    <textarea
+                      className={`input${fieldErrors.justification ? " input-error" : ""}`}
+                      aria-invalid={!!fieldErrors.justification}
+                      data-field="justification"
+                      rows={3}
+                      value={justification}
+                      onChange={(e) => { setJustification(e.target.value); clearErrors("justification"); }}
+                      disabled={saving}
+                      placeholder="Why this requisition is needed for this project"
+                    />
+                    {fieldErrors.justification && <span className="field-error" role="alert">{fieldErrors.justification}</span>}
                   </div>
                 </Card.Body>
               </Card>

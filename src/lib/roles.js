@@ -182,14 +182,6 @@ export const can = {
   // (see 20260910000000_company_documents.sql) — this is UI-only gating,
   // never the actual enforcement.
   manageCompanyDocuments: (role) => role === "admin",
-
-  // "Rebuild Index" for Find Relevant Experience search — a maintenance
-  // action (re-embed every project's searchable text), not a data-access
-  // permission, so it's gated the same way as other admin-only maintenance
-  // actions. The underlying writes are still governed by
-  // project_experience_embeddings' own RLS (can_edit_project per row), so
-  // this is UI-only gating, not the actual enforcement.
-  manageSearchIndex: (role) => role === "admin",
 };
 
 // A person can hold more than one committee (PMT/G3/Accounts) at once —
@@ -245,10 +237,12 @@ export function isValidRole(role) {
 // former G3/DGM-initial gate is now the named Recommending Authority
 // instead). See leadPermissions.js for the actual can()-style predicates.
 //
-// "Accounts" is assignable here but deliberately wired to nothing yet —
-// no page, panel or server-side check anywhere treats committee ===
-// "Accounts" as special. It exists purely so it can be set on a user now
-// and given real permissions later, the same way PMT/G3 already work.
+// "Accounts" is a real committee, not just an assignable placeholder:
+// is_accounts_committee_member()/isAccountsCommittee() (proposalPrep.js)
+// gate the Bid Payment Requisition Note payment step and the EMD refund/
+// PBG verification step (FeeNotesPanel, EmdPanel), and can_view_lead()
+// grants every internal (non-Business Partner) user — Accounts included —
+// org-wide view of any md_approved proposal (20261117010000).
 export const COMMITTEES = ["PMT", "G3", "Accounts"];
 
 // The tier eligible to be Person Responsible for a lead (owns its

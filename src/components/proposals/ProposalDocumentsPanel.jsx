@@ -22,7 +22,7 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export default function ProposalDocumentsPanel({ proposalId, documents, canManage, locked, onChanged }) {
+export default function ProposalDocumentsPanel({ bare = false, proposalId, documents, canManage, locked, defaultOpen = true, onChanged }) {
   const inputRef = useRef(null);
   const [uploading, setUploading] = useState("");
   const [error, setError] = useState("");
@@ -77,8 +77,9 @@ export default function ProposalDocumentsPanel({ proposalId, documents, canManag
   }
 
   return (
-    <Card>
-      <Collapsible
+    <Card className={bare ? "pp-bare" : ""}>
+      <Collapsible expandable={!bare}
+        defaultOpen={defaultOpen}
         title="Proposal Documents"
         icon={<FolderIcon />}
         action={editable ? (
@@ -99,7 +100,15 @@ export default function ProposalDocumentsPanel({ proposalId, documents, canManag
       >
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         {sorted.length === 0 ? (
-          <p className="pp-docs-empty">{editable ? "No files yet — use “Upload Files” to add one or more." : "No files were uploaded."}</p>
+          editable ? (
+            <button type="button" className="pp-dropzone" disabled={!!uploading} onClick={() => inputRef.current?.click()}>
+              <PaperclipIcon />
+              <strong>{uploading || "Upload the proposal documents"}</strong>
+              <span>Technical and financial proposal, forms, annexures. You can pick several files at once.</span>
+            </button>
+          ) : (
+            <p className="pp-empty-line">No files were uploaded.</p>
+          )
         ) : (
           <ul className="pp-docs-list">
             {sorted.map((doc) => (

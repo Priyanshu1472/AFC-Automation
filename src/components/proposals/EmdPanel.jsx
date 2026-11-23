@@ -1,160 +1,224 @@
 // EMD after the client's response (proposal_emd_tracking, driven by the
-// proposal-emd-action edge function). Shown once the response is recorded
-// and the approved Bid Payment Requisition Note carried an EMD.
+// proposal-emd-action edge function) — and, on an awarded proposal, the PBG
+// Note (PbgNotePanel, embedded) in the same card so both are in one place.
 //
-//   Not awarded  -> EMD Refund: Pending / Received toggle. While pending,
-//                   the team is reminded every 14 days. Once received, the
-//                   team uploads proof + remarks and forwards it to Accounts,
-//                   who verify it with their PIN (or send it back).
-//   Awarded      -> the team chooses EMD Refund (same as above) or
-//                   Converted to PBG: proof, EMD amount (from the note), PBG
-//                   amount, remaining PBG = PBG − EMD, the PBG Note, remarks,
-//                   then forward to Accounts, who process it with their PIN.
+//   Not awarded  -> EMD Refund: Pending / Received toggle (reminder every 14
+//                   days while pending). Once received, the team uploads
+//                   proof + remarks and forwards it to Accounts, who verify
+//                   it (PIN) or raise a Clarification Request. Setting it
+//                   back to Pending removes the uploaded proofs.
+//   Moves to RFP / Tender (EOI) or Empanelled -> EMD Refund, as above (no
+//                   project to hold it against).
+//   Project awarded -> EMD Refund (as above) / Converted to PBG (adjusted in
+//                   the PBG Note) / On Completion (refunded when the project
+//                   completes, no reminders — switch to EMD Refund if it
+//                   comes back earlier).
+//
+// The top row carries the three things people look for: the Bid Payment
+// Requisition Note, the PBG Note, and the Timeline (opens as a side panel
+// like the chat). Errors show as toasts.
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
 import { useToast } from "../../hooks/useToast";
+import { openPdfFromFunction } from "../../lib/openPdf";
 import Card from "../ui/Card";
 import Collapsible from "../ui/Collapsible";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
-import Alert from "../ui/Alert";
+import ConfirmDialog from "../ui/ConfirmDialog";
 import FinanceFiles from "./FinanceFiles";
 import FinanceActionModal from "./FinanceActionModal";
-import { RupeeIcon, InfoIcon, CheckCircleIcon, RotateCcwIcon, FileTextIcon } from "../icons";
+import FinanceTimelineDrawer from "./FinanceTimelineDrawer";
+import PbgNotePanel from "./PbgNotePanel";
+import { RupeeIcon, CheckCircleIcon, RotateCcwIcon, FileTextIcon, CalendarIcon, ShieldIcon, ClockIcon } from "../icons";
 import { formatINR } from "../../lib/monitoring";
-import { EMD_TRACK_LABELS, EMD_STATUS_LABELS, EMD_STATUS_VARIANTS, FINANCE_EVENT_LABELS } from "../../lib/proposalPrep";
+import { EMD_TRACK_LABELS, EMD_STATUS_LABELS, EMD_STATUS_VARIANTS, PBG_NOTE_STATUS_LABELS, isProjectAward, outcomeLabel } from "../../lib/proposalPrep";
 
 function fmtDateTime(d) {
   if (!d) return "";
   return new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-async function openPdf(fn, body) {
-  const { data, error } = await supabase.functions.invoke(fn, { body });
-  if (error) throw new Error(await extractFunctionErrorMessage(error, "Could not open the note."));
-  if (!data?.success || !data?.pdf_base64) throw new Error(data?.error || "Could not open the note.");
-  const bytes = Uint8Array.from(atob(data.pdf_base64), (c) => c.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-  window.open(url, "_blank", "noopener,noreferrer");
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-}
+const CHOICES = [
+  { track: "refund", icon: <RotateCcwIcon />, title: "EMD Refund" },
+  { track: "pbg", icon: <CheckCircleIcon />, title: "Converted to PBG" },
+  { track: "on_completion", icon: <CalendarIcon />, title: "On Completion" },
+];
 
-export default function EmdPanel({ proposal, feeNote, tracking, financeFiles, events, isTeam, isAccounts, onChanged }) {
+const CHOSEN_TOAST = {
+  refund: "EMD Refund chosen — mark it Received once the client returns it.",
+  pbg: "Converted to PBG — the EMD will be adjusted in the PBG Note.",
+  on_completion: "EMD will be refunded on completion of the project.",
+};
+
+export default function EmdPanel({ bare = false,
+  proposal, lead, profile, feeNote, tracking, pbgNote, financeFiles, events, isTeam, isAccounts,
+  additionalResponsibleIds = [], onChanged,
+}) {
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [busy, setBusy] = useState("");
-  const [error, setError] = useState("");
-  const [modal, setModal] = useState(null); // 'verify' | 'send_back' | 'forward'
-  const [pbgDraft, setPbgDraft] = useState("");
+  const [modal, setModal] = useState(null); // 'verify' | 'clarify'
+  const [confirm, setConfirm] = useState(null); // { title, message, label, run }
   const [remarksDraft, setRemarksDraft] = useState("");
+  const [timelineOpen, setTimelineOpen] = useState(false);
 
   const emd = Number(tracking?.emd_amount ?? feeNote?.emd_amount ?? 0);
-  const awarded = proposal.client_response === "awarded";
+  // Only a project award can convert the EMD to a PBG or hold it until
+  // completion; every other result simply refunds it.
+  const awarded = isProjectAward(proposal);
   const track = tracking?.track || null;
   const status = tracking?.status || null;
   const isRefund = track === "refund";
-  const teamEditable = isTeam && (status === "draft" || status === "pending" || status === "received");
+  const pbgLocked = track === "pbg" && pbgNote && pbgNote.status !== "draft";
+  const teamEditable = isTeam && ["draft", "pending", "received", "awaiting_completion"].includes(status) && !pbgLocked;
+  const canCreatePbg = isTeam || ["admin", "md"].includes(profile?.role);
 
-  // Keep the PBG/remarks inputs in step with what's saved whenever the row
-  // changes (realtime refresh, another user's edit).
   useEffect(() => {
-    setPbgDraft(tracking?.pbg_amount != null ? String(tracking.pbg_amount) : "");
     setRemarksDraft(tracking?.remarks || "");
-  }, [tracking?.id, tracking?.pbg_amount, tracking?.remarks, tracking?.status]);
+  }, [tracking?.id, tracking?.remarks, tracking?.status]);
 
   async function act(action, extra = {}, okMsg) {
     setBusy(action);
-    setError("");
     try {
       const { data, error: fnErr } = await supabase.functions.invoke("proposal-emd-action", { body: { proposal_id: proposal.id, action, ...extra } });
-      if (fnErr) { setError(await extractFunctionErrorMessage(fnErr, "Something went wrong.")); return false; }
-      if (!data?.success) { setError(data?.error || "Something went wrong."); return false; }
+      if (fnErr) { showToast(await extractFunctionErrorMessage(fnErr, "Something went wrong."), "danger"); return false; }
+      if (!data?.success) { showToast(data?.error || "Something went wrong.", "danger"); return false; }
       if (okMsg) showToast(okMsg, "success");
       onChanged();
       return true;
     } catch (err) {
-      setError(err.message || "Something went wrong.");
+      showToast(err.message || "Something went wrong.", "danger");
       return false;
     } finally {
       setBusy("");
     }
   }
 
-  async function view(kind) {
+  async function openNote(kind) {
     setBusy(`view_${kind}`);
-    setError("");
     try {
-      if (kind === "pbg") await openPdf("preview-pbg-note", { proposal_id: proposal.id });
-      else await openPdf("preview-fee-note", { fee_note_id: feeNote.id });
+      if (kind === "fee") await openPdfFromFunction("preview-fee-note", { fee_note_id: feeNote.id });
+      else await openPdfFromFunction("preview-pbg-note", { proposal_id: proposal.id });
     } catch (err) {
-      setError(err.message);
+      showToast(err.message, "danger");
     } finally {
       setBusy("");
     }
   }
 
-  const pbgNum = Number(pbgDraft);
-  const pbgValid = pbgDraft !== "" && Number.isFinite(pbgNum) && pbgNum > 0;
-  const pbgDirty = String(tracking?.pbg_amount ?? "") !== pbgDraft.trim() || (tracking?.remarks || "") !== remarksDraft.trim();
-  const remaining = pbgValid ? pbgNum - emd : null;
-
-  async function createPbgNote() {
-    if (!pbgValid) { setError("Enter the PBG amount."); return; }
-    const ok = await act("save_pbg", { pbg_amount: pbgNum, remark: remarksDraft.trim() });
-    if (ok) await view("pbg");
+  function pbgButton() {
+    if (pbgNote) return openNote("pbg");
+    if (canCreatePbg) return navigate(`/proposals/${lead.id}/pbg-note`);
+    document.getElementById("pbg-note")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  const proofPurpose = isRefund ? "emd_refund" : "pbg";
-  const proofCount = financeFiles.filter((f) => f.purpose === proofPurpose).length;
-  const emdEvents = events.filter((ev) => ev.scope === "emd");
+  const refundProofCount = financeFiles.filter((f) => f.purpose === "emd_refund").length;
+  const timelineEvents = events.filter((ev) => ev.scope === "emd" || ev.scope === "pbg");
+
+  function choose(next) {
+    if (next === track) return;
+    const run = () => act("choose_track", { track: next }, CHOSEN_TOAST[next]);
+    if (isRefund && refundProofCount > 0) {
+      setConfirm({ title: `Switch to ${EMD_TRACK_LABELS[next]}?`, message: "The refund proofs already uploaded will be removed.", label: "Switch", run });
+      return;
+    }
+    run();
+  }
+
+  function setPending() {
+    const run = () => act("set_refund_received", { received: false }, "Marked pending.");
+    if (refundProofCount > 0) {
+      setConfirm({
+        title: "Mark the refund pending again?",
+        message: `The ${refundProofCount === 1 ? "uploaded proof" : `${refundProofCount} uploaded proofs`} will be removed. Upload them again once the refund is received.`,
+        label: "Mark Pending",
+        run,
+      });
+      return;
+    }
+    run();
+  }
+
+  const statusBadge = !track
+    ? <Badge variant="warning">Action Needed</Badge>
+    : track === "pbg"
+      ? <Badge variant={status === "completed" ? "success" : "neutral"}>{status === "completed" ? "PBG Done" : pbgNote ? PBG_NOTE_STATUS_LABELS[pbgNote.status] : "PBG Note pending"}</Badge>
+      : <Badge variant={EMD_STATUS_VARIANTS[status]}>{status === "completed" ? "Refund Verified" : EMD_STATUS_LABELS[status]}</Badge>;
 
   const headerAction = (
     <div className="pp-fee-note-icons">
       {track && <Badge variant="brand">{EMD_TRACK_LABELS[track]}</Badge>}
-      {status && <Badge variant={EMD_STATUS_VARIANTS[status]}>{status === "completed" ? (isRefund ? "Refund Verified" : "PBG Processed") : EMD_STATUS_LABELS[status]}</Badge>}
-      {!track && <Badge variant="warning">Action Needed</Badge>}
+      {statusBadge}
     </div>
   );
 
   return (
-    <Card>
-      <Collapsible title={awarded ? "EMD — Refund or PBG" : "EMD Refund"} icon={<RupeeIcon />} action={headerAction}>
-        {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
-
-        <div className="pp-emd-facts">
-          <div><span>EMD deposited</span><strong>{formatINR(emd)}</strong></div>
-          <div><span>Client response</span><strong>{awarded ? "Awarded" : "Not awarded"}</strong></div>
-          {feeNote && (
-            <div>
-              <span>EMD note</span>
-              <button type="button" className="pp-link-btn" disabled={!!busy} onClick={() => view("fee")}>
-                <FileTextIcon /> {busy === "view_fee" ? "Opening…" : "View Bid Payment Requisition Note"}
+    <Card className={bare ? "pp-bare" : ""}>
+      <Collapsible expandable={!bare} title={awarded ? "EMD & PBG" : "EMD Refund"} icon={<RupeeIcon />} action={headerAction}>
+        {/* ── Summary + quick buttons ─────────────────────────────── */}
+        <div className="pp-emd-top">
+          <div className="pp-emd-stats">
+            <div><span>EMD deposited</span><strong>{formatINR(emd)}</strong></div>
+            <div><span>Client response</span><strong className={proposal.client_response === "awarded" ? "is-good" : ""}>{outcomeLabel(proposal)}</strong></div>
+          </div>
+          <div className="pp-chip-row">
+            {feeNote && (
+              <button type="button" className="pp-chip-btn" disabled={!!busy} onClick={() => openNote("fee")}>
+                <FileTextIcon /> {busy === "view_fee" ? "Opening…" : "Bid Payment Requisition Note"}
               </button>
-            </div>
-          )}
+            )}
+            {awarded && (pbgNote || canCreatePbg) && (
+              <button type="button" className="pp-chip-btn" disabled={!!busy} onClick={pbgButton}>
+                <ShieldIcon /> {busy === "view_pbg" ? "Opening…" : pbgNote ? "PBG Note" : "Create PBG Note"}
+              </button>
+            )}
+            <button type="button" className="pp-chip-btn" onClick={() => setTimelineOpen(true)}>
+              <ClockIcon /> Timeline{timelineEvents.length ? <span className="pp-chip-count">{timelineEvents.length}</span> : null}
+            </button>
+          </div>
         </div>
 
-        {/* ── Choose: awarded only ─────────────────────────────── */}
-        {awarded && (!track || (teamEditable && proofCount === 0)) && (
-          isTeam ? (
-            <div className="pp-flow-respond">
-              <strong className="pp-flow-respond-title">{track ? "Change what happens to the EMD" : "What happens to the EMD?"}</strong>
-              <div className="pp-flow-choices" role="radiogroup" aria-label="EMD outcome">
-                <button type="button" role="radio" aria-checked={track === "refund"} className={`pp-flow-choice is-awarded${track === "refund" ? " is-selected" : ""}`} disabled={!!busy} onClick={() => track !== "refund" && act("choose_track", { track: "refund" })}>
-                  <RotateCcwIcon />
-                  <span><strong>EMD Refund</strong><small>The client returns the EMD</small></span>
-                </button>
-                <button type="button" role="radio" aria-checked={track === "pbg"} className={`pp-flow-choice is-awarded${track === "pbg" ? " is-selected" : ""}`} disabled={!!busy} onClick={() => track !== "pbg" && act("choose_track", { track: "pbg" })}>
-                  <CheckCircleIcon />
-                  <span><strong>Converted to PBG</strong><small>EMD adjusted towards the Performance Bank Guarantee</small></span>
-                </button>
-              </div>
+        {/* ── Choose: awarded only ───────────────────────────────── */}
+        {/* Always visible on an awarded proposal so everyone can see which
+            way the EMD went; only the lead's team can change it, and only
+            until it's forwarded / the PBG Note has left draft. */}
+        {awarded && (
+          <div className="pp-emd-choose">
+            <span className="pp-fin-sub">What happens to the EMD</span>
+            <div className="pp-choice-row" role="radiogroup" aria-label="EMD outcome">
+              {CHOICES.map((c) => {
+                const canChange = isTeam && (!track || teamEditable);
+                return (
+                  <button
+                    key={c.track}
+                    type="button"
+                    role="radio"
+                    aria-checked={track === c.track}
+                    className={`pp-choice${track === c.track ? " is-selected" : ""}${canChange ? "" : " is-readonly"}`}
+                    disabled={!!busy || !canChange}
+                    onClick={() => choose(c.track)}
+                  >
+                    {c.icon}
+                    <span>{c.title}</span>
+                  </button>
+                );
+              })}
             </div>
-          ) : (
-            !track && <p className="pp-flow-note">Waiting for the Person Responsible, Reviewer or Recommending Authority to choose EMD Refund or Converted to PBG.</p>
-          )
+            {!isTeam && (
+              <span className="pp-choice-note">
+                {track ? "Only the lead's Person Responsible, Reviewer or Recommending Authority can change this." : "Waiting for the lead's Person Responsible, Reviewer or Recommending Authority to choose."}
+              </span>
+            )}
+            {isTeam && track && !teamEditable && (
+              <span className="pp-choice-note">Locked — it has already gone forward for approval.</span>
+            )}
+          </div>
         )}
 
-        {/* Not awarded, but recorded before EMD tracking existed. */}
+        {/* No choice to make (not a project award), but recorded before EMD
+            tracking existed. */}
         {!awarded && !track && (
           isTeam ? (
             <div className="pp-fin-actions" style={{ justifyContent: "flex-start" }}>
@@ -163,43 +227,54 @@ export default function EmdPanel({ proposal, feeNote, tracking, financeFiles, ev
               </Button>
             </div>
           ) : (
-            <p className="pp-flow-note">EMD refund tracking hasn't been started yet.</p>
+            <p className="pp-fin-wait">EMD refund tracking hasn't been started yet.</p>
           )
         )}
 
         {tracking?.accounts_remark && (status === "received" || status === "draft") && (
-          <p className="pp-fee-note-remark">Sent back by Accounts: {tracking.accounts_remark}</p>
+          <div className="pp-callout is-warning">
+            <strong>Clarification requested by Accounts</strong>
+            <span>{tracking.accounts_remark}</span>
+          </div>
         )}
 
-        {/* ── Refund ──────────────────────────────────────────── */}
+        {track === "on_completion" && (
+          <p className="pp-fin-wait">The EMD will be refunded on completion of the project.</p>
+        )}
+
+        {/* ── Refund ─────────────────────────────────────────────── */}
         {isRefund && (status === "pending" || status === "received") && (
-          <div className="pp-fin-block">
-            <div className="pp-fin-block-head">
-              <strong>EMD refund</strong>
+          <div className="pp-fin-step">
+            <div className="pp-fin-step-head">
+              <strong>EMD refund from the client</strong>
               {isTeam ? (
                 <div className="pp-seg" role="radiogroup" aria-label="EMD refund">
-                  <button type="button" role="radio" aria-checked={status === "received"} className={`pp-seg-btn${status === "received" ? " is-on" : ""}`} disabled={!!busy || status === "received"} onClick={() => act("set_refund_received", { received: true })}>Received</button>
-                  <button type="button" role="radio" aria-checked={status === "pending"} className={`pp-seg-btn${status === "pending" ? " is-on" : ""}`} disabled={!!busy || status === "pending"} onClick={() => act("set_refund_received", { received: false })}>Pending</button>
+                  <button type="button" role="radio" aria-checked={status === "pending"} className={`pp-seg-btn${status === "pending" ? " is-on" : ""}`} disabled={!!busy || status === "pending"} onClick={setPending}>Pending</button>
+                  <button type="button" role="radio" aria-checked={status === "received"} className={`pp-seg-btn${status === "received" ? " is-on" : ""}`} disabled={!!busy || status === "received"} onClick={() => act("set_refund_received", { received: true }, "Marked received — upload the proof and forward it to Accounts.")}>Received</button>
                 </div>
               ) : (
                 <Badge variant={EMD_STATUS_VARIANTS[status]}>{EMD_STATUS_LABELS[status]}</Badge>
               )}
             </div>
-            {status === "pending" && (
-              <p className="pp-note-bar-text pp-fin-hint"><InfoIcon /> The EMD has to come back from the client. Until it's marked Received, the Person Responsible, Reviewer and Recommending Authority get a reminder every 14 days.</p>
-            )}
             {status === "received" && (
               <>
                 <FinanceFiles proposalId={proposal.id} purpose="emd_refund" files={financeFiles} canManage={isTeam} emptyText="Upload the refund proof (bank statement, credit advice, returned BG/DD…)." onChanged={onChanged} />
                 {isTeam && (
                   <>
                     <div className="field">
-                      <label className="field-label" htmlFor="emd-refund-remarks">Remarks</label>
+                      <label className="field-label" htmlFor="emd-refund-remarks">Remarks <span className="required">*</span></label>
                       <textarea id="emd-refund-remarks" className="input" rows={2} maxLength={2000} value={remarksDraft} onChange={(e) => setRemarksDraft(e.target.value)} disabled={!!busy} />
                     </div>
                     <div className="pp-fin-actions">
-                      <Button variant="primary" size="sm" disabled={!!busy || proofCount === 0} title={proofCount === 0 ? "Upload at least one proof first" : undefined} loading={busy === "forward"} onClick={() => act("forward", { remark: remarksDraft.trim() }, "Forwarded to Accounts for verification.")}>
-                        Forward to Accounts for Verification
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={!!busy || refundProofCount === 0 || !remarksDraft.trim()}
+                        title={refundProofCount === 0 ? "Upload at least one proof first" : !remarksDraft.trim() ? "Add a remark first" : undefined}
+                        loading={busy === "forward"}
+                        onClick={() => act("forward", { remark: remarksDraft.trim() }, "Forwarded to Accounts for verification.")}
+                      >
+                        Forward to Accounts
                       </Button>
                     </div>
                   </>
@@ -209,107 +284,47 @@ export default function EmdPanel({ proposal, feeNote, tracking, financeFiles, ev
           </div>
         )}
 
-        {/* ── PBG draft ───────────────────────────────────────── */}
-        {track === "pbg" && status === "draft" && (
-          <div className="pp-fin-block">
-            <div className="pp-fin-block-head"><strong>Converted to PBG</strong></div>
-            <FinanceFiles proposalId={proposal.id} purpose="pbg" files={financeFiles} canManage={isTeam} emptyText="Upload the proof (PDF, Word or image)." onChanged={onChanged} />
-            {isTeam ? (
-              <>
-                <div className="pp-pbg-grid">
-                  <div className="field">
-                    <label className="field-label">EMD amount</label>
-                    <div className="pp-pbg-static">{formatINR(emd)}</div>
-                  </div>
-                  <div className="field">
-                    <label className="field-label" htmlFor="pbg-amount">PBG amount (₹)</label>
-                    <input id="pbg-amount" className="input" type="number" min="0" step="0.01" inputMode="decimal" value={pbgDraft} onChange={(e) => setPbgDraft(e.target.value)} disabled={!!busy} placeholder="e.g. 500000" />
-                  </div>
-                  <div className="field">
-                    <label className="field-label">{remaining != null && remaining < 0 ? "Excess EMD (EMD − PBG)" : "Remaining PBG (PBG − EMD)"}</label>
-                    <div className={`pp-pbg-static${remaining != null && remaining < 0 ? " is-neg" : ""}`}>{remaining != null ? formatINR(Math.abs(remaining)) : "—"}</div>
-                  </div>
-                </div>
-                <div className="field">
-                  <label className="field-label" htmlFor="pbg-remarks">Remarks</label>
-                  <textarea id="pbg-remarks" className="input" rows={2} maxLength={2000} value={remarksDraft} onChange={(e) => setRemarksDraft(e.target.value)} disabled={!!busy} />
-                </div>
-                <div className="pp-fin-actions">
-                  <Button variant="secondary" size="sm" icon={<FileTextIcon />} disabled={!!busy || !pbgValid} loading={busy === "save_pbg" || busy === "view_pbg"} onClick={createPbgNote}>
-                    {tracking?.pbg_amount != null && !pbgDirty ? "View PBG Note" : "Create PBG Note"}
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={!!busy || tracking?.pbg_amount == null || pbgDirty || proofCount === 0}
-                    title={tracking?.pbg_amount == null || pbgDirty ? "Create the PBG note first" : proofCount === 0 ? "Upload at least one proof first" : undefined}
-                    loading={busy === "forward"}
-                    onClick={() => act("forward", { remark: remarksDraft.trim() }, "Forwarded to Accounts.")}
-                  >
-                    Forward to Accounts
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <p className="pp-flow-note">The team is preparing the PBG note.</p>
-            )}
-          </div>
-        )}
-
-        {/* ── With Accounts / completed ───────────────────────── */}
-        {(status === "pending_accounts" || status === "completed") && (
-          <div className="pp-fin-block">
-            <div className="pp-fin-block-head">
-              <strong>{isRefund ? "EMD Refund Verification" : "PBG with Accounts"}</strong>
+        {/* ── With Accounts / verified (refund, or a legacy PBG row) ── */}
+        {(status === "pending_accounts" || (status === "completed" && track !== "pbg")) && (
+          <div className="pp-fin-step">
+            <div className="pp-fin-step-head">
+              <strong>{isRefund ? "Refund verification" : "PBG with Accounts"}</strong>
               <span className={status === "completed" ? "pp-fin-done" : "pp-fin-wait"}>
                 {status === "completed"
-                  ? `${isRefund ? "Verified" : "Processed"} by Accounts ${fmtDateTime(tracking.completed_at)}${tracking.completer?.full_name ? ` (${tracking.completer.full_name})` : ""}`
-                  : `Forwarded ${fmtDateTime(tracking.forwarded_at)}${tracking.forwarder?.full_name ? ` by ${tracking.forwarder.full_name}` : ""} — waiting for Accounts`}
+                  ? `Verified ${fmtDateTime(tracking.completed_at)}${tracking.completer?.full_name ? ` · ${tracking.completer.full_name}` : ""}`
+                  : `Forwarded ${fmtDateTime(tracking.forwarded_at)}${tracking.forwarder?.full_name ? ` by ${tracking.forwarder.full_name}` : ""}`}
               </span>
             </div>
-            {!isRefund && (
-              <div className="pp-pbg-grid">
-                <div className="field"><label className="field-label">EMD amount</label><div className="pp-pbg-static">{formatINR(emd)}</div></div>
-                <div className="field"><label className="field-label">PBG amount</label><div className="pp-pbg-static">{formatINR(tracking.pbg_amount)}</div></div>
-                <div className="field">
-                  <label className="field-label">{Number(tracking.pbg_amount) - emd < 0 ? "Excess EMD (EMD − PBG)" : "Remaining PBG (PBG − EMD)"}</label>
-                  <div className="pp-pbg-static">{formatINR(Math.abs(Number(tracking.pbg_amount) - emd))}</div>
-                </div>
+            {tracking.remarks && <p className="pp-fin-quote"><span>Team remarks</span>{tracking.remarks}</p>}
+            {tracking.accounts_remark && status === "completed" && <p className="pp-fin-quote"><span>Accounts remarks</span>{tracking.accounts_remark}</p>}
+            <FinanceFiles proposalId={proposal.id} purpose={isRefund ? "emd_refund" : "pbg"} files={financeFiles} canManage={false} onChanged={onChanged} />
+            {isAccounts && status === "pending_accounts" && (
+              <div className="pp-fin-actions">
+                <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => setModal("clarify")}>Clarification Request</Button>
+                <Button variant="primary" size="sm" disabled={!!busy} onClick={() => setModal("verify")}>{isRefund ? "Verify EMD Refund" : "Confirm PBG Processed"}</Button>
               </div>
             )}
-            {tracking.remarks && <p className="pp-fee-note-justification"><strong>Team remarks:</strong> {tracking.remarks}</p>}
-            {tracking.accounts_remark && status === "completed" && <p className="pp-fee-note-justification"><strong>Accounts remarks:</strong> {tracking.accounts_remark}</p>}
-            <span className="pp-fin-sub">Uploaded proofs</span>
-            <FinanceFiles proposalId={proposal.id} purpose={proofPurpose} files={financeFiles} canManage={false} onChanged={onChanged} />
-            <div className="pp-fin-actions">
-              {!isRefund && (
-                <Button variant="secondary" size="sm" icon={<FileTextIcon />} loading={busy === "view_pbg"} disabled={!!busy} onClick={() => view("pbg")}>View PBG Note</Button>
-              )}
-              {isAccounts && status === "pending_accounts" && (
-                <>
-                  <Button variant="secondary" size="sm" disabled={!!busy} onClick={() => setModal("send_back")}>Send Back</Button>
-                  <Button variant="primary" size="sm" disabled={!!busy} onClick={() => setModal("verify")}>{isRefund ? "Verify EMD Refund" : "Confirm PBG Processed"}</Button>
-                </>
-              )}
-            </div>
           </div>
         )}
 
-        {emdEvents.length > 0 && (
-          <div className="pp-fin-history">
-            <span className="pp-fin-sub">History</span>
-            <ul>
-              {emdEvents.map((ev) => (
-                <li key={ev.id}>
-                  <span>{FINANCE_EVENT_LABELS[ev.action] || ev.action}{ev.actor?.full_name ? ` — ${ev.actor.full_name}` : ""}{ev.remark ? `: “${ev.remark}”` : ""}</span>
-                  <time>{fmtDateTime(ev.created_at)}</time>
-                </li>
-              ))}
-            </ul>
-          </div>
+        {/* ── PBG Note, in the same card ─────────────────────────── */}
+        {awarded && (
+          <PbgNotePanel
+            embedded
+            proposal={proposal}
+            lead={lead}
+            note={pbgNote}
+            financeFiles={financeFiles}
+            events={events}
+            profile={profile}
+            isAccounts={isAccounts}
+            additionalResponsibleIds={additionalResponsibleIds}
+            onChanged={onChanged}
+          />
         )}
       </Collapsible>
 
+      {timelineOpen && <FinanceTimelineDrawer title="EMD & PBG Timeline" events={timelineEvents} onClose={() => setTimelineOpen(false)} />}
       {modal === "verify" && (
         <FinanceActionModal
           title={isRefund ? "Verify EMD Refund" : "Confirm PBG Processed"}
@@ -323,17 +338,26 @@ export default function EmdPanel({ proposal, feeNote, tracking, financeFiles, ev
           onSuccess={() => { setModal(null); showToast(isRefund ? "EMD refund verified." : "PBG marked processed.", "success"); onChanged(); }}
         />
       )}
-      {modal === "send_back" && (
+      {modal === "clarify" && (
         <FinanceActionModal
-          title="Send Back to the Team"
-          intro="The team can fix it and forward it again."
-          confirmLabel="Send Back"
-          confirmVariant="danger"
-          remarkLabel="What needs fixing"
+          title="Clarification Request"
+          intro="It goes back to the Person Responsible, Reviewer and Recommending Authority. Once they've answered, they forward it to Accounts again."
+          confirmLabel="Send Clarification Request"
+          remarkLabel="What needs clarifying"
           remarkRequired
-          run={({ remark }) => supabase.functions.invoke("proposal-emd-action", { body: { proposal_id: proposal.id, action: "send_back", remark } })}
+          run={({ remark }) => supabase.functions.invoke("proposal-emd-action", { body: { proposal_id: proposal.id, action: "request_clarification", remark } })}
           onClose={() => setModal(null)}
-          onSuccess={() => { setModal(null); showToast("Sent back to the team.", "success"); onChanged(); }}
+          onSuccess={() => { setModal(null); showToast("Clarification Request sent to the team.", "success"); onChanged(); }}
+        />
+      )}
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.title}
+          message={confirm.message}
+          confirmLabel={confirm.label}
+          loading={!!busy}
+          onConfirm={async () => { await confirm.run(); setConfirm(null); }}
+          onCancel={() => setConfirm(null)}
         />
       )}
     </Card>

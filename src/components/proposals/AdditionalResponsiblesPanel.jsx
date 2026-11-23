@@ -13,10 +13,12 @@ import Button from "../ui/Button";
 import Select from "../ui/Select";
 import Alert from "../ui/Alert";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
-import { UserPlusIcon, CloseIcon } from "../icons";
+import { CloseIcon } from "../icons";
 
-export default function AdditionalResponsiblesPanel({ leadId, team, existingIds, additional, canManage, locked, onChanged }) {
-  const [adding, setAdding] = useState(false);
+// The "add" control is an icon button the parent puts beside the Person
+// Responsible label, so the picker is controlled via adding/onAddingChange.
+export default function AdditionalResponsiblesPanel({ leadId, team, existingIds, additional, canManage, locked, onChanged, adding, onAddingChange }) {
+  const setAdding = onAddingChange;
   const [options, setOptions] = useState([]);
   const [selected, setSelected] = useState("");
   const [busy, setBusy] = useState(false);
@@ -73,7 +75,7 @@ export default function AdditionalResponsiblesPanel({ leadId, team, existingIds,
     }
   }
 
-  if (!canManage && additional.length === 0) return null;
+  if (additional.length === 0 && !(canManage && !locked && adding) && !error) return null;
 
   return (
     <div className="pp-additional-pr">
@@ -98,16 +100,12 @@ export default function AdditionalResponsiblesPanel({ leadId, team, existingIds,
         </div>
       )}
 
-      {canManage && !locked && (
-        adding ? (
-          <div className="pp-additional-pr-add-row">
-            <Select searchable options={options} value={selected} onChange={setSelected} placeholder="Select a team member…" />
-            <Button size="sm" loading={busy} disabled={!selected} onClick={handleAdd}>Add</Button>
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setAdding(false); setSelected(""); setError(""); }}>Cancel</Button>
-          </div>
-        ) : (
-          <Button size="sm" variant="secondary" icon={<UserPlusIcon />} onClick={() => setAdding(true)}>Add Person Responsible</Button>
-        )
+      {canManage && !locked && adding && (
+        <div className="pp-additional-pr-add-row">
+          <Select searchable options={options} value={selected} onChange={setSelected} placeholder="Add another Person Responsible…" />
+          <Button size="sm" loading={busy} disabled={!selected} onClick={handleAdd}>Add</Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setAdding(false); setSelected(""); setError(""); }}>Cancel</Button>
+        </div>
       )}
 
       {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}

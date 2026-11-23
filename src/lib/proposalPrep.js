@@ -55,72 +55,149 @@ export const CLIENT_RESPONSE_LABELS = {
   rejected: "Rejected",
 };
 
+// What "Awarded" meant (proposal_preparations.award_kind). Only a project
+// award opens Monitoring and can carry a PBG / EMD-on-completion.
+export const AWARD_KIND_LABELS = {
+  project: "Awarded",
+  next_stage: "Moves to RFP / Tender",
+  empanelled: "Empanelled",
+};
+
+export function isProjectAward(proposal) {
+  return proposal?.client_response === "awarded" && (proposal.award_kind || "project") === "project";
+}
+
+// The outcome as one short label for badges and lists.
+export function outcomeLabel(proposal) {
+  if (proposal?.client_response === "awarded") return AWARD_KIND_LABELS[proposal.award_kind || "project"];
+  return CLIENT_RESPONSE_LABELS[proposal?.client_response || "pending"];
+}
+
+export function isEoiLead(lead) {
+  return lead?.source !== "suo_moto" && lead?.lead_type === "eoi";
+}
+
+// The lead's document type as a short label: RFP / EOI / Suo Moto.
+export function leadTypeLabel(lead) {
+  if (lead?.source === "suo_moto") return "Suo Moto";
+  return isEoiLead(lead) ? "EOI" : "RFP";
+}
+
+// Is the proposed value needed before locking? Mirrors lock-proposal's
+// proposedValueRule():
+//   "none"      marked Empanelment only — no proposed value at all
+//   "optional"  EOI — enter one if the client asked for it
+//   "required"  RFP / Suo Moto
+export function proposedValueRule(lead, proposal) {
+  if (proposal?.empanelment_only) return "none";
+  if (isEoiLead(lead)) return "optional";
+  return "required";
+}
+
 export const CLIENT_RESPONSE_VARIANTS = {
   pending: "neutral",
   awarded: "success",
   rejected: "danger",
 };
 
-// Who gets "Open Proposal" — md/admin, or the lead's three assignees
-// (Person Responsible, Reviewer, and Recommending Authority/authorised
-// signatory, who locks the proposal and records the client's outcome).
-// Shared by LeadListPage/LeadDetailPage's row action and ProposalsListPage
-// so the rule can't drift between entry points.
-//
-// The Accounts Committee can open a proposal too, but only ever sees ones
-// whose Bid Payment Requisition Note the MD has approved (RLS returns no
-// other rows to them), so seeing the row is enough here.
+// Who gets "Open Proposal" — md/admin, the lead's three assignees (Person
+// Responsible, Reviewer, and Recommending Authority/authorised signatory,
+// who locks the proposal and records the client's outcome), or any other
+// internal (non-Business Partner) user, org-wide — RLS/create-proposal-
+// preparation grant the same rule (see 20261117010000_org_wide_internal_
+// proposal_view.sql). Shared by LeadListPage/LeadDetailPage's row action
+// and ProposalsListPage so the rule can't drift between entry points.
 export function canOpenProposal(lead, profile) {
   if (!profile || !lead) return false;
   if (["md", "admin"].includes(profile.role)) return true;
   if ([lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id)) return true;
-  return isAccountsCommittee(profile);
+  return profile.role !== "business_associate";
 }
 
 export function isAccountsCommittee(profile) {
   return hasCommittee(profile, "Accounts");
 }
 
+// The lead's own team on a proposal: Person Responsible / Reviewer /
+// Recommending Authority, or an additional Person Responsible.
+export function isProposalTeam(profile, lead, additionalResponsibleIds = []) {
+  if (!profile || !lead) return false;
+  return [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id)
+    || additionalResponsibleIds.includes(profile.id);
+}
+
 // What still stands between a proposal and "Lock Proposal" — mirrored by
 // lock-proposal's own server-side checks. Empty array = ready to lock.
-export function lockBlockers({ proposal, feeNote, documents }) {
+export function lockBlockers({ proposal, lead, feeNote, documents }) {
   const out = [];
   if (feeNote?.status !== "approved") out.push(`${FEE_NOTE_TITLE} approved by the MD`);
   if (!documents?.length) out.push("Proposal documents uploaded");
-  if (proposal?.proposed_value == null) out.push("Proposed value entered in Financial");
+  if (proposedValueRule(lead, proposal) === "required" && proposal?.proposed_value == null) {
+    out.push("Proposed value entered in Financial (or marked Empanelment only)");
+  }
   return out;
 }
 
 // ── EMD after the client's response (proposal_emd_tracking) ─────────
-export const EMD_TRACK_LABELS = { refund: "EMD Refund", pbg: "Converted to PBG" };
-
+export const EMD_TRACK_LABELS = { refund: "EMD Refund", pbg: "Converted to PBG", on_completion: "On Completion" };
 export const EMD_STATUS_LABELS = {
-  draft: "Draft",
+  draft: "In PBG Note",
   pending: "Refund Pending",
   received: "Refund Received",
   pending_accounts: "With Accounts",
   completed: "Completed",
+  awaiting_completion: "Refund on Completion",
 };
-
 export const EMD_STATUS_VARIANTS = {
   draft: "neutral",
   pending: "warning",
   received: "info",
   pending_accounts: "warning",
   completed: "success",
+  awaiting_completion: "neutral",
 };
+
+// ── PBG Note (proposal_pbg_notes) ───────────────────────────────────
+export const PBG_NOTE_STATUS_LABELS = {
+  draft: "Draft",
+  pending_ra: "Pending Recommending Authority",
+  pending_md: "Pending MD Approval",
+  pending_accounts: "With Accounts",
+  pending_payment: "Payment Pending",
+  completed: "PBG Done",
+};
+export const PBG_NOTE_STATUS_VARIANTS = {
+  draft: "neutral",
+  pending_ra: "warning",
+  pending_md: "warning",
+  pending_accounts: "warning",
+  pending_payment: "info",
+  completed: "success",
+};
+// Who a Clarification Request came from, keyed by the stage it was raised at.
+export const PBG_STAGE_LABELS = { pending_ra: "Recommending Authority", pending_md: "MD", pending_accounts: "Accounts" };
 
 export const FINANCE_EVENT_LABELS = {
   payment_done: "Payment made by Accounts",
   refund_opened: "EMD refund opened",
   chose_refund: "Chose EMD Refund",
   chose_pbg: "Chose Converted to PBG",
+  chose_on_completion: "Chose EMD refund On Completion",
   refund_received: "Marked refund received",
-  refund_pending: "Marked refund pending",
+  refund_pending: "Marked refund pending (proofs removed)",
   forwarded_to_accounts: "Forwarded to Accounts",
   refund_verified: "Accounts verified the EMD refund",
   pbg_processed: "Accounts processed the PBG",
-  returned_by_accounts: "Sent back by Accounts",
+  returned_by_accounts: "Clarification requested by Accounts",
+  clarification_requested: "Clarification requested by Accounts",
+  pbg_note_created: "PBG Note created",
+  pbg_forwarded: "Forwarded to the Recommending Authority",
+  pbg_clarified: "Clarification answered and forwarded again",
+  pbg_ra_approved: "Approved by the Recommending Authority",
+  pbg_md_approved: "Approved by the MD",
+  pbg_accounts_approved: "Reviewed by Accounts",
+  pbg_clarification_requested: "Clarification requested",
+  pbg_paid: "PBG paid — PBG Done",
 };
 
 // Proof uploads for payment / refund / PBG.

@@ -17,7 +17,7 @@ import { addLeadChatParticipants, getOrgWideHolders } from "../_shared/leadAuth.
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
   validateRecommendingAuthority, validateBusinessAssociate, validateForwardedTo, clampText,
-  resolveManualBusinessPartner,
+  resolveManualBusinessPartner, parseBpAssociation, parseExtraBpValues, resolveExtraBusinessPartners, replaceExtraBusinessPartners,
 } from "../_shared/leadEligibility.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -115,6 +115,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   const manualBaId = assignedBaId ? null : get("manual_ba_id") || null;
   const manualBaName = assignedBaId || manualBaId ? "" : (get("manual_ba_name") || "").trim();
   const hasAnyBa = !!(assignedBaId || manualBaId || manualBaName);
+  // Further BPs (2nd, 3rd…) and how the BP(s) are involved.
+  const extraBps = parseExtraBpValues(get("extra_business_partners"));
+  if (extraBps.error) return jsonRes(req, 400, { error: extraBps.error });
+  if (extraBps.values.length && !hasAnyBa) return jsonRes(req, 400, { error: "Select the first Business Partner before adding more." });
+  const bpAssociation = parseBpAssociation(get("bp_association"));
+  if (bpAssociation === "invalid") return jsonRes(req, 400, { error: "Choose Consortium/JV or Independent (with BP Inputs)." });
+  if (hasAnyBa && !bpAssociation) return jsonRes(req, 400, { error: "Choose whether the Business Partner is in a Consortium/JV or Independent (with BP Inputs)." });
   if (input.source === "ba" && !hasAnyBa) {
     return jsonRes(req, 400, { error: "Select a Business Partner for a BP Source lead." });
   }
@@ -227,6 +234,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
       resolvedManualBaId = manual.id;
     }
+    const extras = await resolveExtraBusinessPartners(adminClient, extraBps.values, {
+      primaryBaId: assignedBaId, primaryManualId: resolvedManualBaId, team, createdBy: caller.id,
+    });
+    if (extras.error) {
+      if (uploadedPaths.length) await adminClient.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
+      return jsonRes(req, 400, { error: extras.error });
+    }
 
     const { data: lead, error: insertErr } = await adminClient
       .from("leads")
@@ -257,6 +271,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         recommending_authority_id: isPoRouted ? null : input.recommending_authority_id,
         assigned_ba_id: assignedBaId,
         manual_ba_id: resolvedManualBaId,
+        bp_association: hasAnyBa ? bpAssociation : null,
         forwarded_to_id: isPoRouted ? forwardedToId : null,
         status: isPoRouted ? "po_assignment" : "pa_review",
         // Chat opens the moment Person Responsible/Reviewer/Recommending
@@ -273,6 +288,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       if (uploadedPaths.length) await adminClient.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
       console.error("Lead insert failed:", insertErr?.message);
       return jsonRes(req, 500, { error: "Failed to create lead. Please try again." });
+    }
+
+    if (extras.rows.length) {
+      const extraErr = await replaceExtraBusinessPartners(adminClient, lead.id, extras.rows);
+      if (extraErr) console.error("Saving extra Business Partners failed:", extraErr);
     }
 
     // A brand-new lead has no prior possible_duplicate_ids — every match

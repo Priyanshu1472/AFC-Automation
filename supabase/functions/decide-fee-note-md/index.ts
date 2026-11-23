@@ -15,7 +15,8 @@ import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { notifyUsers } from "../_shared/notify.ts";
-import { notifyAccountsCommittee, leadRef } from "../_shared/proposalFinance.ts";
+import { notifyAccountsCommittee, leadRef, getAccountsMemberIds } from "../_shared/proposalFinance.ts";
+import { addProposalChatParticipants } from "../_shared/proposalChat.ts";
 
 const NOTE_LABEL = "Bid Payment Requisition Note";
 
@@ -98,7 +99,10 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     // The approved note goes to the Accounts Committee, who check the
     // signatures and make the payment (mark-fee-note-paid).
+    // They also join the proposal's chat, so they can clear any doubt about
+    // the payment with the team there.
     if (decision === "approved" && lead) {
+      await addProposalChatParticipants(adminClient, note.proposal_id, await getAccountsMemberIds(adminClient), "accounts", caller.id);
       await notifyAccountsCommittee(adminClient, {
         title: "Bid Payment Requisition Note approved — payment due",
         sub_text: `${leadRef(lead)}: the MD approved the ${noteLabel}. Check the signatures and make the payment.`,

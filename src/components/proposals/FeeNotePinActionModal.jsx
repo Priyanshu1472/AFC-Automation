@@ -115,10 +115,6 @@ export default function FeeNotePinActionModal({ feeNoteId, action, onClose, onSu
             <Card className="ar-action-card">
               <Card.Header title="Confirm with PIN" />
               <Card.Body className="ar-action-body">
-                <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
-                  Nothing changes until you enter your PIN and confirm.
-                </p>
-
                 {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
 
                 {!previewError && (
@@ -130,7 +126,6 @@ export default function FeeNotePinActionModal({ feeNoteId, action, onClose, onSu
                       onChange={setPin}
                       disabled={verifying || loadingPreview}
                       autoFocus
-                      hint="Confirms it's really you"
                     />
                   </div>
                 )}

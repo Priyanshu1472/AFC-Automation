@@ -51,6 +51,10 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     .eq("user_id", user_id)
     .eq("role_at_add", "additional_pr");
 
+  await adminClient.rpc("log_proposal_activity", {
+    p_proposal_id: proposal.id, p_action: "responsible_removed", p_actor: caller.id, p_detail: target?.full_name || null,
+  }).then(({ error }) => { if (error) console.error("timeline log failed:", error.message); });
+
   await logLeadActivity(
     adminClient, lead_id, caller.id, caller.role, "proposal_responsible_removed", lead.status, lead.status,
     `Removed ${target?.full_name || "a user"} as an additional Person Responsible on the proposal.`

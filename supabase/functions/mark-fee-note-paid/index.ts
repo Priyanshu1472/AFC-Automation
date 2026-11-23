@@ -1,6 +1,8 @@
 // supabase/functions/mark-fee-note-paid/index.ts
-// JWT must be ON. An Accounts Committee member records that the payment on
-// an MD-approved Bid Payment Requisition Note has been made — after
+// JWT must be ON. An Accounts Committee member — or the lead's Person
+// Responsible / an additional Person Responsible, when the payment went
+// through them — records that the payment on an MD-approved Bid Payment
+// Requisition Note has been made — after
 // checking the note carries every required signature. PIN-gated, once
 // only. Works regardless of the proposal's lock state: paying the EMD /
 // fees can happen after the bid is submitted.
@@ -12,7 +14,8 @@ import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { verifyActionPin } from "../_shared/pin.ts";
 import { notifyUsers } from "../_shared/notify.ts";
 import {
-  KIND_ACCOUNTS, isAccountsMember, loadProposalAndLead, teamIds, leadRef, proposalLink,
+  KIND_ACCOUNTS, KIND_FEE_PROOF, isAccountsMember, loadProposalAndLead, teamIds, leadRef, proposalLink,
+  getAdditionalResponsibleIds, notifyAccountsCommittee,
   clearPendingAlerts, logFinanceEvent, cleanRemark,
 } from "../_shared/proposalFinance.ts";
 
@@ -41,10 +44,6 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
   const remark = cleanRemark(body.remark);
 
   try {
-    if (!(await isAccountsMember(adminClient, caller.id))) {
-      return jsonRes(req, 403, { error: "Only an Accounts Committee member can record this payment." });
-    }
-
     const { data: note, error: noteErr } = await adminClient
       .from("fee_notes")
       .select("id, proposal_id, status, payment_status")
@@ -57,6 +56,13 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     const ctx = await loadProposalAndLead(adminClient, note.proposal_id);
     if (!ctx.ok) return jsonRes(req, ctx.status, { error: ctx.error });
     const { lead } = ctx;
+
+    const isAccounts = await isAccountsMember(adminClient, caller.id);
+    const isPr = caller.id === lead.person_responsible_id ||
+      (await getAdditionalResponsibleIds(adminClient, note.proposal_id)).includes(caller.id);
+    if (!isAccounts && !isPr) {
+      return jsonRes(req, 403, { error: "Only an Accounts Committee member or the Person Responsible can record this payment." });
+    }
 
     const pinErr = await verifyActionPin(adminClient, caller.id, caller.pin_hash, body.pin);
     if (pinErr) return jsonRes(req, 400, { error: pinErr });
@@ -84,12 +90,16 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const link = proposalLink(lead);
     await clearPendingAlerts(adminClient, link, KIND_ACCOUNTS);
-    await notifyUsers(adminClient, teamIds(lead), {
-      title: "Payment made by Accounts",
-      sub_text: `${leadRef(lead)}: Accounts has made the payment on the ${NOTE_LABEL}.${reference ? ` Ref: ${reference}.` : ""}`,
+    await clearPendingAlerts(adminClient, link, KIND_FEE_PROOF);
+    const byWhom = isAccounts ? "Accounts has" : "the Person Responsible has";
+    const payload = {
+      title: isAccounts ? "Payment made by Accounts" : "Payment marked done",
+      sub_text: `${leadRef(lead)}: ${byWhom} recorded the payment on the ${NOTE_LABEL}.${reference ? ` Ref: ${reference}.` : ""}`,
       type: "info",
       link,
-    });
+    };
+    await notifyUsers(adminClient, teamIds(lead).filter((id) => id !== caller.id), payload);
+    if (!isAccounts) await notifyAccountsCommittee(adminClient, { ...payload, kind: "proposal_fee_paid_info" });
 
     return jsonRes(req, 200, { success: true });
   } catch (err) {

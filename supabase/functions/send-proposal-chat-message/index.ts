@@ -2,24 +2,19 @@
 // JWT must be ON. Posts one message into a proposal's group chat. Reads are
 // governed entirely by RLS (proposal_chat_messages_select, see the
 // 20260909000000_proposal_chat migration); this function only needs to gate
-// the write: the chat must actually be open, not yet closed by the proposal
-// being locked, and the caller must already be on that proposal's roster
-// (proposal_chat_participants — bulk-added once at creation, in
-// create-proposal-preparation, never by this function itself).
+// the write: the chat must actually be open and the caller must already be
+// on that proposal's roster (proposal_chat_participants).
 //
-// "Locked" mirrors isProposalLocked() (src/lib/proposalPrep.js) and the DB's
-// can_edit_proposal(): true either because someone locked it manually
-// (proposal_preparations.locked) or because the lead's own
-// submission_deadline has passed — both make the rest of the page
-// read-only, so the chat closes on the same condition, not just the
-// manual-lock flag alone.
+// The chat closes when — and only when — the proposal is locked (2026-11-23,
+// user's call). The submission deadline passing does not close it; until
+// someone locks the proposal people can keep talking. After locking the
+// history stays readable (RLS), but nobody can post.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { notifyUsers, bumpChatNotifications } from "../_shared/notify.ts";
-import { isDeadlinePassed } from "../_shared/deadline.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -59,11 +54,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (proposalErr || !proposal) return jsonRes(req, 404, { error: "Proposal not found." });
 
   if (!proposal.chat_opened_at) return jsonRes(req, 400, { error: "Chat isn't open for this proposal yet." });
+  if (proposal.locked) return jsonRes(req, 400, { error: "This proposal is locked, so its chat is closed." });
   const lead = proposal.lead as { submission_deadline: string | null; lead_number: string | null; title: string | null } | null;
-  const deadlinePassed = !!lead?.submission_deadline && isDeadlinePassed(lead.submission_deadline);
-  if (proposal.locked || deadlinePassed) {
-    return jsonRes(req, 400, { error: "This proposal is locked — the chat is closed." });
-  }
 
   const { data: participant } = await adminClient
     .from("proposal_chat_participants")

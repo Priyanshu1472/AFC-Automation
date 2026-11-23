@@ -1,8 +1,9 @@
 // supabase/functions/preview-pbg-note/index.ts
 // JWT must be ON. Renders the PBG Note PDF as base64 — "Create / View PBG
-// Note" on the proposal page. Read-only. Visible to the lead's Person
-// Responsible / Reviewer / Recommending Authority, MD/Admin, and the
-// Accounts Committee (who process it).
+// Note" on the proposal page. Read-only. Any internal (non-Business
+// Partner) user can view it, org-wide — same rule as can_view_lead()'s
+// md_approved clause (see 20261117010000_org_wide_internal_proposal_
+// view.sql).
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -10,7 +11,7 @@ import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { bytesToBase64 } from "../_shared/letterPdf.ts";
 import { buildPbgNotePdf } from "../_shared/pbgNotePdf.ts";
-import { isAccountsMember, isLeadTeam, loadProposalAndLead } from "../_shared/proposalFinance.ts";
+import { isInternalRole, loadProposalAndLead } from "../_shared/proposalFinance.ts";
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
@@ -36,11 +37,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
     const ctx = await loadProposalAndLead(adminClient, proposalId);
     if (!ctx.ok) return jsonRes(req, ctx.status, { error: ctx.error });
 
-    const authorized =
-      ["md", "admin"].includes(caller.role) ||
-      isLeadTeam(ctx.lead, caller.id) ||
-      (await isAccountsMember(adminClient, caller.id));
-    if (!authorized) return jsonRes(req, 403, { error: "You do not have access to this proposal." });
+    if (!isInternalRole(caller)) return jsonRes(req, 403, { error: "You do not have access to this proposal." });
 
     const built = await buildPbgNotePdf(adminClient, proposalId);
     if (!built.ok) return jsonRes(req, 400, { error: built.error });

@@ -1,9 +1,12 @@
 // supabase/functions/create-proposal-preparation/index.ts
 // JWT must be ON. Idempotent create/fetch of the proposal_preparations row
-// for an approved lead — "Open Proposal" calls this on first visit. Caller
-// must be the lead's Person Responsible, Reviewer, or Recommending Authority
-// (the authorised signatory needs to reach the page too, to lock/decide
-// outcome later), or md/admin. Mirrors create-lead's shape.
+// for an approved lead — "Open Proposal" calls this on every visit.
+// Any internal (non-Business Partner) user can open any approved lead's
+// proposal, org-wide — including one its team hasn't opened yet, in which
+// case it's set up here exactly as if the team had (the chat roster comes
+// from the lead's own assignees + MD, never from whoever opened it).
+// Every action on the page stays gated to the lead's named assignees /
+// md/admin. Business Partners can't open proposals here.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -11,7 +14,7 @@ import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { getOrgWideHolders } from "../_shared/leadAuth.ts";
 import { addProposalChatParticipants } from "../_shared/proposalChat.ts";
-import { isAccountsMember } from "../_shared/proposalFinance.ts";
+import { isInternalRole } from "../_shared/proposalFinance.ts";
 
 export async function handleRequest(req: Request, adminClient: ReturnType<typeof createAdminClient> = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
@@ -41,20 +44,10 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
-    const authorized =
+    const isNamed =
       ["md", "admin"].includes(caller.role) ||
       [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(caller.id);
-    if (!authorized) {
-      // Accounts Committee members only ever open an existing proposal
-      // whose Bid Payment Requisition Note the MD has approved — never
-      // create one or touch the chat roster.
-      if (await isAccountsMember(adminClient, caller.id)) {
-        const { data: existingForAccounts } = await adminClient.from("proposal_preparations").select("id").eq("lead_id", leadId).maybeSingle();
-        if (existingForAccounts) {
-          const { data: approved } = await adminClient.from("fee_notes").select("id").eq("proposal_id", existingForAccounts.id).eq("status", "approved").maybeSingle();
-          if (approved) return jsonRes(req, 200, { success: true, proposal_id: existingForAccounts.id });
-        }
-      }
+    if (!isNamed && !isInternalRole(caller)) {
       return jsonRes(req, 403, { error: "You do not have access to this lead's proposal." });
     }
 
@@ -85,8 +78,21 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         .insert({ lead_id: leadId, created_by: caller.id, chat_opened_at: new Date().toISOString() })
         .select("id")
         .single();
-      if (insertErr) throw new Error(insertErr.message);
-      proposalId = created.id;
+      if (insertErr) {
+        // Two "open" calls raced (page load + a realtime re-fetch, or two
+        // people opening it together): the other one created the row a
+        // moment ago. Use that row instead of failing.
+        if (insertErr.code !== "23505") throw new Error(insertErr.message);
+        const { data: raced, error: racedErr } = await adminClient
+          .from("proposal_preparations")
+          .select("id")
+          .eq("lead_id", leadId)
+          .maybeSingle();
+        if (racedErr || !raced) throw new Error(insertErr.message);
+        proposalId = raced.id;
+      } else {
+        proposalId = created.id;
+      }
 
       // Fee notes (EMD / Tender Fee / Processing Fee) are deliberately NOT
       // created here — an eagerly-created stub could end up with a blank

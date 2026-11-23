@@ -148,7 +148,7 @@ export function formatRupees(amount: number): string {
 }
 
 // ── Build input ───────────────────────────────────────────────────
-type Signer = { name: string | null; designation: string; signatureBytes: Uint8Array | null };
+export type Signer = { name: string | null; designation: string; signatureBytes: Uint8Array | null };
 
 export type FeeLine = {
   key: FeeKey;
@@ -179,6 +179,9 @@ export type FeeNoteBuildInput = {
     scope_of_work: string[];
   };
   bpName: string | null;
+  // leads.bp_list: every BP in order with its own arrangement
+  // ("consortium_jv" | "independent_bp_inputs").
+  bpList?: Array<{ name: string; association: string | null }> | null;
   refLabel: string;
   personResponsible: Signer;
   recommendingAuthority: Signer;
@@ -201,7 +204,8 @@ function deliveryModeWord(deliveryType: string | null): string {
 }
 
 function borneByPhrase(borneBy: "afc" | "bp", bpName: string | null): string {
-  if (borneBy === "bp") return bpName ? `the Business Partner, M/s. ${bpName}` : "the Business Partner";
+  const plural = !!bpName && bpName.includes(" & ");
+  if (borneBy === "bp") return bpName ? `the Business Partner${plural ? "s" : ""}, M/s. ${bpName}` : "the Business Partner";
   return "AFC";
 }
 
@@ -209,9 +213,15 @@ function borneByPhrase(borneBy: "afc" | "bp", bpName: string | null): string {
 // which fee" sentence — used both as one of page 1's body paragraphs and,
 // flattened to plain text below, as the Implementation Arrangements
 // fallback. Change the wording here and both places follow.
-function buildBorneSegs(feeLines: FeeLine[], bpName: string | null): Segment[] {
+function buildBorneSegs(feeLines: FeeLine[], bpName: string | null, bpList?: Array<{ name: string; association: string | null }> | null): Segment[] {
   const segs: Segment[] = [];
-  if (bpName) {
+  const jv = (bpList || []).filter((b) => b.association === "consortium_jv").map((b) => b.name);
+  const inputs = (bpList || []).filter((b) => b.association !== "consortium_jv").map((b) => b.name);
+  if (jv.length) {
+    segs.push(plain(`We are bidding for this assignment in Consortium/JV with `), bold(`M/s. ${jv.join(" & ")}`));
+    if (inputs.length) segs.push(plain(`, and the services of `), bold(`M/s. ${inputs.join(" & ")}`), plain(` will be roped in, if the assignment is awarded to us. `));
+    else segs.push(plain(`. `));
+  } else if (bpName) {
     segs.push(plain(`We are bidding independently for this assignment and the services of `), bold(`M/s. ${bpName}`), plain(` will be roped in, if the assignment is awarded to us. `));
   } else {
     segs.push(plain(`We are bidding independently for this assignment. `));
@@ -237,7 +247,7 @@ function implementationArrangementsText(input: FeeNoteBuildInput): string {
   if (input.implementationArrangements && input.implementationArrangements.trim()) {
     return input.implementationArrangements.trim();
   }
-  return buildBorneSegs(input.feeLines, input.bpName).map((s) => s.text).join("");
+  return buildBorneSegs(input.feeLines, input.bpName, input.bpList).map((s) => s.text).join("");
 }
 
 function feeLineText(l: FeeLine): string {
@@ -273,7 +283,7 @@ function buildCoverParagraphs(input: FeeNoteBuildInput): { intro: Segment[][]; f
     plain("."),
   ]);
 
-  intro.push(buildBorneSegs(input.feeLines, input.bpName));
+  intro.push(buildBorneSegs(input.feeLines, input.bpName, input.bpList));
 
   intro.push([plain("For the same, we need to furnish the following:")]);
 
@@ -310,7 +320,7 @@ function buildCoverParagraphs(input: FeeNoteBuildInput): { intro: Segment[][]; f
 // as "Encl. as above" rather than stacked below every other signature —
 // matching the reference note, where "Encl. as above" reads as sitting
 // right above/alongside the MD's signature, not underneath it.
-async function drawSignatureBlock(e: PageEngine, leftSigners: Signer[], md: Signer) {
+export async function drawSignatureBlock(e: PageEngine, leftSigners: Signer[], md: Signer, enclLabel = "Encl. as above") {
   const size = 10;
   const sigGap = 48;   // blank space above each name, sized to hold the signature image without it touching the name line
   const imgPad = 3;    // clearance kept above and below the image within that blank space
@@ -357,7 +367,7 @@ async function drawSignatureBlock(e: PageEngine, leftSigners: Signer[], md: Sign
   }
 
   const mdStartY = e.y;
-  await sdPara(e, [plain("Encl. as above")], size);
+  if (enclLabel) await sdPara(e, [plain(enclLabel)], size);
   const yAfterEncl = e.y;
 
   const yAfterMd = drawRow(md, mdImg, (w) => e.RIGHT_EDGE - w, mdStartY);
@@ -375,7 +385,7 @@ async function drawCenteredLine(e: PageEngine, text: string, size: number, isBol
 }
 
 // deno-lint-ignore no-explicit-any
-async function drawFeeNoteHeader(pdf: any, page: any, logoBytes: Uint8Array, _fonts: unknown, H: number) {
+export async function drawFeeNoteHeader(pdf: any, page: any, logoBytes: Uint8Array, _fonts: unknown, H: number) {
   if (!logoBytes.length) return;
   const logo = await embedImageAuto(pdf, logoBytes).catch(() => null);
   if (!logo) return;
@@ -385,7 +395,7 @@ async function drawFeeNoteHeader(pdf: any, page: any, logoBytes: Uint8Array, _fo
   page.drawImage(logo, { x: 40, y: H - 40 - logoH, width: logoW, height: logoH });
 }
 
-function drawFeeNoteFooter() {}
+export function drawFeeNoteFooter() {}
 
 // ── Page 2: the requisition format table ──────────────────────────
 function buildRequisitionRows(input: FeeNoteBuildInput): { label: string; value: string }[] {
@@ -487,7 +497,7 @@ export async function generateFeeNotePDF(
 // ── Data assembly ────────────────────────────────────────────────
 type UserRow = { full_name?: string | null; role?: string | null; signature_path?: string | null } | null;
 
-async function resolveSigner(
+export async function resolveSigner(
   admin: AdminClient,
   opts: { nominalId: string | null; actualId: string | null; signed: boolean; designationOverride?: string },
 ): Promise<Signer> {
@@ -552,7 +562,7 @@ export async function buildFeeNotePdfForNote(
 
   const { data: lead, error: leadErr } = await admin
     .from("leads")
-    .select("title, client_name, portal_name, bid_number, lead_type, delivery_type, submission_deadline, source, assigned_ba_id, manual_ba_id, person_responsible_id, recommending_authority_id, approval_note_data")
+    .select("title, client_name, portal_name, bid_number, lead_type, delivery_type, submission_deadline, source, assigned_ba_id, manual_ba_id, bp_names, bp_list, person_responsible_id, recommending_authority_id, approval_note_data")
     .eq("id", proposal.lead_id)
     .maybeSingle();
   if (leadErr || !lead) return { ok: false, error: "Lead not found." };
@@ -596,7 +606,9 @@ export async function buildFeeNotePdfForNote(
       objectives: (approvalData.objectives as string) || null,
       scope_of_work: Array.isArray(approvalData.scope_of_work) ? (approvalData.scope_of_work as string[]) : [],
     },
-    bpName: (baRow as { data: { full_name?: string } | null })?.data?.full_name || null,
+    // Every BP on the lead ("A & B"), else the single linked one.
+    bpName: (lead.bp_names as string | null) || (baRow as { data: { full_name?: string } | null })?.data?.full_name || null,
+    bpList: (lead.bp_list as Array<{ name: string; association: string | null }> | null) || null,
     refLabel: portalRefLabel(lead.portal_name),
     personResponsible,
     recommendingAuthority,

@@ -1,117 +1,206 @@
 // supabase/functions/_shared/pbgNotePdf.ts
-// The PBG Note — raised by the lead's team once an awarded proposal's EMD
-// is being converted into the Performance Bank Guarantee, and forwarded to
-// Accounts. States the EMD already deposited, the PBG the client requires,
-// and the remaining PBG (PBG - EMD) still to be furnished, then leaves the
-// Accounts boxes to be signed on the printout.
+// The PBG Note (proposal_pbg_notes) — the approval note for furnishing the
+// Performance Bank Guarantee on an awarded proposal, modelled on AFC's two
+// reference notes:
+//
+//   "converted" — the EMD is adjusted towards the PBG (EMD track
+//                 "Converted to PBG"): PBG − EMD = remaining PBG to submit.
+//   "full"      — nothing is adjusted (EMD refunded, held until project
+//                 completion, or there was no EMD): the full PBG is submitted.
+//
+// Which one is decided purely by the amounts — emd_adjusted > 0 means
+// "converted". The wording itself (subject + paragraphs + enclosures) is
+// what the team typed in the PBG Note editor (content jsonb, pre-filled
+// there); only the calculation table is built here, from the amounts, so
+// it can never disagree with them. The editor's live preview
+// (src/lib/pbgNoteDraft.js) mirrors pbgCalculationRows exactly.
+//
+// Signatures: Person Responsible and Recommending Authority on the left,
+// MD on the right — each printed with their signature image once they've
+// signed (pr_signed_* / ra_signed_* / md_signed_*), same as the Bid
+// Payment Requisition Note.
 
+import { PDFDocument, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
 import {
-  PageEngine, plain, bold, newPdfDoc, formatDateDDMMYYYY,
-  drawSimpleHeader, drawSimpleFooter,
-  sdPara, sdGap, sd, drawKeyValueTable, drawGridTable,
+  PageEngine, plain, bold, formatDateDDMMYYYY, sd, sdPara, sdGap, drawGridTable,
 } from "./letterPdf.ts";
-import { formatRupees, fetchLogoBytes, amountToIndianWords } from "./feeNotePdf.ts";
-import { deepSafe } from "./clientInvoicePdf.ts";
+import {
+  formatRupees, fetchLogoBytes, amountToIndianWords, drawSignatureBlock, drawFeeNoteHeader, drawFeeNoteFooter,
+  resolveSigner,
+} from "./feeNotePdf.ts";
 
 // deno-lint-ignore no-explicit-any
 type AdminClient = any;
 
-const PAYMENT_MODE_LABELS: Record<string, string> = {
-  online: "Online",
-  bank_guarantee: "Bank Guarantee",
-  demand_draft: "Demand Draft",
-  bankers_cheque: "Banker's Cheque",
-  fixed_deposit_receipt: "Fixed Deposit Receipt",
+export type EmdContext = "converted" | "refunded" | "on_completion" | "not_adjusted" | "none";
+
+export type PbgAmounts = {
+  pbgAmount: number;
+  consultancyFee: number | null;
+  pbgPercent: string | null;
+  emdAmount: number;
+  emdAdjusted: number;
+  emdContext: EmdContext;
 };
 
-const rs = (n: number) => `Rs. ${formatRupees(Math.round(n * 100) / 100)}/-`;
+export const rsSlash = (n: number) => `${formatRupees(Math.round(n * 100) / 100)}/-`;
+
+function wordsOnly(n: number): string {
+  // "Rupees One Lakh ... Only" -> "Rupees One Lakh ... only", as in the reference notes.
+  return amountToIndianWords(n).replace(/ Only$/, " only");
+}
+
+// Which EMD story the note tells — from the EMD track (and whether any EMD
+// is actually adjusted).
+export function emdContextOf(track: string | null | undefined, emdAmount: number, emdAdjusted: number): EmdContext {
+  if (emdAdjusted > 0) return "converted";
+  if (!(emdAmount > 0)) return "none";
+  if (track === "refund") return "refunded";
+  if (track === "on_completion") return "on_completion";
+  return "not_adjusted";
+}
+
+// The calculation table — [S. No., Particulars, Amount (Rs.)].
+export function pbgCalculationRows(a: PbgAmounts): string[][] {
+  const pct = a.pbgPercent ? ` (${a.pbgPercent}% of consultancy fees)` : "";
+  const rows: [string, string][] = [];
+  if (a.emdContext === "converted") {
+    const adjusted = Math.min(a.emdAdjusted, a.pbgAmount);
+    const remaining = Math.max(0, a.pbgAmount - adjusted);
+    rows.push([`PBG amount${pct}`, rsSlash(a.pbgAmount)]);
+    rows.push(["Less: EMD converted to PBG", rsSlash(adjusted)]);
+    rows.push([
+      remaining > 0 ? `Remaining PBG to be submitted (${wordsOnly(remaining)})` : "Remaining PBG to be submitted (Nil — fully covered by the EMD)",
+      rsSlash(remaining),
+    ]);
+    if (a.emdAdjusted > a.pbgAmount) rows.push(["Excess EMD to be refunded by the client", rsSlash(a.emdAdjusted - a.pbgAmount)]);
+  } else {
+    if (a.consultancyFee) rows.push(["Consultancy fees (inclusive of GST)", rsSlash(a.consultancyFee)]);
+    rows.push([`PBG amount${pct}`, rsSlash(a.pbgAmount)]);
+    if (a.emdContext === "refunded") rows.push(["EMD refunded by the client (not adjusted)", rsSlash(a.emdAmount)]);
+    else if (a.emdContext === "on_completion") rows.push(["EMD to be refunded on completion of the project (not adjusted)", rsSlash(a.emdAmount)]);
+    else if (a.emdContext === "not_adjusted") rows.push(["EMD (not adjusted)", rsSlash(a.emdAmount)]);
+    rows.push([`Full PBG to be submitted (${wordsOnly(a.pbgAmount)})`, rsSlash(a.pbgAmount)]);
+  }
+  return rows.map(([p, amt], i) => [String(i + 1), p, amt]);
+}
+
+export const PARAGRAPH_ORDER_BEFORE_TABLE = ["award", "partner", "requirement", "emd"] as const;
+export const PARAGRAPH_ORDER_AFTER_TABLE = ["delivery", "closing"] as const;
+
+type Content = {
+  subject?: string;
+  paragraphs?: Record<string, string>;
+  enclosures?: string;
+  fields?: Record<string, string>;
+};
+
+function str(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
 
 export async function buildPbgNotePdf(
   admin: AdminClient,
   proposalId: string,
 ): Promise<{ ok: true; pdfBytes: Uint8Array } | { ok: false; error: string }> {
-  const { data: trackingRow } = await admin.from("proposal_emd_tracking").select("*").eq("proposal_id", proposalId).maybeSingle();
-  if (!trackingRow || trackingRow.track !== "pbg") return { ok: false, error: "This proposal has no PBG entry." };
-  if (!(Number(trackingRow.pbg_amount) > 0)) return { ok: false, error: "Enter the PBG amount first." };
+  const { data: note } = await admin.from("proposal_pbg_notes").select("*").eq("proposal_id", proposalId).maybeSingle();
+  if (!note) return { ok: false, error: "The PBG Note hasn't been created yet." };
 
-  const [{ data: proposalRow }, { data: noteRow }, logoBytes] = await Promise.all([
-    admin.from("proposal_preparations")
-      .select("id, client_response_at, proposed_value, lead:lead_id(title, lead_number, client_name, bid_number, team, pr:person_responsible_id(full_name), ra:recommending_authority_id(full_name), ba:assigned_ba_id(full_name))")
-      .eq("id", proposalId).maybeSingle(),
-    admin.from("fee_notes").select("emd_amount, emd_payment_mode, emd_borne_by, payment_done_at, payment_reference").eq("proposal_id", proposalId).eq("status", "approved").maybeSingle(),
+  const [{ data: proposal }, { data: tracking }, logoBytes] = await Promise.all([
+    admin.from("proposal_preparations").select("id, lead_id").eq("id", proposalId).maybeSingle(),
+    admin.from("proposal_emd_tracking").select("track").eq("proposal_id", proposalId).maybeSingle(),
     fetchLogoBytes(),
   ]);
-  if (!proposalRow) return { ok: false, error: "Proposal not found." };
+  if (!proposal) return { ok: false, error: "Proposal not found." };
   if (!logoBytes) return { ok: false, error: "Could not load the AFC letterhead logo. Please try again." };
 
-  const preparerId = trackingRow.forwarded_by || trackingRow.created_by;
-  const { data: preparerRow } = preparerId
-    ? await admin.from("afc_users").select("full_name").eq("id", preparerId).maybeSingle()
-    : { data: null };
+  const { data: lead } = await admin
+    .from("leads")
+    .select("person_responsible_id, recommending_authority_id")
+    .eq("id", proposal.lead_id)
+    .maybeSingle();
 
-  const [tracking, proposal, note, preparer] = deepSafe([trackingRow, proposalRow, noteRow || {}, preparerRow]);
-  const lead = proposal.lead || {};
-  const emd = Number(tracking.emd_amount);
-  const pbg = Number(tracking.pbg_amount);
-  const remaining = pbg - emd;
-  const team: string = lead.team || "BPDD";
+  const [personResponsible, recommendingAuthority, md] = await Promise.all([
+    resolveSigner(admin, { nominalId: lead?.person_responsible_id || null, actualId: note.pr_signed_by, signed: !!note.pr_signed_at }),
+    resolveSigner(admin, { nominalId: lead?.recommending_authority_id || null, actualId: note.ra_signed_by, signed: !!note.ra_signed_at }),
+    resolveSigner(admin, { nominalId: null, actualId: note.md_signed_by, signed: !!note.md_signed_at, designationOverride: "Managing Director" }),
+  ]);
 
-  const { pdf, fonts } = await newPdfDoc();
-  const e = new PageEngine(pdf, fonts, logoBytes, { drawHeader: drawSimpleHeader, drawFooter: drawSimpleFooter, contentTop: 735, footerSafe: 70 });
-  e.LEFT = 40; e.RIGHT_EDGE = 555; e.MAX_W = e.RIGHT_EDGE - e.LEFT;
+  const content = (note.content || {}) as Content;
+  const paragraphs = content.paragraphs || {};
+  const emdAmount = Number(note.emd_amount) || 0;
+  const emdAdjusted = Number(note.emd_adjusted) || 0;
+  const amounts: PbgAmounts = {
+    pbgAmount: Number(note.pbg_amount),
+    consultancyFee: note.consultancy_fee != null ? Number(note.consultancy_fee) : null,
+    pbgPercent: str(content.fields?.pbg_percent) || null,
+    emdAmount,
+    emdAdjusted,
+    emdContext: emdContextOf(tracking?.track, emdAmount, emdAdjusted),
+  };
+
+  const pdf = await PDFDocument.create();
+  const fontReg = await pdf.embedFont(StandardFonts.TimesRoman);
+  const fontBold = await pdf.embedFont(StandardFonts.TimesRomanBold);
+  const e = new PageEngine(pdf, { reg: fontReg, bold: fontBold }, logoBytes, {
+    drawHeader: drawFeeNoteHeader,
+    drawFooter: drawFeeNoteFooter,
+    footerSafe: 55,
+  });
+  e.LINE_H = 12.5;
+  const S = 10.5;
+
   await e.newPage();
+  const dated = note.pr_signed_at ? new Date(note.pr_signed_at) : new Date();
+  await sd(e, () => e.drawTextRight(formatDateDDMMYYYY(dated).replace(/\//g, "."), S, false));
+  e.gap(e.LINE_H + 8);
 
-  const dated = tracking.forwarded_at ? new Date(tracking.forwarded_at) : new Date();
-  await sd(e, () => { e.drawTextRight(`Date: ${formatDateDDMMYYYY(dated)}`, 9.5, true); e.gap(16); });
-  await sd(e, () => {
-    const t = "PBG NOTE — CONVERSION OF EMD INTO PERFORMANCE BANK GUARANTEE";
-    const w = fonts.bold.widthOfTextAtSize(t, 12);
-    e.currentPage.drawText(t, { x: (e.W - w) / 2, y: e.y, size: 12, font: fonts.bold });
-    e.y -= 20;
-  });
+  const subject = str(content.subject);
+  if (subject) {
+    await sdPara(e, [bold(subject)], S + 0.5, 0, true);
+    await sdGap(e, 8);
+  }
 
-  await sdPara(e, [
-    plain("The proposal for "), bold(lead.title || "—"), plain(` (${lead.lead_number || "—"}) has been `), bold("awarded"),
-    plain(" by the client. The EMD deposited against this bid is to be adjusted towards the Performance Bank Guarantee (PBG), and the remaining PBG amount is to be furnished as detailed below."),
-  ], 9.5, 0, true);
-  await sdGap(e, 10);
+  for (const key of PARAGRAPH_ORDER_BEFORE_TABLE) {
+    const text = str(paragraphs[key]);
+    if (!text) continue;
+    for (const part of text.split(/\n{2,}/)) {
+      await sdPara(e, [plain(part.replace(/\n/g, " "))], S, 0, true);
+      await sdGap(e, 7);
+    }
+  }
 
-  const emdMode = note.emd_payment_mode ? PAYMENT_MODE_LABELS[note.emd_payment_mode] || note.emd_payment_mode : "—";
-  await drawKeyValueTable(e, [
-    { label: "Project Name", value: lead.title || "—" },
-    { label: "Project Code", value: lead.lead_number || "—" },
-    { label: "Client", value: lead.client_name || "—" },
-    { label: "Tender / Reference No.", value: lead.bid_number || "—" },
-    { label: "Business Partner", value: lead.ba?.full_name || "—" },
-    { label: "Proposed Value", value: proposal.proposed_value != null ? rs(Number(proposal.proposed_value)) : "—" },
-    { label: "EMD deposited", value: `${rs(emd)} (${emdMode}${note.payment_reference ? `, Ref: ${note.payment_reference}` : ""})` },
-    { label: "PBG required", value: rs(pbg) },
-    { label: "EMD adjusted towards PBG", value: rs(Math.min(emd, pbg)) },
-    {
-      label: remaining >= 0 ? "Remaining PBG to be furnished (PBG - EMD)" : "Excess EMD to be refunded (EMD - PBG)",
-      value: `${rs(Math.abs(remaining))} (Rupees ${amountToIndianWords(Math.abs(remaining))} only)`,
-    },
-    { label: "Remarks", value: tracking.remarks || "—" },
-  ], { labelWidth: 200, fontSize: 9, lineH: 11.5, padY: 4 });
-  await sdGap(e, 26);
-
-  if (e.y - 40 < e.FOOTER_SAFE) await e.newPage();
-  await sd(e, () => {
-    e.drawTextAt(`Prepared By : ${preparer?.full_name || lead.pr?.full_name || "—"}`, e.LEFT, 9, true);
-    const rec = `Recommending Authority/${team}`;
-    e.drawTextAt(rec, e.RIGHT_EDGE - fonts.bold.widthOfTextAtSize(rec, 9), 9, true);
-    e.gap(12);
-    const name = lead.ra?.full_name || "";
-    if (name) e.drawTextAt(name, e.RIGHT_EDGE - fonts.reg.widthOfTextAtSize(name, 9), 9, false);
-    e.gap(24);
-  });
-
-  if (e.y - 70 < e.FOOTER_SAFE) await e.newPage();
   await drawGridTable(e, [
-    { header: "Checked By (Accounts)", width: 34 },
-    { header: "Checked By (Accounts)", width: 33 },
-    { header: "Processed By (Accounts)", width: 33 },
-  ], [["\n\n", "\n\n", "\n\n"]], { fontSize: 8, lineH: 9 });
+    { header: "S. No.", width: 9 },
+    { header: "Particulars", width: 66 },
+    { header: "Amount (Rs.)", width: 25 },
+  ], pbgCalculationRows(amounts), { fontSize: 9.5, lineH: 12, padY: 4 });
+  await sdGap(e, 12);
+
+  for (const key of PARAGRAPH_ORDER_AFTER_TABLE) {
+    const text = str(paragraphs[key]);
+    if (!text) continue;
+    // Keeps line breaks — the delivery paragraph usually carries an address.
+    const [first, ...rest] = text.split("\n");
+    await sdPara(e, [plain(first)], S, 0, true);
+    for (const line of rest) {
+      if (line.trim()) await sdPara(e, [plain(line.trim())], S);
+      else await sdGap(e, 5);
+    }
+    await sdGap(e, 7);
+  }
+
+  await sdGap(e, 8);
+  await drawSignatureBlock(e, [personResponsible, recommendingAuthority], md, "");
+
+  const encl = str(content.enclosures);
+  if (encl) {
+    await sdGap(e, 10);
+    await sdPara(e, [bold("Encl:")], S);
+    for (const line of encl.split("\n").map((l) => l.trim()).filter(Boolean)) {
+      await sdPara(e, [plain(line)], S, 12);
+    }
+  }
 
   const pdfBytes = await pdf.save();
   return { ok: true, pdfBytes };

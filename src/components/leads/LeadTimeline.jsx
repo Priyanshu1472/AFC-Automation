@@ -39,7 +39,10 @@ export default function LeadTimeline({ logs }) {
                 {log.from_status && log.to_status && (
                   <p className="ar-acc-comment">{log.from_status.replace(/_/g, " ")} → {log.to_status.replace(/_/g, " ")}</p>
                 )}
-                {log.comment ? <p className="ar-acc-comment">&quot;{log.comment}&quot;</p> : <p className="ar-acc-no-comment">No comment added.</p>}
+                {/* Optional plain detail (file name, amount…) — used by the
+                    proposal timeline; lead logs don't set it. */}
+                {log.detail && <p className="ar-acc-comment">{log.detail}</p>}
+                {log.comment ? <p className="ar-acc-comment">&quot;{log.comment}&quot;</p> : !log.detail && <p className="ar-acc-no-comment">No comment added.</p>}
               </div>
             )}
           </div>

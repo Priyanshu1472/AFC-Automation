@@ -52,13 +52,24 @@ Deno.test("unknown lead -> 404", async () => {
   assertEquals(res.status, 404);
 });
 
-Deno.test("rejects a caller with no access to the lead", async () => {
+Deno.test("rejects a Business Partner who isn't on the lead", async () => {
   const client = createFakeAdminClient({
-    afc_users: [{ data: callerRow({ id: "someone-else" }), error: null }],
+    afc_users: [{ data: callerRow({ id: "someone-else", role: "business_associate" }), error: null }],
     leads: [{ data: leadRow(), error: null }],
   });
   const res = await handleRequest(req({ lead_id: LEAD_ID }), client as never);
   assertEquals(res.status, 403);
+});
+
+Deno.test("any internal user can open a proposal the team hasn't opened yet", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [{ data: callerRow({ id: "accounts-1", role: "associate_consultant" }), error: null }, { data: [], error: null }],
+    leads: [{ data: leadRow(), error: null }],
+    proposal_preparations: [{ data: null, error: null }, { data: { id: "new-prop" }, error: null }],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).proposal_id, "new-prop");
 });
 
 Deno.test("rejects a lead that isn't md_approved yet", async () => {
@@ -156,4 +167,19 @@ Deno.test("a proposal with no assigned Business Partner still rosters just the t
   const participantCalls = log.filter((l) => l.table === "proposal_chat_participants");
   const namedRows = JSON.parse(participantCalls[0].calls.find((c) => c[0] === "upsert")![1]);
   assertEquals(namedRows.map((r: { user_id: string }) => r.user_id).sort(), [PR_ID, REVIEWER_ID, AUTHORITY_ID].sort());
+});
+
+Deno.test("two opens racing: the loser of the insert reuses the row the winner created", async () => {
+  const client = createFakeAdminClient({
+    afc_users: [{ data: callerRow({ id: "pr-1", role: "associate_consultant" }), error: null }, { data: [], error: null }],
+    leads: [{ data: leadRow(), error: null }],
+    proposal_preparations: [
+      { data: null, error: null },
+      { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint \"proposal_preparations_lead_id_key\"" } },
+      { data: { id: "winner-prop" }, error: null },
+    ],
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID }), client as never);
+  assertEquals(res.status, 200);
+  assertEquals((await res.json()).proposal_id, "winner-prop");
 });
