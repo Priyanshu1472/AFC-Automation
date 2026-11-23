@@ -20,7 +20,7 @@ import { notifyUser } from "../_shared/notify.ts";
 import {
   validateRequiredFields, validateAssignment, validateReviewer,
   validateRecommendingAuthority, validateBusinessAssociate, clampText,
-  resolveManualBusinessPartner,
+  resolveManualBusinessPartner, parseBpAssociation, parseExtraBpValues, resolveExtraBusinessPartners, replaceExtraBusinessPartners,
 } from "../_shared/leadEligibility.ts";
 import { isDeadlinePassed } from "../_shared/deadline.ts";
 
@@ -104,6 +104,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   // See create-lead: a BP not on PMIS, picked from the manual list or typed.
   const manualBaId = assignedBaId ? null : get("manual_ba_id") || null;
   const manualBaName = assignedBaId || manualBaId ? "" : (get("manual_ba_name") || "").trim();
+  const hasAnyBa = !!(assignedBaId || manualBaId || manualBaName);
+  const extraBps = parseExtraBpValues(get("extra_business_partners"));
+  if (extraBps.error) return jsonRes(req, 400, { error: extraBps.error });
+  if (extraBps.values.length && !hasAnyBa) return jsonRes(req, 400, { error: "Select the first Business Partner before adding more." });
+  const bpAssociation = parseBpAssociation(get("bp_association"));
+  if (bpAssociation === "invalid") return jsonRes(req, 400, { error: "Choose Consortium/JV or Independent (with BP Inputs)." });
 
   try {
     const { data: lead, error: leadErr } = await adminClient
@@ -162,6 +168,8 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     let finalRecommendingAuthorityId = lead.recommending_authority_id as string;
     let finalAssignedBaId = lead.assigned_ba_id as string | null;
     let finalManualBaId = lead.manual_ba_id as string | null;
+    let finalBpAssociation: string | null | undefined = undefined; // undefined = leave as is
+    let finalExtraRows: Array<{ ba_user_id: string | null; manual_ba_id: string | null; association: string }> | null = null;
 
     if (allowReassignment) {
       const { data: personResponsible, error: prErr } = await adminClient
@@ -198,6 +206,15 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         if (manual.error) return jsonRes(req, 400, { error: manual.error });
         finalManualBaId = manual.id;
       }
+      if (hasAnyBa && !bpAssociation) {
+        return jsonRes(req, 400, { error: "Choose whether the Business Partner is in a Consortium/JV or Independent (with BP Inputs)." });
+      }
+      const extras = await resolveExtraBusinessPartners(adminClient, extraBps.values, {
+        primaryBaId: finalAssignedBaId, primaryManualId: finalManualBaId, team, createdBy: caller.id,
+      });
+      if (extras.error) return jsonRes(req, 400, { error: extras.error });
+      finalExtraRows = extras.rows;
+      finalBpAssociation = hasAnyBa ? (bpAssociation as string) : null;
     }
 
     const files = formData.getAll("document").filter((f): f is File => f instanceof File && f.size > 0);
@@ -244,6 +261,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         recommending_authority_id: finalRecommendingAuthorityId,
         assigned_ba_id: finalAssignedBaId,
         manual_ba_id: finalManualBaId,
+        ...(finalBpAssociation !== undefined ? { bp_association: finalBpAssociation } : {}),
       })
       .eq("id", lead.id)
       .eq("status", fromStatus);
@@ -252,6 +270,11 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       if (uploadedPaths.length) await adminClient.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
       console.error("Lead update failed:", updateErr.message);
       return jsonRes(req, 500, { error: "Failed to update lead. Please try again." });
+    }
+
+    if (finalExtraRows) {
+      const extraErr = await replaceExtraBusinessPartners(adminClient, lead.id, finalExtraRows);
+      if (extraErr) console.error("Saving extra Business Partners failed:", extraErr);
     }
 
     await logLeadActivity(adminClient, lead.id, caller.id, caller.role, "edited", fromStatus, fromStatus, null);

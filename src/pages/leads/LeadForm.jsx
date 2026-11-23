@@ -16,6 +16,7 @@ import { DELIVERY_TYPE_LABELS } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 import { ROLE_LABELS } from "../../lib/roles";
 import BusinessPartnerPicker, { NEW_BP_PREFIX, MANUAL_BP_PREFIX } from "../../components/leads/BusinessPartnerPicker";
+import { BP_ASSOCIATION_LABELS } from "../../lib/leadBusinessPartners";
 import SectionHead from "../../components/leads/SectionHead";
 import "../../styles/LeadForm.css";
 
@@ -112,7 +113,14 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
     // One picker value for both kinds of BP: an on-PMIS BP's afc_users id,
     // "manual:<id>" for one added by name earlier, or "new:<name>" for a
     // name typed just now (see BusinessPartnerPicker).
-    assigned_ba_id: lead?.assigned_ba_id || (lead?.manual_ba_id ? MANUAL_BP_PREFIX + lead.manual_ba_id : ""),
+    // Every picked BP, in order — the first is the lead's main BP; any
+    // further ones are loaded from lead_extra_business_partners below.
+    bps: lead?.assigned_ba_id ? [lead.assigned_ba_id] : lead?.manual_ba_id ? [MANUAL_BP_PREFIX + lead.manual_ba_id] : [],
+    // Consortium/JV or Independent (with BP Inputs), per picked BP value.
+    bpAssoc: (() => {
+      const first = lead?.assigned_ba_id || (lead?.manual_ba_id ? MANUAL_BP_PREFIX + lead.manual_ba_id : "");
+      return first && lead?.bp_association ? { [first]: lead.bp_association } : {};
+    })(),
     forwarded_to_id: "",
     // Not defaulted to the creator's own id — left blank so they have to
     // deliberately pick someone, same as Reviewer/Recommending Authority.
@@ -121,6 +129,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
     recommending_authority_id: lead?.recommending_authority_id || "",
   }));
   const isSuoMoto = form.source === "suo_moto";
+  const realBps = form.bps.filter((v) => v !== YET_TO_BE_DECIDED);
   const [files, setFiles] = useState([]);
   const [personResponsibleOptions, setPersonResponsibleOptions] = useState([]);
   const [reviewerOptions, setReviewerOptions] = useState([]);
@@ -137,6 +146,22 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
   function set(field, value) {
     setForm((p) => ({ ...p, [field]: value }));
   }
+
+  // An edited lead's 2nd, 3rd… Business Partners.
+  useEffect(() => {
+    if (!lead?.id || !(lead.assigned_ba_id || lead.manual_ba_id)) return;
+    supabase
+      .from("lead_extra_business_partners")
+      .select("ba_user_id, manual_ba_id, association, position")
+      .eq("lead_id", lead.id)
+      .order("position")
+      .then(({ data }) => {
+        if (!data?.length) return;
+        const extra = data.map((r) => r.ba_user_id || MANUAL_BP_PREFIX + r.manual_ba_id);
+        const assoc = Object.fromEntries(data.filter((r) => r.association).map((r) => [r.ba_user_id || MANUAL_BP_PREFIX + r.manual_ba_id, r.association]));
+        setForm((p) => ({ ...p, bps: [...p.bps.filter((v) => !extra.includes(v)), ...extra], bpAssoc: { ...assoc, ...p.bpAssoc } }));
+      });
+  }, [lead?.id, lead?.assigned_ba_id, lead?.manual_ba_id]);
 
   // Person Responsible / Reviewer are informational contacts, not the
   // workflow gate — the actual PMT authorization is org-wide committee
@@ -281,9 +306,12 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
     if (isPoRouted && !form.forwarded_to_id) errs.forwarded_to_id = "Forward to is required.";
     // "Yet to be Decided" doesn't count as a real answer for a source that
     // requires an actually-named BP.
-    const isBaUnset = !form.assigned_ba_id || form.assigned_ba_id === YET_TO_BE_DECIDED;
-    if (form.source === "ba" && isBaUnset) errs.assigned_ba_id = "Business Partner is required for a BP Source lead.";
-    if (isSuoMoto && isBaUnset) errs.assigned_ba_id = "Business Partner is required for a Suo Moto lead.";
+    const isBaUnset = realBps.length === 0;
+    if (!isLogisticsOnlyEdit) {
+      if (form.source === "ba" && isBaUnset) errs.assigned_ba_id = "Business Partner is required for a BP Source lead.";
+      if (isSuoMoto && isBaUnset) errs.assigned_ba_id = "Business Partner is required for a Suo Moto lead.";
+      if (realBps.some((v) => !form.bpAssoc[v])) errs.bp_association = "Choose Consortium/JV or Independent (with BP Inputs) for each Business Partner.";
+    }
     // Only on create — an edit appends to the lead's existing documents
     // rather than replacing them, so an empty picker there just means "no
     // new files this time", not "no documents at all".
@@ -332,12 +360,15 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
       fd.set("presentation_date", form.presentation_date);
       fd.set("followup_date", form.followup_date);
       fd.set("remark", form.remark);
-      const ba = form.assigned_ba_id === YET_TO_BE_DECIDED ? "" : form.assigned_ba_id;
+      // First BP goes the old way; the rest as extra_business_partners.
+      const ba = realBps[0] || "";
       const isManual = ba.startsWith(MANUAL_BP_PREFIX);
       const isNew = ba.startsWith(NEW_BP_PREFIX);
       fd.set("assigned_ba_id", isManual || isNew ? "" : ba);
       fd.set("manual_ba_id", isManual ? ba.slice(MANUAL_BP_PREFIX.length) : "");
       fd.set("manual_ba_name", isNew ? ba.slice(NEW_BP_PREFIX.length) : "");
+      fd.set("extra_business_partners", JSON.stringify(realBps.slice(1).map((v) => ({ value: v, association: form.bpAssoc[v] || "" }))));
+      fd.set("bp_association", realBps.length ? form.bpAssoc[realBps[0]] || "" : "");
       fd.set("person_responsible_id", form.person_responsible_id);
       fd.set("reviewer_id", form.reviewer_id);
       fd.set("recommending_authority_id", form.recommending_authority_id);
@@ -375,11 +406,17 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
   }
 
   const labelOf = (opts, v) => opts.find((o) => o.value === v)?.label;
-  const baSummary = form.assigned_ba_id === YET_TO_BE_DECIDED
+  const bpLabel = (v) => (v.startsWith(NEW_BP_PREFIX) ? v.slice(NEW_BP_PREFIX.length) : labelOf(baOptions, v) || "…");
+  const bpNames = realBps.map(bpLabel);
+  function setBpAssoc(v, assoc) {
+    setForm((p) => ({ ...p, bpAssoc: { ...p.bpAssoc, [v]: assoc } }));
+    setErrors((e) => { if (!e.bp_association) return e; const n = { ...e }; delete n.bp_association; return n; });
+  }
+  const baSummary = form.bps.includes(YET_TO_BE_DECIDED)
     ? "Yet to be Decided"
-    : form.assigned_ba_id.startsWith(NEW_BP_PREFIX)
-      ? `${form.assigned_ba_id.slice(NEW_BP_PREFIX.length)} (new)`
-      : labelOf(baOptions, form.assigned_ba_id);
+    : bpNames.length
+      ? realBps.map((v) => `${bpLabel(v)}${form.bpAssoc[v] ? ` (${BP_ASSOCIATION_LABELS[form.bpAssoc[v]]})` : ""}`).join(" & ")
+      : "";
   const summaryRows = [
     { label: "Type", value: isSuoMoto ? "Suo Moto" : `${form.lead_type.toUpperCase()} · ${SOURCE_CHOICES.find((s) => s.value === form.source)?.label}` },
     { label: isSuoMoto ? "Proposal" : "Assignment", value: form.title.trim() },
@@ -630,10 +667,59 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
                 <span className="field-label">
                   {baRequired ? <>Business Partner <span className="required">*</span></> : "Business Partner (optional)"}
                 </span>
+                {realBps.length > 0 && (
+                  <div className="lf-bp-selected">
+                    <div className="lf-bp-selected-head">
+                      <strong>Selected ({realBps.length})</strong>
+                      <span title={bpNames.join(" & ")}>{bpNames.join(" & ")}</span>
+                    </div>
+                    <ol className="lf-bp-rows">
+                      {realBps.map((v, i) => {
+                        const missing = !!errors.bp_association && !form.bpAssoc[v];
+                        return (
+                          <li key={v} className="lf-bp-row-wrap">
+                            {i > 0 && <span className="lf-bp-and" aria-hidden="true">&amp;</span>}
+                            <div className={`lf-bp-row${missing ? " has-error" : ""}`}>
+                              <span className="lf-bp-idx" aria-hidden="true">{i + 1}</span>
+                              <span className="lf-bp-row-name" title={bpLabel(v)}>{bpLabel(v)}</span>
+                              <div className="lf-bp-toggle" role="radiogroup" aria-label={`How ${bpLabel(v)} is involved`}>
+                                {Object.entries(BP_ASSOCIATION_LABELS).map(([a, label]) => (
+                                  <button
+                                    key={a}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={form.bpAssoc[v] === a}
+                                    className={`lf-bp-opt${form.bpAssoc[v] === a ? " is-on" : ""}`}
+                                    disabled={submitting}
+                                    onClick={() => setBpAssoc(v, a)}
+                                  >
+                                    <span className="lf-bp-opt-dot" aria-hidden="true" />
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                              <button
+                                type="button"
+                                className="lf-bp-remove"
+                                aria-label={`Remove ${bpLabel(v)}`}
+                                title="Remove"
+                                disabled={submitting}
+                                onClick={() => set("bps", form.bps.filter((x) => x !== v))}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                    {errors.bp_association && <span className="field-error">{errors.bp_association}</span>}
+                  </div>
+                )}
                 <BusinessPartnerPicker
                   options={baOptions}
-                  value={form.assigned_ba_id}
-                  onChange={(v) => set("assigned_ba_id", v)}
+                  value={form.bps}
+                  onChange={(v) => set("bps", v)}
                   ownTeam={team}
                   tbdValue={YET_TO_BE_DECIDED}
                   error={errors.assigned_ba_id}

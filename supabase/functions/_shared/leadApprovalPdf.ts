@@ -74,7 +74,18 @@ type LeadForNote = {
   submission_deadline: string | null;
   assigned_ba_id: string | null;
   manual_ba_id?: string | null;
+  bp_association?: string | null;
 };
+
+const BP_ASSOC_LABEL: Record<string, string> = { consortium_jv: "Consortium/JV", independent_bp_inputs: "Independent (with BP Inputs)" };
+
+// "A (Consortium/JV) & B (Independent (with BP Inputs))" from leads.bp_list.
+function bpListText(list: unknown): string | null {
+  if (!Array.isArray(list) || !list.length) return null;
+  return (list as Array<{ name: string; association: string | null }>)
+    .map((b) => (b.association && BP_ASSOC_LABEL[b.association] ? `${b.name} (${BP_ASSOC_LABEL[b.association]})` : b.name))
+    .join(" & ");
+}
 
 // (group key -> the advance-lead-stage action names that resolve it, in
 // pipeline order) — used to pick each stage's most recent activity row.
@@ -656,7 +667,7 @@ async function regenerateApprovalNoteInner(
 ): Promise<{ ok: true; document: LeadDocument } | { ok: false; error: string }> {
   const { data: lead, error: leadErr } = await admin
     .from("leads")
-    .select("id, lead_number, title, status, client_name, submission_deadline, assigned_ba_id, manual_ba_id, person_responsible_id, team, documents, approval_note_data, approval_note_pr_reviewed")
+    .select("id, lead_number, title, status, client_name, submission_deadline, assigned_ba_id, manual_ba_id, bp_association, bp_names, bp_list, person_responsible_id, team, documents, approval_note_data, approval_note_pr_reviewed")
     .eq("id", leadId)
     .maybeSingle();
   if (leadErr || !lead) return { ok: false, error: "Lead not found." };
@@ -666,8 +677,11 @@ async function regenerateApprovalNoteInner(
 
   const { data: pr } = await admin.from("afc_users").select("full_name, role, signature_path").eq("id", lead.person_responsible_id).maybeSingle();
 
-  let baOrgName: string | null = null;
-  if (lead.assigned_ba_id) {
+  // "A & B & C" when the lead names more than one BP (kept by a DB trigger).
+  let baOrgName: string | null = bpListText(lead.bp_list) || (lead.bp_names as string | null) || null;
+  if (baOrgName) {
+    // already have every name
+  } else if (lead.assigned_ba_id) {
     // Org-wide: the linked BP may belong to another team.
     const { data: baList } = await admin.rpc("get_empanelled_business_partners");
     const match = ((baList || []) as Row[]).find((b) => b.id === lead.assigned_ba_id);
@@ -715,6 +729,7 @@ async function regenerateApprovalNoteInner(
       submission_deadline: lead.submission_deadline,
       assigned_ba_id: lead.assigned_ba_id,
       manual_ba_id: lead.manual_ba_id,
+      bp_association: lead.bp_association,
     },
     approvalNoteData: lead.approval_note_data,
     personResponsibleName: pr?.full_name || "—",

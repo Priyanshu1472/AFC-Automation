@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function SearchIcon() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>;
+}
+function ChevronIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>;
 }
 function CheckIcon() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>;
@@ -29,9 +32,30 @@ const norm = (s) => (s || "").replace(/\s+/g, " ").trim().toLowerCase();
 // If the BP isn't in the list at all, typing its name in the search box
 // offers to add it. Clicking the selected row again clears it.
 //
+// More than one BP can be picked: `value` is an array of picker values in
+// the order they were picked (the first is the lead's main BP). Clicking a
+// picked row again unpicks it. "Yet to be Decided" is exclusive.
+//
 // options: [{ value, label (organisation name), team, manual? }]
-export default function BusinessPartnerPicker({ options, value, onChange, ownTeam, error, disabled, tbdValue, tbdLabel = "Yet to be Decided" }) {
+export default function BusinessPartnerPicker({ options, value = [], onChange, ownTeam, error, disabled, tbdValue, tbdLabel = "Yet to be Decided" }) {
   const [query, setQuery] = useState("");
+  // Closed like a dropdown until the search box is clicked/typed in; stays
+  // open while picking (several BPs can be picked) and closes on a click
+  // outside or Escape.
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+    };
+  }, [open]);
 
   const sorted = useMemo(
     () => [...options].sort((a, b) => (a.team === ownTeam ? 0 : 1) - (b.team === ownTeam ? 0 : 1) || a.label.localeCompare(b.label)),
@@ -43,33 +67,39 @@ export default function BusinessPartnerPicker({ options, value, onChange, ownTea
   const manualCount = options.filter((o) => o.manual).length;
   const pmisCount = options.length - manualCount;
 
-  // A typed name that's selected but not saved yet (value "new:<name>").
-  const pendingName = value?.startsWith(NEW_BP_PREFIX) ? value.slice(NEW_BP_PREFIX.length) : "";
+  // Typed names that are selected but not saved yet (values "new:<name>").
+  const pendingNames = value.filter((v) => v.startsWith(NEW_BP_PREFIX)).map((v) => v.slice(NEW_BP_PREFIX.length));
   const typedName = query.replace(/\s+/g, " ").trim();
   const exactMatch = typedName ? options.find((o) => norm(o.label) === norm(typedName)) : null;
-  const canAddTyped = typedName.length >= 2 && !exactMatch && norm(pendingName) !== norm(typedName);
+  const canAddTyped = typedName.length >= 2 && !exactMatch && !pendingNames.some((n) => norm(n) === norm(typedName));
+  const isPicked = (v) => value.includes(v);
 
   function pick(v) {
     if (disabled) return;
-    onChange(v === value ? "" : v);
+    if (v === tbdValue) { onChange(isPicked(v) ? [] : [v]); return; }
+    const rest = value.filter((x) => x !== tbdValue);
+    onChange(rest.includes(v) ? rest.filter((x) => x !== v) : [...rest, v]);
   }
 
   function addTyped() {
     if (disabled || !canAddTyped) return;
-    onChange(NEW_BP_PREFIX + typedName);
+    onChange([...value.filter((x) => x !== tbdValue), NEW_BP_PREFIX + typedName]);
     setQuery("");
   }
 
   return (
-    <div className={`bpp${error ? " bpp-has-error" : ""}${disabled ? " bpp-disabled" : ""}`}>
-      <div className="bpp-toolbar">
+    <div ref={rootRef} className={`bpp${open ? " bpp-open" : ""}${error ? " bpp-has-error" : ""}${disabled ? " bpp-disabled" : ""}`}>
+      <div className="bpp-toolbar" onClick={() => { if (!disabled) { setOpen(true); inputRef.current?.focus(); } }}>
         <label className="bpp-search">
           <SearchIcon />
           <input
+            ref={inputRef}
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setOpen(true)}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
             onKeyDown={(e) => {
+              if (e.key === "Escape") { setOpen(false); return; }
               // Enter would otherwise submit the whole lead form.
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -80,14 +110,27 @@ export default function BusinessPartnerPicker({ options, value, onChange, ownTea
             placeholder="Search, or type a BP's name to add it…"
             disabled={disabled}
             aria-label="Search Business Partners"
+            aria-expanded={open}
+            aria-haspopup="listbox"
           />
         </label>
         <span className="bpp-count">
           {pmisCount} on PMIS{manualCount > 0 ? ` · ${manualCount} added manually` : ""}{teamCount > 0 ? ` · ${teamCount} team${teamCount === 1 ? "" : "s"}` : ""}
         </span>
+        <button
+          type="button"
+          className="bpp-chevron"
+          aria-label={open ? "Close the list" : "Open the list"}
+          disabled={disabled}
+          onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        >
+          <ChevronIcon />
+        </button>
       </div>
 
-      <ul className="bpp-list" role="listbox" aria-label="Business Partners">
+      {open && (
+      <div className="bpp-panel">
+      <ul className="bpp-list" role="listbox" aria-multiselectable="true" aria-label="Business Partners">
         {canAddTyped && (
           <li>
             <button type="button" className="bpp-item bpp-item-add" onClick={addTyped} disabled={disabled}>
@@ -97,27 +140,27 @@ export default function BusinessPartnerPicker({ options, value, onChange, ownTea
             </button>
           </li>
         )}
-        {pendingName && (
-          <li>
-            <button type="button" role="option" aria-selected className="bpp-item bpp-item-selected" onClick={() => pick(value)} disabled={disabled}>
+        {pendingNames.map((pendingName) => (
+          <li key={pendingName}>
+            <button type="button" role="option" aria-selected className="bpp-item bpp-item-selected" onClick={() => pick(NEW_BP_PREFIX + pendingName)} disabled={disabled}>
               <span className="bpp-avatar" aria-hidden="true">{initials(pendingName)}</span>
               <span className="bpp-name" title={pendingName}>{pendingName}</span>
               <span className="bpp-tag bpp-tag-new" title="Will be added to the Manually Added BP list when this lead is saved">New · added on save</span>
               <span className="bpp-check"><CheckIcon /></span>
             </button>
           </li>
-        )}
+        ))}
         {tbdValue && !q && (
           <li>
-            <button type="button" role="option" aria-selected={value === tbdValue} className={`bpp-item bpp-item-tbd${value === tbdValue ? " bpp-item-selected" : ""}`} onClick={() => pick(tbdValue)} disabled={disabled}>
+            <button type="button" role="option" aria-selected={isPicked(tbdValue)} className={`bpp-item bpp-item-tbd${isPicked(tbdValue) ? " bpp-item-selected" : ""}`} onClick={() => pick(tbdValue)} disabled={disabled}>
               <span className="bpp-avatar bpp-avatar-tbd" aria-hidden="true">?</span>
               <span className="bpp-name">{tbdLabel}</span>
-              <span className="bpp-check">{value === tbdValue && <CheckIcon />}</span>
+              <span className="bpp-check">{isPicked(tbdValue) && <CheckIcon />}</span>
             </button>
           </li>
         )}
         {shown.map((o) => {
-          const selected = o.value === value;
+          const selected = isPicked(o.value);
           const own = !!ownTeam && o.team === ownTeam;
           return (
             <li key={o.value}>
@@ -137,7 +180,9 @@ export default function BusinessPartnerPicker({ options, value, onChange, ownTea
           </li>
         )}
       </ul>
-      <p className="bpp-hint">Not in the list? Type the Business Partner's name in the search box and choose “Add”.</p>
+      <p className="bpp-hint">You can pick more than one. Not in the list? Type the name in the search box and choose “Add”.</p>
+      </div>
+      )}
     </div>
   );
 }

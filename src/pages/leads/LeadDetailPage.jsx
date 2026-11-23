@@ -28,6 +28,7 @@ import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 // stepper, action panel, doc list), no Lead-Gen-specific CSS needed yet.
 import "../../styles/ApplicationReviewPage.css";
 import BackButton from "../../components/ui/BackButton";
+import { bpListText } from "../../lib/leadBusinessPartners";
 
 function fmt(v) {
   return v === null || v === undefined || v === "" ? "—" : v;
@@ -803,7 +804,7 @@ export default function LeadDetailPage() {
                   <Row label="Person Responsible" value={fmt(lead.assignee?.full_name)} />
                   <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
                   <Row label="Recommending Authority" value={fmt(lead.authority?.full_name)} />
-                  <Row label="Business Partner" value={lead.ba?.full_name || (lead.manual_ba?.org_name ? `${lead.manual_ba.org_name} (added manually)` : "Yet to be Decided")} />
+                  <Row label="Business Partner" value={bpListText(lead, lead.ba?.full_name || lead.manual_ba?.org_name || "Yet to be Decided")} />
                   {lead.transferred_from_team && <Row label="Transferred From" value={lead.transferred_from_team} />}
                 </Card.Body>
               </Card>

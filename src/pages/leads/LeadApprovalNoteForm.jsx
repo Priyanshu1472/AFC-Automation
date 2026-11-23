@@ -13,6 +13,7 @@ import { SCRUTINY_PARAMETERS, defaultScrutinyEntries, deriveNatureOfLead } from 
 import "../../styles/LeadForm.css";
 import BackButton from "../../components/ui/BackButton";
 import SectionHead from "../../components/leads/SectionHead";
+import { bpListText } from "../../lib/leadBusinessPartners";
 
 const YES_NO_OPTIONS = [
   { value: "Yes", label: "Yes" },
@@ -201,7 +202,9 @@ export default function LeadApprovalNoteForm() {
         justification: d.justification || "",
       });
     }
-    if (data?.assigned_ba_id && data?.team) {
+    if (data?.bp_names) {
+      setBaOrgName(bpListText(data));
+    } else if (data?.assigned_ba_id && data?.team) {
       const { data: baList } = await supabase.rpc("get_empanelled_business_partners");
       setBaOrgName((baList || []).find((b) => b.id === data.assigned_ba_id)?.org_name || null);
     } else if (data?.manual_ba_id) {

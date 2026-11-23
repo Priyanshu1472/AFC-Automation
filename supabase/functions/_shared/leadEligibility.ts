@@ -171,3 +171,95 @@ export async function resolveManualBusinessPartner(
   console.error("Manual BP insert failed:", error?.message);
   return { id: null, error: "Could not save the Business Partner name. Please try again." };
 }
+
+// ── More than one Business Partner on a lead ───────────────────────────
+// The lead form sends the first BP the old way (assigned_ba_id /
+// manual_ba_id / manual_ba_name, its Consortium/JV-or-Independent choice
+// as bp_association) and every further one in extra_business_partners: a
+// JSON array of { value, association }, where value is a picker value — an
+// on-PMIS BP's afc_users id, "manual:<id>", or "new:<typed name>". They're stored in
+// lead_extra_business_partners (position 1, 2, …); a trigger keeps
+// leads.bp_names ("A & B & C") current.
+
+export const BP_ASSOCIATIONS = ["consortium_jv", "independent_bp_inputs"] as const;
+export const MAX_EXTRA_BPS = 9;
+
+export type ExtraBpRow = { ba_user_id: string | null; manual_ba_id: string | null; association: string };
+export type ExtraBpInput = { value: string; association: string };
+
+export function parseBpAssociation(raw: string | null | undefined): string | null | "invalid" {
+  const v = (raw || "").trim();
+  if (!v) return null;
+  return (BP_ASSOCIATIONS as readonly string[]).includes(v) ? v : "invalid";
+}
+
+export function parseExtraBpValues(raw: string | null | undefined): { values: ExtraBpInput[]; error?: string } {
+  if (!raw) return { values: [] };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { values: [], error: "Invalid Business Partner list." };
+  }
+  if (!Array.isArray(parsed)) return { values: [], error: "Invalid Business Partner list." };
+  const values: ExtraBpInput[] = [];
+  for (const item of parsed) {
+    const value = typeof item === "string" ? item : (item as { value?: unknown })?.value;
+    const association = typeof item === "string" ? "" : (item as { association?: unknown })?.association;
+    if (typeof value !== "string") return { values: [], error: "Invalid Business Partner list." };
+    if (!value.trim()) continue;
+    const assoc = parseBpAssociation(typeof association === "string" ? association : "");
+    if (!assoc || assoc === "invalid") {
+      return { values: [], error: "Choose Consortium/JV or Independent (with BP Inputs) for every Business Partner." };
+    }
+    values.push({ value: value.trim(), association: assoc });
+  }
+  if (values.length > MAX_EXTRA_BPS) return { values: [], error: `A lead can have at most ${MAX_EXTRA_BPS + 1} Business Partners.` };
+  return { values };
+}
+
+// Resolves picker values to rows, adding any newly typed names to the manual
+// list. Drops duplicates and anything equal to the first (primary) BP.
+export async function resolveExtraBusinessPartners(
+  admin: AdminClient,
+  values: ExtraBpInput[],
+  opts: { primaryBaId: string | null; primaryManualId: string | null; team?: string | null; createdBy: string },
+): Promise<{ rows: ExtraBpRow[]; error?: string }> {
+  const rows: ExtraBpRow[] = [];
+  const seen = new Set<string>();
+  if (opts.primaryBaId) seen.add(`u:${opts.primaryBaId}`);
+  if (opts.primaryManualId) seen.add(`m:${opts.primaryManualId}`);
+  for (const { value: v, association } of values) {
+    let row: ExtraBpRow;
+    if (v.startsWith("manual:") || v.startsWith("new:")) {
+      const manual = await resolveManualBusinessPartner(admin, {
+        manualBaId: v.startsWith("manual:") ? v.slice(7) : null,
+        manualBaName: v.startsWith("new:") ? v.slice(4) : null,
+        team: opts.team,
+        createdBy: opts.createdBy,
+      });
+      if (manual.error) return { rows: [], error: manual.error };
+      if (!manual.id) continue;
+      row = { ba_user_id: null, manual_ba_id: manual.id, association };
+    } else {
+      const baErr = await validateBusinessAssociate(admin, v);
+      if (baErr) return { rows: [], error: baErr };
+      row = { ba_user_id: v, manual_ba_id: null, association };
+    }
+    const key = row.ba_user_id ? `u:${row.ba_user_id}` : `m:${row.manual_ba_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push(row);
+  }
+  return { rows };
+}
+
+export async function replaceExtraBusinessPartners(admin: AdminClient, leadId: string, rows: ExtraBpRow[]): Promise<string | null> {
+  const { error: delErr } = await admin.from("lead_extra_business_partners").delete().eq("lead_id", leadId);
+  if (delErr) return delErr.message;
+  if (!rows.length) return null;
+  const { error } = await admin
+    .from("lead_extra_business_partners")
+    .insert(rows.map((r, i) => ({ lead_id: leadId, position: i + 1, ba_user_id: r.ba_user_id, manual_ba_id: r.manual_ba_id, association: r.association })));
+  return error ? error.message : null;
+}

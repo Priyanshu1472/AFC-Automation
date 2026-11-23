@@ -91,7 +91,7 @@ export default function PbgNoteEditPage() {
     const { data: lead } = await supabase
       .from("leads")
       .select(
-        "id, lead_number, title, client_name, person_responsible_id, reviewer_id, recommending_authority_id, approval_note_data, " +
+        "id, lead_number, title, client_name, bp_names, person_responsible_id, reviewer_id, recommending_authority_id, approval_note_data, " +
         "ba:assigned_ba_id(full_name), pr:person_responsible_id(full_name, role), aa:recommending_authority_id(full_name, role)",
       )
       .eq("id", leadId)
@@ -182,7 +182,7 @@ export default function PbgNoteEditPage() {
     if (!ctx) return null;
     return composePbgDefaults({
       lead: ctx.lead,
-      bpName: ctx.lead.ba?.full_name || null,
+      bpName: ctx.lead.bp_names || ctx.lead.ba?.full_name || null,
       fields,
       pbgAmount: pbgNum,
       consultancyFee: feeNum || null,

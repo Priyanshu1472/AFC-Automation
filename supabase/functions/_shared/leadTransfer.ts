@@ -84,6 +84,7 @@ export async function performLeadTransfer(
       recommending_authority_id: null,
       assigned_ba_id: null,
       manual_ba_id: null,
+      bp_association: null,
       forwarded_to_id: forwardedToId,
       handled_by_dgm_id: null,
       declined_from_status: null,
@@ -99,6 +100,10 @@ export async function performLeadTransfer(
     console.error("Lead transfer update failed:", updateErr.message);
     return { ok: false, error: "Failed to transfer lead. Please try again." };
   }
+
+  // The new team picks its own Business Partner(s), like the first one above.
+  const { error: extraErr } = await admin.from("lead_extra_business_partners").delete().eq("lead_id", lead.id);
+  if (extraErr) console.error("Clearing extra Business Partners failed:", extraErr.message);
 
   // The old team's chat roster has no business being on the new team's
   // thread — chat_opened_at is already cleared above, but the participant

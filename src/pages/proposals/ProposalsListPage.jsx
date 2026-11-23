@@ -253,7 +253,7 @@ export default function ProposalsListPage() {
       return (
         (l.lead_number || "").toLowerCase().includes(s) ||
         (l.client_name || "").toLowerCase().includes(s) ||
-        (l.ba?.full_name || "").toLowerCase().includes(s)
+        (l.bp_names || l.ba?.full_name || "").toLowerCase().includes(s)
       );
     });
   }, [teamScoped, quickFilter, prepStatusFilter, search]);
@@ -373,7 +373,7 @@ export default function ProposalsListPage() {
                             </button>
                           </td>
                           <td>{l.client_name || <span className="pp-td-muted">—</span>}</td>
-                          <td className="pp-td-muted">{l.ba?.full_name || "—"}</td>
+                          <td className="pp-td-muted">{l.bp_names || l.ba?.full_name || "—"}</td>
                           <td className="pp-td-muted">{l.pr?.full_name || "—"}</td>
                           <td className={overdue ? "pp-td-date--overdue" : ""}>{fmtDate(l.submission_deadline)}</td>
                           <td>

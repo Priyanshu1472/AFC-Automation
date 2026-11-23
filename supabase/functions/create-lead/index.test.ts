@@ -121,7 +121,7 @@ Deno.test("handleRequest - ba source without assigned_ba_id is rejected", async 
 Deno.test("handleRequest - ba source with a valid assigned_ba_id succeeds", async () => {
   const BA_ID = "ba-1";
   const client = buildClient({ baTarget: { data: { id: BA_ID, role: "business_associate", team: TEAM, is_active: true }, error: null } });
-  const res = await handleRequest(formReq(baseFields({ source: "ba", assigned_ba_id: BA_ID })), client as never);
+  const res = await handleRequest(formReq(baseFields({ source: "ba", assigned_ba_id: BA_ID, bp_association: "independent_bp_inputs" })), client as never);
   assertEquals(res.status, 200);
 });
 
@@ -138,7 +138,7 @@ Deno.test("handleRequest - suo_moto source with a valid assigned_ba_id succeeds 
   const client = buildClient({ baTarget: { data: { id: BA_ID, role: "business_associate", team: TEAM, is_active: true }, error: null } });
   const res = await handleRequest(
     formReq(baseFields({
-      source: "suo_moto", assigned_ba_id: BA_ID,
+      source: "suo_moto", assigned_ba_id: BA_ID, bp_association: "independent_bp_inputs",
       presentation_date: "2026-09-01", followup_date: "2026-09-15",
     })),
     client as never
@@ -338,7 +338,7 @@ Deno.test("handleRequest - a non-Suo-Moto lead with zero documents is rejected",
 Deno.test("handleRequest - a Suo Moto lead needs no document", async () => {
   const BA_ID = "ba-1";
   const client = buildClient({ baTarget: { data: { id: BA_ID, role: "business_associate", team: TEAM, is_active: true }, error: null } });
-  const res = await handleRequest(formReqWithFiles(baseFields({ source: "suo_moto", assigned_ba_id: BA_ID }), []), client as never);
+  const res = await handleRequest(formReqWithFiles(baseFields({ source: "suo_moto", assigned_ba_id: BA_ID, bp_association: "independent_bp_inputs" }), []), client as never);
   assertEquals(res.status, 200);
 
   const log = (client as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
@@ -398,4 +398,26 @@ Deno.test("handleRequest - a possible duplicate back-links onto the matched lead
   assertEquals(!!notificationsInsert, true);
   const notifiedIds = JSON.parse(notificationsInsert!.calls.find(([name]) => name === "insert")![1]).map((r: { user_id: string }) => r.user_id);
   assertEquals(notifiedIds.sort(), ["matched-authority", "matched-creator", "matched-pr", "matched-reviewer"]);
+});
+
+Deno.test("handleRequest - a BP lead must say Consortium/JV or Independent", async () => {
+  const client = buildClient({});
+  const res = await handleRequest(formReq(baseFields({ source: "ba", assigned_ba_id: "ba-x" })), client as never);
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "Choose whether the Business Partner is in a Consortium/JV or Independent (with BP Inputs).");
+});
+
+Deno.test("handleRequest - every extra BP needs its own Consortium/JV or Independent choice", async () => {
+  const client = buildClient({ baTarget: { data: { id: "ba-1", role: "business_associate", team: TEAM, is_active: true }, error: null } });
+  const res = await handleRequest(
+    formReq(baseFields({
+      source: "ba", assigned_ba_id: "ba-1", bp_association: "consortium_jv",
+      extra_business_partners: JSON.stringify([{ value: "new:Second BP", association: "" }]),
+    })),
+    client as never,
+  );
+  assertEquals(res.status, 400);
+  const body = await res.json();
+  assertEquals(body.error, "Choose Consortium/JV or Independent (with BP Inputs) for every Business Partner.");
 });

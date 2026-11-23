@@ -179,6 +179,9 @@ export type FeeNoteBuildInput = {
     scope_of_work: string[];
   };
   bpName: string | null;
+  // leads.bp_list: every BP in order with its own arrangement
+  // ("consortium_jv" | "independent_bp_inputs").
+  bpList?: Array<{ name: string; association: string | null }> | null;
   refLabel: string;
   personResponsible: Signer;
   recommendingAuthority: Signer;
@@ -201,7 +204,8 @@ function deliveryModeWord(deliveryType: string | null): string {
 }
 
 function borneByPhrase(borneBy: "afc" | "bp", bpName: string | null): string {
-  if (borneBy === "bp") return bpName ? `the Business Partner, M/s. ${bpName}` : "the Business Partner";
+  const plural = !!bpName && bpName.includes(" & ");
+  if (borneBy === "bp") return bpName ? `the Business Partner${plural ? "s" : ""}, M/s. ${bpName}` : "the Business Partner";
   return "AFC";
 }
 
@@ -209,9 +213,15 @@ function borneByPhrase(borneBy: "afc" | "bp", bpName: string | null): string {
 // which fee" sentence — used both as one of page 1's body paragraphs and,
 // flattened to plain text below, as the Implementation Arrangements
 // fallback. Change the wording here and both places follow.
-function buildBorneSegs(feeLines: FeeLine[], bpName: string | null): Segment[] {
+function buildBorneSegs(feeLines: FeeLine[], bpName: string | null, bpList?: Array<{ name: string; association: string | null }> | null): Segment[] {
   const segs: Segment[] = [];
-  if (bpName) {
+  const jv = (bpList || []).filter((b) => b.association === "consortium_jv").map((b) => b.name);
+  const inputs = (bpList || []).filter((b) => b.association !== "consortium_jv").map((b) => b.name);
+  if (jv.length) {
+    segs.push(plain(`We are bidding for this assignment in Consortium/JV with `), bold(`M/s. ${jv.join(" & ")}`));
+    if (inputs.length) segs.push(plain(`, and the services of `), bold(`M/s. ${inputs.join(" & ")}`), plain(` will be roped in, if the assignment is awarded to us. `));
+    else segs.push(plain(`. `));
+  } else if (bpName) {
     segs.push(plain(`We are bidding independently for this assignment and the services of `), bold(`M/s. ${bpName}`), plain(` will be roped in, if the assignment is awarded to us. `));
   } else {
     segs.push(plain(`We are bidding independently for this assignment. `));
@@ -237,7 +247,7 @@ function implementationArrangementsText(input: FeeNoteBuildInput): string {
   if (input.implementationArrangements && input.implementationArrangements.trim()) {
     return input.implementationArrangements.trim();
   }
-  return buildBorneSegs(input.feeLines, input.bpName).map((s) => s.text).join("");
+  return buildBorneSegs(input.feeLines, input.bpName, input.bpList).map((s) => s.text).join("");
 }
 
 function feeLineText(l: FeeLine): string {
@@ -273,7 +283,7 @@ function buildCoverParagraphs(input: FeeNoteBuildInput): { intro: Segment[][]; f
     plain("."),
   ]);
 
-  intro.push(buildBorneSegs(input.feeLines, input.bpName));
+  intro.push(buildBorneSegs(input.feeLines, input.bpName, input.bpList));
 
   intro.push([plain("For the same, we need to furnish the following:")]);
 
@@ -552,7 +562,7 @@ export async function buildFeeNotePdfForNote(
 
   const { data: lead, error: leadErr } = await admin
     .from("leads")
-    .select("title, client_name, portal_name, bid_number, lead_type, delivery_type, submission_deadline, source, assigned_ba_id, manual_ba_id, person_responsible_id, recommending_authority_id, approval_note_data")
+    .select("title, client_name, portal_name, bid_number, lead_type, delivery_type, submission_deadline, source, assigned_ba_id, manual_ba_id, bp_names, bp_list, person_responsible_id, recommending_authority_id, approval_note_data")
     .eq("id", proposal.lead_id)
     .maybeSingle();
   if (leadErr || !lead) return { ok: false, error: "Lead not found." };
@@ -596,7 +606,9 @@ export async function buildFeeNotePdfForNote(
       objectives: (approvalData.objectives as string) || null,
       scope_of_work: Array.isArray(approvalData.scope_of_work) ? (approvalData.scope_of_work as string[]) : [],
     },
-    bpName: (baRow as { data: { full_name?: string } | null })?.data?.full_name || null,
+    // Every BP on the lead ("A & B"), else the single linked one.
+    bpName: (lead.bp_names as string | null) || (baRow as { data: { full_name?: string } | null })?.data?.full_name || null,
+    bpList: (lead.bp_list as Array<{ name: string; association: string | null }> | null) || null,
     refLabel: portalRefLabel(lead.portal_name),
     personResponsible,
     recommendingAuthority,

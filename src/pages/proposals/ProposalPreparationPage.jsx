@@ -351,7 +351,7 @@ export default function ProposalPreparationPage() {
                   <div><dt>Last Date</dt><dd className={pastDeadline ? "pp-overdue" : ""}>{fmtDate(lead.submission_deadline)}</dd></div>
                   <div><dt>Proposed Value</dt><dd>{valueText}</dd></div>
                   <div><dt>Reference No.</dt><dd>{lead.bid_number || "—"}</dd></div>
-                  <div><dt>Business Partner</dt><dd>{lead.ba?.full_name || "—"}</dd></div>
+                  <div><dt>Business Partner</dt><dd>{lead.bp_names || lead.ba?.full_name || "—"}</dd></div>
                 </dl>
 
                 <div className="pp-people">

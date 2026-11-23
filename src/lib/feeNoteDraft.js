@@ -82,7 +82,8 @@ function feeListPhrase(lines) {
 }
 
 function borneByPhrase(borneBy, bpName) {
-  if (borneBy === "bp") return bpName ? `the Business Partner, M/s. ${bpName}` : "the Business Partner";
+  const plural = !!bpName && bpName.includes(" & ");
+  if (borneBy === "bp") return bpName ? `the Business Partner${plural ? "s" : ""}, M/s. ${bpName}` : "the Business Partner";
   return "AFC";
 }
 
@@ -104,9 +105,15 @@ export const bold = (text) => ({ text, bold: true });
 // which fee" sentence — used both as one of page 1's body paragraphs and,
 // flattened to plain text below, as the Implementation Arrangements
 // starting text. Change the wording here and both places follow.
-function buildBorneSegs({ feeLines, bpName }) {
+function buildBorneSegs({ feeLines, bpName, bpList }) {
   const segs = [];
-  if (bpName) {
+  const jv = (bpList || []).filter((b) => b.association === "consortium_jv").map((b) => b.name);
+  const inputs = (bpList || []).filter((b) => b.association !== "consortium_jv").map((b) => b.name);
+  if (jv.length) {
+    segs.push(plain("We are bidding for this assignment in Consortium/JV with "), bold(`M/s. ${jv.join(" & ")}`));
+    if (inputs.length) segs.push(plain(", and the services of "), bold(`M/s. ${inputs.join(" & ")}`), plain(" will be roped in, if the assignment is awarded to us. "));
+    else segs.push(plain(". "));
+  } else if (bpName) {
     segs.push(plain("We are bidding independently for this assignment and the services of "), bold(`M/s. ${bpName}`), plain(" will be roped in, if the assignment is awarded to us. "));
   } else {
     segs.push(plain("We are bidding independently for this assignment. "));
@@ -131,15 +138,15 @@ const segsToText = (segs) => segs.map((s) => s.text).join("");
 // Just the plain-text flattening of buildBorneSegs, the exact same
 // paragraph shown live on page 1 — never a separately hand-typed sentence
 // that could drift out of sync with it.
-export function composeImplementationArrangements({ feeLines, bpName }) {
-  return segsToText(buildBorneSegs({ feeLines, bpName }));
+export function composeImplementationArrangements({ feeLines, bpName, bpList }) {
+  return segsToText(buildBorneSegs({ feeLines, bpName, bpList }));
 }
 
 // Live preview of page 1's body — mirrors buildCoverParagraphs's shape
 // exactly (intro paragraphs / numbered fee lines / tail paragraphs) so the
 // component can render it the same way the PDF lays it out. Returns null
 // when there's nothing to show yet (no fee ticked).
-export function composeFeeNotePreview({ lead, feeLines, bpName, submitTo, refLabel }) {
+export function composeFeeNotePreview({ lead, feeLines, bpName, bpList, submitTo, refLabel }) {
   if (!feeLines.length) return null;
 
   const rfpOrEoi = lead.lead_type === "eoi" ? "EOI" : "RFP";
@@ -157,7 +164,7 @@ export function composeFeeNotePreview({ lead, feeLines, bpName, submitTo, refLab
     plain("."),
   ]);
 
-  intro.push(buildBorneSegs({ feeLines, bpName }));
+  intro.push(buildBorneSegs({ feeLines, bpName, bpList }));
 
   intro.push([plain("For the same, we need to furnish the following:")]);
 

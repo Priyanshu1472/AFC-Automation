@@ -105,7 +105,7 @@ export default function FeeNoteEditPage() {
     const { data: lead } = await supabase
       .from("leads")
       .select(
-        "id, lead_number, title, client_name, portal_name, bid_number, lead_type, assigned_ba_id, submission_deadline, person_responsible_id, reviewer_id, recommending_authority_id, approval_note_data, " +
+        "id, lead_number, title, client_name, portal_name, bid_number, lead_type, assigned_ba_id, bp_names, bp_list, submission_deadline, person_responsible_id, reviewer_id, recommending_authority_id, approval_note_data, " +
         "ba:assigned_ba_id(full_name), pr:person_responsible_id(full_name, role), aa:recommending_authority_id(full_name, role)",
       )
       .eq("id", leadId)
@@ -189,7 +189,8 @@ export default function FeeNoteEditPage() {
     return composeFeeNotePreview({
       lead: ctx.lead,
       feeLines: composeLines,
-      bpName: ctx.lead.ba?.full_name || null,
+      bpName: ctx.lead.bp_names || ctx.lead.ba?.full_name || null,
+      bpList: ctx.lead.bp_list || null,
       submitTo,
       refLabel: portalRefLabel(ctx.lead.portal_name),
     });
@@ -202,7 +203,7 @@ export default function FeeNoteEditPage() {
     if (!ctx || implementationDirty) return;
     const composeLines = activeComposeLines(lines);
     setImplementation(composeLines.length
-      ? composeImplementationArrangements({ feeLines: composeLines, bpName: ctx.lead.ba?.full_name || null })
+      ? composeImplementationArrangements({ feeLines: composeLines, bpName: ctx.lead.bp_names || ctx.lead.ba?.full_name || null, bpList: ctx.lead.bp_list || null })
       : "");
   }, [ctx, lines, implementationDirty]);
 
