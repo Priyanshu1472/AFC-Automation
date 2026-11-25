@@ -1330,12 +1330,30 @@
   color: var(--text-primary);
 }
 
-@media (max-width: 480px) {
+/* Below 720px AppHeader reverts from a left rail to an in-flow sticky top
+   bar (see AppHeader.css's own max-width: 720px query) — the chat FAB's
+   desktop top offset (sized for the rail, which has no top bar to clear)
+   would otherwise sit on top of that bar's own icons. Push it down far
+   enough to clear the bar (logo height + its vertical padding + border)
+   so it lands beside the page's own Back button row instead. */
+@media (max-width: 720px) {
   .ar-chat-widget {
     right: var(--space-4);
-    top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
+    top: calc(50px + var(--space-3) * 2 + 1px + var(--space-4) + env(safe-area-inset-top, 0px));
   }
 
+  .ar-chat-fab {
+    width: 40px;
+    height: 40px;
+  }
+
+  .ar-chat-fab svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-width: 480px) {
   .ar-chat-popup {
     width: 100vw;
   }
