@@ -66,6 +66,13 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
   const update: Record<string, unknown> = { full_name: full_name.trim() };
 
+  // A Business Partner's organisation name (shown wherever the BP is named).
+  if (target.role === "business_associate" && typeof body.bp_org_name === "string") {
+    const org = body.bp_org_name.trim();
+    if (org.length < 2) return jsonRes(req, 400, { error: "Organisation name is required for a Business Partner." });
+    update.bp_org_name = org;
+  }
+
   // Only validate the role against the whitelist when it's actually
   // changing — otherwise editing an existing md/admin account's name would
   // be rejected just because their current role isn't in

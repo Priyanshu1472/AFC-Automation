@@ -13,7 +13,10 @@ import Alert from "../../components/ui/Alert";
 import "../../styles/CreateUserPage.css";
 import BackButton from "../../components/ui/BackButton";
 
-const EMPTY_FORM = { full_name: "", email: "", role: "", teams: [], office: "", committees: [] };
+const EMPTY_FORM = { full_name: "", email: "", role: "", bp_org_name: "", teams: [], office: "", committees: [] };
+// A Business Partner already working with AFC gets a login here directly,
+// without going through empanelment.
+const BP_ROLE = "business_associate";
 const SIGNATURE_TYPES = ["image/png", "image/jpeg"];
 
 // Each team has one "home" office — picking a team auto-fills Office with
@@ -31,7 +34,7 @@ function isValidEmail(val) {
 
 export default function CreateUserPage() {
   const roleOptions = useMemo(
-    () => ADMIN_CREATABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] || r })),
+    () => [...ADMIN_CREATABLE_ROLES, BP_ROLE].map((r) => ({ value: r, label: ROLE_LABELS[r] || r })),
     []
   );
 
@@ -58,6 +61,8 @@ export default function CreateUserPage() {
     setSignatureFile(file);
   }
 
+  const isBp = form.role === BP_ROLE;
+
   function set(field, value) {
     setForm((p) => ({ ...p, [field]: value }));
   }
@@ -73,6 +78,8 @@ export default function CreateUserPage() {
       if (!isValidEmail(form.email)) errs.email = "Enter a valid email address.";
       if (!form.role) errs.role = "Select a role.";
       if (!form.office) errs.office = "Office is required for this role.";
+      if (isBp && form.bp_org_name.trim().length < 2) errs.bp_org_name = "Enter the Business Partner's organisation name.";
+      if (isBp && !form.teams.length) errs.team = "Select a team.";
       if (Object.keys(errs).length) {
         setErrors(errs);
         return;
@@ -88,7 +95,8 @@ export default function CreateUserPage() {
             role: form.role,
             teams: form.teams,
             office: form.office || null,
-            committees: form.committees,
+            committees: isBp ? [] : form.committees,
+            ...(isBp ? { bp_org_name: form.bp_org_name.trim() } : {}),
           },
         });
 
@@ -105,7 +113,7 @@ export default function CreateUserPage() {
         setBanner(`Account created for ${form.full_name.trim()}.`);
         setForm(EMPTY_FORM);
 
-        if (signatureFile && data.id) {
+        if (signatureFile && data.id && !isBp) {
           const fd = new FormData();
           fd.set("user_id", data.id);
           fd.set("file", signatureFile, signatureFile.name);
@@ -121,7 +129,7 @@ export default function CreateUserPage() {
         setSaving(false);
       }
     },
-    [form]
+    [form, isBp, signatureFile]
   );
 
   return (
@@ -196,10 +204,23 @@ export default function CreateUserPage() {
                   />
                   {errors.role && <span className="field-error">{errors.role}</span>}
                 </div>
+                {isBp && (
+                  <div className="field">
+                    <Input
+                      label="Organisation Name"
+                      required
+                      value={form.bp_org_name}
+                      onChange={(e) => set("bp_org_name", e.target.value)}
+                      placeholder="e.g. Sharma Consultants Pvt. Ltd."
+                      error={errors.bp_org_name}
+                      disabled={saving}
+                    />
+                  </div>
+                )}
 
                 <div className="field">
                   <label className="field-label">
-                    Team
+                    Team {isBp && <span className="required">*</span>}
                   </label>
                   <TeamMultiSelect
                     options={teams}
@@ -227,6 +248,7 @@ export default function CreateUserPage() {
                   />
                   {errors.office && <span className="field-error">{errors.office}</span>}
                 </div>
+                {!isBp && (
                 <div className="field">
                   <label className="field-label">
                     Committee
@@ -239,6 +261,8 @@ export default function CreateUserPage() {
                     disabled={saving}
                   />
                 </div>
+                )}
+                {!isBp && (
                 <div className="field full">
                   <label className="field-label">
                     Signature
@@ -249,6 +273,7 @@ export default function CreateUserPage() {
                   </label>
                   {signatureError && <span className="field-error">{signatureError}</span>}
                 </div>
+                )}
               </div>
             </Card.Body>
             <Card.Footer>

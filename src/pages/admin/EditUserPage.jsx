@@ -57,7 +57,7 @@ export default function EditUserPage() {
     }
     return base;
   }, [target]);
-  const [form, setForm] = useState({ full_name: "", role: "", teams: [], office: "", committees: [] });
+  const [form, setForm] = useState({ full_name: "", role: "", bp_org_name: "", teams: [], office: "", committees: [] });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [banner, setBanner] = useState("");
@@ -69,7 +69,7 @@ export default function EditUserPage() {
 
   const fetchUser = useCallback(async () => {
     setLoading(true);
-    const cols = "id, full_name, email, role, team, office, committee, pin_updated_at, signature_path";
+    const cols = "id, full_name, email, role, team, office, committee, bp_org_name, pin_updated_at, signature_path";
     const { data, error } = await supabase.from("afc_users").select(cols).eq("id", id).maybeSingle();
     if (error || !data) {
       setNotFound(true);
@@ -91,7 +91,7 @@ export default function EditUserPage() {
       : data.committee
         ? [data.committee]
         : [];
-    setForm({ full_name: data.full_name || "", role: data.role || "", teams: assignedTeams, office: data.office || "", committees: assignedCommittees });
+    setForm({ full_name: data.full_name || "", role: data.role || "", bp_org_name: data.bp_org_name || "", teams: assignedTeams, office: data.office || "", committees: assignedCommittees });
     setSignatureUrl(null);
     if (data.signature_path) {
       const { data: signed } = await supabase.functions.invoke("get-user-signature-url", { body: { user_id: id } });
@@ -103,6 +103,10 @@ export default function EditUserPage() {
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
+
+  // Only a BP created straight from Admin keeps its organisation name on the
+  // user row; an empanelled BP's comes from its application.
+  const isBpTarget = target?.role === "business_associate" && !!target?.bp_org_name;
 
   function set(field, value) {
     setForm((p) => ({ ...p, [field]: value }));
@@ -116,6 +120,7 @@ export default function EditUserPage() {
     const errs = {};
     if (!form.full_name.trim() || form.full_name.trim().length < 2) errs.full_name = "Enter the person's full name.";
     if (canEditRole && !form.role) errs.role = "Select a role.";
+    if (isBpTarget && form.bp_org_name.trim().length < 2) errs.bp_org_name = "Enter the Business Partner's organisation name.";
     if (Object.keys(errs).length) {
       setErrors(errs);
       return;
@@ -130,6 +135,7 @@ export default function EditUserPage() {
           full_name: form.full_name.trim(),
           teams: form.teams,
           office: form.office || null,
+          ...(isBpTarget ? { bp_org_name: form.bp_org_name.trim() } : {}),
           ...(canEditRole ? { role: form.role, committees: form.committees } : {}),
         },
       });
@@ -217,6 +223,19 @@ export default function EditUserPage() {
                   <div className="field">
                     <label className="field-label">Designation</label>
                     <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{ROLE_LABELS[target.role] || target.role}</p>
+                  </div>
+                )}
+
+                {isBpTarget && (
+                  <div className="field">
+                    {canEdit ? (
+                      <Input label="Organisation Name" required value={form.bp_org_name} onChange={(e) => set("bp_org_name", e.target.value)} error={errors.bp_org_name} disabled={saving} />
+                    ) : (
+                      <>
+                        <label className="field-label">Organisation Name</label>
+                        <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{target.bp_org_name}</p>
+                      </>
+                    )}
                   </div>
                 )}
 
