@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
+import { DesktopNotificationPrompt } from "./DesktopNotifications";
 import SupportWidget from "./SupportWidget";
 import NavDropdown from "./NavDropdown";
 import UserMenu from "./UserMenu";
@@ -171,6 +172,8 @@ export default function AppHeader() {
         <SupportWidget />
         <NotificationBell />
       </div>
+
+      <DesktopNotificationPrompt />
 
       {menuOpen && <div className="app-header-backdrop" onClick={closeMenu} aria-hidden="true" />}
 

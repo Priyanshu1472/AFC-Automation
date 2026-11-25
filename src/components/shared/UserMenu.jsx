@@ -4,6 +4,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
 import { ROLE_LABELS } from "../../lib/roles";
 import ProfileAvatar from "./ProfileAvatar";
+import { DesktopNotificationToggle } from "./DesktopNotifications";
 import "../../styles/UserMenu.css";
 
 // `compact`: the rail is folded, so the theme toggle and Support button
@@ -107,6 +108,7 @@ export default function UserMenu({ compact = false, onOpenSupport }) {
           <button type="button" className="user-menu-item" role="menuitem" onClick={goToProfile}>
             My Profile
           </button>
+          <DesktopNotificationToggle />
           {compact && (
             <>
               <button type="button" className="user-menu-item" role="menuitem" onClick={handleToggleTheme}>

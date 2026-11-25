@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { handleRealtimeNotification, isPushActive } from "./desktopNotifications";
 
 export async function fetchRecentNotifications(userId, limit = 20) {
   const { data, error } = await supabase
@@ -35,7 +36,36 @@ export async function fetchPendingActionNotifications(userId, limit = 10) {
 // keep one real channel per user here and fan its events out to every
 // caller, ref-counting so the channel is torn down once the last caller
 // unsubscribes.
-const notificationChannels = new Map(); // userId -> { channel, listeners: Set }
+const notificationChannels = new Map(); // userId -> { channel, listeners: Set, cleanup }
+
+// When this tab first subscribed for each user (page load / sign-in). A
+// desktop catch-up never reaches further back than this, so notifications
+// that already existed at sign-in never pop up as new.
+const firstSubscribedAt = new Map(); // userId -> ISO string
+const CATCH_UP_WINDOW_MS = 10 * 60 * 1000;
+
+// Realtime only delivers events while the socket is connected. A background
+// tab can drop it (Chrome throttles/freezes hidden tabs), and a page change
+// briefly tears the channel down — so on every (re)subscribe, and when the
+// tab comes back to the foreground, re-check for unread notifications that
+// arrived in the meantime and hand them to the desktop notifier only (it
+// skips anything already shown). The in-app lists are left exactly as they
+// were.
+async function catchUpDesktop(userId) {
+  // With Web Push on, the push itself delivers anything missed.
+  if (isPushActive()) return;
+  const since = Math.max(Date.parse(firstSubscribedAt.get(userId)), Date.now() - CATCH_UP_WINDOW_MS);
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id, user_id, title, sub_text, type, link, is_read, created_at")
+    .eq("user_id", userId)
+    .eq("is_read", false)
+    .gt("created_at", new Date(since).toISOString())
+    .order("created_at", { ascending: true })
+    .limit(20);
+  if (error || !data) return;
+  for (const row of data) await handleRealtimeNotification(userId, row);
+}
 
 // Subscribes to INSERT and UPDATE events for this user only — UPDATE
 // matters because a grouped chat-message notification (see
@@ -51,13 +81,26 @@ export function subscribeToNotifications(userId, onChange) {
 
   if (!entry) {
     const listeners = new Set();
-    const notify = (payload) => listeners.forEach((fn) => fn(payload.new));
+    const notify = (payload) => {
+      listeners.forEach((fn) => fn(payload.new));
+      // Once per event per tab (not per listener) — the desktop pop-up
+      // decides for itself whether the event is genuinely new.
+      handleRealtimeNotification(userId, payload.new).catch(() => {});
+    };
     const channel = supabase
       .channel(`notifications-${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, notify)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, notify)
-      .subscribe();
-    entry = { channel, listeners };
+      .subscribe((status) => {
+        if (status !== "SUBSCRIBED") return;
+        if (!firstSubscribedAt.has(userId)) firstSubscribedAt.set(userId, new Date().toISOString());
+        else catchUpDesktop(userId).catch(() => {});
+      });
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && firstSubscribedAt.has(userId)) catchUpDesktop(userId).catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    entry = { channel, listeners, cleanup: () => document.removeEventListener("visibilitychange", onVisible) };
     notificationChannels.set(userId, entry);
   }
 
@@ -67,6 +110,7 @@ export function subscribeToNotifications(userId, onChange) {
     entry.listeners.delete(onChange);
     if (entry.listeners.size === 0) {
       notificationChannels.delete(userId);
+      entry.cleanup();
       supabase.removeChannel(entry.channel);
     }
   };
