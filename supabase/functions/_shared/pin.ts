@@ -11,7 +11,7 @@
 // from My Profile whenever they want, same as a default password.
 
 import { createAdminClient } from "./auth.ts";
-import { checkRateLimit } from "./publicAccess.ts";
+import { checkRateLimit, clearRateLimit } from "./publicAccess.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -31,8 +31,17 @@ export async function hashPin(pin: string, userId: string): Promise<string> {
 // caller's own pin_hash (already fetched as part of getCallerProfile — no
 // second query) rather than looking it up again. Returns an error string
 // on failure (rate-limited, no PIN set, or wrong PIN), or null on success.
+//
+// The budget only ever drains on a wrong PIN. A correct one clears it
+// (clearRateLimit) before returning — otherwise, since this same key is
+// shared across every PIN-gated action a user takes (accept, approve,
+// decline, lock, mark-paid, ...), a busy user doing several correct,
+// legitimate approvals in one sitting would eventually exhaust the
+// 5-per-15-minutes budget purely from normal use, and the very next check
+// — right or wrong — would read as "locked out after one try."
 export async function verifyActionPin(admin: AdminClient, userId: string, pinHash: string | null, candidatePin: unknown): Promise<string | null> {
-  const rate = await checkRateLimit(admin, `lead_action_pin:${userId}`, 5, 15 * 60);
+  const key = `lead_action_pin:${userId}`;
+  const rate = await checkRateLimit(admin, key, 5, 15 * 60);
   if (!rate.allowed) return `Too many incorrect PIN attempts. Try again in about ${rate.waitMinutes} minute(s).`;
 
   if (!isValidPin(candidatePin)) return "Enter your 4-digit PIN.";
@@ -41,5 +50,6 @@ export async function verifyActionPin(admin: AdminClient, userId: string, pinHas
   const candidateHash = await hashPin(candidatePin, userId);
   if (candidateHash !== pinHash) return "Incorrect PIN.";
 
+  await clearRateLimit(admin, key);
   return null;
 }
