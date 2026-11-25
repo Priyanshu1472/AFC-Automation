@@ -352,6 +352,12 @@ export default function LeadDetailPage() {
   // through this, not a bare `profile?.id === lead.person_responsible_id`
   // — an additional responsible gets the exact same actions.
   const isPrUser = !!profile?.id && (profile.id === lead?.person_responsible_id || additionalResponsibleIds.includes(profile.id));
+  // Who may add/remove an additional Person Responsible: the lead's own
+  // PR/Reviewer/Recommending Authority, or MD/Admin — same as
+  // can_manage_lead_responsibles() server-side.
+  const canManageResponsibles =
+    isPrUser || [lead?.reviewer_id, lead?.recommending_authority_id].includes(profile?.id) || ["md", "admin"].includes(profile?.role);
+  const canAddResponsibleNow = canManageResponsibles && !!lead && !CLOSED_STATUSES.has(lead.status);
 
   function availableActions() {
     if (!lead) return [];
@@ -835,47 +841,7 @@ export default function LeadDetailPage() {
                   {lead.status === "po_assignment" && (
                     <Row label="Forwarded To" value={fmt(lead.forwarded?.full_name)} />
                   )}
-                  {(() => {
-                    const canManageResponsibles =
-                      isPrUser || [lead.reviewer_id, lead.recommending_authority_id].includes(profile?.id) || ["md", "admin"].includes(profile?.role);
-                    // Mirrors the plain <Row> it replaces: hidden entirely
-                    // once there's neither a name to show nor anyone able to
-                    // add one (e.g. an unclaimed po_assignment lead, before
-                    // Reviewer/Recommending Authority are even named).
-                    if (!lead.assignee?.full_name && !canManageResponsibles) return null;
-                    return (
-                      <>
-                        <div className="ar-row">
-                          <span className="ar-row-label">Person Responsible</span>
-                          <span className="ar-row-value ar-row-value-with-action">
-                            {fmt(lead.assignee?.full_name)}
-                            {canManageResponsibles && !CLOSED_STATUSES.has(lead.status) && (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                icon={<UserPlusIcon />}
-                                aria-expanded={addingResponsible}
-                                onClick={() => setAddingResponsible((v) => !v)}
-                              >
-                                Add User
-                              </Button>
-                            )}
-                          </span>
-                        </div>
-                        <LeadAdditionalResponsiblesPanel
-                          leadId={lead.id}
-                          team={lead.team}
-                          existingIds={[lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id]}
-                          additional={additionalResponsibles}
-                          canManage={canManageResponsibles}
-                          disabled={CLOSED_STATUSES.has(lead.status)}
-                          onChanged={fetchLead}
-                          adding={addingResponsible}
-                          onAddingChange={setAddingResponsible}
-                        />
-                      </>
-                    );
-                  })()}
+                  <Row label="Person Responsible" value={fmt(lead.assignee?.full_name)} />
                   <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
                   <Row label="Recommending Authority" value={fmt(lead.authority?.full_name)} />
                   <Row label="Business Partner" value={bpListText(lead, lead.ba?.full_name || lead.manual_ba?.org_name || "Yet to be Decided")} />
@@ -914,7 +880,36 @@ export default function LeadDetailPage() {
               {/* The one thing still editable past md_approved — a
                   standalone card, not a slot in the "Your Action" card
                   below, since that one is suppressed outright for every
-                  terminal status (isTerminal), md_approved included. */}
+                  terminal status (isTerminal), md_approved included. Add
+                  User has to live here too at this status — the "Your
+                  Action" card itself doesn't render once isTerminal, so
+                  this is the only place left to manage it. */}
+              {lead.status === "md_approved" && (canAddResponsibleNow || additionalResponsibles.length > 0) && (
+                <div className="ar-add-responsible">
+                  {canAddResponsibleNow && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<UserPlusIcon />}
+                      aria-expanded={addingResponsible}
+                      onClick={() => setAddingResponsible((v) => !v)}
+                    >
+                      Add User
+                    </Button>
+                  )}
+                  <LeadAdditionalResponsiblesPanel
+                    leadId={lead.id}
+                    team={lead.team}
+                    existingIds={[lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id]}
+                    additional={additionalResponsibles}
+                    canManage={canManageResponsibles}
+                    disabled={!canAddResponsibleNow}
+                    onChanged={fetchLead}
+                    adding={addingResponsible}
+                    onAddingChange={setAddingResponsible}
+                  />
+                </div>
+              )}
               {lead.status === "md_approved" && isPrUser && (
                 <EditDueDatePanel leadId={lead.id} submissionDeadline={lead.submission_deadline} onChanged={fetchLead} />
               )}
@@ -942,6 +937,32 @@ export default function LeadDetailPage() {
                 <Card className="ar-action-card">
                   <Card.Header title="Your Action" />
                   <Card.Body className="ar-action-body">
+                    {(canAddResponsibleNow || additionalResponsibles.length > 0) && (
+                      <div className="ar-add-responsible">
+                        {canAddResponsibleNow && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={<UserPlusIcon />}
+                            aria-expanded={addingResponsible}
+                            onClick={() => setAddingResponsible((v) => !v)}
+                          >
+                            Add User
+                          </Button>
+                        )}
+                        <LeadAdditionalResponsiblesPanel
+                          leadId={lead.id}
+                          team={lead.team}
+                          existingIds={[lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id]}
+                          additional={additionalResponsibles}
+                          canManage={canManageResponsibles}
+                          disabled={!canAddResponsibleNow}
+                          onChanged={fetchLead}
+                          adding={addingResponsible}
+                          onAddingChange={setAddingResponsible}
+                        />
+                      </div>
+                    )}
                     {pendingAction ? (
                       <>
                         {needsReassignSelection && (

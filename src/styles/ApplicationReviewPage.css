@@ -547,13 +547,6 @@
   font-weight: 500;
 }
 
-.ar-row-value-with-action {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
 .ar-row-value {
   flex: 1;
   min-width: 0;
@@ -705,6 +698,17 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+/* "Add User" (additional Person Responsible) — sits above the action
+   buttons in the "Your Action" card, or standalone at md_approved where
+   that card itself doesn't render. */
+.ar-add-responsible {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .ar-field {
