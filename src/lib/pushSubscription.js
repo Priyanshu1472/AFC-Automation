@@ -58,6 +58,33 @@ async function getPublicKey() {
   return publicKey;
 }
 
+// What this device's Web Push registration is doing, for the settings UI:
+//   { state: "checking" | "registered" | "off" | "unavailable" | "error", error? }
+// Failures used to be silent, which made "not receiving on this phone"
+// impossible to tell apart from "never asked to register".
+let status = { state: "checking" };
+const statusListeners = new Set();
+
+function setStatus(next) {
+  status = next;
+  setPushActive(next.state === "registered");
+  statusListeners.forEach((fn) => fn(status));
+}
+
+export function getPushStatus() {
+  return status;
+}
+
+export function subscribePushStatus(fn) {
+  statusListeners.add(fn);
+  return () => statusListeners.delete(fn);
+}
+
+function describeError(err) {
+  const msg = (err && (err.message || err.name)) || String(err || "");
+  return msg.slice(0, 200) || "Unknown error";
+}
+
 // Remembers the last state saved for this tab, so remounting the app shell
 // on every page change doesn't call the server again.
 let lastSynced = null;
@@ -69,10 +96,14 @@ function serialise(fn) {
   return run;
 }
 
-async function doSync(userId) {
+async function doSync(userId, { fresh = false } = {}) {
+  if (!isPushSupported()) {
+    setStatus({ state: "unavailable", error: "This browser doesn't support notifications while PMIS is closed." });
+    return false;
+  }
   const reg = await getRegistration();
   if (!reg || !userId) {
-    setPushActive(false);
+    setStatus({ state: "unavailable", error: "PMIS isn't installed in this browser yet — reload the page." });
     return false;
   }
   let sub = await reg.pushManager.getSubscription();
@@ -83,22 +114,27 @@ async function doSync(userId) {
       await sub.unsubscribe().catch(() => {});
     }
     lastSynced = null;
-    setPushActive(false);
+    setStatus({ state: "off" });
     return false;
   }
 
   const key = await getPublicKey();
   if (!key) {
     // Push isn't configured on this environment — live pop-ups still work.
-    setPushActive(false);
+    setStatus({ state: "unavailable", error: "Notifications while PMIS is closed aren't set up on this server." });
     return false;
   }
 
-  // A subscription made with an older server key can't be pushed to.
+  // Start over on request (Retry / turning on): a subscription the push
+  // service has dropped — e.g. after Chrome's "Unsubscribe" button — can
+  // linger in the browser and would otherwise be re-saved as if it worked.
+  // Also replace one made with an older server key, which can't be pushed to.
   const subKey = sub?.options?.applicationServerKey;
-  if (sub && subKey && bytesToBase64Url(subKey) !== key) {
+  if (sub && (fresh || (subKey && bytesToBase64Url(subKey) !== key))) {
+    await invoke({ action: "unsubscribe", endpoint: sub.endpoint }).catch(() => {});
     await sub.unsubscribe().catch(() => {});
     sub = null;
+    lastSynced = null;
   }
   if (!sub) {
     sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlToBytes(key) });
@@ -106,7 +142,7 @@ async function doSync(userId) {
 
   const marker = `${userId}|${sub.endpoint}`;
   if (lastSynced === marker) {
-    setPushActive(true);
+    setStatus({ state: "registered" });
     return true;
   }
   const { error } = await invoke({
@@ -115,19 +151,20 @@ async function doSync(userId) {
     user_agent: navigator.userAgent.slice(0, 300),
   });
   if (error) {
-    setPushActive(false);
+    setStatus({ state: "error", error: `Server couldn't save this device: ${describeError(error)}` });
     return false;
   }
   lastSynced = marker;
-  setPushActive(true);
+  setStatus({ state: "registered" });
   return true;
 }
 
 // Bring this browser's push registration in line with the current user's
 // desktop-notification switches (subscribe, move to this user, or remove).
-export function syncPushSubscription(userId) {
-  return serialise(() => doSync(userId).catch(() => {
-    setPushActive(false);
+// { fresh: true } replaces this browser's subscription with a new one.
+export function syncPushSubscription(userId, options) {
+  return serialise(() => doSync(userId, options).catch((err) => {
+    setStatus({ state: "error", error: describeError(err) });
     return false;
   }));
 }
@@ -137,7 +174,7 @@ export function syncPushSubscription(userId) {
 export function removePushSubscription() {
   const work = serialise(async () => {
     lastSynced = null;
-    setPushActive(false);
+    setStatus({ state: "off" });
     const reg = await getRegistration();
     const sub = await reg?.pushManager.getSubscription();
     if (!sub) return;

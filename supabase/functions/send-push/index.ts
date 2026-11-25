@@ -1,6 +1,6 @@
 // supabase/functions/send-push/index.ts
 // verify_jwt = false — called by the database trigger on notifications
-// (public.push_notification_to_devices, 20261125010000) through pg_net,
+// (public.push_notification_to_devices, 20261125030000) through pg_net,
 // authenticated by the x-push-secret header: the database's own
 // "push_webhook_secret" Vault entry, checked via the service-role-only
 // verify_push_webhook_secret() — so no copy of it lives in function secrets.
