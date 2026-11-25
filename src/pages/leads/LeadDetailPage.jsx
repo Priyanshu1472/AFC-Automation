@@ -844,23 +844,24 @@ export default function LeadDetailPage() {
                     // Reviewer/Recommending Authority are even named).
                     if (!lead.assignee?.full_name && !canManageResponsibles) return null;
                     return (
-                      <div className="pp-person pp-person-pr">
-                        <span className="pp-person-label">
-                          Person Responsible
-                          {canManageResponsibles && !CLOSED_STATUSES.has(lead.status) && (
-                            <button
-                              type="button"
-                              className="pp-person-add"
-                              title="Add another Person Responsible"
-                              aria-label="Add another Person Responsible"
-                              aria-expanded={addingResponsible}
-                              onClick={() => setAddingResponsible((v) => !v)}
-                            >
-                              <UserPlusIcon />
-                            </button>
-                          )}
-                        </span>
-                        <strong>{fmt(lead.assignee?.full_name)}</strong>
+                      <>
+                        <div className="ar-row">
+                          <span className="ar-row-label">Person Responsible</span>
+                          <span className="ar-row-value ar-row-value-with-action">
+                            {fmt(lead.assignee?.full_name)}
+                            {canManageResponsibles && !CLOSED_STATUSES.has(lead.status) && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                icon={<UserPlusIcon />}
+                                aria-expanded={addingResponsible}
+                                onClick={() => setAddingResponsible((v) => !v)}
+                              >
+                                Add User
+                              </Button>
+                            )}
+                          </span>
+                        </div>
                         <LeadAdditionalResponsiblesPanel
                           leadId={lead.id}
                           team={lead.team}
@@ -872,7 +873,7 @@ export default function LeadDetailPage() {
                           adding={addingResponsible}
                           onAddingChange={setAddingResponsible}
                         />
-                      </div>
+                      </>
                     );
                   })()}
                   <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
