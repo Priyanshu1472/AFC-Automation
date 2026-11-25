@@ -2,24 +2,23 @@ import { assertEquals } from "jsr:@std/assert@1";
 import { handleRequest, buildPushPayload, type Sender } from "./index.ts";
 import { createFakeAdminClient, type FakeResult } from "../_shared/testHelpers.ts";
 
-Deno.env.set("CRON_SECRET", "s3cret");
-
 const ROW = { id: 42, user_id: "u-1", title: "Lead awaiting your review", sub_text: "AFC/BPDD/L/26/001", link: "/leads/abc", is_read: false, created_at: "2026-11-25T08:00:00Z" };
 const SUBS = [
   { id: "s-1", endpoint: "https://fcm.googleapis.com/fcm/send/a", p256dh: "k1", auth: "a1" },
   { id: "s-2", endpoint: "https://wns2-pn1p.notify.windows.com/w/?token=b", p256dh: "k2", auth: "a2" },
 ];
 
-function client(row: unknown = ROW, subs: unknown = SUBS) {
+function client(row: unknown = ROW, subs: unknown = SUBS, secretOk = true) {
   const routes: Record<string, FakeResult[]> = {
     notifications: [{ data: row, error: null }],
     push_subscriptions: [{ data: subs, error: null }, { data: null, error: null }, { data: null, error: null }],
   };
-  return createFakeAdminClient(routes);
+  // verify_push_webhook_secret() is true only for the real secret.
+  return createFakeAdminClient(routes, { rpc: { verify_push_webhook_secret: { data: secretOk, error: null } } });
 }
 
 const req = (body: unknown = { notification_id: 42 }, secret = "s3cret") =>
-  new Request("https://x.com/send-push", { method: "POST", headers: { "x-cron-secret": secret }, body: JSON.stringify(body) });
+  new Request("https://x.com/send-push", { method: "POST", headers: secret ? { "x-push-secret": secret } : {}, body: JSON.stringify(body) });
 
 function recorder(fail: Record<string, number> = {}) {
   const sent: { endpoint: string; payload: string; options: Record<string, unknown> }[] = [];
@@ -33,8 +32,10 @@ function recorder(fail: Record<string, number> = {}) {
 
 Deno.test("send-push - wrong secret is refused", async () => {
   const r = recorder();
-  const res = await handleRequest(req(undefined, "nope"), client() as never, r.send);
+  const res = await handleRequest(req(undefined, "nope"), client(ROW, SUBS, false) as never, r.send);
   assertEquals(res.status, 401);
+  const missing = await handleRequest(req(undefined, ""), client() as never, r.send);
+  assertEquals(missing.status, 401);
   assertEquals(r.sent.length, 0);
 });
 

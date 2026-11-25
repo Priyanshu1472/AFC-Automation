@@ -14,9 +14,12 @@
 --                       deliver it — via pg_net, so it's asynchronous and
 --                       never slows down or fails the insert itself.
 --
--- Uses the same Vault entries as the daily finance job ("project_url",
--- "cron_secret"); without them, or for a user with no subscriptions, the
--- trigger does nothing.
+-- Calls go to the project URL in Vault ("project_url", shared with the
+-- daily finance job) with a shared secret the database generates for itself
+-- ("push_webhook_secret", created below if missing — it never leaves the
+-- database: send-push checks it through verify_push_webhook_secret()).
+-- Without project_url, or for a user with no subscriptions, the trigger
+-- does nothing.
 
 create extension if not exists pg_net;
 
@@ -35,6 +38,34 @@ create index if not exists push_subscriptions_user_id_idx on public.push_subscri
 
 alter table public.push_subscriptions enable row level security;
 revoke all on public.push_subscriptions from anon, authenticated;
+
+do $$
+begin
+  if not exists (select 1 from vault.secrets where name = 'push_webhook_secret') then
+    perform vault.create_secret(
+      replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
+      'push_webhook_secret',
+      'Shared secret: notifications trigger -> send-push edge function'
+    );
+  end if;
+end $$;
+
+-- send-push (service role) checks the caller's secret here instead of
+-- holding its own copy.
+create or replace function public.verify_push_webhook_secret(p_secret text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(p_secret, '') <> '' and exists (
+    select 1 from vault.decrypted_secrets
+    where name = 'push_webhook_secret' and decrypted_secret = p_secret
+  );
+$$;
+revoke all on function public.verify_push_webhook_secret(text) from public, anon, authenticated;
+grant execute on function public.verify_push_webhook_secret(text) to service_role;
 
 create or replace function public.push_notification_to_devices()
 returns trigger
@@ -57,14 +88,14 @@ begin
   end if;
 
   select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
-  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'cron_secret';
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'push_webhook_secret';
   if v_url is null or v_secret is null then
     return new;
   end if;
 
   perform net.http_post(
     url := rtrim(v_url, '/') || '/functions/v1/send-push',
-    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', v_secret),
     body := jsonb_build_object('notification_id', new.id),
     timeout_milliseconds := 10000
   );

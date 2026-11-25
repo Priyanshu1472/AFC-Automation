@@ -1,8 +1,9 @@
 // supabase/functions/send-push/index.ts
 // verify_jwt = false — called by the database trigger on notifications
 // (public.push_notification_to_devices, 20261125010000) through pg_net,
-// authenticated by the shared x-cron-secret header (CRON_SECRET function
-// secret = the "cron_secret" Vault entry), same as proposal-finance-daily.
+// authenticated by the x-push-secret header: the database's own
+// "push_webhook_secret" Vault entry, checked via the service-role-only
+// verify_push_webhook_secret() — so no copy of it lives in function secrets.
 //
 // Sends one new (or re-bumped chat) notification as a Web Push message to
 // every browser its recipient has desktop notifications on in, so it pops
@@ -55,9 +56,10 @@ export async function handleRequest(
 ): Promise<Response> {
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
 
-  const expected = Deno.env.get("CRON_SECRET") || "";
-  const given = req.headers.get("x-cron-secret") || "";
-  if (!expected || given !== expected) return jsonRes(req, 401, { error: "Unauthorized" });
+  const given = req.headers.get("x-push-secret") || "";
+  if (!given) return jsonRes(req, 401, { error: "Unauthorized" });
+  const { data: valid, error: authErr } = await adminClient.rpc("verify_push_webhook_secret", { p_secret: given });
+  if (authErr || valid !== true) return jsonRes(req, 401, { error: "Unauthorized" });
   if (!send) return jsonRes(req, 503, { error: "Push notifications are not configured." });
 
   let body: Record<string, unknown>;
