@@ -16,6 +16,7 @@ import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
 import { clampText } from "../_shared/leadEligibility.ts";
 import { regenerateApprovalNote, SCRUTINY_PARAMETERS, deriveNatureOfLead } from "../_shared/leadApprovalPdf.ts";
+import { getLeadAdditionalResponsibleIds } from "../_shared/leadResponsibles.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -107,7 +108,13 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
-  if (caller.id !== lead.created_by && caller.id !== lead.person_responsible_id) {
+  // An additional Person Responsible (lead_additional_responsibles) gets
+  // every action the named Person Responsible has — see
+  // 20261125010000_lead_additional_responsibles.sql.
+  const additionalResponsibleIds = await getLeadAdditionalResponsibleIds(adminClient, leadId);
+  const isPersonResponsibleCaller = caller.id === lead.person_responsible_id || additionalResponsibleIds.includes(caller.id);
+
+  if (caller.id !== lead.created_by && !isPersonResponsibleCaller) {
     return jsonRes(req, 403, { error: "Only the lead's creator or Person Responsible can generate its Approval Note." });
   }
   if (lead.status !== "pa_review" && lead.status !== "pa_action_required") {
@@ -120,7 +127,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   // Edits it themselves (which calls pr_review_accept first, clearing this
   // flag, before ever reaching this endpoint), or Rejects it, at which
   // point this flag clears and the creator can edit again.
-  if (lead.approval_note_pending_pr_review && caller.id !== lead.person_responsible_id) {
+  if (lead.approval_note_pending_pr_review && !isPersonResponsibleCaller) {
     return jsonRes(req, 400, { error: "This note is awaiting the Person Responsible's review — wait for their Accept/Edit/Reject." });
   }
 
@@ -153,10 +160,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     // signature on the PDF) when the PR is the one actually generating it —
     // the creator filling this in is always a draft awaiting PR review, see
     // regenerateApprovalNoteInner in leadApprovalPdf.ts.
-    const isPersonResponsible = caller.id === lead.person_responsible_id;
     const { error: updateErr } = await adminClient
       .from("leads")
-      .update({ approval_note_data: approvalNoteData, approval_note_pr_reviewed: isPersonResponsible })
+      .update({ approval_note_data: approvalNoteData, approval_note_pr_reviewed: isPersonResponsibleCaller })
       .eq("id", leadId);
     if (updateErr) return jsonRes(req, 500, { error: "Failed to save the Approval Note fields." });
 

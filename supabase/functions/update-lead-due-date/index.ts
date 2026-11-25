@@ -15,6 +15,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { logLeadActivity } from "../_shared/leadActivity.ts";
+import { isLeadAdditionalResponsible } from "../_shared/leadResponsibles.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -51,7 +52,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (lead.status !== "md_approved") {
     return jsonRes(req, 400, { error: "This is only for an already-approved lead — use the normal Edit for anything still in review." });
   }
-  if (caller.id !== lead.person_responsible_id) {
+  if (caller.id !== lead.person_responsible_id && !(await isLeadAdditionalResponsible(adminClient, lead_id, caller.id))) {
     return jsonRes(req, 403, { error: "Only the Person Responsible can update the due date on an approved lead." });
   }
 

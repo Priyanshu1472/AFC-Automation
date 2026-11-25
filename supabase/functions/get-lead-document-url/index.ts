@@ -10,6 +10,7 @@ import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { moduleOffResponse } from "../_shared/modules.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
 import { canViewLead } from "../_shared/leadAuth.ts";
+import { isLeadAdditionalResponsible } from "../_shared/leadResponsibles.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -50,7 +51,9 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
     .maybeSingle();
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
-  if (!canViewLead(caller, lead)) return jsonRes(req, 403, { error: "You do not have access to this lead." });
+  if (!canViewLead(caller, lead) && !(await isLeadAdditionalResponsible(adminClient, lead_id, caller.id))) {
+    return jsonRes(req, 403, { error: "You do not have access to this lead." });
+  }
 
   const { data: signed, error: signErr } = await adminClient.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
   if (signErr || !signed) return jsonRes(req, 500, { error: "Failed to generate document link." });

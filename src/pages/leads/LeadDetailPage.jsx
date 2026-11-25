@@ -21,12 +21,17 @@ import EditDueDatePanel from "../../components/leads/EditDueDatePanel";
 import MdTransferLeadDialog from "../../components/leads/MdTransferLeadDialog";
 import EscalateToG3Dialog from "../../components/leads/EscalateToG3Dialog";
 import LeadDuplicatesTable from "../../components/leads/LeadDuplicatesTable";
+import LeadAdditionalResponsiblesPanel from "../../components/leads/LeadAdditionalResponsiblesPanel";
 import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
+import { UserPlusIcon } from "../../components/icons";
 // Reuses the ar-* detail/action/timeline/document styles already defined
 // for Empanelment's review page — generic patterns (label/value rows,
 // stepper, action panel, doc list), no Lead-Gen-specific CSS needed yet.
 import "../../styles/ApplicationReviewPage.css";
+// pp-person*/pp-additional-pr* — the "add another Person Responsible"
+// control and chip list, already styled for Proposals; reused as-is here.
+import "../../styles/ProposalPreparationPage.css";
 import BackButton from "../../components/ui/BackButton";
 import { bpListText } from "../../lib/leadBusinessPartners";
 
@@ -136,6 +141,14 @@ const PR_REVIEW_ACTIONS = [
   { key: "pr_review_reject", label: "Reject", variant: "danger", requiresReason: true },
 ];
 
+// Dead ends — nothing is left for an additional Person Responsible to help
+// with once a lead lands here. Mirrors can_manage_lead_responsibles() in
+// 20261125010000_lead_additional_responsibles.sql. Deliberately narrower
+// than leadStatus.js's own TERMINAL_STATUSES (which also includes
+// md_approved) — the due-date edit stays open at md_approved, so adding/
+// removing an additional responsible should too.
+const CLOSED_STATUSES = new Set(["pa_dropped", "md_declined"]);
+
 function DocItem({ doc, leadId }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(false);
@@ -192,6 +205,12 @@ export default function LeadDetailPage() {
 
   const [lead, setLead] = useState(null);
   const [logs, setLogs] = useState([]);
+  // Teammates added on top of the named Person Responsible — same access
+  // as the PR across every pipeline action (see
+  // 20261125010000_lead_additional_responsibles.sql and
+  // LeadAdditionalResponsiblesPanel).
+  const [additionalResponsibles, setAdditionalResponsibles] = useState([]);
+  const [addingResponsible, setAddingResponsible] = useState(false);
   // Client contact details (address / telephone / email) are captured on
   // the Bid Payment Requisition Note during Proposal Preparation, not on the
   // lead itself — surfaced read-only here once that note exists.
@@ -267,6 +286,13 @@ export default function LeadDetailPage() {
       .order("created_at", { ascending: false });
     setLogs(activity || []);
 
+    const { data: additionalRows } = await supabase
+      .from("lead_additional_responsibles")
+      .select("user_id, user:user_id(full_name)")
+      .eq("lead_id", id)
+      .order("created_at");
+    setAdditionalResponsibles((additionalRows || []).map((r) => ({ user_id: r.user_id, full_name: r.user?.full_name || "—" })));
+
     const { data: proposal } = await supabase
       .from("proposal_preparations")
       .select("id")
@@ -295,6 +321,7 @@ export default function LeadDetailPage() {
       .channel(`lead-${id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "leads", filter: `id=eq.${id}` }, () => fetchLead())
       .on("postgres_changes", { event: "*", schema: "public", table: "lead_activity_log", filter: `lead_id=eq.${id}` }, () => fetchLead())
+      .on("postgres_changes", { event: "*", schema: "public", table: "lead_additional_responsibles", filter: `lead_id=eq.${id}` }, () => fetchLead())
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [id, fetchLead]);
@@ -320,6 +347,12 @@ export default function LeadDetailPage() {
     }
   }
 
+  const additionalResponsibleIds = additionalResponsibles.map((a) => a.user_id);
+  // Every "is this caller the Person Responsible" check below should go
+  // through this, not a bare `profile?.id === lead.person_responsible_id`
+  // — an additional responsible gets the exact same actions.
+  const isPrUser = !!profile?.id && (profile.id === lead?.person_responsible_id || additionalResponsibleIds.includes(profile.id));
+
   function availableActions() {
     if (!lead) return [];
     // Admin has org-wide VIEW-ONLY access to every lead (for the Audit
@@ -333,7 +366,8 @@ export default function LeadDetailPage() {
     // the date into the future. Takes priority over the pending-PR-review
     // branch below — the date must be fixed before anything else continues.
     if (isLeadOverdue(lead)) {
-      return profile?.id === overdueEditorId(lead) ? [{ key: "__edit_resubmit", label: "Edit", variant: "primary" }] : [];
+      return (profile?.id === overdueEditorId(lead) || additionalResponsibleIds.includes(profile?.id))
+        ? [{ key: "__edit_resubmit", label: "Edit", variant: "primary" }] : [];
     }
     // A creator-drafted note is sitting with the PR for Accept/Edit/Reject
     // — swap in that trio (PR only; everyone else, including the creator,
@@ -341,7 +375,7 @@ export default function LeadDetailPage() {
     // status-driven list. Not a status change, so this can happen at
     // pa_review or pa_action_required alike.
     if (lead.approval_note_pending_pr_review) {
-      return PR_REVIEW_ACTIONS.filter(() => profile?.id === lead.person_responsible_id);
+      return PR_REVIEW_ACTIONS.filter(() => isPrUser);
     }
     const candidates = ACTIONS_BY_STATUS[lead.status] || [];
     return candidates.filter((a) => {
@@ -354,7 +388,7 @@ export default function LeadDetailPage() {
         // as Edit), but only PR can actually Submit for approval from the
         // preview page — enforced there and, ultimately, server-side.
         case "lead_approval_note":
-          return lead.status === "pa_review" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
+          return lead.status === "pa_review" && (profile?.id === lead.created_by || isPrUser);
         // A true drop, no reassignment. The creator has no Drop of their
         // own.
         // - po_assignment: the person it was forwarded to.
@@ -371,20 +405,20 @@ export default function LeadDetailPage() {
         case "drop": {
           if (lead.status === "po_assignment") return !!profile?.id && profile.id === lead.forwarded_to_id;
           if (lead.status === "pa_review") {
-            return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
+            return isPrUser || [lead.reviewer_id, lead.recommending_authority_id].includes(profile?.id);
           }
           if (lead.status === "recommending_authority_review") {
-            return !!profile?.id && [lead.person_responsible_id, lead.recommending_authority_id].includes(profile.id);
+            return isPrUser || profile?.id === lead.recommending_authority_id;
           }
           if (lead.status === "pa_action_required") {
-            return ["pmt_review", "md_review"].includes(lead.declined_from_status) && profile?.id === lead.person_responsible_id;
+            return ["pmt_review", "md_review"].includes(lead.declined_from_status) && isPrUser;
           }
           return false;
         }
         // The PR handing the lead to a teammate instead of dropping it — an
         // alternative to Drop, not exclusive with it.
         case "reject_reassign":
-          return lead.status === "pa_review" && profile?.id === lead.person_responsible_id;
+          return lead.status === "pa_review" && isPrUser;
         case "claim":
           return LEAD_PA_TIER_ROLES.includes(profile?.role) && !!profile?.teams?.includes(lead.team);
         // The lead's actual first-line gate — the exact named person, not a
@@ -407,14 +441,14 @@ export default function LeadDetailPage() {
           // _shared/leadTransfer.ts).
           return (
             profile?.id === lead.created_by ||
-            profile?.id === lead.person_responsible_id ||
+            isPrUser ||
             (!lead.person_responsible_id && !!profile?.teams?.includes(lead.team))
           );
         // Returns the lead to PR Review — it is NOT a drop. Only available
         // at Recommending Authority review; once a lead has passed that
         // stage it can no longer be withdrawn, only dropped (see "drop").
         case "withdraw_submission":
-          return lead.status === "recommending_authority_review" && (profile?.id === lead.created_by || profile?.id === lead.person_responsible_id);
+          return lead.status === "recommending_authority_review" && (profile?.id === lead.created_by || isPrUser);
         default:
           return false;
       }
@@ -801,7 +835,46 @@ export default function LeadDetailPage() {
                   {lead.status === "po_assignment" && (
                     <Row label="Forwarded To" value={fmt(lead.forwarded?.full_name)} />
                   )}
-                  <Row label="Person Responsible" value={fmt(lead.assignee?.full_name)} />
+                  {(() => {
+                    const canManageResponsibles =
+                      isPrUser || [lead.reviewer_id, lead.recommending_authority_id].includes(profile?.id) || ["md", "admin"].includes(profile?.role);
+                    // Mirrors the plain <Row> it replaces: hidden entirely
+                    // once there's neither a name to show nor anyone able to
+                    // add one (e.g. an unclaimed po_assignment lead, before
+                    // Reviewer/Recommending Authority are even named).
+                    if (!lead.assignee?.full_name && !canManageResponsibles) return null;
+                    return (
+                      <div className="pp-person pp-person-pr">
+                        <span className="pp-person-label">
+                          Person Responsible
+                          {canManageResponsibles && !CLOSED_STATUSES.has(lead.status) && (
+                            <button
+                              type="button"
+                              className="pp-person-add"
+                              title="Add another Person Responsible"
+                              aria-label="Add another Person Responsible"
+                              aria-expanded={addingResponsible}
+                              onClick={() => setAddingResponsible((v) => !v)}
+                            >
+                              <UserPlusIcon />
+                            </button>
+                          )}
+                        </span>
+                        <strong>{fmt(lead.assignee?.full_name)}</strong>
+                        <LeadAdditionalResponsiblesPanel
+                          leadId={lead.id}
+                          team={lead.team}
+                          existingIds={[lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id]}
+                          additional={additionalResponsibles}
+                          canManage={canManageResponsibles}
+                          disabled={CLOSED_STATUSES.has(lead.status)}
+                          onChanged={fetchLead}
+                          adding={addingResponsible}
+                          onAddingChange={setAddingResponsible}
+                        />
+                      </div>
+                    );
+                  })()}
                   <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
                   <Row label="Recommending Authority" value={fmt(lead.authority?.full_name)} />
                   <Row label="Business Partner" value={bpListText(lead, lead.ba?.full_name || lead.manual_ba?.org_name || "Yet to be Decided")} />
@@ -841,7 +914,7 @@ export default function LeadDetailPage() {
                   standalone card, not a slot in the "Your Action" card
                   below, since that one is suppressed outright for every
                   terminal status (isTerminal), md_approved included. */}
-              {lead.status === "md_approved" && profile?.id === lead.person_responsible_id && (
+              {lead.status === "md_approved" && isPrUser && (
                 <EditDueDatePanel leadId={lead.id} submissionDeadline={lead.submission_deadline} onChanged={fetchLead} />
               )}
 

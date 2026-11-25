@@ -95,6 +95,15 @@ Deno.test("accept - rejects a caller who isn't Person Responsible", async () => 
   assertEquals(res.status, 403);
 });
 
+Deno.test("accept - an additional Person Responsible (not the named PR) can accept too", async () => {
+  const client = buildClient({
+    lead: leadRow({ person_responsible_id: "someone-else" }),
+    routes: { lead_additional_responsibles: [{ data: [{ user_id: CALLER_ID }], error: null }] },
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);
+  assertEquals(res.status, 200);
+});
+
 Deno.test("accept - requires the Lead Approval Note to be generated first", async () => {
   const client = buildClient({ lead: leadRow({ approval_note_data: null, assigned_ba_id: "existing-ba" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, action: "accept" }), client as never);

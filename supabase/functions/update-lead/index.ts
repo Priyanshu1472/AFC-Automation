@@ -23,6 +23,7 @@ import {
   resolveManualBusinessPartner, parseBpAssociation, parseExtraBpValues, resolveExtraBusinessPartners, replaceExtraBusinessPartners,
 } from "../_shared/leadEligibility.ts";
 import { isDeadlinePassed } from "../_shared/deadline.ts";
+import { getLeadAdditionalResponsibleIds } from "../_shared/leadResponsibles.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -119,6 +120,12 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       .maybeSingle();
     if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
 
+    // An additional Person Responsible (lead_additional_responsibles) gets
+    // every action the named Person Responsible has — see
+    // 20261125010000_lead_additional_responsibles.sql.
+    const additionalResponsibleIds = await getLeadAdditionalResponsibleIds(adminClient, leadId);
+    const isPr = (id: string) => id === lead.person_responsible_id || additionalResponsibleIds.includes(id);
+
     // Overdue: this lead's submission deadline has already passed and it
     // isn't finished — every normal pipeline action is blocked (see
     // advance-lead-stage's blanket guard) except this edit, which the
@@ -140,7 +147,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
 
     if (isOverdue) {
       const editorId = lead.person_responsible_id || lead.forwarded_to_id || lead.created_by;
-      if (caller.id !== editorId) {
+      if (caller.id !== editorId && !additionalResponsibleIds.includes(caller.id)) {
         return jsonRes(req, 403, { error: "This lead's submission deadline has passed — only the Person Responsible (or the person it was forwarded to, if none is assigned yet) can edit it." });
       }
     } else {
@@ -148,7 +155,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       // anyone on its new team can pick it up and fill the form, not just the
       // (old team's) creator (see _shared/leadTransfer.ts).
       const isUnclaimedOnCallerTeam = !lead.person_responsible_id && caller.teams.includes(lead.team);
-      if (caller.id !== lead.created_by && caller.id !== lead.person_responsible_id && !isUnclaimedOnCallerTeam) {
+      if (caller.id !== lead.created_by && !isPr(caller.id) && !isUnclaimedOnCallerTeam) {
         return jsonRes(req, 403, { error: "Only the lead's creator or Person Responsible can edit it." });
       }
       if (!inNormalEditWindow) {
