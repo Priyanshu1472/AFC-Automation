@@ -29,11 +29,12 @@ async function showFromPush(row) {
   // pop it a second time.
   for (const client of await windowClients()) client.postMessage({ type: "pmis-push-shown", key });
 
-  // A tab may already have shown it (same tag, same event) — don't alert twice.
+  // Every push must show a pop-up — Safari/iOS revokes push permission for
+  // sites that receive pushes without showing one. If a tab already showed
+  // this same event, replace it quietly (same tag, no second alert).
   const open = await self.registration.getNotifications({ tag: notificationTag(row) });
-  if (open.some((n) => n.data?.key === key)) return;
-
   const { title, options } = buildDesktopPayload(row);
+  if (open.some((n) => n.data?.key === key)) options.renotify = false;
   await self.registration.showNotification(title, options);
 }
 
@@ -44,7 +45,11 @@ self.addEventListener("push", (event) => {
   } catch {
     row = null;
   }
-  if (!row?.id) return;
+  if (!row?.id) {
+    // Still show something (see showFromPush) rather than nothing.
+    event.waitUntil(self.registration.showNotification("AFC PMIS", { body: "You have a new notification.", icon: "/icons/icon-192.png", data: { link: "/home" } }));
+    return;
+  }
   event.waitUntil(showFromPush(row));
 });
 

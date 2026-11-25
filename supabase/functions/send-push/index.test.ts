@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { handleRequest, buildPushPayload, type Sender } from "./index.ts";
+import { handleRequest, buildPushPayload, pushOptions, type Sender } from "./index.ts";
 import { createFakeAdminClient, type FakeResult } from "../_shared/testHelpers.ts";
 
 const ROW = { id: 42, user_id: "u-1", title: "Lead awaiting your review", sub_text: "AFC/BPDD/L/26/001", link: "/leads/abc", is_read: false, created_at: "2026-11-25T08:00:00Z" };
@@ -76,6 +76,13 @@ Deno.test("send-push - drops subscriptions the push service says are gone", asyn
 Deno.test("send-push - not configured (no VAPID keys) answers 503 instead of failing silently", async () => {
   const res = await handleRequest(req(), client() as never, null);
   assertEquals(res.status, 503);
+});
+
+Deno.test("send-push - no Topic header for Apple (it rejects it with BadWebPushTopic), kept for the others", () => {
+  assertEquals(pushOptions("https://web.push.apple.com/QGx2", 7).topic, undefined);
+  assertEquals(pushOptions("https://fcm.googleapis.com/fcm/send/a", 7).topic, "n7");
+  assertEquals(pushOptions("https://wns2-pn1p.notify.windows.com/w/?token=b", 7).topic, "n7");
+  assertEquals(pushOptions("https://web.push.apple.com/QGx2", 7).urgency, "high");
 });
 
 Deno.test("send-push - payload stays well under the 4 KB push limit", () => {

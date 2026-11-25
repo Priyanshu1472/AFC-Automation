@@ -49,6 +49,25 @@ function defaultSender(): Sender | null {
   return (sub, payload, options) => webpush.sendNotification(sub, payload, options);
 }
 
+// Apple's push service (iPhone/iPad Home Screen apps, Safari) rejects the
+// Topic header outright ({"reason":"BadWebPushTopic"}), so it's only sent to
+// the others. Pop-ups for one notification still replace each other on every
+// platform through the pop-up's tag.
+export function pushOptions(endpoint: string, notificationId: number): Record<string, unknown> {
+  const options: Record<string, unknown> = {
+    TTL: 60 * 60, // undelivered after an hour (browser closed) → drop it
+    urgency: "high",
+  };
+  let host = "";
+  try {
+    host = new URL(endpoint).hostname;
+  } catch { /* stored endpoints are validated URLs */ }
+  // Collapses a not-yet-delivered older push for the same notification
+  // (chat bumps) into the newest one.
+  if (!host.endsWith("push.apple.com")) options.topic = `n${notificationId}`;
+  return options;
+}
+
 export async function handleRequest(
   req: Request,
   adminClient: ReturnType<typeof createAdminClient> = createAdminClient(),
@@ -95,19 +114,15 @@ export async function handleRequest(
 
     await Promise.all(subs.map(async (s) => {
       try {
-        await send({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, {
-          TTL: 60 * 60, // undelivered after an hour (browser closed) → drop it
-          urgency: "high",
-          // Collapses a not-yet-delivered older push for the same
-          // notification (chat bumps) into the newest one.
-          topic: `n${row.id}`,
-        });
+        await send({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, pushOptions(s.endpoint, row.id));
         sent++;
         used.push(s.id);
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) gone.push(s.id);
-        else console.error("send-push delivery failed:", status, (err as Error).message);
+        // The push service explains a rejection in the body (e.g. Apple:
+        // {"reason":"BadJwtToken"}), so log it alongside the status.
+        else console.error("send-push delivery failed:", status, new URL(s.endpoint).hostname, (err as { body?: string }).body || (err as Error).message);
       }
     }));
 
