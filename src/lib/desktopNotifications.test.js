@@ -62,6 +62,8 @@ describe("desktop notifications", () => {
     expect(shown[0].title).toBe("Lead awaiting PMT review");
     expect(shown[0].options.tag).toBe("pmis-notification-n1");
     expect(shown[0].options.icon).toBe(dn.DESKTOP_ICON);
+    // Android paints the badge as a white mask — never the full-colour logo.
+    expect(shown[0].options.badge).toBe("/icons/notification-badge-96.png");
   });
 
   it("never pops the same event twice (re-delivery, second subscription, remount)", async () => {

@@ -10,7 +10,7 @@
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { clientsClaim } from "workbox-core";
-import { buildDesktopPayload, eventKey, notificationTag } from "./lib/desktopNotificationPayload";
+import { DESKTOP_BADGE, DESKTOP_ICON, buildDesktopPayload, eventKey, notificationTag } from "./lib/desktopNotificationPayload";
 
 self.skipWaiting();
 clientsClaim();
@@ -47,7 +47,7 @@ self.addEventListener("push", (event) => {
   }
   if (!row?.id) {
     // Still show something (see showFromPush) rather than nothing.
-    event.waitUntil(self.registration.showNotification("AFC PMIS", { body: "You have a new notification.", icon: "/icons/icon-192.png", data: { link: "/home" } }));
+    event.waitUntil(self.registration.showNotification("AFC PMIS", { body: "You have a new notification.", icon: DESKTOP_ICON, badge: DESKTOP_BADGE, data: { link: "/home" } }));
     return;
   }
   event.waitUntil(showFromPush(row));

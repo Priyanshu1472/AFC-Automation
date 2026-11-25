@@ -6,6 +6,10 @@
 import { describeNotification } from "./notificationDisplay";
 
 export const DESKTOP_ICON = "/icons/icon-192.png";
+// Android's small status-bar/badge icon uses only the image's transparency
+// (every visible pixel is painted white), so it must be a white silhouette
+// on transparent — the full-colour logo would show as a plain white square.
+export const DESKTOP_BADGE = "/icons/notification-badge-96.png";
 
 // A grouped chat notification re-arrives with a fresh created_at for every
 // new message (bump_chat_notification), so id + created_at identifies one
@@ -26,7 +30,7 @@ export function buildDesktopPayload(row) {
     options: {
       body: lines.join("\n"),
       icon: DESKTOP_ICON,
-      badge: DESKTOP_ICON,
+      badge: DESKTOP_BADGE,
       // One pop-up per notification row: a chat thread's newer message
       // replaces the older pop-up (and alerts again) instead of stacking.
       tag: notificationTag(row),
