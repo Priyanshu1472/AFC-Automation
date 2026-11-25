@@ -92,7 +92,7 @@ const ACTIONS_BY_STATUS = {
     { key: "ra_approve", label: "Recommend to PMT", variant: "primary", requiresReason: true, requiresPin: true },
     { key: "ra_decline", label: "Clarification Request", variant: "danger", requiresReason: true },
     { key: "drop", label: "Drop", variant: "danger", requiresPin: true },
-    { key: "withdraw_submission", label: "Withdraw Submission (edit BA)", variant: "secondary", requiresReason: true, requiresPin: true },
+    { key: "withdraw_submission", label: "Withdraw Submission", variant: "secondary", requiresReason: true, requiresPin: true },
   ],
   // Past Recommending Authority review, neither Withdraw Submission (see
   // leadCan.withdrawSubmission) nor Drop is available to anyone anymore —
