@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { handleRealtimeNotification } from "./desktopNotifications";
+import { handleRealtimeNotification, isPushActive } from "./desktopNotifications";
 
 export async function fetchRecentNotifications(userId, limit = 20) {
   const { data, error } = await supabase
@@ -52,6 +52,8 @@ const CATCH_UP_WINDOW_MS = 10 * 60 * 1000;
 // skips anything already shown). The in-app lists are left exactly as they
 // were.
 async function catchUpDesktop(userId) {
+  // With Web Push on, the push itself delivers anything missed.
+  if (isPushActive()) return;
   const since = Math.max(Date.parse(firstSubscribedAt.get(userId)), Date.now() - CATCH_UP_WINDOW_MS);
   const { data, error } = await supabase
     .from("notifications")

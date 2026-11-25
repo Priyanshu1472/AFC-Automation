@@ -8,7 +8,7 @@ const rpc = vi.fn();
 const order = vi.fn();
 
 const handleRealtimeNotification = vi.fn(() => Promise.resolve());
-vi.mock("./desktopNotifications", () => ({ handleRealtimeNotification: (...a) => handleRealtimeNotification(...a) }));
+vi.mock("./desktopNotifications", () => ({ handleRealtimeNotification: (...a) => handleRealtimeNotification(...a), isPushActive: () => false }));
 
 vi.mock("./supabase", () => ({
   supabase: {
