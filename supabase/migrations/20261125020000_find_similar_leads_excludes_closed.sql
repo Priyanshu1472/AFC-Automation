@@ -1,9 +1,12 @@
 -- find_similar_leads() scored every lead regardless of status, so a brand
 -- new lead with the same title/bid-number/document as one that was
--- already dropped or declined still got flagged as a possible duplicate —
--- a dropped/declined lead is a dead end, not something anyone could
--- actually be duplicating work on. Excludes both statuses from matching;
--- same signature, used unchanged by LeadForm.jsx's live hint and
+-- already dropped still got flagged as a possible duplicate — pa_dropped
+-- is the one genuine dead end, nothing left for anyone to duplicate work
+-- on. md_declined is NOT excluded here: an MD decline sends the lead back
+-- to pa_action_required for the Person Responsible to rework and
+-- resubmit (see advance-lead-stage's md_review transitions) — it's still
+-- a live lead, so a new lead matching it should still be flagged. Same
+-- signature, used unchanged by LeadForm.jsx's live hint and
 -- create-lead/update-lead's save-time check (_shared/leadDuplicates.ts).
 create or replace function public.find_similar_leads(
   p_title text,
@@ -42,7 +45,7 @@ as $$
       ), 0), 0) as title_score
     from public.leads l
     where (p_exclude_id is null or l.id <> p_exclude_id)
-      and l.status not in ('pa_dropped', 'md_declined')
+      and l.status <> 'pa_dropped'
   )
   select
     id, lead_number, title, status, team,
