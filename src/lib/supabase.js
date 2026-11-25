@@ -22,6 +22,10 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     // session in the URL fragment) are picked up automatically.
     detectSessionInUrl: true,
   },
+  // Run the Realtime heartbeat in a Web Worker (inline, no external script):
+  // Chrome throttles timers in background tabs, which otherwise lets the
+  // socket drop — and with it live notifications and desktop pop-ups.
+  realtime: { worker: true },
 });
 
 // supabase-js's FunctionsHttpError only exposes a generic "non-2xx status

@@ -108,10 +108,17 @@ describe("desktop notifications", () => {
     expect(shown).toHaveLength(0);
   });
 
-  it("stays quiet while the person is looking at PMIS", async () => {
+  it("pops up even while the person is looking at PMIS", async () => {
     setActive(true);
     await deliver(row());
-    expect(shown).toHaveLength(0);
+    expect(shown).toHaveLength(1);
+  });
+
+  it("is on by default once the browser allows it — for every account on this browser", async () => {
+    localStorage.clear();
+    await deliver(row({ user_id: "user-2" }), "user-2");
+    expect(dn.getDesktopPreference("user-2")).toBe(true);
+    expect(shown).toHaveLength(1);
   });
 
   it("click focuses PMIS, marks it read and navigates to its link", async () => {
@@ -132,11 +139,12 @@ describe("desktop notifications", () => {
     expect(dn.shouldOfferDesktopPrompt(USER)).toBe(false);
   });
 
-  it("enabling turns the preference on only when the browser grants permission", async () => {
+  it("enabling asks the browser, and an explicit Turn off survives it being granted", async () => {
     localStorage.clear();
     FakeNotification.permission = "default";
     FakeNotification.requestPermission.mockResolvedValueOnce("denied");
     expect(await dn.enableDesktopNotifications(USER)).toBe("denied");
+    dn.setDesktopPreference(USER, false);
     expect(dn.getDesktopPreference(USER)).toBe(false);
     FakeNotification.requestPermission.mockResolvedValueOnce("granted");
     expect(await dn.enableDesktopNotifications(USER)).toBe("granted");

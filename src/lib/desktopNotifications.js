@@ -8,8 +8,9 @@
 // Two separate switches, both required:
 //   • browser permission — Notification.permission, owned by the browser
 //   • user preference    — "does this person want PMIS desktop alerts",
-//                          kept per user, per browser (localStorage), since
-//                          permission is per browser too.
+//                          kept per user, per browser (localStorage). On by
+//                          default: allowing the browser permission is the
+//                          opt-in; only an explicit "Turn off" disables it.
 //
 // Future Web Push: showDesktopNotification() is the single place that turns
 // a notifications row into a pop-up (buildDesktopPayload is pure). A service
@@ -27,9 +28,6 @@ const SEEN_MAX = 300;
 // fresh event (e.g. an unrelated UPDATE to an old row). Generous enough to
 // absorb a client clock that's a few minutes off.
 const MAX_AGE_MS = 10 * 60 * 1000;
-// A tab the person is looking at shows the event in-app; background tabs
-// wait a moment so a focused tab can claim the event first.
-const BACKGROUND_TAB_DELAY_MS = 400;
 export const DESKTOP_ICON = "/icons/icon-192.png";
 
 function storageGet(key) {
@@ -70,7 +68,7 @@ export function getDesktopPermission() {
 }
 
 export function getDesktopPreference(userId) {
-  return !!userId && storageGet(PREF_KEY(userId)) === "on";
+  return !!userId && storageGet(PREF_KEY(userId)) !== "off";
 }
 
 export function setDesktopPreference(userId, enabled) {
@@ -85,7 +83,7 @@ export function shouldOfferDesktopPrompt(userId) {
   return (
     !!userId &&
     getDesktopPermission() === "default" &&
-    storageGet(PREF_KEY(userId)) == null &&
+    storageGet(PREF_KEY(userId)) !== "off" &&
     storageGet(PROMPT_KEY(userId)) == null
   );
 }
@@ -187,10 +185,6 @@ function claimAcrossTabs(key) {
   return Promise.resolve(claim(key));
 }
 
-function tabIsActive() {
-  return typeof document !== "undefined" && document.visibilityState === "visible" && document.hasFocus();
-}
-
 // ── Showing it ────────────────────────────────────────────────────────────
 
 export function buildDesktopPayload(row) {
@@ -245,13 +239,9 @@ export async function handleRealtimeNotification(userId, row) {
   const key = eventKey(row);
   if (seenThisTab.has(key)) return;
 
-  const active = tabIsActive();
-  if (!active) await new Promise((r) => setTimeout(r, BACKGROUND_TAB_DELAY_MS));
-
-  // Claim even when not showing, so a background tab doesn't pop what the
-  // person is already looking at in another tab.
-  const won = await claimAcrossTabs(key);
-  if (!won || active) return;
+  // Every new notification pops up — also while PMIS is the focused tab —
+  // but only once, however many PMIS tabs are open.
   if (getDesktopPermission() !== "granted" || !getDesktopPreference(userId)) return;
-  showDesktopNotification(row);
+  const won = await claimAcrossTabs(key);
+  if (won) showDesktopNotification(row);
 }
