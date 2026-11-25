@@ -1,5 +1,6 @@
 import { createContext, useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { removePushSubscription } from "../lib/pushSubscription";
 import { markRecoveryInProgress, clearRecoveryFlag, isRecoveryInProgress } from "../lib/passwordRecoveryFlag";
 
 export { clearRecoveryFlag };
@@ -134,6 +135,9 @@ export function AuthProvider({ children }) {
   }, [loadProfile]);
 
   const signOut = useCallback(async () => {
+    // While still signed in: stop Web Push sending this user's
+    // notifications to this browser.
+    await removePushSubscription();
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);

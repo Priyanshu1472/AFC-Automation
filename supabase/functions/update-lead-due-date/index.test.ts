@@ -17,10 +17,11 @@ function leadRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function buildClient(opts: { caller?: Record<string, unknown>; lead?: Record<string, unknown> }) {
+function buildClient(opts: { caller?: Record<string, unknown>; lead?: Record<string, unknown>; routes?: Record<string, { data: unknown; error: unknown }[]> }) {
   return createFakeAdminClient({
     afc_users: [{ data: opts.caller ?? callerRow(), error: null }],
     leads: [{ data: opts.lead === null ? null : (opts.lead ?? leadRow()), error: null }],
+    ...(opts.routes || {}),
   });
 }
 
@@ -55,6 +56,16 @@ Deno.test("update-lead-due-date - caller is not the Person Responsible -> 403", 
   const client = buildClient({ caller: callerRow({ id: "someone-else" }) });
   const res = await handleRequest(authedReq("https://x.com/update-lead-due-date", { token: fakeJwt({ sub: "someone-else" }), body: { lead_id: LEAD_ID, submission_deadline: "2026-06-15" } }), client as never);
   assertEquals(res.status, 403);
+});
+
+Deno.test("update-lead-due-date - an additional Person Responsible (not the named PR) can still update it", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: "teammate-1" }),
+    lead: leadRow({ person_responsible_id: CALLER_ID }),
+    routes: { lead_additional_responsibles: [{ data: { id: "lar-1" }, error: null }] },
+  });
+  const res = await handleRequest(authedReq("https://x.com/update-lead-due-date", { token: fakeJwt({ sub: "teammate-1" }), body: { lead_id: LEAD_ID, submission_deadline: "2026-06-15" } }), client as never);
+  assertEquals(res.status, 200);
 });
 
 Deno.test("update-lead-due-date - success updates the date and logs activity", async () => {

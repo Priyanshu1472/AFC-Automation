@@ -1,0 +1,220 @@
+/* Desktop-notification controls: a row at the foot of the Notifications
+   panel, and a one-time prompt card in the corner of the page. */
+
+.desktop-notif-settings {
+  flex: none;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.desktop-notif-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.desktop-notif-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.desktop-notif-row-end {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.desktop-notif-status {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.desktop-notif-status-success { color: var(--success-dark); }
+.desktop-notif-status-danger  { color: var(--danger); }
+.desktop-notif-status-muted   { color: var(--text-tertiary); }
+
+.desktop-notif-link {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-link);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.desktop-notif-link:hover { text-decoration: underline; }
+.desktop-notif-link:disabled { opacity: 0.6; cursor: default; }
+
+.desktop-notif-help {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.desktop-notif-prompt {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  padding: var(--space-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: desktop-notif-in var(--duration-fast) var(--ease-out);
+}
+
+@keyframes desktop-notif-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.desktop-notif-prompt-icon {
+  display: inline-flex;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  color: var(--text-link);
+}
+
+.desktop-notif-prompt-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.desktop-notif-prompt-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.desktop-notif-prompt-title {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.desktop-notif-prompt-text {
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.desktop-notif-prompt-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.desktop-notif-prompt-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.desktop-notif-prompt-close:hover {
+  color: var(--text-primary);
+  background: var(--btn-ghost-bg-hover);
+}
+
+@media (max-width: 720px) {
+  .desktop-notif-prompt {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: auto;
+  }
+}
+
+/* Profile menu: "Desktop Notifications" row with a toggle switch. */
+.desktop-notif-menu-item.user-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.desktop-notif-menu-item:disabled {
+  cursor: default;
+  color: var(--text-tertiary);
+}
+
+.desktop-notif-menu-item:disabled:hover {
+  background: none;
+}
+
+.desktop-notif-switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: var(--border-default);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.desktop-notif-switch.on {
+  background: var(--brand-600);
+}
+
+.desktop-notif-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.desktop-notif-switch.on .desktop-notif-switch-knob {
+  transform: translateX(14px);
+}
+
+.desktop-notif-menu-help {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* This device's Web Push state, under the Desktop notifications row. */
+.desktop-notif-device-ok {
+  color: var(--success-dark);
+}
+
+.desktop-notif-device-error {
+  color: var(--danger);
+}
+
+.desktop-notif-menu-device {
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.desktop-notif-menu-device .desktop-notif-help {
+  margin-top: 0;
+}

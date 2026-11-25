@@ -747,3 +747,15 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/rebuild-lead-approval-note/deno.json"
 entrypoint = "./functions/rebuild-lead-approval-note/index.ts"
+
+[functions.push-subscription]
+enabled = true
+verify_jwt = true
+import_map = "./functions/push-subscription/deno.json"
+entrypoint = "./functions/push-subscription/index.ts"
+
+[functions.send-push]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send-push/deno.json"
+entrypoint = "./functions/send-push/index.ts"

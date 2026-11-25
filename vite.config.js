@@ -9,6 +9,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Our own worker (src/sw.js) instead of a generated one, so it can
+      // also show Web Push desktop notifications. It keeps the generated
+      // worker's caching behaviour (precache + index.html fallback).
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       includeAssets: ['favicon.ico', 'icons/apple-touch-icon.png'],
       // App-shell + static asset caching only (installability + fast
       // repeat loads). No runtimeCaching for the Supabase API — leads,

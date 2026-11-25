@@ -18,6 +18,7 @@ import { validateBusinessAssociate, validateAssignment, validateReviewer, valida
 import { verifyActionPin } from "../_shared/pin.ts";
 import { LeadDocument, regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
 import { isDeadlinePassed } from "../_shared/deadline.ts";
+import { getLeadAdditionalResponsibleIds } from "../_shared/leadResponsibles.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -221,6 +222,14 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   if (leadErr || !lead) return jsonRes(req, 404, { error: "Lead not found." });
   const leadRow = lead as LeadRow;
 
+  // An additional Person Responsible (lead_additional_responsibles) gets
+  // every action the named Person Responsible has below — see
+  // 20261125010000_lead_additional_responsibles.sql. Named
+  // `isPersonResponsible` (not `isPr`) to avoid shadowing the "drop"
+  // case's own local `isPr` further down.
+  const additionalResponsibleIds = await getLeadAdditionalResponsibleIds(adminClient, lead_id);
+  const isPersonResponsible = (id: string) => id === leadRow.person_responsible_id || additionalResponsibleIds.includes(id);
+
   // Every action is blocked once the submission deadline has passed — the
   // only way forward is the Person Responsible (or the creator, if none is
   // assigned yet, e.g. a po_assignment lead) editing the lead via
@@ -310,7 +319,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       }
 
       case "accept": {
-        if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can accept this lead.");
+        if (!isPersonResponsible(caller.id)) return forbidden("Only the assigned Person Responsible can accept this lead.");
         // From pa_action_required, "accept" resubmits through the
         // Recommending Authority again — regardless of which stage
         // (Recommending Authority, PMT, or MD) declined it. Every
@@ -360,7 +369,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       // which is what drives the Draft label and the PR's Accept/Edit/
       // Reject prompt on the lead page.
       case "submit_for_pr_review": {
-        if (caller.id === leadRow.person_responsible_id) {
+        if (isPersonResponsible(caller.id)) {
           return forbidden("You're the Person Responsible — submit for DGM approval directly instead.");
         }
         if (caller.id !== leadRow.created_by) return forbidden("Only the lead's creator can send it for Person Responsible review.");
@@ -371,7 +380,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           return jsonRes(req, 400, { error: "This note is already awaiting the Person Responsible's review." });
         }
         extraFields = { approval_note_pending_pr_review: true };
-        notifyTargetIds = [leadRow.person_responsible_id];
+        notifyTargetIds = [leadRow.person_responsible_id, ...additionalResponsibleIds];
         notifyTitle = "Lead Approval Note awaiting your review";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was drafted and needs your Accept/Edit/Reject.`;
         break;
@@ -386,7 +395,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       // regenerated immediately via REGENERATE_DRAFT_NOTE_ON above), and
       // there's nothing left pending their review.
       case "pr_review_accept": {
-        if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can review this lead's note.");
+        if (!isPersonResponsible(caller.id)) return forbidden("Only the assigned Person Responsible can review this lead's note.");
         if (!leadRow.approval_note_pending_pr_review) return jsonRes(req, 400, { error: "There's no draft awaiting your review." });
         extraFields = { approval_note_pr_reviewed: true, approval_note_pending_pr_review: false };
         notifyTargetIds = [leadRow.created_by];
@@ -402,7 +411,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       // approval_note_pending_pr_review clears, no separate resubmit path
       // needed.
       case "pr_review_reject": {
-        if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can review this lead's note.");
+        if (!isPersonResponsible(caller.id)) return forbidden("Only the assigned Person Responsible can review this lead's note.");
         if (!leadRow.approval_note_pending_pr_review) return jsonRes(req, 400, { error: "There's no draft awaiting your review." });
         extraFields = { approval_note_pending_pr_review: false };
         notifyTargetIds = [leadRow.created_by];
@@ -434,7 +443,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           break;
         }
         if (leadRow.status === "pa_review") {
-          const isPr = caller.id === leadRow.person_responsible_id;
+          const isPr = isPersonResponsible(caller.id);
           const isReviewer = caller.id === leadRow.reviewer_id;
           const isRa = caller.id === leadRow.recommending_authority_id;
           if (!isPr && !isReviewer && !isRa) {
@@ -443,7 +452,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           break;
         }
         if (leadRow.status === "recommending_authority_review") {
-          const isPr = caller.id === leadRow.person_responsible_id;
+          const isPr = isPersonResponsible(caller.id);
           const isRa = caller.id === leadRow.recommending_authority_id;
           if (!isPr && !isRa) {
             return forbidden("Only the Person Responsible or the Recommending Authority can drop this lead.");
@@ -451,7 +460,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
           break;
         }
         // pa_action_required
-        if (caller.id !== leadRow.person_responsible_id || !["pmt_review", "md_review"].includes(leadRow.declined_from_status as string)) {
+        if (!isPersonResponsible(caller.id) || !["pmt_review", "md_review"].includes(leadRow.declined_from_status as string)) {
           return forbidden("Only the Person Responsible can drop this lead, and only if PMT or MD sent it back.");
         }
         break;
@@ -463,7 +472,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       // they're also the creator, now that Drop itself no longer turns on
       // that distinction.
       case "reject_reassign": {
-        if (caller.id !== leadRow.person_responsible_id) return forbidden("Only the assigned Person Responsible can reject this lead.");
+        if (!isPersonResponsible(caller.id)) return forbidden("Only the assigned Person Responsible can reject this lead.");
         const reassignToId = typeof body.reassign_to_id === "string" ? body.reassign_to_id : "";
         if (!reassignToId) return jsonRes(req, 400, { error: "Select a team member to assign this lead to." });
         if (reassignToId === caller.id) return jsonRes(req, 400, { error: "Choose a different team member to reassign this lead to." });
@@ -542,7 +551,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         const documentsWithoutNote = (leadRow.documents || []).filter((d) => d.category !== "approval_note");
         if (staleNote) storageCleanupPaths = [staleNote.path];
         extraFields = { handled_by_dgm_id: caller.id, declined_from_status: leadRow.status, documents: documentsWithoutNote };
-        notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
+        notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id, ...additionalResponsibleIds];
         notifyTitle = "Lead returned by Recommending Authority";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
         break;
@@ -564,7 +573,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       case "pmt_decline": {
         if (!caller.committees.includes("PMT")) return forbidden("Only a PMT committee member can act on this lead.");
         extraFields = { declined_from_status: leadRow.status };
-        notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
+        notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id, ...additionalResponsibleIds];
         notifyTitle = "Lead returned by PMT";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned. Reason: ${trimmedComment}`;
         break;
@@ -573,7 +582,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       case "md_approve": {
         if (caller.role !== "md") return forbidden("Only the MD can act on this lead.");
         extraFields = { decided_at: new Date().toISOString() };
-        notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id];
+        notifyTargetIds = [leadRow.created_by, leadRow.person_responsible_id, ...additionalResponsibleIds];
         notifyTitle = "Lead approved";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was approved by the MD.`;
         break;
@@ -585,7 +594,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
         // PMT is the only committee that ever sends a lead to MD now — no
         // need to walk the activity log to figure out which one did.
         const pmtHolders = await getOrgWideHolders(adminClient, { committee: "PMT" });
-        notifyTargetIds = [...new Set([leadRow.created_by, leadRow.person_responsible_id, ...pmtHolders])];
+        notifyTargetIds = [...new Set([leadRow.created_by, leadRow.person_responsible_id, ...additionalResponsibleIds, ...pmtHolders])];
         notifyTitle = "Lead returned by MD";
         notifySubText = `${leadRow.lead_number} — "${leadRow.title}" was returned by the MD. Reason: ${trimmedComment}`;
         break;
@@ -601,7 +610,7 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
       // authority_review, same as any other decline, so nothing downstream
       // is treated as still-valid once BA might have changed.
       case "withdraw_submission": {
-        if (caller.id !== leadRow.created_by && caller.id !== leadRow.person_responsible_id) {
+        if (caller.id !== leadRow.created_by && !isPersonResponsible(caller.id)) {
           return forbidden("Only the lead's creator or Person Responsible can withdraw this submission.");
         }
         extraFields = { declined_from_status: null, approval_note_pr_reviewed: false, approval_note_pending_pr_review: false };

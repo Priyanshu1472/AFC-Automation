@@ -68,6 +68,15 @@ Deno.test("handleRequest - a same-team user is authorized", async () => {
   assertEquals(res.status, 200);
 });
 
+Deno.test("handleRequest - an off-team additional Person Responsible is authorized", async () => {
+  const client = buildClient({
+    caller: callerRow({ team: "SomeOtherTeam" }),
+    routes: { lead_additional_responsibles: [{ data: { id: "lar-1" }, error: null }] },
+  });
+  const res = await handleRequest(req({ lead_id: LEAD_ID, path: PATH }), client as never);
+  assertEquals(res.status, 200);
+});
+
 Deno.test("handleRequest - an AGM has org-wide visibility, even off-team and not named on the lead", async () => {
   const client = buildClient({ caller: callerRow({ role: "agm", team: "SomeOtherTeam" }) });
   const res = await handleRequest(req({ lead_id: LEAD_ID, path: PATH }), client as never);

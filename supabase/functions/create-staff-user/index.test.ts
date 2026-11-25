@@ -182,3 +182,40 @@ Deno.test("create-staff-user - returns the temp password only when the credentia
     globalThis.fetch = original;
   }
 });
+
+Deno.test("create-staff-user - Admin can create a Business Partner account with its organisation name and a BP welcome email", async () => {
+  const original = globalThis.fetch;
+  let mail: Record<string, unknown> | null = null;
+  globalThis.fetch = ((_u: string, init: RequestInit) => {
+    mail = JSON.parse(String(init.body));
+    return Promise.resolve(new Response(JSON.stringify({ id: "e1" }), { status: 200 }));
+  }) as unknown as typeof fetch;
+  try {
+    const c = client({});
+    const res = await handleRequest(
+      req({ email: "bp@partner.com", full_name: "Ravi Sharma", role: "business_associate", bp_org_name: "  Sharma Consultants  ", teams: ["BPDD"], office: "delhi" }),
+      c as never,
+    );
+    assertEquals(res.status, 200);
+    const log = (c as unknown as { __log: { table: string; calls: string[][] }[] }).__log;
+    const profileInsert = JSON.parse(log.filter((l) => l.table === "afc_users").find((l) => l.calls[0][0] === "insert")!.calls[0][1])[0];
+    assertEquals(profileInsert.role, "business_associate");
+    assertEquals(profileInsert.bp_org_name, "Sharma Consultants");
+    assertEquals(profileInsert.team, "BPDD");
+    assertEquals(mail!.subject, "Your AFC India Limited Business Partner account");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("create-staff-user - a Business Partner needs an organisation name and a team, and no committee", async () => {
+  const base = { email: "bp@partner.com", full_name: "Ravi Sharma", role: "business_associate", office: "delhi" };
+  for (const body of [
+    { ...base, teams: ["BPDD"] },
+    { ...base, bp_org_name: "Sharma Consultants" },
+    { ...base, bp_org_name: "Sharma Consultants", teams: ["BPDD"], committees: ["PMT"] },
+  ]) {
+    const res = await handleRequest(req(body), client({}) as never);
+    assertEquals(res.status, 400);
+  }
+});

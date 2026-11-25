@@ -9,6 +9,7 @@ import {
 } from "../../lib/notifications";
 import { describeNotification } from "../../lib/notificationDisplay";
 import NotificationDetail from "./NotificationDetail";
+import { DesktopNotificationSettings } from "./DesktopNotifications";
 import { BellIcon, CloseIcon } from "../icons";
 import "../../styles/NotificationBell.css";
 
@@ -149,6 +150,7 @@ export default function NotificationBell() {
               })
             )}
           </div>
+          <DesktopNotificationSettings />
         </div>
       )}
     </div>

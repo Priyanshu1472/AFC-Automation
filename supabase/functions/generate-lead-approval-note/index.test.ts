@@ -111,6 +111,19 @@ Deno.test("handleRequest - the Person Responsible (not creator) can generate the
   });
 });
 
+Deno.test("handleRequest - an additional Person Responsible (neither creator nor named PR) can also generate the note", async () => {
+  const client = buildClient({
+    lead: leadRow({ created_by: "someone-else", person_responsible_id: "someone-else-2" }),
+    routes: { lead_additional_responsibles: [{ data: [{ user_id: CALLER_ID }], error: null }] },
+  });
+  await withFetch(logoFailsFetch, async () => {
+    const res = await handleRequest(req(validBody()), client as never);
+    // Same reasoning as the Person-Responsible test above: a 500 here (not
+    // 403) proves the permission check passed.
+    assertEquals(res.status, 500);
+  });
+});
+
 // approval_note_pr_reviewed gates whether the PR's signature gets embedded
 // on the PDF (see leadApprovalPdf.ts) — it must reflect who actually filled
 // this form in, not just that a note now exists.

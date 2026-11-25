@@ -106,6 +106,15 @@ Deno.test("handleRequest - rejects a caller who is neither creator nor Person Re
   assertEquals(res.status, 403);
 });
 
+Deno.test("handleRequest - an additional Person Responsible (neither creator nor named PR) can still edit", async () => {
+  const client = buildClient({
+    lead: leadRow({ created_by: "someone-else", person_responsible_id: "someone-else-2" }),
+    routes: { lead_additional_responsibles: [{ data: [{ user_id: CALLER_ID }], error: null }] },
+  });
+  const res = await handleRequest(formReq(baseFields()), client as never);
+  assertEquals(res.status, 200);
+});
+
 Deno.test("handleRequest - rejects editing a lead that isn't pa_action_required", async () => {
   const client = buildClient({ lead: leadRow({ status: "pmt_review" }) });
   const res = await handleRequest(formReq(baseFields()), client as never);

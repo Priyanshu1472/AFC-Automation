@@ -169,7 +169,8 @@ function BaStatusCard() {
   if (!app) {
     return (
       <Card>
-        <Card.Body><p className="text-secondary">No empanelment application is linked to this account yet.</p></Card.Body>
+        {/* A BP whose login Admin created directly has no application. */}
+        <Card.Body><p className="text-secondary">Your Business Partner account with AFC India Limited is active.</p></Card.Body>
       </Card>
     );
   }

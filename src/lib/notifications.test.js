@@ -7,6 +7,9 @@ const removeChannel = vi.fn();
 const rpc = vi.fn();
 const order = vi.fn();
 
+const handleRealtimeNotification = vi.fn(() => Promise.resolve());
+vi.mock("./desktopNotifications", () => ({ handleRealtimeNotification: (...a) => handleRealtimeNotification(...a), isPushActive: () => false }));
+
 vi.mock("./supabase", () => ({
   supabase: {
     channel: (...a) => channel(...a),
@@ -24,7 +27,9 @@ beforeEach(async () => {
   // reset the module registry so each test starts from a clean Map instead
   // of leaking subscriptions left open by a previous test.
   vi.resetModules();
-  channel.mockReturnValue({ on: (...a) => { on(...a); return { subscribe } }, });
+  // channel().on(INSERT).on(UPDATE).subscribe() — each .on() chains.
+  const builder = { on: (...a) => { on(...a); return builder; }, subscribe: (...a) => subscribe(...a) };
+  channel.mockReturnValue(builder);
   subscribe.mockReturnValue("the-channel-handle");
   notifications = await import("./notifications");
 });
@@ -60,6 +65,14 @@ describe("subscribeToNotifications ref-counting", () => {
 
     expect(listener1).toHaveBeenCalledWith({ id: "notif-1" });
     expect(listener2).toHaveBeenCalledWith({ id: "notif-1" });
+  });
+
+  it("hands each event to the desktop notifier once per event, not once per listener", () => {
+    notifications.subscribeToNotifications("user-1", vi.fn());
+    notifications.subscribeToNotifications("user-1", vi.fn());
+    on.mock.calls[0][2]({ new: { id: "notif-1" } });
+    expect(handleRealtimeNotification).toHaveBeenCalledTimes(1);
+    expect(handleRealtimeNotification).toHaveBeenCalledWith("user-1", { id: "notif-1" });
   });
 
   it("does not remove the channel while other listeners remain subscribed", () => {

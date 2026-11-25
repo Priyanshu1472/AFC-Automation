@@ -53,7 +53,11 @@ function jsonRes(req: Request, status: number, body: unknown) {
 // Admin-only everywhere (an Admin account already exists in every real
 // environment; recovering from zero Admins is an out-of-band ops task, not
 // a normal-flow UI capability).
-const ADMIN_CREATABLE_ROLES = ["admin", "md", "executive_director", "cfo", "cs", "general_manager", "dgm", "agm", "srm", "regional_manager", "area_manager", "project_officer", "associate_consultant", "project_assistant"];
+const ADMIN_CREATABLE_ROLES = ["admin", "md", "executive_director", "cfo", "cs", "general_manager", "dgm", "agm", "srm", "regional_manager", "area_manager", "project_officer", "associate_consultant", "project_assistant", "business_associate"];
+
+// A Business Partner already working with AFC can get a login straight
+// from Admin, without going through empanelment.
+const BP_ROLE = "business_associate";
 
 // Lead Generation / Proposals review committees — an optional, independent
 // tag on top of the person's HR role (e.g. a DGM sits on G3; a Project
@@ -76,6 +80,7 @@ const ROLE_LABELS: Record<string, string> = {
   project_assistant: "Project Assistant",
   admin: "Administrator",
   executive_director: "Executive Director",
+  business_associate: "Business Partner",
 };
 
 // Decode JWT payload without verifying signature — the Supabase gateway
@@ -136,6 +141,8 @@ async function sendCredentialsEmail(opts: {
   roleLabel: string;
   tempPassword: string;
   loginUrl: string;
+  isBp?: boolean;
+  orgName?: string | null;
 }): Promise<boolean> {
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!RESEND_API_KEY) {
@@ -163,7 +170,9 @@ async function sendCredentialsEmail(opts: {
             <tr><td style="padding:32px;">
               <p style="margin:0 0 16px;font-size:14px;color:#374151;">Dear ${safeName},</p>
               <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
-                A staff account has been created for you with the role of <strong>${safeRole}</strong>.
+                ${opts.isBp
+                  ? `A Business Partner account has been created for you${opts.orgName ? ` (<strong>${escapeHtml(opts.orgName)}</strong>)` : ""} on the AFC India Limited PMIS portal.`
+                  : `A staff account has been created for you with the role of <strong>${safeRole}</strong>.`}
               </p>
               <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:20px 24px;margin:0 0 24px;">
                 <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:0.08em;">Email</p>
@@ -194,7 +203,7 @@ async function sendCredentialsEmail(opts: {
     body: JSON.stringify({
       from: "AFC India Limited <noreply@pmisafc.in>",
       to: [opts.to],
-      subject: "Your AFC India Limited staff account",
+      subject: opts.isBp ? "Your AFC India Limited Business Partner account" : "Your AFC India Limited staff account",
       html,
     }),
   });
@@ -284,6 +293,17 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       return jsonRes(req, 403, { error: `Admin can only create: ${ADMIN_CREATABLE_ROLES.join(", ")}.` });
     }
 
+    const isBp = role === BP_ROLE;
+    const bpOrgName = isBp && typeof body.bp_org_name === "string" ? body.bp_org_name.trim() : "";
+    if (isBp) {
+      if (bpOrgName.length < 2) return jsonRes(req, 400, { error: "Organisation name is required for a Business Partner." });
+      if (committeeSet.length) return jsonRes(req, 400, { error: "A Business Partner can't be on a committee." });
+      const teamCount = Array.isArray(body.teams)
+        ? body.teams.filter((t) => typeof t === "string" && t.trim()).length
+        : (body.team ? 1 : 0);
+      if (!teamCount) return jsonRes(req, 400, { error: "Team is required for a Business Partner." });
+    }
+
     const normalizedEmail = email.trim().toLowerCase();
 
     const { data: existing } = await adminClient
@@ -335,6 +355,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
         team: finalTeam,
         office: finalOffice,
         committee: finalCommittee,
+        bp_org_name: isBp ? bpOrgName : null,
         is_active: true,
         must_change_password: true,
         created_by: caller.id,
@@ -386,6 +407,8 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
       roleLabel: ROLE_LABELS[role] || role,
       tempPassword,
       loginUrl: `${siteUrl}/login`,
+      isBp,
+      orgName: isBp ? bpOrgName : null,
     });
 
     await adminClient.from("application_audit_log").insert({
