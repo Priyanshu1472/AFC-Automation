@@ -76,6 +76,17 @@ export default function ImportantUpdatesModal() {
 
   useEffect(() => {
     setScrolledToBottom(false);
+    // Short enough to show without scrolling at all (no overflow) — there's
+    // nothing to scroll to, so don't leave Acknowledge permanently disabled
+    // waiting for a scroll event that can never fire. Checked after the
+    // list has actually rendered (and once more after fonts/layout settle).
+    const el = bodyRef.current;
+    if (el && el.scrollHeight <= el.clientHeight) setScrolledToBottom(true);
+    const raf = requestAnimationFrame(() => {
+      const el2 = bodyRef.current;
+      if (el2 && el2.scrollHeight <= el2.clientHeight) setScrolledToBottom(true);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [announcement?.id]);
 
   function onBodyScroll() {
