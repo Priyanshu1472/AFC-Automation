@@ -48,6 +48,21 @@ Deno.test("remove-lead-responsible - caller not named and not an additional resp
   assertEquals(res.status, 403);
 });
 
+Deno.test("remove-lead-responsible - an additional responsible can add but cannot remove", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: "additional-1" }),
+    larFirstCallResult: { data: { id: "lar-1" }, error: null },
+  });
+  const res = await handleRequest(authedReq("https://x.com/remove-lead-responsible", { token: fakeJwt({ sub: "additional-1" }), body: { lead_id: LEAD_ID, user_id: TARGET_ID } }), client as never);
+  assertEquals(res.status, 403);
+});
+
+Deno.test("remove-lead-responsible - the named Reviewer cannot remove either, only the named Person Responsible", async () => {
+  const client = buildClient({ caller: callerRow({ id: "reviewer-1" }) });
+  const res = await handleRequest(authedReq("https://x.com/remove-lead-responsible", { token: fakeJwt({ sub: "reviewer-1" }), body: { lead_id: LEAD_ID, user_id: TARGET_ID } }), client as never);
+  assertEquals(res.status, 403);
+});
+
 Deno.test("remove-lead-responsible - lead already dropped -> 400", async () => {
   const client = buildClient({ lead: leadRow({ status: "pa_dropped" }) });
   const res = await handleRequest(req(), client as never);

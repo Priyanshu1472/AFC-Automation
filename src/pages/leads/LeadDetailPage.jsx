@@ -352,9 +352,13 @@ export default function LeadDetailPage() {
   // through this, not a bare `profile?.id === lead.person_responsible_id`
   // — an additional responsible gets the exact same actions.
   const isPrUser = !!profile?.id && (profile.id === lead?.person_responsible_id || additionalResponsibleIds.includes(profile.id));
-  // Who may add/remove an additional Person Responsible: the lead's own
-  // PR/Reviewer/Recommending Authority, or MD/Admin — same as
-  // can_manage_lead_responsibles() server-side.
+  // The lead's actual named Person Responsible — not an additional one.
+  // Only this person (not even an additional responsible they added) may
+  // remove someone from the list.
+  const isNamedPersonResponsible = !!profile?.id && profile.id === lead?.person_responsible_id;
+  // Who may add an additional Person Responsible: the lead's own
+  // PR/Reviewer/Recommending Authority (named or additional), or MD/Admin
+  // — same as can_manage_lead_responsibles() server-side.
   const canManageResponsibles =
     isPrUser || [lead?.reviewer_id, lead?.recommending_authority_id].includes(profile?.id) || ["md", "admin"].includes(profile?.role);
   const canAddResponsibleNow = canManageResponsibles && !!lead && !CLOSED_STATUSES.has(lead.status);
@@ -841,7 +845,26 @@ export default function LeadDetailPage() {
                   {lead.status === "po_assignment" && (
                     <Row label="Forwarded To" value={fmt(lead.forwarded?.full_name)} />
                   )}
-                  <Row label="Person Responsible" value={fmt(lead.assignee?.full_name)} />
+                  {(lead.assignee?.full_name || additionalResponsibles.length > 0) && (
+                    <div className="ar-row">
+                      <span className="ar-row-label">Person Responsible</span>
+                      <span className="ar-row-value ar-row-value-with-chips">
+                        {fmt(lead.assignee?.full_name)}
+                        <LeadAdditionalResponsiblesPanel
+                          leadId={lead.id}
+                          team={lead.team}
+                          existingIds={[lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id]}
+                          additional={additionalResponsibles}
+                          canManage={false}
+                          canRemove={isNamedPersonResponsible}
+                          disabled={CLOSED_STATUSES.has(lead.status)}
+                          onChanged={fetchLead}
+                          adding={false}
+                          onAddingChange={() => {}}
+                        />
+                      </span>
+                    </div>
+                  )}
                   <Row label="Reviewer" value={fmt(lead.reviewer?.full_name)} />
                   <Row label="Recommending Authority" value={fmt(lead.authority?.full_name)} />
                   <Row label="Business Partner" value={bpListText(lead, lead.ba?.full_name || lead.manual_ba?.org_name || "Yet to be Decided")} />
@@ -884,25 +907,24 @@ export default function LeadDetailPage() {
                   User has to live here too at this status — the "Your
                   Action" card itself doesn't render once isTerminal, so
                   this is the only place left to manage it. */}
-              {lead.status === "md_approved" && (canAddResponsibleNow || additionalResponsibles.length > 0) && (
+              {lead.status === "md_approved" && canAddResponsibleNow && (
                 <div className="ar-add-responsible">
-                  {canAddResponsibleNow && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      icon={<UserPlusIcon />}
-                      aria-expanded={addingResponsible}
-                      onClick={() => setAddingResponsible((v) => !v)}
-                    >
-                      Add User
-                    </Button>
-                  )}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<UserPlusIcon />}
+                    aria-expanded={addingResponsible}
+                    onClick={() => setAddingResponsible((v) => !v)}
+                  >
+                    Add User
+                  </Button>
                   <LeadAdditionalResponsiblesPanel
                     leadId={lead.id}
                     team={lead.team}
                     existingIds={[lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id]}
                     additional={additionalResponsibles}
                     canManage={canManageResponsibles}
+                    showChips={false}
                     disabled={!canAddResponsibleNow}
                     onChanged={fetchLead}
                     adding={addingResponsible}
@@ -937,25 +959,24 @@ export default function LeadDetailPage() {
                 <Card className="ar-action-card">
                   <Card.Header title="Your Action" />
                   <Card.Body className="ar-action-body">
-                    {(canAddResponsibleNow || additionalResponsibles.length > 0) && (
+                    {canAddResponsibleNow && (
                       <div className="ar-add-responsible">
-                        {canAddResponsibleNow && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            icon={<UserPlusIcon />}
-                            aria-expanded={addingResponsible}
-                            onClick={() => setAddingResponsible((v) => !v)}
-                          >
-                            Add User
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<UserPlusIcon />}
+                          aria-expanded={addingResponsible}
+                          onClick={() => setAddingResponsible((v) => !v)}
+                        >
+                          Add User
+                        </Button>
                         <LeadAdditionalResponsiblesPanel
                           leadId={lead.id}
                           team={lead.team}
                           existingIds={[lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id]}
                           additional={additionalResponsibles}
                           canManage={canManageResponsibles}
+                          showChips={false}
                           disabled={!canAddResponsibleNow}
                           onChanged={fetchLead}
                           adding={addingResponsible}

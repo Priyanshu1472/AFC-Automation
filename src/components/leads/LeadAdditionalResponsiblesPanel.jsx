@@ -17,7 +17,12 @@ import { CloseIcon } from "../icons";
 
 // The "add" control is an icon button the parent puts beside the Person
 // Responsible label, so the picker is controlled via adding/onAddingChange.
-export default function LeadAdditionalResponsiblesPanel({ leadId, team, existingIds, additional, canManage, disabled, onChanged, adding, onAddingChange }) {
+// `canManage` gates the add row only — whether the chip list renders at
+// all (`showChips`) and whether each chip gets a remove button
+// (`canRemove`) are separate: only the lead's actual named Person
+// Responsible may remove someone, not an additional responsible they
+// added, even though both can add.
+export default function LeadAdditionalResponsiblesPanel({ leadId, team, existingIds, additional, canManage, canRemove = false, showChips = true, disabled, onChanged, adding, onAddingChange }) {
   const setAdding = onAddingChange;
   const [options, setOptions] = useState([]);
   const [selected, setSelected] = useState("");
@@ -75,16 +80,17 @@ export default function LeadAdditionalResponsiblesPanel({ leadId, team, existing
     }
   }
 
-  if (additional.length === 0 && !(canManage && !disabled && adding) && !error) return null;
+  const showChipList = showChips && additional.length > 0;
+  if (!showChipList && !(canManage && !disabled && adding) && !error) return null;
 
   return (
     <div className="pp-additional-pr">
-      {additional.length > 0 && (
+      {showChipList && (
         <div className="pp-additional-pr-list">
           {additional.map((a) => (
             <span key={a.user_id} className="pp-additional-pr-chip">
               {a.full_name}
-              {canManage && !disabled && (
+              {canRemove && !disabled && (
                 <button
                   type="button"
                   className="pp-additional-pr-remove"

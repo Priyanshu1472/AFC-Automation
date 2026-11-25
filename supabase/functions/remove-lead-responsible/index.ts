@@ -5,6 +5,12 @@
 // that row granted via can_view_lead()/the widened per-action checks in
 // update-lead, advance-lead-stage, update-lead-due-date and
 // generate-lead-approval-note.
+//
+// Unlike adding (open to the lead's named PR/Reviewer/Recommending
+// Authority, MD/Admin, or an additional responsible themselves), removing
+// is deliberately narrower: only the lead's actual named Person
+// Responsible, or MD/Admin, can remove someone — not an additional
+// responsible, even though they can add one.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
@@ -36,6 +42,10 @@ export async function handleRequest(req: Request, adminClient: AdminClient = cre
   const check = await checkCanManageLeadResponsibles(adminClient, lead_id, caller);
   if (!check.ok) return jsonRes(req, check.status, { error: check.error });
   const { lead } = check;
+
+  if (!["md", "admin"].includes(caller.role) && caller.id !== lead.person_responsible_id) {
+    return jsonRes(req, 403, { error: "Only the lead's Person Responsible can remove someone from this list." });
+  }
 
   const { data: target } = await adminClient.from("afc_users").select("full_name").eq("id", user_id).maybeSingle();
 
