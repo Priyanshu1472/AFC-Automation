@@ -35,10 +35,20 @@ export default function ImportantUpdatesModal() {
       setAnnouncement(null);
       return;
     }
+    // Must filter by user_id too, not just announcement_id — Super
+    // Admin's own select policy on this table can see every user's ack
+    // rows (so the compose page can show a count), not just their own.
+    // Without this, once more than one person has acknowledged the same
+    // announcement, .maybeSingle() sees multiple rows and throws — which,
+    // with only `data` read here, silently came back as "nobody
+    // acknowledged" and reshowed the popup every refresh, even to someone
+    // who already had.
+    if (!profile?.id) return;
     const { data: ack } = await supabase
       .from("org_announcement_acks")
       .select("id")
       .eq("announcement_id", latest.id)
+      .eq("user_id", profile.id)
       .maybeSingle();
     setAnnouncement(ack ? null : latest);
   }
