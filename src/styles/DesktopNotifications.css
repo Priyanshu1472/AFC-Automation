@@ -201,3 +201,20 @@
   line-height: 1.45;
   color: var(--text-secondary);
 }
+
+/* This device's Web Push state, under the Desktop notifications row. */
+.desktop-notif-device-ok {
+  color: var(--success-dark);
+}
+
+.desktop-notif-device-error {
+  color: var(--danger);
+}
+
+.desktop-notif-menu-device {
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.desktop-notif-menu-device .desktop-notif-help {
+  margin-top: 0;
+}

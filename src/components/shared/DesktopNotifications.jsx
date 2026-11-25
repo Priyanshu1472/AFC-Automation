@@ -12,7 +12,7 @@ import {
   shouldOfferDesktopPrompt,
   subscribeDesktopState,
 } from "../../lib/desktopNotifications";
-import { syncPushSubscription } from "../../lib/pushSubscription";
+import { getPushStatus, subscribePushStatus, syncPushSubscription } from "../../lib/pushSubscription";
 import { BellIcon, CloseIcon } from "../icons";
 import "../../styles/DesktopNotifications.css";
 
@@ -44,16 +44,51 @@ function useDesktopState(userId) {
   return state;
 }
 
+function usePushStatus() {
+  const [status, setStatus] = useState(getPushStatus);
+  useEffect(() => subscribePushStatus(setStatus), []);
+  return status;
+}
+
 // One on/off action for both controls: turning on asks the browser for
 // permission the first time; turning off is just the PMIS preference.
+// Turning on always registers this device afresh for Web Push.
 async function toggleDesktop(userId, permission, isOn) {
   if (isOn) {
     setDesktopPreference(userId, false);
-  } else if (permission === "granted") {
-    setDesktopPreference(userId, true);
-  } else {
-    await enableDesktopNotifications(userId);
+    return;
   }
+  if (permission === "granted") setDesktopPreference(userId, true);
+  else await enableDesktopNotifications(userId);
+  await syncPushSubscription(userId, { fresh: true });
+}
+
+// Whether this device will also get notifications with PMIS closed — and
+// if not, why, with a way to retry.
+function PushDeviceStatus({ userId }) {
+  const push = usePushStatus();
+  const [busy, setBusy] = useState(false);
+
+  async function retry() {
+    setBusy(true);
+    await syncPushSubscription(userId, { fresh: true });
+    setBusy(false);
+  }
+
+  if (push.state === "registered") {
+    return <p className="desktop-notif-help desktop-notif-device-ok">This device is set up — notifications arrive even when PMIS is closed.</p>;
+  }
+  if (push.state === "checking" || push.state === "off") {
+    return <p className="desktop-notif-help">Setting up this device…</p>;
+  }
+  return (
+    <p className="desktop-notif-help desktop-notif-device-error">
+      This device isn't receiving notifications while PMIS is closed: {push.error}{" "}
+      <button type="button" className="desktop-notif-link" onClick={retry} disabled={busy}>
+        {busy ? "Retrying…" : "Retry"}
+      </button>
+    </p>
+  );
 }
 
 // Toggle switch in the profile menu.
@@ -91,6 +126,11 @@ export function DesktopNotificationToggle() {
           <span className="desktop-notif-switch-knob" />
         </span>
       </button>
+      {isOn && (
+        <div className="desktop-notif-menu-device">
+          <PushDeviceStatus userId={userId} />
+        </div>
+      )}
       {blocked && <p className="desktop-notif-menu-help">{BLOCKED_HELP}</p>}
       {unsupported && <p className="desktop-notif-menu-help">Not supported in this browser — use Chrome or Edge.</p>}
     </div>
@@ -153,6 +193,7 @@ export function DesktopNotificationSettings() {
         </span>
       </div>
       {help && <p className="desktop-notif-help">{help}</p>}
+      {permission === "granted" && preference && <PushDeviceStatus userId={userId} />}
     </div>
   );
 }
