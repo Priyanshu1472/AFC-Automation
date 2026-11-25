@@ -9,10 +9,11 @@ import UserMenu from "./UserMenu";
 import ProfileAvatar from "./ProfileAvatar";
 import { useAuth } from "../../hooks/useAuth";
 import { useModules } from "../../context/ModulesContext";
+import { IS_PRODUCTION } from "../../lib/modules";
 import { USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, MODULE_SETTINGS_ROLES, ROLE_LABELS } from "../../lib/roles";
 import {
   MenuIcon, CloseIcon, HomeIcon, BookIcon, UsersIcon, TargetIcon, FileTextIcon, ActivityIcon, RupeeIcon,
-  UserCogIcon, ClipboardListIcon, LayoutGridIcon, BarChartIcon, ListChecksIcon,
+  UserCogIcon, ClipboardListIcon, LayoutGridIcon, BarChartIcon, ListChecksIcon, MegaphoneIcon,
 } from "../icons";
 import logo from "../../images/Logo.png";
 import "../../styles/AppHeader.css";
@@ -134,6 +135,8 @@ export default function AppHeader() {
   const canSeeMonitoring = MONITORING_ROLES.includes(profile.role) && isEnabled("monitoring");
   const canSeeFinancials = FINANCIALS_ROLES.includes(profile.role) && isEnabled("financials");
   const canSeeModuleSettings = MODULE_SETTINGS_ROLES.includes(profile.actualRole);
+  // Staging/dev trial only — see lib/modules.js's IS_PRODUCTION.
+  const canSeeAnnouncements = profile.actualRole === "super_admin" && !IS_PRODUCTION;
   const navItems = [
     { to: "/home", label: "Home", icon: <HomeIcon />, show: true },
     { to: "/knowledge", label: "Knowledge Repository", icon: <BookIcon />, show: canSeeKnowledge },
@@ -145,6 +148,7 @@ export default function AppHeader() {
     { to: "/users", label: "Users", icon: <UserCogIcon />, show: canSeeUsers },
     { to: "/audit-logs", label: "Audit Logs", icon: <ClipboardListIcon />, show: canSeeAuditLogs },
     { to: "/settings/modules", label: "Module Settings", icon: <ListChecksIcon />, show: canSeeModuleSettings },
+    { to: "/announcements", label: "Important Updates", icon: <MegaphoneIcon />, show: canSeeAnnouncements },
   ].filter((it) => it.show);
   const roleLabel = ROLE_LABELS[profile.actualRole || profile.role] || profile.role;
   const teams = profile.teams || [];

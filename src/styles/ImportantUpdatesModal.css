@@ -1,0 +1,77 @@
+/* Full-viewport, un-dismissable overlay — distinct from the centered
+   Modal.jsx/.modal-backdrop dialog, which never covers the whole screen.
+   No close button, no backdrop click, no Escape handling anywhere in
+   this file's companion component — the only way out is Acknowledge. */
+.iu-overlay {
+  position: fixed;
+  inset: 0;
+  /* Above every other fixed/portaled element in the app (chat FAB/popup
+     at 1000-1001, the mobile nav drawer and ordinary Modal.jsx dialogs at
+     --z-modal: 300) — this one has to win over all of them. */
+  z-index: 2000;
+  background: var(--bg-page);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  padding-top: calc(var(--space-6) + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+}
+
+.iu-dialog {
+  width: 100%;
+  max-width: 560px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+}
+
+.iu-title {
+  margin: 0;
+  padding: var(--space-6) var(--space-6) var(--space-4);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.iu-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-6);
+}
+
+.iu-list {
+  margin: 0;
+  padding-left: 1.25em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.iu-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.iu-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.iu-footer .btn { width: 100%; max-width: 320px; }
