@@ -48,7 +48,7 @@ Deno.test("remove-lead-responsible - caller not named and not an additional resp
   assertEquals(res.status, 403);
 });
 
-Deno.test("remove-lead-responsible - an additional responsible can add but cannot remove", async () => {
+Deno.test("remove-lead-responsible - an additional responsible cannot remove (or manage the list at all)", async () => {
   const client = buildClient({
     caller: callerRow({ id: "additional-1" }),
     larFirstCallResult: { data: { id: "lar-1" }, error: null },

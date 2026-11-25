@@ -356,11 +356,14 @@ export default function LeadDetailPage() {
   // Only this person (not even an additional responsible they added) may
   // remove someone from the list.
   const isNamedPersonResponsible = !!profile?.id && profile.id === lead?.person_responsible_id;
-  // Who may add an additional Person Responsible: the lead's own
-  // PR/Reviewer/Recommending Authority (named or additional), or MD/Admin
-  // — same as can_manage_lead_responsibles() server-side.
+  // Who may add (or remove) an additional Person Responsible: the lead's
+  // own named PR/Reviewer/Recommending Authority, or MD/Admin — NOT an
+  // additional responsible themselves. They get every other PR action,
+  // but not managing this list itself — matches
+  // checkCanManageLeadResponsibles() server-side.
   const canManageResponsibles =
-    isPrUser || [lead?.reviewer_id, lead?.recommending_authority_id].includes(profile?.id) || ["md", "admin"].includes(profile?.role);
+    [lead?.person_responsible_id, lead?.reviewer_id, lead?.recommending_authority_id].includes(profile?.id) ||
+    ["md", "admin"].includes(profile?.role);
   const canAddResponsibleNow = canManageResponsibles && !!lead && !CLOSED_STATUSES.has(lead.status);
 
   function availableActions() {

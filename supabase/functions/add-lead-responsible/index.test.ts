@@ -61,6 +61,18 @@ Deno.test("add-lead-responsible - caller not named on the lead and not already a
   assertEquals(res.status, 403);
 });
 
+// An additional responsible gets every other Person-Responsible action,
+// but not managing this list itself — only the named PR/Reviewer/
+// Recommending Authority or MD/Admin may add (or remove) someone.
+Deno.test("add-lead-responsible - an existing additional responsible cannot add another one", async () => {
+  const client = buildClient({
+    caller: callerRow({ id: "additional-1", role: "project_officer" }),
+    larFirstCallResult: { data: { id: "lar-1" }, error: null },
+  });
+  const res = await handleRequest(authedReq("https://x.com/add-lead-responsible", { token: fakeJwt({ sub: "additional-1" }), body: { lead_id: LEAD_ID, user_id: TARGET_ID } }), client as never);
+  assertEquals(res.status, 403);
+});
+
 Deno.test("add-lead-responsible - lead already dropped -> 400", async () => {
   const client = buildClient({ lead: leadRow({ status: "pa_dropped" }) });
   const res = await handleRequest(req(), client as never);
