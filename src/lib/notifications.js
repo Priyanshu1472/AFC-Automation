@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { handleRealtimeNotification } from "./desktopNotifications";
 
 export async function fetchRecentNotifications(userId, limit = 20) {
   const { data, error } = await supabase
@@ -51,7 +52,12 @@ export function subscribeToNotifications(userId, onChange) {
 
   if (!entry) {
     const listeners = new Set();
-    const notify = (payload) => listeners.forEach((fn) => fn(payload.new));
+    const notify = (payload) => {
+      listeners.forEach((fn) => fn(payload.new));
+      // Once per event per tab (not per listener) — the desktop pop-up
+      // decides for itself whether the event is genuinely new.
+      handleRealtimeNotification(userId, payload.new).catch(() => {});
+    };
     const channel = supabase
       .channel(`notifications-${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, notify)
