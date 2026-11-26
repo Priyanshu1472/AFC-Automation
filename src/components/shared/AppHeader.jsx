@@ -9,7 +9,6 @@ import UserMenu from "./UserMenu";
 import ProfileAvatar from "./ProfileAvatar";
 import { useAuth } from "../../hooks/useAuth";
 import { useModules } from "../../context/ModulesContext";
-import { IS_PRODUCTION } from "../../lib/modules";
 import { USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, MODULE_SETTINGS_ROLES, ROLE_LABELS } from "../../lib/roles";
 import {
   MenuIcon, CloseIcon, HomeIcon, BookIcon, UsersIcon, TargetIcon, FileTextIcon, ActivityIcon, RupeeIcon,
@@ -135,8 +134,7 @@ export default function AppHeader() {
   const canSeeMonitoring = MONITORING_ROLES.includes(profile.role) && isEnabled("monitoring");
   const canSeeFinancials = FINANCIALS_ROLES.includes(profile.role) && isEnabled("financials");
   const canSeeModuleSettings = MODULE_SETTINGS_ROLES.includes(profile.actualRole);
-  // Staging/dev trial only — see lib/modules.js's IS_PRODUCTION.
-  const canSeeAnnouncements = profile.actualRole === "super_admin" && !IS_PRODUCTION;
+  const canSeeAnnouncements = profile.actualRole === "super_admin";
   const navItems = [
     { to: "/home", label: "Home", icon: <HomeIcon />, show: true },
     { to: "/knowledge", label: "Knowledge Repository", icon: <BookIcon />, show: canSeeKnowledge },

@@ -19,16 +19,6 @@ function req(body: Record<string, unknown> = {}) {
   return authedReq("https://x.com/send-announcement", { token: fakeJwt({ sub: CALLER_ID }), body: { items: ["Update one", "Update two"], ...body } });
 }
 
-Deno.test("send-announcement - refuses on production, even for Super Admin", async () => {
-  Deno.env.set("APP_ENV", "production");
-  try {
-    const res = await handleRequest(req(), client() as never);
-    assertEquals(res.status, 403);
-  } finally {
-    Deno.env.delete("APP_ENV");
-  }
-});
-
 Deno.test("send-announcement - unauthenticated caller -> 401", async () => {
   const res = await handleRequest(new Request("https://x.com", { method: "POST" }), client() as never);
   assertEquals(res.status, 401);
