@@ -31,10 +31,14 @@ export type LeadManageCheck =
   | { ok: true; lead: Lead }
   | { ok: false; status: number; error: string };
 
-// Dead ends — nothing is left for an additional responsible to help with
-// once a lead lands here. Mirrors can_manage_lead_responsibles() in
-// 20261125010000_lead_additional_responsibles.sql.
-const CLOSED_STATUSES = new Set(["pa_dropped", "md_declined"]);
+// Managing the list is only meaningful while the lead is still with the
+// PR — pa_review (first pass) or pa_action_required (sent back for
+// rework by the Recommending Authority, PMT, or MD). Once it clears
+// Recommending Authority review the roster is considered locked in; a
+// later decline that returns it to pa_action_required re-opens the
+// window again. Mirrors can_manage_lead_responsibles() in
+// 20261126000000_lead_responsibles_pr_stage_only.sql.
+const MANAGEABLE_STATUSES = new Set(["pa_review", "pa_action_required"]);
 
 export async function checkCanManageLeadResponsibles(
   admin: AdminClient,
@@ -48,8 +52,8 @@ export async function checkCanManageLeadResponsibles(
     .maybeSingle();
   if (leadErr || !lead) return { ok: false, status: 404, error: "Lead not found." };
 
-  if (CLOSED_STATUSES.has(lead.status as string)) {
-    return { ok: false, status: 400, error: "This lead has already been dropped or declined." };
+  if (!MANAGEABLE_STATUSES.has(lead.status as string)) {
+    return { ok: false, status: 400, error: "This is only available while the lead is still with the Person Responsible, before Recommending Authority review." };
   }
 
   // Named only — md/admin or the lead's own PR/Reviewer/Recommending

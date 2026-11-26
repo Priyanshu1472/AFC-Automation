@@ -8,6 +8,7 @@ import { PathModuleGate } from "./components/routing/ModuleGate";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import ProtectedRoute from "./components/routing/ProtectedRoute";
 import PublicOnlyRoute from "./components/routing/PublicOnlyRoute";
+import ImportantUpdatesModal from "./components/shared/ImportantUpdatesModal";
 import PageLoader from "./components/ui/PageLoader";
 import { USERS_PAGE_ROLES, USERS_VIEW_ROLES, AUDIT_LOG_ROLES, EMPANELMENT_ROLES, EMPANELMENT_SENDER_ROLES, KNOWLEDGE_REPOSITORY_ROLES, LEAD_GENERATION_NAV_ROLES, MONITORING_ROLES, FINANCIALS_ROLES, MODULE_SETTINGS_ROLES } from "./lib/roles";
 
@@ -25,6 +26,7 @@ const EditUserPage = lazy(() => import("./pages/admin/EditUserPage"));
 const UserListPage = lazy(() => import("./pages/admin/UserListPage"));
 const AuditLogsPage = lazy(() => import("./pages/admin/AuditLogsPage"));
 const ModuleSettingsPage = lazy(() => import("./pages/admin/ModuleSettingsPage"));
+const AnnouncementsPage = lazy(() => import("./pages/admin/AnnouncementsPage"));
 const SendEmpanelmentPage = lazy(() => import("./pages/empanelment/SendEmpanelmentPage"));
 const BaFormPage = lazy(() => import("./pages/empanelment/BaFormPage"));
 const EmpanelmentListPage = lazy(() => import("./pages/empanelment/EmpanelmentListPage"));
@@ -156,6 +158,15 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={MODULE_SETTINGS_ROLES}>
                       <ModuleSettingsPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/announcements"
+                  element={
+                    <ProtectedRoute allowedRoles={MODULE_SETTINGS_ROLES}>
+                      <AnnouncementsPage />
                     </ProtectedRoute>
                   }
                 />
@@ -393,6 +404,7 @@ export default function App() {
                 </Routes>
                 </PathModuleGate>
               </Suspense>
+              <ImportantUpdatesModal />
               </ModulesProvider>
             </AuthProvider>
           </ToastProvider>

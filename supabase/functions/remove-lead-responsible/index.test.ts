@@ -12,7 +12,7 @@ function callerRow(overrides: Record<string, unknown> = {}) {
 
 function leadRow(overrides: Record<string, unknown> = {}) {
   return {
-    id: LEAD_ID, lead_number: "AFC/BPDD/L/26/001", title: "Test Lead", status: "md_approved", team: "BPDD",
+    id: LEAD_ID, lead_number: "AFC/BPDD/L/26/001", title: "Test Lead", status: "pa_review", team: "BPDD",
     person_responsible_id: CALLER_ID, reviewer_id: "reviewer-1", recommending_authority_id: "ra-1",
     ...overrides,
   };
@@ -65,6 +65,12 @@ Deno.test("remove-lead-responsible - the named Reviewer cannot remove either, on
 
 Deno.test("remove-lead-responsible - lead already dropped -> 400", async () => {
   const client = buildClient({ lead: leadRow({ status: "pa_dropped" }) });
+  const res = await handleRequest(req(), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("remove-lead-responsible - past Recommending Authority review -> 400, even for the named PR", async () => {
+  const client = buildClient({ lead: leadRow({ status: "md_review" }) });
   const res = await handleRequest(req(), client as never);
   assertEquals(res.status, 400);
 });
