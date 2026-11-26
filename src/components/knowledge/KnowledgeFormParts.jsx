@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import "../../styles/KnowledgeFormParts.css";
 
-export const DOC_TYPES = ["Work Order", "Completion Certificate", "MoU", "Agreement", "Invoice", "Other"];
+export const DOC_TYPES = ["Work Order", "Sanctioned Order", "Completion Certificate", "MoU", "Agreement", "Invoice", "Other"];
 
 export const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
