@@ -8,9 +8,9 @@ export const STATUS_MAP = {
   recommending_authority_review: { label: "Recommending Authority", variant: "yellow" },
   pmt_review: { label: "PMT", variant: "yellow" },
   g3_review: { label: "G3 Committee Review", variant: "yellow" },
-  md_review: { label: "MD Approval Pending", variant: "neutral" },
+  md_review: { label: "MD Approval Pending", variant: "warning" },
   pa_action_required: { label: "Action Required", variant: "warning" },
-  pa_dropped: { label: "Dropped", variant: "danger" },
+  pa_dropped: { label: "Dropped", variant: "neutral" },
   md_approved: { label: "Approved", variant: "success" },
 };
 
