@@ -12,7 +12,7 @@ function callerRow(overrides: Record<string, unknown> = {}) {
 
 function leadRow(overrides: Record<string, unknown> = {}) {
   return {
-    id: LEAD_ID, lead_number: "AFC/BPDD/L/26/001", title: "Test Lead", status: "md_approved", team: "BPDD",
+    id: LEAD_ID, lead_number: "AFC/BPDD/L/26/001", title: "Test Lead", status: "pa_review", team: "BPDD",
     person_responsible_id: CALLER_ID, reviewer_id: "reviewer-1", recommending_authority_id: "ra-1",
     ...overrides,
   };
@@ -83,6 +83,18 @@ Deno.test("add-lead-responsible - lead already declined -> 400", async () => {
   const client = buildClient({ lead: leadRow({ status: "md_declined" }) });
   const res = await handleRequest(req(), client as never);
   assertEquals(res.status, 400);
+});
+
+Deno.test("add-lead-responsible - past Recommending Authority review -> 400, even for the named PR", async () => {
+  const client = buildClient({ lead: leadRow({ status: "pmt_review" }) });
+  const res = await handleRequest(req(), client as never);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("add-lead-responsible - back at pa_action_required (sent back for rework) is available again", async () => {
+  const client = buildClient({ lead: leadRow({ status: "pa_action_required" }) });
+  const res = await handleRequest(req(), client as never);
+  assertEquals(res.status, 200);
 });
 
 Deno.test("add-lead-responsible - target on a different team -> 400", async () => {

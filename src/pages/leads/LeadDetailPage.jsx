@@ -141,13 +141,15 @@ const PR_REVIEW_ACTIONS = [
   { key: "pr_review_reject", label: "Reject", variant: "danger", requiresReason: true },
 ];
 
-// Dead ends — nothing is left for an additional Person Responsible to help
-// with once a lead lands here. Mirrors can_manage_lead_responsibles() in
-// 20261125010000_lead_additional_responsibles.sql. Deliberately narrower
-// than leadStatus.js's own TERMINAL_STATUSES (which also includes
-// md_approved) — the due-date edit stays open at md_approved, so adding/
-// removing an additional responsible should too.
-const CLOSED_STATUSES = new Set(["pa_dropped", "md_declined"]);
+// Managing the additional-responsible list is only meaningful while the
+// lead is still with the PR — pa_review (first pass) or
+// pa_action_required (sent back for rework by the Recommending
+// Authority, PMT, or MD). Once it clears Recommending Authority review
+// the roster is considered locked in; a later decline that returns it to
+// pa_action_required re-opens the window again. Mirrors
+// can_manage_lead_responsibles() in
+// 20261126000000_lead_responsibles_pr_stage_only.sql.
+const MANAGEABLE_STATUSES = new Set(["pa_review", "pa_action_required"]);
 
 function DocItem({ doc, leadId }) {
   const [loading, setLoading] = useState(false);
@@ -364,7 +366,7 @@ export default function LeadDetailPage() {
   const canManageResponsibles =
     [lead?.person_responsible_id, lead?.reviewer_id, lead?.recommending_authority_id].includes(profile?.id) ||
     ["md", "admin"].includes(profile?.role);
-  const canAddResponsibleNow = canManageResponsibles && !!lead && !CLOSED_STATUSES.has(lead.status);
+  const canAddResponsibleNow = canManageResponsibles && !!lead && MANAGEABLE_STATUSES.has(lead.status);
 
   function availableActions() {
     if (!lead) return [];
@@ -860,7 +862,7 @@ export default function LeadDetailPage() {
                           additional={additionalResponsibles}
                           canManage={false}
                           canRemove={isNamedPersonResponsible}
-                          disabled={CLOSED_STATUSES.has(lead.status)}
+                          disabled={!MANAGEABLE_STATUSES.has(lead.status)}
                           onChanged={fetchLead}
                           adding={false}
                           onAddingChange={() => {}}
@@ -907,34 +909,9 @@ export default function LeadDetailPage() {
                   standalone card, not a slot in the "Your Action" card
                   below, since that one is suppressed outright for every
                   terminal status (isTerminal), md_approved included. Add
-                  User has to live here too at this status — the "Your
-                  Action" card itself doesn't render once isTerminal, so
-                  this is the only place left to manage it. */}
-              {lead.status === "md_approved" && canAddResponsibleNow && (
-                <div className="ar-add-responsible">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<UserPlusIcon />}
-                    aria-expanded={addingResponsible}
-                    onClick={() => setAddingResponsible((v) => !v)}
-                  >
-                    Add User
-                  </Button>
-                  <LeadAdditionalResponsiblesPanel
-                    leadId={lead.id}
-                    team={lead.team}
-                    existingIds={[lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id]}
-                    additional={additionalResponsibles}
-                    canManage={canManageResponsibles}
-                    showChips={false}
-                    disabled={!canAddResponsibleNow}
-                    onChanged={fetchLead}
-                    adding={addingResponsible}
-                    onAddingChange={setAddingResponsible}
-                  />
-                </div>
-              )}
+                  User only ever applies at pa_review/pa_action_required
+                  (see MANAGEABLE_STATUSES), both long past by md_approved,
+                  so there's nothing to show here for it anymore. */}
               {lead.status === "md_approved" && isPrUser && (
                 <EditDueDatePanel leadId={lead.id} submissionDeadline={lead.submission_deadline} onChanged={fetchLead} />
               )}
