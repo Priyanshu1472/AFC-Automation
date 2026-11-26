@@ -22,7 +22,7 @@ import MdTransferLeadDialog from "../../components/leads/MdTransferLeadDialog";
 import EscalateToG3Dialog from "../../components/leads/EscalateToG3Dialog";
 import LeadDuplicatesTable from "../../components/leads/LeadDuplicatesTable";
 import LeadAdditionalResponsiblesPanel from "../../components/leads/LeadAdditionalResponsiblesPanel";
-import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId } from "../../components/leads/leadStatus";
+import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId, displayStatusCfg } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 import { UserPlusIcon } from "../../components/icons";
 // Reuses the ar-* detail/action/timeline/document styles already defined
@@ -663,9 +663,9 @@ export default function LeadDetailPage() {
     );
   }
 
-  const statusCfg = STATUS_MAP[lead.status] || { label: lead.status, variant: "neutral" };
-  const isTerminal = ["md_approved", "md_declined", "pa_dropped"].includes(lead.status);
   const overdue = isLeadOverdue(lead);
+  const statusCfg = displayStatusCfg(lead);
+  const isTerminal = ["md_approved", "md_declined", "pa_dropped"].includes(lead.status);
   const actions = availableActions();
   const currentFlowIdx = STATUS_FLOW.findIndex((s) => s.key === lead.status);
   // Every uploaded/generated document lives under Lead Records now — the
@@ -686,7 +686,6 @@ export default function LeadDetailPage() {
                 <div className="ar-header-badges">
                   <Badge variant="brand">Lead</Badge>
                   <Badge variant={statusCfg.variant} dot>{statusCfg.label}</Badge>
-                  {overdue && <Badge variant="danger" dot>Submission Overdue</Badge>}
                 </div>
                 <h1 className="ar-header-email">{lead.title}</h1>
                 <p className="ar-header-meta">

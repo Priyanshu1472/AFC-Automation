@@ -13,7 +13,7 @@ import Select from "../../components/ui/Select";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import { ChatIcon, PencilIcon, TrashIcon, ArrowRightIcon } from "../../components/icons";
-import { STATUS_MAP, COMMITTEE_STAGE_STATUS } from "../../components/leads/leadStatus";
+import { STATUS_MAP, COMMITTEE_STAGE_STATUS, displayStatusCfg } from "../../components/leads/leadStatus";
 import { canOpenProposal } from "../../lib/proposalPrep";
 import "../../styles/LeadListPage.css";
 
@@ -33,8 +33,8 @@ const QUICK_FILTERS = {
   approved: { label: "Approved", match: (l) => l.status === "md_approved" },
 };
 
-function StatusBadge({ status }) {
-  const cfg = STATUS_MAP[status] || { label: status, variant: "neutral" };
+function StatusBadge({ lead }) {
+  const cfg = displayStatusCfg(lead);
   return <Badge className="ll-status-badge" variant={cfg.variant} dot>{cfg.label}</Badge>;
 }
 
@@ -401,7 +401,7 @@ export default function LeadListPage() {
                       {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>}
                       <td className="ll-name-cell" title={l.assignee?.full_name || ""}>{fmt(l.assignee?.full_name)}</td>
                       <td>{leadTypeLabel(l)}</td>
-                      <td className="ll-col-status"><StatusBadge status={l.status} /></td>
+                      <td className="ll-col-status"><StatusBadge lead={l} /></td>
                       <td className="ll-date">{fmtDate(l.submission_deadline)}</td>
                       <td className="ll-col-actions" onClick={(e) => e.stopPropagation()}>
                         <div className="ll-action-icons">

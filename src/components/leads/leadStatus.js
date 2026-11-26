@@ -76,6 +76,15 @@ export function isLeadOverdue(lead) {
   return !!lead.submission_deadline && isDeadlinePassed(lead.submission_deadline);
 }
 
+// What a lead's status badge should actually show — overdue takes over the
+// badge entirely (not a second tag next to it) until the deadline's fixed
+// or the lead moves past needing one, at which point isLeadOverdue goes
+// false again and this falls back to the real pipeline status.
+export function displayStatusCfg(lead) {
+  if (isLeadOverdue(lead)) return { label: "Submission Overdue", variant: "danger" };
+  return STATUS_MAP[lead?.status] || { label: lead?.status, variant: "neutral" };
+}
+
 // Who's allowed to edit an overdue lead: the named Person Responsible, or —
 // for a po_assignment lead, which has none yet — the person it was
 // forwarded to (the only one who can act on it at all at that stage,

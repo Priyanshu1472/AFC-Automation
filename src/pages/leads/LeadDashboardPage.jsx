@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { can } from "../../lib/roles";
-import { STATUS_MAP } from "../../components/leads/leadStatus";
+import { STATUS_MAP, displayStatusCfg } from "../../components/leads/leadStatus";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
@@ -236,7 +236,7 @@ function DrillDownPanel({ title, leads, onClose, onView }) {
                   <span className="ldb-drill-email">{l.title}</span>
                   <span className="ldb-drill-code">{l.lead_number}{l.team ? ` · ${l.team}` : ""}</span>
                 </span>
-                <Badge variant={STATUS_MAP[l.status]?.variant || "neutral"}>{STATUS_MAP[l.status]?.label || l.status}</Badge>
+                <Badge variant={displayStatusCfg(l).variant}>{displayStatusCfg(l).label}</Badge>
               </button>
             ))
           )}
