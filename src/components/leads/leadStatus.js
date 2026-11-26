@@ -1,4 +1,13 @@
 import { isDeadlinePassed } from "../../lib/deadline";
+
+// Turns the "Add User" (additional Person Responsible) button off on
+// LeadDetailPage, frontend-only — the DB table, add/remove-lead-responsible
+// edge functions, and the other edge functions' widened isPr() checks are
+// untouched, so flipping this back to true re-enables it instantly with no
+// backend changes needed. Existing additional responsibles (if any) keep
+// showing and keep every permission they already had either way.
+export const ADDITIONAL_RESPONSIBLE_ENABLED = false;
+
 // Shared lead-status display config — used by LeadListPage and
 // LeadDetailPage so the label/color for a given status never drifts
 // between the two.
