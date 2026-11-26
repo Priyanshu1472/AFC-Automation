@@ -11,7 +11,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, jsonRes } from "../_shared/cors.ts";
 import { createAdminClient, getCallerProfile } from "../_shared/auth.ts";
-import { isProductionEnv } from "../_shared/modules.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -21,11 +20,6 @@ const MAX_ITEM_LENGTH = 500;
 export async function handleRequest(req: Request, adminClient: AdminClient = createAdminClient()): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: getCorsHeaders(req) });
   if (req.method !== "POST") return jsonRes(req, 405, { error: "Method not allowed" });
-
-  // Explicitly a staging/dev trial, per the request — refuse outright on
-  // production (APP_ENV secret) regardless of caller, not just by never
-  // deploying this function there.
-  if (isProductionEnv()) return jsonRes(req, 403, { error: "This feature isn't available on production yet." });
 
   const callerResult = await getCallerProfile(req, adminClient);
   if (!callerResult.ok) return jsonRes(req, callerResult.status, { error: callerResult.error });

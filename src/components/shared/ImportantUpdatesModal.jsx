@@ -14,7 +14,6 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import Button from "../ui/Button";
-import { IS_PRODUCTION } from "../../lib/modules";
 import "../../styles/ImportantUpdatesModal.css";
 
 export default function ImportantUpdatesModal() {
@@ -54,10 +53,7 @@ export default function ImportantUpdatesModal() {
   }
 
   useEffect(() => {
-    // A staging/dev trial, per the request — stays entirely off on
-    // production, same convention as the module ON/OFF switch (see
-    // lib/modules.js).
-    if (!profile?.id || IS_PRODUCTION) {
+    if (!profile?.id) {
       setAnnouncement(null);
       return undefined;
     }

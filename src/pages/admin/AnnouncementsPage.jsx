@@ -5,7 +5,6 @@ import Button from "../../components/ui/Button";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { useToast } from "../../hooks/useToast";
 import { supabase, extractFunctionErrorMessage } from "../../lib/supabase";
-import { IS_PRODUCTION } from "../../lib/modules";
 
 function fmtWhen(val) {
   if (!val) return "";
@@ -13,9 +12,7 @@ function fmtWhen(val) {
 }
 
 // Super Admin only (route-guarded by MODULE_SETTINGS_ROLES in App.jsx;
-// the actual send is enforced by send-announcement's own role check) —
-// a staging/dev trial, refused outright on production by that same edge
-// function (and hidden from the nav there, see AppHeader.jsx).
+// the actual send is enforced by send-announcement's own role check).
 export default function AnnouncementsPage() {
   const { showToast } = useToast();
   const [draft, setDraft] = useState("");
@@ -47,7 +44,7 @@ export default function AnnouncementsPage() {
   }, []);
 
   useEffect(() => {
-    if (!IS_PRODUCTION) fetchLast();
+    fetchLast();
   }, [fetchLast]);
 
   const items = draft.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -77,50 +74,41 @@ export default function AnnouncementsPage() {
           <h1>Important Updates</h1>
         </div>
 
-        {IS_PRODUCTION ? (
-          <div className="card" style={{ padding: "12px 16px" }}>
-            <strong>Not available on production yet.</strong>{" "}
-            <span className="text-secondary">This is a staging/dev trial — try it there first.</span>
-          </div>
-        ) : (
-          <>
-            <Card>
-              <Card.Header title="Send a new update" subtitle="Shown as a full-screen popup to every active user until they scroll through it and acknowledge. One update per line." />
-              <Card.Body>
-                <div className="field">
-                  <textarea
-                    className="input"
-                    rows={6}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    placeholder={"e.g.\nFee notes now track the payment mode per line, not once for the whole note.\nLeads can have an additional Person Responsible, with the same actions as the named one."}
-                    disabled={sending}
-                  />
-                </div>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <Button variant="primary" disabled={items.length === 0 || sending} onClick={() => setConfirming(true)}>
-                    Send to Every Active User
-                  </Button>
-                </div>
-              </Card.Body>
-            </Card>
+        <Card>
+          <Card.Header title="Send a new update" subtitle="Shown as a full-screen popup to every active user until they scroll through it and acknowledge. One update per line." />
+          <Card.Body>
+            <div className="field">
+              <textarea
+                className="input"
+                rows={6}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={"e.g.\nFee notes now track the payment mode per line, not once for the whole note.\nLeads can have an additional Person Responsible, with the same actions as the named one."}
+                disabled={sending}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button variant="primary" disabled={items.length === 0 || sending} onClick={() => setConfirming(true)}>
+                Send to Every Active User
+              </Button>
+            </div>
+          </Card.Body>
+        </Card>
 
-            {last && (
-              <Card style={{ marginTop: 16 }}>
-                <Card.Header title="Last sent" subtitle={fmtWhen(last.created_at)} />
-                <Card.Body>
-                  <ul style={{ margin: 0, paddingLeft: "1.25em", display: "flex", flexDirection: "column", gap: 8 }}>
-                    {last.items.map((item, i) => <li key={i}>{item}</li>)}
-                  </ul>
-                  {ackCount != null && (
-                    <p className="text-secondary text-sm" style={{ marginTop: 16 }}>
-                      Acknowledged by {ackCount} of {totalActive} active users.
-                    </p>
-                  )}
-                </Card.Body>
-              </Card>
-            )}
-          </>
+        {last && (
+          <Card style={{ marginTop: 16 }}>
+            <Card.Header title="Last sent" subtitle={fmtWhen(last.created_at)} />
+            <Card.Body>
+              <ul style={{ margin: 0, paddingLeft: "1.25em", display: "flex", flexDirection: "column", gap: 8 }}>
+                {last.items.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
+              {ackCount != null && (
+                <p className="text-secondary text-sm" style={{ marginTop: 16 }}>
+                  Acknowledged by {ackCount} of {totalActive} active users.
+                </p>
+              )}
+            </Card.Body>
+          </Card>
         )}
       </div>
 
