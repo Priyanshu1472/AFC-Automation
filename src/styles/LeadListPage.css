@@ -111,6 +111,7 @@
    as Empanelment's .bl-status-badge and Proposals' .pp-status-badge. Sized
    for the longest label, "Action Required". */
 .ll-status-badge { min-width: 140px; justify-content: center; }
+.ll-col-status { text-align: center; }
 
 /* Person Responsible — without this, a long full name wraps onto a second
    line while every other row stays single-line, making that one row

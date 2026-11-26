@@ -390,7 +390,7 @@ export default function LeadListPage() {
                 <thead>
                   <tr>
                     <th>Lead Number</th><th>Title</th>{canFilterTeam && <th>Team</th>}
-                    <th>Person Responsible</th><th>Lead Type</th><th>Status</th><th>Last Date</th><th className="ll-col-actions">Actions</th>
+                    <th>Person Responsible</th><th>Lead Type</th><th className="ll-col-status">Status</th><th>Last Date</th><th className="ll-col-actions">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -401,7 +401,7 @@ export default function LeadListPage() {
                       {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>}
                       <td className="ll-name-cell" title={l.assignee?.full_name || ""}>{fmt(l.assignee?.full_name)}</td>
                       <td>{leadTypeLabel(l)}</td>
-                      <td><StatusBadge status={l.status} /></td>
+                      <td className="ll-col-status"><StatusBadge status={l.status} /></td>
                       <td className="ll-date">{fmtDate(l.submission_deadline)}</td>
                       <td className="ll-col-actions" onClick={(e) => e.stopPropagation()}>
                         <div className="ll-action-icons">
