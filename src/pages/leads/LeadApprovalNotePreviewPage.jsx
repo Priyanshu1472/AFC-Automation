@@ -136,7 +136,7 @@ export default function LeadApprovalNotePreviewPage() {
                   <Card.Header title="Lead Approval Note" />
                   <Card.Body>
                     {pdfLoading && <p className="ar-empty-text">Loading PDF…</p>}
-                    {!pdfLoading && !pdfUrl && <Alert variant="danger">The Approval Note PDF couldn&apos;t be loaded — try generating it again.</Alert>}
+                    {!pdfLoading && !pdfUrl && <Alert variant="danger">The Approval Note PDF couldn&apos;t be loaded. Try generating it again.</Alert>}
                     {!pdfLoading && pdfUrl && (
                       <iframe
                         src={pdfUrl}
@@ -177,7 +177,7 @@ export default function LeadApprovalNotePreviewPage() {
                               disabled={submitting}
                               searchable
                             />
-                            <span className="field-hint">Leave unselected (or pick "Yet to be Decided") to submit without one — the note will print "Yet to be Decided" until you edit the lead again to set it.</span>
+                            <span className="field-hint">Leave unselected (or pick "Yet to be Decided") to submit without one. The note will print "Yet to be Decided" until you edit the lead again to set it.</span>
                           </div>
                         )}
                         <div className="ar-field">

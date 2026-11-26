@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { can } from "../../lib/roles";
-import { STATUS_MAP } from "../../components/leads/leadStatus";
+import { STATUS_MAP, displayStatusCfg } from "../../components/leads/leadStatus";
 import AppHeader from "../../components/shared/AppHeader";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
@@ -15,7 +15,7 @@ import "../../styles/LeadDashboardPage.css";
 // chart approach (no charting library anywhere in this app), same
 // donut/funnel/spark/insights/team-performance layout, adapted to the
 // leads workflow's own status set.
-const TERMINAL = ["md_approved", "md_declined", "pa_dropped"];
+const TERMINAL = ["md_approved", "pa_dropped"];
 // The on-track funnel, in STATUS_FLOW order, ending at the terminal
 // approval — mirrors Empanelment's PIPELINE (which also ends at its
 // terminal "accepted").
@@ -40,7 +40,6 @@ const DONUT_BUCKETS = [
   { key: "pmt", label: "PMT Review", match: (s) => s === "pmt_review", colorVar: "--ldb-cat-4" },
   { key: "action_dropped", label: "Action Required / Dropped", match: (s) => s === "pa_action_required" || s === "pa_dropped", colorVar: "--ldb-cat-6" },
   { key: "md_pending", label: "MD Pending", match: (s) => s === "md_review", colorVar: "--ldb-cat-7" },
-  { key: "declined", label: "Declined", match: (s) => s === "md_declined", colorVar: "--ldb-cat-8" },
 ];
 
 function daysSince(iso) {
@@ -236,7 +235,7 @@ function DrillDownPanel({ title, leads, onClose, onView }) {
                   <span className="ldb-drill-email">{l.title}</span>
                   <span className="ldb-drill-code">{l.lead_number}{l.team ? ` · ${l.team}` : ""}</span>
                 </span>
-                <Badge variant={STATUS_MAP[l.status]?.variant || "neutral"}>{STATUS_MAP[l.status]?.label || l.status}</Badge>
+                <Badge variant={displayStatusCfg(l).variant}>{displayStatusCfg(l).label}</Badge>
               </button>
             ))
           )}
@@ -308,11 +307,13 @@ export default function LeadDashboardPage() {
 
   const total = filtered.length;
   const approved = filtered.filter((l) => l.status === "md_approved").length;
-  const declined = filtered.filter((l) => l.status === "md_declined").length;
   const dropped = filtered.filter((l) => l.status === "pa_dropped").length;
   const actionRequired = filtered.filter((l) => l.status === "pa_action_required").length;
   const inReview = filtered.filter((l) => IN_PROGRESS_STATUSES.includes(l.status)).length;
-  const approvalRate = approved + declined > 0 ? Math.round((approved / (approved + declined)) * 100) : null;
+  // "Decided" leads: approved or dropped — md_decline is no longer a
+  // terminal outcome (it returns the lead for rework), so it isn't one of
+  // the two counted here.
+  const approvalRate = approved + dropped > 0 ? Math.round((approved / (approved + dropped)) * 100) : null;
 
   const avgTat = useMemo(() => {
     const done = filtered.filter((l) => l.status === "md_approved" && l.decided_at);
@@ -383,13 +384,13 @@ export default function LeadDashboardPage() {
     const map = {};
     filtered.forEach((l) => {
       if (!l.team) return;
-      if (!map[l.team]) map[l.team] = { total: 0, approved: 0, declined: 0 };
+      if (!map[l.team]) map[l.team] = { total: 0, approved: 0, dropped: 0 };
       map[l.team].total++;
       if (l.status === "md_approved") map[l.team].approved++;
-      if (l.status === "md_declined") map[l.team].declined++;
+      if (l.status === "pa_dropped") map[l.team].dropped++;
     });
     return Object.entries(map)
-      .map(([team, v]) => ({ team, ...v, rate: v.approved + v.declined > 0 ? Math.round((v.approved / (v.approved + v.declined)) * 100) : 0 }))
+      .map(([team, v]) => ({ team, ...v, rate: v.approved + v.dropped > 0 ? Math.round((v.approved / (v.approved + v.dropped)) * 100) : 0 }))
       .sort((a, b) => b.total - a.total);
   }, [filtered, canFilterTeam]);
 
@@ -400,8 +401,8 @@ export default function LeadDashboardPage() {
     if (actionRequired > 0) list.push({ tone: "warn", icon: Icon.alert, text: `${actionRequired} lead${actionRequired > 1 ? "s need" : " needs"} changes before it can move on.` });
     if (approvalRate !== null && approvalRate >= 70) list.push({ tone: "good", icon: Icon.check, text: `Strong approval rate of ${approvalRate}% across decided leads.` });
     if (avgTat !== null) list.push({ tone: "info", icon: Icon.trending, text: `Leads take an average of ${avgTat} day${avgTat !== 1 ? "s" : ""} from creation to MD approval.` });
-    if (stalled.length === 0 && total > 0) list.push({ tone: "good", icon: Icon.check, text: "No stalled leads — the pipeline is moving well." });
-    if (total === 0) list.push({ tone: "info", icon: Icon.send, text: "No leads yet — create one to get started." });
+    if (stalled.length === 0 && total > 0) list.push({ tone: "good", icon: Icon.check, text: "No stalled leads. The pipeline is moving well." });
+    if (total === 0) list.push({ tone: "info", icon: Icon.send, text: "No leads yet. Create one to get started." });
     return list.slice(0, 4);
   }, [stalled, nearDeadline, actionRequired, total, approvalRate, avgTat]);
 
@@ -470,8 +471,7 @@ export default function LeadDashboardPage() {
         <div className="ldb-kpi-row">
           <StatTile label="Total Leads" value={total} sub={dateRangeDays ? `Last ${dateRangeDays} days` : "All time"} variant="brand" icon={Icon.send} onClick={() => handleKpiClick("total", "All Leads", filtered)} active={activeKpi === "total"} />
           <StatTile label="In Review" value={inReview} sub="Active pipeline" variant="warning" icon={Icon.clock} onClick={() => handleKpiClick("progress", "In Review", filtered.filter((l) => IN_PROGRESS_STATUSES.includes(l.status)))} active={activeKpi === "progress"} />
-          <StatTile label="Approved" value={approved} sub={approvalRate !== null ? `${approvalRate}% approval rate` : "—"} variant="success" icon={Icon.check} onClick={() => handleKpiClick("approved", "Approved", filtered.filter((l) => l.status === "md_approved"))} active={activeKpi === "approved"} />
-          <StatTile label="Declined" value={declined} sub="Final decisions" variant="danger" icon={Icon.x} onClick={() => handleKpiClick("declined", "Declined", filtered.filter((l) => l.status === "md_declined"))} active={activeKpi === "declined"} />
+          <StatTile label="Approved" value={approved} sub={approvalRate !== null ? `${approvalRate}% approval rate` : "-"} variant="success" icon={Icon.check} onClick={() => handleKpiClick("approved", "Approved", filtered.filter((l) => l.status === "md_approved"))} active={activeKpi === "approved"} />
           <StatTile label="Dropped" value={dropped} sub="Withdrawn" variant="neutral" icon={Icon.trash} onClick={() => handleKpiClick("dropped", "Dropped", filtered.filter((l) => l.status === "pa_dropped"))} active={activeKpi === "dropped"} />
           <StatTile label="Action Required" value={actionRequired} sub="Returned for changes" variant="danger" icon={Icon.alert} onClick={() => handleKpiClick("action_required", "Action Required", filtered.filter((l) => l.status === "pa_action_required"))} active={activeKpi === "action_required"} />
           {avgTat !== null && <StatTile label="Avg. Time to Decision" value={`${avgTat}d`} sub="Created → MD approved" variant="info" icon={Icon.trending} />}

@@ -184,7 +184,7 @@ export default function FinancialsPage() {
                         <span className="mon-alert-dot" aria-hidden="true" />
                         <span className="mon-alert-text">
                           <strong>{i.title}</strong>
-                          {" — "}
+                          {" · "}
                           <button type="button" className="mon-link" onClick={() => navigate(`/monitoring/${i.project_id}`)}>{p?.lead?.title}</button>
                           {i.invoice_amount != null ? ` · ${formatINR(i.invoice_amount)}` : ""}
                           {i.completed_at ? ` · completed ${fmtDate(i.completed_at)}` : ""}
@@ -215,7 +215,7 @@ export default function FinancialsPage() {
             <InvoiceList
               entries={shown}
               showProject
-              emptyText={entries.length === 0 ? "No invoices yet — raise one from a project in Monitoring, or from “Ready to Invoice” above." : "No invoices in this view."}
+              emptyText={entries.length === 0 ? "No invoices yet. Raise one from a project in Monitoring, or from “Ready to Invoice” above." : "No invoices in this view."}
               onChanged={fetchAll}
             />
           </Card>

@@ -119,7 +119,7 @@ export default function CreateUserPage() {
           fd.set("file", signatureFile, signatureFile.name);
           const { error: sigError } = await supabase.functions.invoke("upload-user-signature", { body: fd });
           if (sigError) {
-            setBanner(`Account created for ${form.full_name.trim()}, but the signature upload failed — add it from Edit User.`);
+            setBanner(`Account created for ${form.full_name.trim()}, but the signature upload failed. Add it from Edit User.`);
           }
         }
         setSignatureFile(null);
@@ -152,10 +152,10 @@ export default function CreateUserPage() {
         )}
 
         {result && !result.emailSent && (
-          <Alert variant="warning" title="Email delivery failed — share this password manually">
+          <Alert variant="warning" title="Email delivery failed: share this password manually">
             <p className="mb-2">
               The account was created, but the notification email could not be sent. This password will not be
-              shown again — copy it now and share it securely with the new user.
+              shown again. Copy it now and share it securely with the new user.
             </p>
             <code className="cup-password">{result.password}</code>
           </Alert>
@@ -257,7 +257,7 @@ export default function CreateUserPage() {
                     options={committeeOptions}
                     value={form.committees}
                     onChange={(v) => set("committees", v)}
-                    placeholder="— None —"
+                    placeholder="None"
                     disabled={saving}
                   />
                 </div>

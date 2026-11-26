@@ -141,7 +141,7 @@ export function ClientPaymentModal({ invoice, onClose, onSaved }) {
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         <div className="mon-form">
           <Field label="Received on" required><DatePickerCalendar value={date} onChange={setDate} /></Field>
-          <Field label="Amount received" required hint={num(amount) !== null && num(amount) < Number(invoice.total_amount) ? `${formatINR(roundMoney(Number(invoice.total_amount) - num(amount)))} less than the invoice total (e.g. TDS) — it will show as outstanding.` : null}>
+          <Field label="Amount received" required hint={num(amount) !== null && num(amount) < Number(invoice.total_amount) ? `${formatINR(roundMoney(Number(invoice.total_amount) - num(amount)))} less than the invoice total (e.g. TDS), so it will show as outstanding.` : null}>
             <AmountInput value={amount} onChange={setAmount} disabled={saving} ariaLabel="Amount received" />
           </Field>
           <Field label="Reference (UTR / cheque no.)">
@@ -186,7 +186,7 @@ export function RequestBpInvoiceModal({ invoice, bpName, existing, onClose, onSa
     <Modal onClose={sending ? undefined : onClose} size="sm" closeOnBackdrop={!sending}>
       <Modal.Header
         title={isReminder ? "Remind Business Partner" : "Request BP Invoice"}
-        subtitle={`${bpName || "Business Partner"} — against client invoice ${invoice.invoice_number}`}
+        subtitle={`${bpName || "Business Partner"} · against client invoice ${invoice.invoice_number}`}
         onClose={sending ? undefined : onClose}
       />
       <Modal.Body>
@@ -195,7 +195,7 @@ export function RequestBpInvoiceModal({ invoice, bpName, existing, onClose, onSa
           The Business Partner gets an email and an alert on their portal Home, where they upload their invoice in their own format.
         </p>
         <div className="mon-form">
-          <Field label="Amount to invoice" hint={`Optional — shown to the BP in the request. The client paid ${formatINR(invoice.payment_amount)}.`}>
+          <Field label="Amount to invoice" hint={`Optional, shown to the BP in the request. The client paid ${formatINR(invoice.payment_amount)}.`}>
             <AmountInput value={amount} onChange={setAmount} disabled={sending} ariaLabel="Amount to invoice" />
           </Field>
           <Field label="Note to the BP">
@@ -290,7 +290,7 @@ export function BpInvoiceUploadModal({ bpInvoice, projectTitle, onBehalf = false
               <AmountInput value={gstAmount} onChange={setGstAmount} disabled={saving} ariaLabel="GST amount" />
             </Field>
           </div>
-          <div className="mon-total-line">Invoice total <strong>{num(amount) ? formatINR(roundMoney(num(amount) + (num(gstAmount) || 0))) : "—"}</strong></div>
+          <div className="mon-total-line">Invoice total <strong>{num(amount) ? formatINR(roundMoney(num(amount) + (num(gstAmount) || 0))) : "-"}</strong></div>
           <Field label="Invoice file" required>
             <SingleFilePicker file={file} existingName={bpInvoice.file_name} onPick={setFile} disabled={saving} />
           </Field>
@@ -408,14 +408,14 @@ export function PaymentNoteModal({ entry, onClose, onSaved }) {
     <Modal onClose={saving ? undefined : onClose} closeOnBackdrop={!saving} size="lg">
       <Modal.Header
         title="Payment Note"
-        subtitle={`Project Payment Requisition Note — ${project.bpName || "BP"} invoice ${bpInvoice.invoice_number} · ${formatINR(bpInvoice.amount)}`}
+        subtitle={`Project Payment Requisition Note · ${project.bpName || "BP"} invoice ${bpInvoice.invoice_number} · ${formatINR(bpInvoice.amount)}`}
         onClose={saving ? undefined : onClose}
       />
       <Modal.Body>
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         <p className="mon-modal-lead">
           Project, client, fee, revenue share and the instalment table (Part B) are filled in from the records. Once sent, Accounts gets the note
-          and the BP&rsquo;s invoice to release the payment — it can&rsquo;t be edited after that.
+          and the BP&rsquo;s invoice to release the payment. It can&rsquo;t be edited after that.
         </p>
         <div className="mon-form">
           <div className="mon-form-row">

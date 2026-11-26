@@ -20,7 +20,7 @@ import Alert from "../ui/Alert";
 import DatePickerCalendar from "../ui/DatePickerCalendar";
 
 function fmtDate(d) {
-  if (!d) return "—";
+  if (!d) return "-";
   return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -54,7 +54,7 @@ export default function EditDueDatePanel({ leadId, submissionDeadline, onChanged
         {!editing ? (
           <>
             <Alert variant="info">
-              This lead has been approved, so every other field is locked — but as Person Responsible you can still correct the submission deadline. The proposal uses this same date, so it updates there too.
+              This lead has been approved, so every other field is locked, but as Person Responsible you can still correct the submission deadline. The proposal uses this same date, so it updates there too.
             </Alert>
             <div className="ar-field">
               <label className="ar-label">Current Date</label>

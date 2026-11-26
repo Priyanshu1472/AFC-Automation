@@ -7,7 +7,7 @@ import "../../styles/NotificationBell.css";
 // with any quoted text — usually a chat message — emphasised.
 // `d` is the result of describeNotification().
 export default function NotificationDetail({ d, className = "" }) {
-  if (!d.subject && !d.detail) return <span className={className}>—</span>;
+  if (!d.subject && !d.detail) return <span className={className}>-</span>;
   return (
     <span className={`notif-detail ${className}`}>
       {d.subject && <strong className="notif-detail-subject" title={d.subject}>{d.subject}</strong>}

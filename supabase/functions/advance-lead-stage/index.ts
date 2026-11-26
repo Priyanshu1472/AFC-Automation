@@ -49,7 +49,7 @@ type LeadRow = {
 
 // A finished lead never goes "overdue" — mirrors leadStatus.js's identical
 // TERMINAL_STATUSES on the frontend.
-const TERMINAL_STATUSES = new Set(["md_approved", "md_declined", "pa_dropped"]);
+const TERMINAL_STATUSES = new Set(["md_approved", "pa_dropped"]);
 
 // Every action that stamps a fresh signature/remark onto the (still
 // in-progress) Lead Approval Note — every committee approve, but not

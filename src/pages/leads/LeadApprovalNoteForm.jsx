@@ -21,7 +21,7 @@ const YES_NO_OPTIONS = [
 ];
 
 function fmtDate(v) {
-  if (!v) return "—";
+  if (!v) return "-";
   return new Date(v).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -49,10 +49,10 @@ function NotePreview({ lead, baOrgName, form }) {
   const rows = [
     { label: "Nature of Lead", value: deriveNatureOfLead(lead.source, lead.lead_type) },
     { label: "Title of Proposed Assignment*", value: lead.title },
-    { label: "Client Name with address*", value: [lead.client_name, form.client_address.trim()].filter(Boolean).join("\n") || "—" },
+    { label: "Client Name with address*", value: [lead.client_name, form.client_address.trim()].filter(Boolean).join("\n") || "-" },
     {
       label: "Brief write-up on nature and objective of the proposed assignment*",
-      value: !form.objectives.trim() && !scope.length ? "—" : (
+      value: !form.objectives.trim() && !scope.length ? "-" : (
         <>
           {form.objectives.trim() && (
             <>
@@ -69,9 +69,9 @@ function NotePreview({ lead, baOrgName, form }) {
         </>
       ),
     },
-    { label: "Project Timeline", value: form.project_timeline.trim() || "—" },
+    { label: "Project Timeline", value: form.project_timeline.trim() || "-" },
     { label: "Proposed Implementation Arrangements* (In-house/BP)", value: lead.assigned_ba_id || lead.manual_ba_id ? "Business Partner" : "In-house" },
-    { label: "Name of BP*", value: lead.assigned_ba_id || lead.manual_ba_id ? baOrgName || "—" : "Yet to be Decided" },
+    { label: "Name of BP*", value: lead.assigned_ba_id || lead.manual_ba_id ? baOrgName || "-" : "Yet to be Decided" },
     {
       label: "Financial Requirement*",
       value: [
@@ -81,7 +81,7 @@ function NotePreview({ lead, baOrgName, form }) {
         `Processing Fee: ${form.processing_fee || "NA"}`,
       ].join("\n"),
     },
-    { label: "Last date for submission of Proposal*", value: lead.submission_deadline ? fmtDate(lead.submission_deadline) : "—" },
+    { label: "Last date for submission of Proposal*", value: lead.submission_deadline ? fmtDate(lead.submission_deadline) : "-" },
     { label: "Revenue sharing", value: form.revenue_sharing.trim() || "Yet to be decided" },
   ];
 
@@ -132,13 +132,13 @@ function NotePreview({ lead, baOrgName, form }) {
       <div className="lan-pv-sigs">
         <div className="lan-pv-sig">
           <div className="lan-pv-sig-label">Name &amp; Signature (pending)</div>
-          <div className="lan-pv-sig-name">{lead.assignee?.full_name || "—"}</div>
+          <div className="lan-pv-sig-name">{lead.assignee?.full_name || "-"}</div>
           <div className="lan-pv-sig-role">Project Coordinator</div>
           <div className="lan-pv-sig-role">{lead.team}</div>
         </div>
         <div className="lan-pv-sig">
           <div className="lan-pv-sig-label">Name &amp; Signature (pending)</div>
-          <div className="lan-pv-sig-name">{lead.authority?.full_name || "—"}</div>
+          <div className="lan-pv-sig-name">{lead.authority?.full_name || "-"}</div>
           <div className="lan-pv-sig-role">Recommending Authority</div>
           <div className="lan-pv-sig-role">{lead.team}</div>
         </div>
@@ -252,8 +252,8 @@ export default function LeadApprovalNoteForm() {
     // title is guaranteed at lead creation, but client/deadline aren't for
     // every lead type, and there's no field here to fix them on, so this
     // just surfaces the gap with a pointer back to the lead.
-    if (!lead.client_name) errs.lead_client_name = "This lead has no Client / Department set — edit the lead to add one before generating the Approval Note.";
-    if (!lead.submission_deadline) errs.lead_submission_deadline = "This lead has no Last Date for Submission set — edit the lead to add one before generating the Approval Note.";
+    if (!lead.client_name) errs.lead_client_name = "This lead has no Client / Department set. Edit the lead to add one before generating the Approval Note.";
+    if (!lead.submission_deadline) errs.lead_submission_deadline = "This lead has no Last Date for Submission set. Edit the lead to add one before generating the Approval Note.";
     return errs;
   }
 
@@ -339,7 +339,7 @@ export default function LeadApprovalNoteForm() {
           <div className="page-title-row">
             <div>
               <h1>Lead Approval Note</h1>
-              {lead && <p>{lead.lead_number} — {lead.title}</p>}
+              {lead && <p>{lead.lead_number} · {lead.title}</p>}
             </div>
           </div>
         </div>
@@ -377,7 +377,7 @@ export default function LeadApprovalNoteForm() {
                     {(lead.assigned_ba_id || lead.manual_ba_id) && (
                       <div className="lan-info-item lan-info-wide">
                         <dt>Name of BP</dt>
-                        <dd>{baOrgName || "—"}</dd>
+                        <dd>{baOrgName || "-"}</dd>
                       </div>
                     )}
                   </dl>
@@ -426,7 +426,7 @@ export default function LeadApprovalNoteForm() {
                       value={form.scope_of_work}
                       onChange={(e) => set("scope_of_work", e.target.value)}
                       disabled={submitting}
-                      placeholder={"One item per line — each becomes a bullet point, e.g.\nIdentification and mobilisation of eligible beneficiaries\nAssessment of skill and livelihood needs"}
+                      placeholder={"One item per line, each becomes a bullet point, e.g.\nIdentification and mobilisation of eligible beneficiaries\nAssessment of skill and livelihood needs"}
                     />
                     {errors.scope_of_work && <span className="field-error">{errors.scope_of_work}</span>}
                   </div>
@@ -530,7 +530,7 @@ export default function LeadApprovalNoteForm() {
                           onChange={(e) => setScrutinyField(i, "remarks", e.target.value)}
                           disabled={submitting}
                           placeholder="Justification / remarks"
-                          aria-label={`${param.label} — justification / remarks`}
+                          aria-label={`${param.label} justification / remarks`}
                         />
                         {errors[`scrutiny_${i}`] && <span className="field-error">{errors[`scrutiny_${i}`]}</span>}
                       </div>
@@ -545,7 +545,7 @@ export default function LeadApprovalNoteForm() {
                       value={form.justification}
                       onChange={(e) => set("justification", e.target.value)}
                       disabled={submitting}
-                      placeholder="Why this lead should be taken up — printed just under the scrutiny table."
+                      placeholder="Why this lead should be taken up. Printed just under the scrutiny table."
                     />
                     {errors.justification && <span className="field-error">{errors.justification}</span>}
                   </div>

@@ -50,7 +50,7 @@ import BackButton from "../../components/ui/BackButton";
 import { isDeadlinePassed } from "../../lib/deadline";
 
 function fmtDate(d) {
-  if (!d) return "—";
+  if (!d) return "-";
   return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -125,7 +125,7 @@ export default function ProposalPreparationPage() {
       supabase.from("proposal_pbg_notes").select("*, payer:payment_done_by(full_name)").eq("proposal_id", proposalId).maybeSingle(),
     ]);
     if (proposalErr || !proposalRow) {
-      setError(proposalErr?.message || "This proposal could not be loaded. It may have just been created — try refreshing.");
+      setError(proposalErr?.message || "This proposal could not be loaded. It may have just been created, try refreshing.");
       setLoading(false);
       return;
     }
@@ -135,7 +135,7 @@ export default function ProposalPreparationPage() {
     setBaItems(baItemRows || []);
     setMonitoringProjectId(monitoringRow?.id || null);
     setDocuments(docRows || []);
-    setAdditionalResponsibles((additionalRows || []).map((r) => ({ user_id: r.user_id, full_name: r.user?.full_name || "—" })));
+    setAdditionalResponsibles((additionalRows || []).map((r) => ({ user_id: r.user_id, full_name: r.user?.full_name || "-" })));
     setEmdTracking(emdRow || null);
     setFinanceFiles(financeFileRows || []);
     setFinanceEvents(financeEventRows || []);
@@ -350,8 +350,8 @@ export default function ProposalPreparationPage() {
                 <dl className="pp-facts">
                   <div><dt>Last Date</dt><dd className={pastDeadline ? "pp-overdue" : ""}>{fmtDate(lead.submission_deadline)}</dd></div>
                   <div><dt>Proposed Value</dt><dd>{valueText}</dd></div>
-                  <div><dt>Reference No.</dt><dd>{lead.bid_number || "—"}</dd></div>
-                  <div><dt>Business Partner</dt><dd>{lead.bp_names || lead.ba?.full_name || "—"}</dd></div>
+                  <div><dt>Reference No.</dt><dd>{lead.bid_number || "-"}</dd></div>
+                  <div><dt>Business Partner</dt><dd>{lead.bp_names || lead.ba?.full_name || "-"}</dd></div>
                 </dl>
 
                 <div className="pp-people">
@@ -371,7 +371,7 @@ export default function ProposalPreparationPage() {
                         </button>
                       )}
                     </span>
-                    <strong>{lead.pr?.full_name || "—"}</strong>
+                    <strong>{lead.pr?.full_name || "-"}</strong>
                     <AdditionalResponsiblesPanel
                       leadId={lead.id}
                       team={lead.team}
@@ -384,8 +384,8 @@ export default function ProposalPreparationPage() {
                       onAddingChange={setAddingPr}
                     />
                   </div>
-                  <div className="pp-person"><span>Reviewer</span><strong>{lead.rev?.full_name || "—"}</strong></div>
-                  <div className="pp-person"><span>Recommending Authority</span><strong>{lead.aa?.full_name || "—"}</strong></div>
+                  <div className="pp-person"><span>Reviewer</span><strong>{lead.rev?.full_name || "-"}</strong></div>
+                  <div className="pp-person"><span>Recommending Authority</span><strong>{lead.aa?.full_name || "-"}</strong></div>
                 </div>
               </Card>
 

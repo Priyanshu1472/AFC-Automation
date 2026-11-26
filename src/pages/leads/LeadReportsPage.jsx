@@ -25,28 +25,27 @@ const ALL_STATUSES = Object.keys(STATUS_MAP);
 // On-track funnel, ending at the terminal approval — mirrors Empanelment's
 // PIPELINE (also ends at its own terminal "accepted").
 const PIPELINE = ["pa_review", "recommending_authority_review", "pmt_review", "g3_review", "md_review", "md_approved"];
-const TERMINAL = ["md_approved", "md_declined", "pa_dropped"];
+const TERMINAL = ["md_approved", "pa_dropped"];
 const SOURCE_LABELS = { in_house: "In House", ba: "BP Source", suo_moto: "Suo Moto" };
 const TYPE_LABELS = { rfp: "RFP", eoi: "EOI" };
 // Every action that can send a lead back for changes — used to find the
-// most recent reason/comment behind an Action Required / Declined /
-// Dropped lead from lead_activity_log, since the lead row itself only
-// keeps the current state, not why it got there.
+// most recent reason/comment behind an Action Required or Dropped lead
+// from lead_activity_log, since the lead row itself only keeps the
+// current state, not why it got there.
 const DECLINE_ACTIONS = new Set([
   "ra_decline", "pmt_decline", "md_decline", "pr_review_reject",
 ]);
 
 const isApproved = (l) => l.status === "md_approved";
-const isDeclined = (l) => l.status === "md_declined";
 const isDropped = (l) => l.status === "pa_dropped";
 const isInProgress = (l) => !TERMINAL.includes(l.status) && l.status !== "pa_action_required";
 
 function fmt(d) {
-  if (!d) return "—";
+  if (!d) return "-";
   const dt = new Date(d);
-  return isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return isNaN(dt.getTime()) ? "-" : dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
-const dash = (v) => (v === 0 ? 0 : v || "—");
+const dash = (v) => (v === 0 ? 0 : v || "-");
 const pct = (part, whole) => (whole ? Math.round((part / whole) * 1000) / 10 : 0);
 const dateKey = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 const daysFrom = (d) => (d ? Math.floor((Date.now() - new Date(d)) / 86400000) : null);
@@ -63,7 +62,7 @@ const avg = (nums) => (nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) 
 function groupBy(arr, keyFn) {
   const m = new Map();
   arr.forEach((x) => {
-    const k = keyFn(x) || "—";
+    const k = keyFn(x) || "-";
     if (!m.has(k)) m.set(k, []);
     m.get(k).push(x);
   });
@@ -90,14 +89,14 @@ const REPORTS = [
     id: "status_summary", group: "Overview", title: "Status Summary",
     desc: "Headline counts across the whole pipeline, with the approval rate.",
     build: ({ leads }) => {
-      const total = leads.length, app = leads.filter(isApproved).length, dec = leads.filter(isDeclined).length;
-      const drop = leads.filter(isDropped).length, prog = leads.filter(isInProgress).length;
+      const total = leads.length, app = leads.filter(isApproved).length, dropped = leads.filter(isDropped).length;
+      const prog = leads.filter(isInProgress).length;
       const action = leads.filter((l) => l.status === "pa_action_required").length;
       return {
         kpis: [
           { label: "Total Leads", value: total }, { label: "Approved", value: app },
-          { label: "Declined", value: dec }, { label: "Dropped", value: drop }, { label: "In Review", value: prog },
-          { label: "Action Required", value: action }, { label: "Approval Rate", value: pct(app, app + dec) + "%" },
+          { label: "Dropped", value: dropped }, { label: "In Review", value: prog },
+          { label: "Action Required", value: action }, { label: "Approval Rate", value: pct(app, app + dropped) + "%" },
         ],
         columns: [{ key: "status", label: "Status" }, { key: "count", label: "Count" }, { key: "share", label: "Share %" }],
         rows: [
@@ -109,7 +108,7 @@ const REPORTS = [
   },
   {
     id: "status_list", group: "Overview", title: "Lead Status Report",
-    desc: "Current pipeline snapshot — every lead with its stage and days elapsed.",
+    desc: "Current pipeline snapshot: every lead with its stage and days elapsed.",
     build: ({ leads }) => ({
       columns: [
         { key: "lead_number", label: "Lead #" }, { key: "title", label: "Title" }, { key: "team", label: "Team" },
@@ -121,25 +120,25 @@ const REPORTS = [
         lead_number: dash(l.lead_number), title: dash(l.title), team: dash(l.team),
         source_label: SOURCE_LABELS[l.source] || dash(l.source), type_label: TYPE_LABELS[l.lead_type] || dash(l.lead_type),
         creator: dash(l.creator?.full_name), pr: dash(l.assignee?.full_name), status_label: STATUS_MAP[l.status]?.label || l.status,
-        created_f: fmt(l.created_at), days: daysFrom(l.created_at) ?? "—", deadline_f: fmt(l.submission_deadline),
+        created_f: fmt(l.created_at), days: daysFrom(l.created_at) ?? "-", deadline_f: fmt(l.submission_deadline),
       })),
     }),
   },
   {
     id: "monthly", group: "Overview", title: "Monthly Trend",
-    desc: "Leads created per month, with how many were approved or declined.",
+    desc: "Leads created per month, with how many were approved or dropped.",
     build: ({ leads }) => {
-      const g = groupBy(leads, (l) => (l.created_at ? new Date(l.created_at).toISOString().slice(0, 7) : "—"));
+      const g = groupBy(leads, (l) => (l.created_at ? new Date(l.created_at).toISOString().slice(0, 7) : "-"));
       return {
         columns: [
           { key: "month", label: "Month" }, { key: "total", label: "Created" }, { key: "approved", label: "Approved" },
-          { key: "declined", label: "Declined" }, { key: "progress", label: "In Review" }, { key: "rate", label: "Approval %" },
+          { key: "dropped", label: "Dropped" }, { key: "progress", label: "In Review" }, { key: "rate", label: "Approval %" },
         ],
         rows: [...g.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([key, arr]) => {
-          const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
+          const app = arr.filter(isApproved).length, dropped = arr.filter(isDropped).length;
           return {
-            month: key === "—" ? "—" : new Date(key + "-01").toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
-            total: arr.length, approved: app, declined: dec, progress: arr.filter(isInProgress).length, rate: pct(app, app + dec),
+            month: key === "-" ? "-" : new Date(key + "-01").toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
+            total: arr.length, approved: app, dropped: dropped, progress: arr.filter(isInProgress).length, rate: pct(app, app + dropped),
           };
         }),
       };
@@ -186,7 +185,7 @@ const REPORTS = [
       const tats = done.map((l) => daysBetween(l.created_at, l.decided_at)).filter((n) => n !== null);
       const rows = done.map((l) => ({
         lead_number: dash(l.lead_number), title: dash(l.title), team: dash(l.team), created_f: fmt(l.created_at),
-        decided_f: fmt(l.decided_at), tat: daysBetween(l.created_at, l.decided_at) ?? "—",
+        decided_f: fmt(l.decided_at), tat: daysBetween(l.created_at, l.decided_at) ?? "-",
       })).sort((x, y) => (y.tat || 0) - (x.tat || 0));
       return {
         kpis: [
@@ -218,7 +217,7 @@ const REPORTS = [
   },
   {
     id: "approval_note", group: "Pipeline", title: "Approval Note Review Status",
-    desc: "Where each lead's Approval Note stands — not yet drafted, awaiting PR review, or PR-reviewed.",
+    desc: "Where each lead's Approval Note stands: not yet drafted, awaiting PR review, or PR-reviewed.",
     build: ({ leads }) => {
       const notDrafted = leads.filter((l) => !l.approval_note_data).length;
       const pending = leads.filter((l) => l.approval_note_pending_pr_review).length;
@@ -241,15 +240,15 @@ const REPORTS = [
   },
   {
     id: "team", group: "Teams & People", title: "Team Performance",
-    desc: "Per-team leads created, approved, declined and still open.",
+    desc: "Per-team leads created, approved, dropped and still open.",
     build: ({ leads }) => ({
       columns: [
         { key: "team", label: "Team" }, { key: "total", label: "Created" }, { key: "approved", label: "Approved" },
-        { key: "declined", label: "Declined" }, { key: "progress", label: "In Review" }, { key: "rate", label: "Approval %" },
+        { key: "dropped", label: "Dropped" }, { key: "progress", label: "In Review" }, { key: "rate", label: "Approval %" },
       ],
       rows: [...groupBy(leads, (l) => l.team)].map(([team, arr]) => {
-        const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
-        return { team, total: arr.length, approved: app, declined: dec, progress: arr.filter(isInProgress).length, rate: pct(app, app + dec) };
+        const app = arr.filter(isApproved).length, dropped = arr.filter(isDropped).length;
+        return { team, total: arr.length, approved: app, dropped: dropped, progress: arr.filter(isInProgress).length, rate: pct(app, app + dropped) };
       }).sort((x, y) => y.total - x.total),
     }),
   },
@@ -259,13 +258,13 @@ const REPORTS = [
     build: ({ leads }) => ({
       columns: [
         { key: "pr", label: "Person Responsible" }, { key: "team", label: "Team" }, { key: "total", label: "Assigned" },
-        { key: "approved", label: "Approved" }, { key: "declined", label: "Declined" }, { key: "open", label: "Still Open" }, { key: "rate", label: "Approval %" },
+        { key: "approved", label: "Approved" }, { key: "dropped", label: "Dropped" }, { key: "open", label: "Still Open" }, { key: "rate", label: "Approval %" },
       ],
-      rows: [...groupBy(leads, (l) => l.assignee?.full_name || "—")].map(([pr, arr]) => {
-        const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
+      rows: [...groupBy(leads, (l) => l.assignee?.full_name || "-")].map(([pr, arr]) => {
+        const app = arr.filter(isApproved).length, dropped = arr.filter(isDropped).length;
         return {
-          pr, team: arr[0]?.team || "—", total: arr.length, approved: app, declined: dec,
-          open: arr.filter((l) => !TERMINAL.includes(l.status)).length, rate: pct(app, app + dec),
+          pr, team: arr[0]?.team || "-", total: arr.length, approved: app, dropped: dropped,
+          open: arr.filter((l) => !TERMINAL.includes(l.status)).length, rate: pct(app, app + dropped),
         };
       }).sort((x, y) => y.total - x.total),
     }),
@@ -276,11 +275,11 @@ const REPORTS = [
     build: ({ leads }) => ({
       columns: [
         { key: "creator", label: "Creator" }, { key: "team", label: "Team" }, { key: "total", label: "Created" },
-        { key: "approved", label: "Approved" }, { key: "declined", label: "Declined" }, { key: "rate", label: "Approval %" },
+        { key: "approved", label: "Approved" }, { key: "dropped", label: "Dropped" }, { key: "rate", label: "Approval %" },
       ],
-      rows: [...groupBy(leads, (l) => l.creator?.full_name || "—")].map(([creator, arr]) => {
-        const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
-        return { creator, team: arr[0]?.team || "—", total: arr.length, approved: app, declined: dec, rate: pct(app, app + dec) };
+      rows: [...groupBy(leads, (l) => l.creator?.full_name || "-")].map(([creator, arr]) => {
+        const app = arr.filter(isApproved).length, dropped = arr.filter(isDropped).length;
+        return { creator, team: arr[0]?.team || "-", total: arr.length, approved: app, dropped: dropped, rate: pct(app, app + dropped) };
       }).sort((x, y) => y.total - x.total),
     }),
   },
@@ -288,11 +287,11 @@ const REPORTS = [
     id: "source", group: "Source & Type", title: "Source-wise Distribution",
     desc: "In-house vs. BP-sourced vs. Suo Moto leads.",
     build: ({ leads }) => ({
-      columns: [{ key: "source", label: "Source" }, { key: "total", label: "Total" }, { key: "approved", label: "Approved" }, { key: "declined", label: "Declined" }, { key: "rate", label: "Approval %" }],
+      columns: [{ key: "source", label: "Source" }, { key: "total", label: "Total" }, { key: "approved", label: "Approved" }, { key: "dropped", label: "Dropped" }, { key: "rate", label: "Approval %" }],
       rows: Object.entries(SOURCE_LABELS).map(([key, label]) => {
         const arr = leads.filter((l) => l.source === key);
-        const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
-        return { source: label, total: arr.length, approved: app, declined: dec, rate: pct(app, app + dec) };
+        const app = arr.filter(isApproved).length, dropped = arr.filter(isDropped).length;
+        return { source: label, total: arr.length, approved: app, dropped: dropped, rate: pct(app, app + dropped) };
       }),
     }),
   },
@@ -300,11 +299,11 @@ const REPORTS = [
     id: "lead_type", group: "Source & Type", title: "Lead Type Distribution",
     desc: "RFP vs. EOI leads.",
     build: ({ leads }) => ({
-      columns: [{ key: "type", label: "Lead Type" }, { key: "total", label: "Total" }, { key: "approved", label: "Approved" }, { key: "declined", label: "Declined" }, { key: "rate", label: "Approval %" }],
+      columns: [{ key: "type", label: "Lead Type" }, { key: "total", label: "Total" }, { key: "approved", label: "Approved" }, { key: "dropped", label: "Dropped" }, { key: "rate", label: "Approval %" }],
       rows: Object.entries(TYPE_LABELS).map(([key, label]) => {
         const arr = leads.filter((l) => l.lead_type === key);
-        const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
-        return { type: label, total: arr.length, approved: app, declined: dec, rate: pct(app, app + dec) };
+        const app = arr.filter(isApproved).length, dropped = arr.filter(isDropped).length;
+        return { type: label, total: arr.length, approved: app, dropped: dropped, rate: pct(app, app + dropped) };
       }),
     }),
   },
@@ -313,27 +312,27 @@ const REPORTS = [
     desc: "Leads sourced through each Business Partner.",
     build: ({ leads }) => {
       const withBa = leads.filter((l) => l.assigned_ba_id || l.manual_ba_id);
-      const rows = [...groupBy(withBa, (l) => l.ba_org_name || "—")].map(([ba, arr]) => {
-        const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
-        return { ba, total: arr.length, approved: app, declined: dec, rate: pct(app, app + dec) };
+      const rows = [...groupBy(withBa, (l) => l.ba_org_name || "-")].map(([ba, arr]) => {
+        const app = arr.filter(isApproved).length, dropped = arr.filter(isDropped).length;
+        return { ba, total: arr.length, approved: app, dropped: dropped, rate: pct(app, app + dropped) };
       }).sort((x, y) => y.total - x.total);
       return {
         kpis: [{ label: "Leads via a BP", value: withBa.length }, { label: "Distinct BPs", value: rows.length }],
-        columns: [{ key: "ba", label: "Business Partner" }, { key: "total", label: "Total" }, { key: "approved", label: "Approved" }, { key: "declined", label: "Declined" }, { key: "rate", label: "Approval %" }],
+        columns: [{ key: "ba", label: "Business Partner" }, { key: "total", label: "Total" }, { key: "approved", label: "Approved" }, { key: "dropped", label: "Dropped" }, { key: "rate", label: "Approval %" }],
         rows,
       };
     },
   },
   {
-    id: "declined_dropped", group: "Source & Type", title: "Declined / Dropped Leads",
-    desc: "Leads that were declined by MD or dropped, with the reason on record.",
+    id: "declined_dropped", group: "Source & Type", title: "Dropped Leads",
+    desc: "Leads that were dropped, with the reason on record.",
     build: ({ leads, reasonById }) => {
-      const rows = leads.filter((l) => isDeclined(l) || isDropped(l)).map((l) => ({
+      const rows = leads.filter(isDropped).map((l) => ({
         lead_number: dash(l.lead_number), title: dash(l.title), team: dash(l.team),
-        outcome: isDeclined(l) ? "Declined" : "Dropped", reason: dash(reasonById[l.id]),
+        outcome: "Dropped", reason: dash(reasonById[l.id]),
         created_f: fmt(l.created_at), decided_f: fmt(l.decided_at),
       }));
-      return { kpis: [{ label: "Declined / Dropped", value: rows.length }], columns: [
+      return { kpis: [{ label: "Dropped", value: rows.length }], columns: [
         { key: "lead_number", label: "Lead #" }, { key: "title", label: "Title" }, { key: "team", label: "Team" },
         { key: "outcome", label: "Outcome" }, { key: "reason", label: "Reason / Remark" }, { key: "created_f", label: "Created On" }, { key: "decided_f", label: "Decided On" },
       ], rows };
@@ -419,7 +418,7 @@ function buildReportPreviewHTML(report, output, filters) {
     : "";
   const headHtml = `<tr>${output.columns.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("")}</tr>`;
   const bodyHtml = output.rows.length
-    ? output.rows.map((row) => `<tr>${output.columns.map((c) => `<td>${escapeHtml(row[c.key] ?? "—")}</td>`).join("")}</tr>`).join("")
+    ? output.rows.map((row) => `<tr>${output.columns.map((c) => `<td>${escapeHtml(row[c.key] ?? "-")}</td>`).join("")}</tr>`).join("")
     : `<tr><td colspan="${output.columns.length}">No data for the selected filters.</td></tr>`;
 
   return `
@@ -458,7 +457,7 @@ function exportPDF(report, output, filters) {
     didDrawPage: () => {
       const w = doc.internal.pageSize.getWidth(), h = doc.internal.pageSize.getHeight();
       doc.setFontSize(7); doc.setTextColor(150);
-      doc.text("AFC India Limited — Confidential", M, h - 20);
+      doc.text("AFC India Limited · Confidential", M, h - 20);
       doc.text(`Page ${doc.internal.getNumberOfPages()}`, w - M, h - 20, { align: "right" });
       doc.setTextColor(0);
     },
@@ -555,7 +554,7 @@ function ReportPreview({ report, output, onExcel, onPdf }) {
               </thead>
               <tbody>
                 {rows.map((row, i) => (
-                  <tr key={i}>{cols.map((c) => <td key={c.key} title={String(row[c.key] ?? "")}>{row[c.key] ?? "—"}</td>)}</tr>
+                  <tr key={i}>{cols.map((c) => <td key={c.key} title={String(row[c.key] ?? "")}>{row[c.key] ?? "-"}</td>)}</tr>
                 ))}
               </tbody>
             </table>
@@ -689,8 +688,8 @@ export default function LeadReportsPage() {
         setLeads(list.map((l) => ({ ...l, ba_org_name: l.assigned_ba_id ? baNameById[l.assigned_ba_id] : l.manual_ba?.org_name || null })));
 
         // Latest decline/reject reason per lead — powers Action Required
-        // and Declined/Dropped reports, since the lead row only holds
-        // current state, not why it got there.
+        // and Dropped reports, since the lead row only holds current
+        // state, not why it got there.
         const ids = list.map((l) => l.id);
         const latestByLead = {};
         for (let i = 0; i < ids.length; i += 300) {

@@ -61,7 +61,7 @@ function UploadDocumentsModal({ projectId, categories, defaultCategory, onClose,
           <Field label="Category" required>
             <Select options={categories.map((c) => ({ value: c.key, label: c.label }))} value={category} onChange={setCategory} />
           </Field>
-          <Field label="Description" hint="Optional — e.g. Signed MoU dated 12 Oct. Applies to every file in this upload.">
+          <Field label="Description" hint="Optional, e.g. Signed MoU dated 12 Oct. Applies to every file in this upload.">
             <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} disabled={!!busy} />
           </Field>
           <Field label="Files" required>
@@ -140,7 +140,7 @@ export default function MonitoringDocumentsPanel({ projectId, documents, canEdit
         </div>
 
         {shown.length === 0 ? (
-          <p className="pp-empty">{documents.length === 0 ? "No documents yet — upload the MoUs and the work order first." : "Nothing in this category yet."}</p>
+          <p className="pp-empty">{documents.length === 0 ? "No documents yet. Upload the MoUs and the work order first." : "Nothing in this category yet."}</p>
         ) : (
           <ul className="pp-docs-list">
             {shown.map((doc) => (

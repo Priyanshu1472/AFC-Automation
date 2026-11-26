@@ -13,7 +13,7 @@ import Select from "../../components/ui/Select";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
 import { ChatIcon, PencilIcon, TrashIcon, ArrowRightIcon } from "../../components/icons";
-import { STATUS_MAP, COMMITTEE_STAGE_STATUS } from "../../components/leads/leadStatus";
+import { STATUS_MAP, COMMITTEE_STAGE_STATUS, displayStatusCfg } from "../../components/leads/leadStatus";
 import { canOpenProposal } from "../../lib/proposalPrep";
 import "../../styles/LeadListPage.css";
 
@@ -33,16 +33,16 @@ const QUICK_FILTERS = {
   approved: { label: "Approved", match: (l) => l.status === "md_approved" },
 };
 
-function StatusBadge({ status }) {
-  const cfg = STATUS_MAP[status] || { label: status, variant: "neutral" };
+function StatusBadge({ lead }) {
+  const cfg = displayStatusCfg(lead);
   return <Badge className="ll-status-badge" variant={cfg.variant} dot>{cfg.label}</Badge>;
 }
 
 function fmt(v) {
-  return v === null || v === undefined || v === "" ? "—" : v;
+  return v === null || v === undefined || v === "" ? "-" : v;
 }
 function fmtDate(v) {
-  if (!v) return "—";
+  if (!v) return "-";
   return new Date(v).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -55,7 +55,7 @@ function leadTypeLabel(l) {
   const source = SOURCE_LABELS[l.source];
   const type = l.lead_type ? l.lead_type.toUpperCase() : null;
   if (type && source) return `${type} · ${source}`;
-  return type || source || "—";
+  return type || source || "-";
 }
 
 // Restores search/filter/page state after a trip out to a lead's detail
@@ -390,7 +390,7 @@ export default function LeadListPage() {
                 <thead>
                   <tr>
                     <th>Lead Number</th><th>Title</th>{canFilterTeam && <th>Team</th>}
-                    <th>Person Responsible</th><th>Lead Type</th><th>Status</th><th>Last Date</th><th className="ll-col-actions">Actions</th>
+                    <th>Person Responsible</th><th>Lead Type</th><th className="ll-col-status">Status</th><th>Last Date</th><th className="ll-col-actions">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -398,10 +398,10 @@ export default function LeadListPage() {
                     <tr key={l.id} className="ll-row-clickable" onClick={() => navigate(`/leads/${l.id}`)}>
                       <td><span className="ll-lead-number">{l.lead_number}</span></td>
                       <td className="ll-title" title={l.title}>{fmt(l.title)}</td>
-                      {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>}
+                      {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "-"}</td>}
                       <td className="ll-name-cell" title={l.assignee?.full_name || ""}>{fmt(l.assignee?.full_name)}</td>
                       <td>{leadTypeLabel(l)}</td>
-                      <td><StatusBadge status={l.status} /></td>
+                      <td className="ll-col-status"><StatusBadge lead={l} /></td>
                       <td className="ll-date">{fmtDate(l.submission_deadline)}</td>
                       <td className="ll-col-actions" onClick={(e) => e.stopPropagation()}>
                         <div className="ll-action-icons">

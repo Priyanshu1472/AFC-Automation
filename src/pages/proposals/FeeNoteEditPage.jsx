@@ -290,7 +290,7 @@ export default function FeeNoteEditPage() {
       try {
         const { data: pdfData, error: pdfError } = await supabase.functions.invoke("preview-fee-note", { body: { fee_note_id: data.fee_note_id } });
         if (pdfError || !pdfData?.success) {
-          showToast(await extractFunctionErrorMessage(pdfError, pdfData?.error || "Saved, but couldn't open the PDF — use the eye icon on the proposal to view it."), "warning");
+          showToast(await extractFunctionErrorMessage(pdfError, pdfData?.error || "Saved, but couldn't open the PDF. Use the eye icon on the proposal to view it."), "warning");
         } else {
           const bytes = Uint8Array.from(atob(pdfData.pdf_base64), (c) => c.charCodeAt(0));
           const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
@@ -321,7 +321,7 @@ export default function FeeNoteEditPage() {
           <div className="page-title-row">
             <div>
               <h1>{FEE_NOTE_TITLE}</h1>
-              {ctx?.lead && <p>{ctx.lead.lead_number} — {ctx.lead.title}</p>}
+              {ctx?.lead && <p>{ctx.lead.lead_number} · {ctx.lead.title}</p>}
             </div>
           </div>
         </div>
@@ -454,7 +454,7 @@ export default function FeeNoteEditPage() {
                         setImplementationDirty(val.trim() !== "");
                       }}
                       disabled={saving}
-                      placeholder="Auto-composed from the Business Partner and who bears each fee — edit freely, or clear to resume auto-sync."
+                      placeholder="Auto-composed from the Business Partner and who bears each fee. Edit freely, or clear to resume auto-sync."
                     />
                   </div>
                   <div className="field">
@@ -482,7 +482,7 @@ export default function FeeNoteEditPage() {
 
             <div className="pp-fnp-preview-col">
               <div className="pp-fnp-preview-head">
-                <span className="pp-fnp-preview-title">Page 1 — as it will print</span>
+                <span className="pp-fnp-preview-title">Page 1 (as it will print)</span>
                 <span className="pp-fnp-live-tag"><span className="pp-fnp-live-dot" />Live</span>
               </div>
               <div className="pp-fnp-page">
@@ -500,11 +500,11 @@ export default function FeeNoteEditPage() {
                     <p className="pp-fnp-thanks">Submitted for your information and approval, please.<br />Thanks and regards,</p>
 
                     <div className="pp-fnp-sig">
-                      <div className="pp-fnp-sig-name">{ctx.lead.pr?.full_name || "—"}</div>
+                      <div className="pp-fnp-sig-name">{ctx.lead.pr?.full_name || "-"}</div>
                       <div className="pp-fnp-sig-role">{ROLE_LABELS[ctx.lead.pr?.role] || "Person Responsible"}</div>
                     </div>
                     <div className="pp-fnp-sig">
-                      <div className="pp-fnp-sig-name">{ctx.lead.aa?.full_name || "—"}</div>
+                      <div className="pp-fnp-sig-name">{ctx.lead.aa?.full_name || "-"}</div>
                       <div className="pp-fnp-sig-role">{ROLE_LABELS[ctx.lead.aa?.role] || "Recommending Authority"}</div>
                     </div>
 
@@ -514,7 +514,7 @@ export default function FeeNoteEditPage() {
                     <div className="pp-fnp-sig-grid">
                       <p className="pp-fnp-encl">Encl. as above</p>
                       <div className="pp-fnp-sig pp-fnp-sig-md">
-                        <div className="pp-fnp-sig-name">—</div>
+                        <div className="pp-fnp-sig-name">-</div>
                         <div className="pp-fnp-sig-role">Managing Director</div>
                       </div>
                     </div>

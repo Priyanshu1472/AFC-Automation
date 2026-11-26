@@ -194,7 +194,7 @@ export default function ProposalChatPanel({ proposalId, chatOpenedAt, locked = f
           )}
 
           {view === "chat" && locked && (
-            <p className="ar-chat-locked">Chat closed — this proposal has been locked.</p>
+            <p className="ar-chat-locked">Chat closed: this proposal has been locked.</p>
           )}
 
           {view === "chat" && !locked && (

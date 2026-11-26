@@ -253,7 +253,7 @@ export default function PbgNoteEditPage() {
       try {
         const { data: pdfData, error: pdfError } = await supabase.functions.invoke("preview-pbg-note", { body: { proposal_id: ctx.proposalId } });
         if (pdfError || !pdfData?.success) {
-          showToast(await extractFunctionErrorMessage(pdfError, pdfData?.error || "Saved, but couldn't open the PDF — use View on the proposal."), "warning");
+          showToast(await extractFunctionErrorMessage(pdfError, pdfData?.error || "Saved, but couldn't open the PDF. Use View on the proposal."), "warning");
         } else {
           const bytes = Uint8Array.from(atob(pdfData.pdf_base64), (c) => c.charCodeAt(0));
           const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
@@ -310,7 +310,7 @@ export default function PbgNoteEditPage() {
           <div className="page-title-row">
             <div>
               <h1>PBG Note</h1>
-              {lead && <p>{lead.lead_number} — {lead.title}</p>}
+              {lead && <p>{lead.lead_number} · {lead.title}</p>}
             </div>
           </div>
         </div>
@@ -386,7 +386,7 @@ export default function PbgNoteEditPage() {
               <Card>
                 <Card.Header title="Wording" />
                 <Card.Body>
-                  <p className="pp-pbg-hint">Every paragraph is filled in for you and updates as you change the details above. Edit any of them freely — your text is kept.</p>
+                  <p className="pp-pbg-hint">Every paragraph is filled in for you and updates as you change the details above. Edit any of them freely, your text is kept.</p>
                   <div className="field">
                     <div className="pp-pbg-para-head">
                       <label className="field-label" htmlFor="pbg-subject">Subject</label>
@@ -436,17 +436,17 @@ export default function PbgNoteEditPage() {
                   <p key={p.key} className="pp-fnp-body pp-pbg-preserve">{paragraphs[p.key]}</p>
                 ))}
                 <div className="pp-fnp-sig">
-                  <div className="pp-fnp-sig-name">{lead.pr?.full_name || "—"}</div>
+                  <div className="pp-fnp-sig-name">{lead.pr?.full_name || "-"}</div>
                   <div className="pp-fnp-sig-role">{ROLE_LABELS[lead.pr?.role] || "Person Responsible"}</div>
                 </div>
                 <div className="pp-fnp-sig">
-                  <div className="pp-fnp-sig-name">{lead.aa?.full_name || "—"}</div>
+                  <div className="pp-fnp-sig-name">{lead.aa?.full_name || "-"}</div>
                   <div className="pp-fnp-sig-role">{ROLE_LABELS[lead.aa?.role] || "Recommending Authority"}</div>
                 </div>
                 <div className="pp-fnp-sig-grid">
                   <span />
                   <div className="pp-fnp-sig pp-fnp-sig-md">
-                    <div className="pp-fnp-sig-name">—</div>
+                    <div className="pp-fnp-sig-name">-</div>
                     <div className="pp-fnp-sig-role">Managing Director</div>
                   </div>
                 </div>

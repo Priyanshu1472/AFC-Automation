@@ -20,18 +20,18 @@ import "../styles/HomePage.css";
 const STATUS_MAP = {
   sent: { label: "Sent", variant: "info" },
   filled: { label: "Form Filled", variant: "warning" },
-  po_review: { label: "Under Review — Project Officer", variant: "warning" },
-  cfo_cs_review: { label: "Under Review — CS / CFO", variant: "info" },
-  po_final_review: { label: "Under Review — Project Officer", variant: "warning" },
-  dgm_review: { label: "Under Review — DGM", variant: "neutral" },
-  md_review: { label: "Under Review — Managing Director", variant: "neutral" },
+  po_review: { label: "Under Review · Project Officer", variant: "warning" },
+  cfo_cs_review: { label: "Under Review · CS / CFO", variant: "info" },
+  po_final_review: { label: "Under Review · Project Officer", variant: "warning" },
+  dgm_review: { label: "Under Review · DGM", variant: "neutral" },
+  md_review: { label: "Under Review · Managing Director", variant: "neutral" },
   accepted: { label: "Accepted", variant: "success" },
   rejected: { label: "Ineligible", variant: "neutral" },
   on_hold: { label: "Correction Needed", variant: "warning" },
 };
 
 function fmtDate(val) {
-  if (!val) return "—";
+  if (!val) return "-";
   return new Date(val).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -399,7 +399,7 @@ function PendingActionsPanel() {
                     >
                       <td className="home-col-num">{i + 1}</td>
                       <td className="home-table-title">{d.alert}</td>
-                      {showRef && <td className="home-col-ref">{d.ref ? <span className="notif-ref">{d.ref}</span> : "—"}</td>}
+                      {showRef && <td className="home-col-ref">{d.ref ? <span className="notif-ref">{d.ref}</span> : "-"}</td>}
                       <td className="home-table-sub"><NotificationDetail d={d} /></td>
                       <td className="home-col-date">
                         <span className="home-table-date">{fmtDate(n.created_at)}</span>

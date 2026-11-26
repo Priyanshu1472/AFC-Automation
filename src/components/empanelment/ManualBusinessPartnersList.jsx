@@ -4,7 +4,7 @@ import Card from "../ui/Card";
 import Badge from "../ui/Badge";
 
 function fmtDate(val) {
-  if (!val) return "—";
+  if (!val) return "-";
   return new Date(val).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -61,8 +61,8 @@ export default function ManualBusinessPartnersList({ onCount }) {
                 {filtered.map((r) => (
                   <tr key={r.id}>
                     <td><span className="bl-org" title={r.org_name}>{r.org_name}</span></td>
-                    <td className="bl-col-team">{r.team ? <Badge variant="neutral" className="bl-team-badge">{r.team}</Badge> : "—"}</td>
-                    <td>{r.created_by_name || "—"}</td>
+                    <td className="bl-col-team">{r.team ? <Badge variant="neutral" className="bl-team-badge">{r.team}</Badge> : "-"}</td>
+                    <td>{r.created_by_name || "-"}</td>
                     <td className="bl-date bl-col-date">{fmtDate(r.created_at)}</td>
                     <td>{Number(r.lead_count) || 0}</td>
                   </tr>

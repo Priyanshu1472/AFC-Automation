@@ -197,7 +197,7 @@ export const FINANCE_EVENT_LABELS = {
   pbg_md_approved: "Approved by the MD",
   pbg_accounts_approved: "Reviewed by Accounts",
   pbg_clarification_requested: "Clarification requested",
-  pbg_paid: "PBG paid — PBG Done",
+  pbg_paid: "PBG paid",
 };
 
 // Proof uploads for payment / refund / PBG.

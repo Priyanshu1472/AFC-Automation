@@ -69,7 +69,7 @@ function SenderInfoRow({ profile, team, advisorName }) {
       {items.map((item) => (
         <div key={item.label} className="sef-sender-item">
           <span className="sef-sender-label">{item.label}</span>
-          <span className={`sef-sender-value${item.highlight ? " sef-sender-highlight" : ""}`}>{item.value || "—"}</span>
+          <span className={`sef-sender-value${item.highlight ? " sef-sender-highlight" : ""}`}>{item.value || "-"}</span>
         </div>
       ))}
     </div>
@@ -86,7 +86,7 @@ function EmailPreview({ to, advisedByName, advisedByDesig, acName }) {
       <div className="sef-email-head">
         <div className="sef-email-avatar" aria-hidden="true">{(to[0] || "B").toUpperCase()}</div>
         <div className="sef-email-head-info">
-          <div className="sef-email-subject">Business Partner Empanelment Form — AFC India Limited</div>
+          <div className="sef-email-subject">Business Partner Empanelment Form · AFC India Limited</div>
           <div className="sef-email-meta-row">
             <span className="sef-email-from">noreply@pmisafc.in</span>
             <span className="sef-email-arrow" aria-hidden="true">→</span>
@@ -105,7 +105,7 @@ function EmailPreview({ to, advisedByName, advisedByDesig, acName }) {
         <div className="sef-email-code-block">
           <span className="sef-email-code-label">Your Application Code</span>
           <span className="sef-email-code-value">XXXXX</span>
-          <span className="sef-email-code-note">This code is sent securely in the actual email. Please keep it safe — you will need it to submit the form.</span>
+          <span className="sef-email-code-note">This code is sent securely in the actual email. Please keep it safe, you will need it to submit the form.</span>
         </div>
         <div className="sef-email-cta-wrap">
           <div className="sef-email-cta" aria-hidden="true">Open Empanelment Form →</div>
@@ -192,7 +192,7 @@ export default function SendEmpanelmentPage() {
   const advisedByName = selectedAdvisor?.full_name || profile?.full_name || "";
   const advisedByDesig = selectedAdvisor ? (ROLE_LABELS[selectedAdvisor.role] || selectedAdvisor.role) : (ROLE_LABELS[profile?.role] || profile?.role || "");
   const poOptions = projectOfficers.map((po) => ({ value: po.id, label: `${po.full_name} (${po.email})` }));
-  const advisorOptions = advisors.map((a) => ({ value: a.id, label: `${a.full_name} — ${ROLE_LABELS[a.role] || a.role}` }));
+  const advisorOptions = advisors.map((a) => ({ value: a.id, label: `${a.full_name} · ${ROLE_LABELS[a.role] || a.role}` }));
   const reviewerLabel = ROLE_LABELS[reviewerRole] || "Project Officer";
 
   function handleGoToPreview() {
@@ -285,7 +285,7 @@ export default function SendEmpanelmentPage() {
                   <div className="sef-field">
                     <label className="sef-label" htmlFor="sef-po-select">{reviewerLabel} <span className="sef-required">*</span></label>
                     {reviewerRole === "project_assistant" && projectOfficers.length > 0 && (
-                      <Alert variant="info">No active Project Officer on team <strong>{team}</strong> — assign a Project Assistant instead.</Alert>
+                      <Alert variant="info">No active Project Officer on team <strong>{team}</strong>. Assign a Project Assistant instead.</Alert>
                     )}
                     {projectOfficers.length === 0 ? (
                       <Alert variant="warning">No active Project Officers or Project Assistants found in team <strong>{team}</strong>.</Alert>
@@ -326,12 +326,12 @@ export default function SendEmpanelmentPage() {
                 <Card.Body className="sef-summary-body">
                   <div className="sef-summary-group">
                     <div className="sef-summary-item"><span className="sef-summary-label">Sending to</span><span className="sef-summary-value sef-summary-email">{form.baEmail}</span></div>
-                    <div className="sef-summary-item"><span className="sef-summary-label">{reviewerLabel}</span><span className="sef-summary-value">{selectedPO?.full_name || "—"}</span></div>
+                    <div className="sef-summary-item"><span className="sef-summary-label">{reviewerLabel}</span><span className="sef-summary-value">{selectedPO?.full_name || "-"}</span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Advised by</span><span className="sef-summary-value">{advisedByName} <span className="sef-summary-role">({advisedByDesig})</span></span></div>
                     <div className="sef-summary-item"><span className="sef-summary-label">Sent by</span><span className="sef-summary-value">{profile?.full_name}</span></div>
                     <div className="sef-summary-item sef-summary-last"><span className="sef-summary-label">Team / Office</span><span className="sef-summary-value">{team} · {officeLabel(profile?.office)}</span></div>
                   </div>
-                  <div className="sef-summary-notice">The application code is generated and sent securely in the actual email — it is not shown in this preview.</div>
+                  <div className="sef-summary-notice">The application code is generated and sent securely in the actual email. It is not shown in this preview.</div>
                   {sendError && <Alert variant="danger" onClose={() => setSendError("")}>{sendError}</Alert>}
                   <div className="sef-btn-col">
                     <Button variant="primary" block loading={sending} onClick={handleSend} icon={<SendIcon />}>{sending ? "Sending email…" : "Confirm and Send"}</Button>
@@ -340,7 +340,7 @@ export default function SendEmpanelmentPage() {
                 </Card.Body>
               </Card>
               <div className="sef-email-wrap">
-                <p className="sef-email-wrap-label">Email preview — what the BP will receive</p>
+                <p className="sef-email-wrap-label">Email preview: what the BP will receive</p>
                 <EmailPreview to={form.baEmail} advisedByName={advisedByName} advisedByDesig={advisedByDesig} acName={profile?.full_name} />
               </div>
             </div>

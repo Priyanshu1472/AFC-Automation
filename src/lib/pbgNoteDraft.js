@@ -54,7 +54,7 @@ export function pbgCalculationRows({ pbgAmount, consultancyFee, pbgPercent, emdA
     rows.push([`PBG amount${pct}`, rsSlash(pbg)]);
     rows.push(["Less: EMD converted to PBG", rsSlash(adjusted)]);
     rows.push([
-      remaining > 0 ? `Remaining PBG to be submitted (${wordsOnly(remaining)})` : "Remaining PBG to be submitted (Nil — fully covered by the EMD)",
+      remaining > 0 ? `Remaining PBG to be submitted (${wordsOnly(remaining)})` : "Remaining PBG to be submitted (Nil, fully covered by the EMD)",
       rsSlash(remaining),
     ]);
     if (emdAdjusted > pbg) rows.push(["Excess EMD to be refunded by the client", rsSlash(emdAdjusted - pbg)]);

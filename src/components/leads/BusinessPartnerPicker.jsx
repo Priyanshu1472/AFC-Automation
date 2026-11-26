@@ -167,7 +167,7 @@ export default function BusinessPartnerPicker({ options, value = [], onChange, o
               <button type="button" role="option" aria-selected={selected} className={`bpp-item${selected ? " bpp-item-selected" : ""}`} onClick={() => pick(o.value)} disabled={disabled}>
                 <span className="bpp-avatar" aria-hidden="true">{initials(o.label)}</span>
                 <span className="bpp-name" title={o.label}>{o.label}</span>
-                {o.manual && <span className="bpp-tag" title="Empanelled before PMIS — added manually by name">Added manually</span>}
+                {o.manual && <span className="bpp-tag" title="Empanelled before PMIS, added manually by name">Added manually</span>}
                 {o.team && <span className={`bpp-team${own ? " bpp-team-own" : ""}`} title={own ? (o.manual ? "Added by your team" : "Empanelled by your team") : `${o.manual ? "Added" : "Empanelled"} by ${o.team}`}>{own ? `${o.team} · Yours` : o.team}</span>}
                 <span className="bpp-check">{selected && <CheckIcon />}</span>
               </button>
@@ -176,7 +176,7 @@ export default function BusinessPartnerPicker({ options, value = [], onChange, o
         })}
         {shown.length === 0 && !canAddTyped && (
           <li className="bpp-empty">
-            {options.length || q ? `No Business Partner matches "${query.trim()}".` : "No Business Partners yet — type a name in the search box to add one."}
+            {options.length || q ? `No Business Partner matches "${query.trim()}".` : "No Business Partners yet. Type a name in the search box to add one."}
           </li>
         )}
       </ul>

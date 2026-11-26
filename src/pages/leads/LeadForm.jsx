@@ -441,7 +441,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
       <div className="lf-main">
         {header}
         <Card className="lf-section">
-          <SectionHead step={1} title="Lead Type & Source" subtitle={isEdit ? "Locked once a lead is created — cannot be changed." : undefined} />
+          <SectionHead step={1} title="Lead Type & Source" subtitle={isEdit ? "Locked once a lead is created. Cannot be changed." : undefined} />
           <Card.Body className="lf-body">
             <div className="lf-source-grid" role="radiogroup" aria-label="Lead source">
               {SOURCE_CHOICES.map((s) => (
@@ -507,7 +507,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
               <Alert variant="warning" title="Possible duplicate lead(s)">
                 {duplicates.map((d) => (
                   <p key={d.id} className="lf-dup-row">
-                    <strong>{d.lead_number}</strong> ({d.team}) — {d.title} ({d.status.replace(/_/g, " ")})
+                    <strong>{d.lead_number}</strong> ({d.team}) · {d.title} ({d.status.replace(/_/g, " ")})
                     {d.match_reason && <span className="lf-dup-reason"> · {d.match_reason}</span>}
                   </p>
                 ))}
@@ -659,7 +659,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
           <Card.Body className="lf-body">
             {isLogisticsOnlyEdit ? (
               <Alert variant="info">
-                This lead's submission deadline had passed. You can update the date and other details — Person Responsible,
+                This lead's submission deadline had passed. You can update the date and other details. Person Responsible,
                 Reviewer, Recommending Authority, and Business Partner are locked once a lead has moved past PR review.
               </Alert>
             ) : (
@@ -745,7 +745,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
                       options={forwardToOptions}
                       value={form.forwarded_to_id}
                       onChange={(v) => set("forwarded_to_id", v)}
-                      placeholder="— Select a person on your team —"
+                      placeholder="Select a person on your team"
                       error={errors.forwarded_to_id}
                       disabled={submitting}
                       searchable
@@ -764,7 +764,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
                         options={personResponsibleOptions}
                         value={form.person_responsible_id}
                         onChange={(v) => set("person_responsible_id", v)}
-                        placeholder="— Select —"
+                        placeholder="Select"
                         error={errors.person_responsible_id}
                         disabled={submitting}
                         searchable
@@ -779,7 +779,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
                         options={reviewerOptions}
                         value={form.reviewer_id}
                         onChange={(v) => set("reviewer_id", v)}
-                        placeholder="— Select —"
+                        placeholder="Select"
                         error={errors.reviewer_id}
                         disabled={submitting}
                         searchable
@@ -797,7 +797,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
                       options={recommendingAuthorityOptions}
                       value={form.recommending_authority_id}
                       onChange={(v) => set("recommending_authority_id", v)}
-                      placeholder="— Select —"
+                      placeholder="Select"
                       error={errors.recommending_authority_id}
                       disabled={submitting}
                     />
@@ -888,7 +888,7 @@ export default function LeadForm({ mode = "create", lead = null, onSuccess, head
           </dl>
           {errorCount > 0 && (
             <p className="lf-summary-errors" role="alert">
-              {errorCount} field{errorCount > 1 ? "s need" : " needs"} attention — see the highlighted section{errorCount > 1 ? "s" : ""}.
+              {errorCount} field{errorCount > 1 ? "s need" : " needs"} attention. See the highlighted section{errorCount > 1 ? "s" : ""}.
             </p>
           )}
           <div className="lf-summary-actions">

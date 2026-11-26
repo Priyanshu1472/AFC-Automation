@@ -70,9 +70,7 @@ describe("leadCan", () => {
     expect(leadCan.drop({ id: "someone", committee: "PMT" }, approved)).toBe(false);
   });
 
-  it("drop is unavailable once MD has declined the lead, or it's already dropped — genuinely terminal", () => {
-    const declined = { status: "md_declined", created_by: "user-1", person_responsible_id: "user-1" };
-    expect(leadCan.drop(user, declined)).toBe(false);
+  it("drop is unavailable once a lead is already dropped — genuinely terminal", () => {
     const dropped = { status: "pa_dropped", created_by: "user-1", person_responsible_id: "user-1" };
     expect(leadCan.drop(user, dropped)).toBe(false);
   });

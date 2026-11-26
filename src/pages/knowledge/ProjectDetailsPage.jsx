@@ -138,7 +138,7 @@ function KeywordDropdown({ keywords, selectedKws, onToggle, onSelectAll, onClear
           </div>
 
           <div className="pd-kw-footer">
-            {selectedCount === 0 ? "No keywords selected — export will use project's brief description" : `${selectedCount} selected — only these will appear in the export`}
+            {selectedCount === 0 ? "No keywords selected: export will use project's brief description" : `${selectedCount} selected: only these will appear in the export`}
           </div>
         </div>
       )}
@@ -395,23 +395,23 @@ export default function ProjectDetailsPage() {
           <div className="details-grid">
             <div className="details-card">
               <h3 className="card-section-title">Client Information</h3>
-              <div className="detail-row"><span className="detail-label">Client</span><span className="detail-value">{project.client || "—"}</span></div>
-              <div className="detail-row"><span className="detail-label">Client Type</span><span className="detail-value">{project.client_type || "—"}</span></div>
-              <div className="detail-row"><span className="detail-label">Representative</span><span className="detail-value">{summary.contactPerson || "—"}</span></div>
+              <div className="detail-row"><span className="detail-label">Client</span><span className="detail-value">{project.client || "-"}</span></div>
+              <div className="detail-row"><span className="detail-label">Client Type</span><span className="detail-value">{project.client_type || "-"}</span></div>
+              <div className="detail-row"><span className="detail-label">Representative</span><span className="detail-value">{summary.contactPerson || "-"}</span></div>
             </div>
 
             <div className="details-card">
               <h3 className="card-section-title">Project Timeline</h3>
               <div className="detail-row"><span className="detail-label">Start Date</span><span className="detail-value">{formatMonth(summary.startDate)}</span></div>
               <div className="detail-row"><span className="detail-label">Finish Date</span><span className="detail-value">{formatMonth(summary.finishDate)}</span></div>
-              <div className="detail-row"><span className="detail-label">Capital Cost</span><span className="detail-value">{summary.capitalCost ? `₹${croreToLakh(summary.capitalCost)} Lakh` : "—"}</span></div>
+              <div className="detail-row"><span className="detail-label">Capital Cost</span><span className="detail-value">{summary.capitalCost ? `₹${croreToLakh(summary.capitalCost)} Lakh` : "-"}</span></div>
             </div>
 
             <div className="details-card full-card">
               <h3 className="card-section-title">Staff Information</h3>
               <div className="staff-info-grid">
-                <div className="detail-row"><span className="detail-label">Total Staff-Months</span><span className="detail-value">{summary.totalStaffMonths || "—"}</span></div>
-                <div className="detail-row"><span className="detail-label">Assoc. Consultant Months</span><span className="detail-value">{summary.associatedConsultantMonths || "—"}</span></div>
+                <div className="detail-row"><span className="detail-label">Total Staff-Months</span><span className="detail-value">{summary.totalStaffMonths || "-"}</span></div>
+                <div className="detail-row"><span className="detail-label">Assoc. Consultant Months</span><span className="detail-value">{summary.associatedConsultantMonths || "-"}</span></div>
               </div>
               {summary.seniorProfessionalStaff && (
                 <div className="detail-row detail-row-block" style={{ marginTop: 10 }}>

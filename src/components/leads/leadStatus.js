@@ -3,16 +3,15 @@ import { isDeadlinePassed } from "../../lib/deadline";
 // LeadDetailPage so the label/color for a given status never drifts
 // between the two.
 export const STATUS_MAP = {
-  po_assignment: { label: "Awaiting Assignment", variant: "warning" },
-  pa_review: { label: "PR Review", variant: "warning" },
-  recommending_authority_review: { label: "Recommending Authority", variant: "warning" },
-  pmt_review: { label: "PMT", variant: "info" },
-  g3_review: { label: "G3 Committee Review", variant: "warning" },
-  md_review: { label: "MD Approval Pending", variant: "neutral" },
-  pa_action_required: { label: "Action Required", variant: "danger" },
-  pa_dropped: { label: "Dropped", variant: "danger" },
+  po_assignment: { label: "Awaiting Assignment", variant: "pale-green" },
+  pa_review: { label: "PR Review", variant: "yellow" },
+  recommending_authority_review: { label: "Recommending Authority", variant: "yellow" },
+  pmt_review: { label: "PMT", variant: "yellow" },
+  g3_review: { label: "G3 Committee Review", variant: "yellow" },
+  md_review: { label: "MD Approval Pending", variant: "warning" },
+  pa_action_required: { label: "Action Required", variant: "warning" },
+  pa_dropped: { label: "Dropped", variant: "neutral" },
   md_approved: { label: "Approved", variant: "success" },
-  md_declined: { label: "Declined", variant: "danger" },
 };
 
 // The full possible pipeline, in order. G3 is an optional waypoint — only a
@@ -60,7 +59,7 @@ export const DELIVERY_TYPE_LABELS = {
 
 // A finished lead never goes "overdue" — matches advance-lead-stage's own
 // TERMINAL_STATUSES and update-lead's identical constant.
-export const TERMINAL_STATUSES = ["md_approved", "md_declined", "pa_dropped"];
+export const TERMINAL_STATUSES = ["md_approved", "pa_dropped"];
 
 // A lead whose submission deadline has passed and isn't already finished —
 // every normal pipeline action gets blocked once this is true (see
@@ -74,6 +73,15 @@ export const TERMINAL_STATUSES = ["md_approved", "md_declined", "pa_dropped"];
 export function isLeadOverdue(lead) {
   if (!lead || TERMINAL_STATUSES.includes(lead.status)) return false;
   return !!lead.submission_deadline && isDeadlinePassed(lead.submission_deadline);
+}
+
+// What a lead's status badge should actually show — overdue takes over the
+// badge entirely (not a second tag next to it) until the deadline's fixed
+// or the lead moves past needing one, at which point isLeadOverdue goes
+// false again and this falls back to the real pipeline status.
+export function displayStatusCfg(lead) {
+  if (isLeadOverdue(lead)) return { label: "Submission Overdue", variant: "danger" };
+  return STATUS_MAP[lead?.status] || { label: lead?.status, variant: "neutral" };
 }
 
 // Who's allowed to edit an overdue lead: the named Person Responsible, or —

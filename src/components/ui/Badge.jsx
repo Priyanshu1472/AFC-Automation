@@ -4,7 +4,7 @@
  * Badge
  *
  * Props:
- *  variant — "success" | "warning" | "danger" | "info" | "neutral" | "brand"
+ *  variant — "success" | "warning" | "danger" | "info" | "neutral" | "brand" | "yellow" | "pale-green"
  *  dot     — bool (shows colored dot before text)
  *  children
  */

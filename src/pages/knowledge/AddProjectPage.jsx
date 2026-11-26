@@ -204,17 +204,17 @@ export default function AddProjectPage() {
 
                 <div className="ap-field">
                   <label>Location within Country (State / UT)</label>
-                  <CustomSelect searchable value={form.location} onChange={(v) => handleFormChange("location", v)} options={[{ value: "", label: "— Select State / UT —" }, ...INDIAN_STATES.map((s) => ({ value: s, label: s }))]} placeholder="— Select State / UT —" />
+                  <CustomSelect searchable value={form.location} onChange={(v) => handleFormChange("location", v)} options={[{ value: "", label: "Select State / UT" }, ...INDIAN_STATES.map((s) => ({ value: s, label: s }))]} placeholder="Select State / UT" />
                 </div>
 
                 <div className="ap-field">
                   <label>Client Type</label>
-                  <CustomSelect value={form.clientType} onChange={(v) => handleFormChange("clientType", v)} options={[{ value: "", label: "— Select Client Type —" }, { value: "Government", label: "Government" }, { value: "Private", label: "Private" }]} placeholder="— Select Client Type —" />
+                  <CustomSelect value={form.clientType} onChange={(v) => handleFormChange("clientType", v)} options={[{ value: "", label: "Select Client Type" }, { value: "Government", label: "Government" }, { value: "Private", label: "Private" }]} placeholder="Select Client Type" />
                 </div>
 
                 <div className="ap-field">
                   <label>Project Status</label>
-                  <CustomSelect value={form.status} onChange={(v) => handleFormChange("status", v)} options={[{ value: "", label: "— Select Project Status —" }, { value: "Ongoing", label: "Ongoing" }, { value: "Completed", label: "Completed" }]} placeholder="— Select Project Status —" />
+                  <CustomSelect value={form.status} onChange={(v) => handleFormChange("status", v)} options={[{ value: "", label: "Select Project Status" }, { value: "Ongoing", label: "Ongoing" }, { value: "Completed", label: "Completed" }]} placeholder="Select Project Status" />
                 </div>
 
                 <div className="ap-field full-width">

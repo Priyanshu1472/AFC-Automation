@@ -172,7 +172,7 @@ export default function EmpanelmentChatPanel({ app }) {
           </div>
 
           {locked ? (
-            <p className="ar-chat-locked">Chat closed — a final decision has been made on this application.</p>
+            <p className="ar-chat-locked">Chat closed: a final decision has been made on this application.</p>
           ) : !isParticipant ? (
             <p className="ar-chat-locked">View only.</p>
           ) : (

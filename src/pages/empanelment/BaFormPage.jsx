@@ -404,7 +404,7 @@ export default function BaFormPage() {
         <FormSection tag="Section E" title="Certifications and Affiliations">
           <Field label="ISO or Other Quality Certifications" full><TextArea name="certifications" value={form.certifications} onChange={handleChange} placeholder="e.g. ISO 9001:2015, Cert. No. XYZ123, Valid until Dec 2026" rows={3} /></Field>
           <Field ref={setRef("doc_isoCert")} full><DocUpload slotKey="isoCert" label={DOC_SLOTS.isoCert.label} required={DOC_SLOTS.isoCert.required} file={files.isoCert} fileError={fileErrors.isoCert} onChange={handleFileChange} onClear={handleFileClear} /></Field>
-          <Field label="Empanelment with Other Government / Donor Agencies" full><TextArea name="govtEmpanelments" value={form.govtEmpanelments} onChange={handleChange} placeholder="e.g. NABARD — empanelled since 2020" rows={3} /></Field>
+          <Field label="Empanelment with Other Government / Donor Agencies" full><TextArea name="govtEmpanelments" value={form.govtEmpanelments} onChange={handleChange} placeholder="e.g. NABARD, empanelled since 2020" rows={3} /></Field>
         </FormSection>
 
         <FormSection tag="Section F" title="Bank Details">

@@ -22,7 +22,7 @@ import MdTransferLeadDialog from "../../components/leads/MdTransferLeadDialog";
 import EscalateToG3Dialog from "../../components/leads/EscalateToG3Dialog";
 import LeadDuplicatesTable from "../../components/leads/LeadDuplicatesTable";
 import LeadAdditionalResponsiblesPanel from "../../components/leads/LeadAdditionalResponsiblesPanel";
-import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId } from "../../components/leads/leadStatus";
+import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId, displayStatusCfg } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 import { UserPlusIcon } from "../../components/icons";
 // Reuses the ar-* detail/action/timeline/document styles already defined
@@ -36,10 +36,10 @@ import BackButton from "../../components/ui/BackButton";
 import { bpListText } from "../../lib/leadBusinessPartners";
 
 function fmt(v) {
-  return v === null || v === undefined || v === "" ? "—" : v;
+  return v === null || v === undefined || v === "" ? "-" : v;
 }
 function fmtDate(v) {
-  if (!v) return "—";
+  if (!v) return "-";
   return new Date(v).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 function fmtSize(bytes) {
@@ -48,7 +48,7 @@ function fmtSize(bytes) {
 }
 
 function Row({ label, value }) {
-  if (!value || value === "—") return null;
+  if (!value || value === "-") return null;
   return (
     <div className="ar-row">
       <span className="ar-row-label">{label}</span>
@@ -177,7 +177,7 @@ function DocItem({ doc, leadId }) {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
         <span className="ar-doc-label" style={{ fontWeight: 500, fontSize: 13 }}>{doc.name}</span>
         <span style={{ fontSize: 11, opacity: 0.55 }}>{fmtSize(doc.size)}</span>
-        {err && <span style={{ fontSize: 11, color: "var(--danger)" }}>Could not open — try again</span>}
+        {err && <span style={{ fontSize: 11, color: "var(--danger)" }}>Could not open, try again</span>}
       </div>
       <span className="ar-doc-open">{loading ? "Opening…" : "Open"}</span>
     </div>
@@ -293,7 +293,7 @@ export default function LeadDetailPage() {
       .select("user_id, user:user_id(full_name)")
       .eq("lead_id", id)
       .order("created_at");
-    setAdditionalResponsibles((additionalRows || []).map((r) => ({ user_id: r.user_id, full_name: r.user?.full_name || "—" })));
+    setAdditionalResponsibles((additionalRows || []).map((r) => ({ user_id: r.user_id, full_name: r.user?.full_name || "-" })));
 
     const { data: proposal } = await supabase
       .from("proposal_preparations")
@@ -663,9 +663,9 @@ export default function LeadDetailPage() {
     );
   }
 
-  const statusCfg = STATUS_MAP[lead.status] || { label: lead.status, variant: "neutral" };
-  const isTerminal = ["md_approved", "md_declined", "pa_dropped"].includes(lead.status);
   const overdue = isLeadOverdue(lead);
+  const statusCfg = displayStatusCfg(lead);
+  const isTerminal = ["md_approved", "pa_dropped"].includes(lead.status);
   const actions = availableActions();
   const currentFlowIdx = STATUS_FLOW.findIndex((s) => s.key === lead.status);
   // Every uploaded/generated document lives under Lead Records now — the
@@ -686,7 +686,6 @@ export default function LeadDetailPage() {
                 <div className="ar-header-badges">
                   <Badge variant="brand">Lead</Badge>
                   <Badge variant={statusCfg.variant} dot>{statusCfg.label}</Badge>
-                  {overdue && <Badge variant="danger" dot>Submission Overdue</Badge>}
                 </div>
                 <h1 className="ar-header-email">{lead.title}</h1>
                 <p className="ar-header-meta">
@@ -755,7 +754,7 @@ export default function LeadDetailPage() {
                 <div className="ld-dup-card-head">
                   <h2>Possible duplications</h2>
                   <p>
-                    {lead.lead_number} matches {duplicateRefs.length === 1 ? "1 existing lead" : `${duplicateRefs.length} existing leads`} — here's what's the same.
+                    {lead.lead_number} matches {duplicateRefs.length === 1 ? "1 existing lead" : `${duplicateRefs.length} existing leads`}. Here's what's the same.
                   </p>
                 </div>
                 <LeadDuplicatesTable refs={duplicateRefs} currentLeadId={lead.id} currentLeadNumber={lead.lead_number} />
@@ -931,8 +930,7 @@ export default function LeadDetailPage() {
 
               {/* md_approved has no ACTIONS_BY_STATUS entry anymore — Drop
                   was the one action still open there, and it's gone now
-                  that Drop is removed entirely past PMT review. md_declined
-                  has no entry either (actions.length is already 0 there).
+                  that Drop is removed entirely past PMT review.
                   pa_dropped's own "Claim Lead" action deliberately keeps
                   its existing isTerminal-suppressed behavior. */}
               {actions.length > 0 && !isTerminal && (
@@ -1076,6 +1074,8 @@ export default function LeadDetailPage() {
                 <Card><Card.Body className="ar-view-only">
                   {overdue ? (
                     <span>Submission deadline passed. Only the Person Responsible (or the creator, if none is assigned yet) can edit this lead to update the date.</span>
+                  ) : lead.status === "pa_action_required" ? (
+                    <span>Viewing only. This lead was returned for changes: pending edit &amp; resubmission by the Person Responsible.</span>
                   ) : (
                     <span>Viewing only. Action pending from <strong>{statusCfg.label}</strong>.</span>
                   )}
@@ -1086,7 +1086,7 @@ export default function LeadDetailPage() {
                 <Card className={`ar-final-card ar-final-${lead.status === "md_approved" ? "accepted" : "rejected"}`}>
                   <Card.Body>
                     <p className="ar-final-title">
-                      {lead.status === "md_approved" ? "Lead Approved" : lead.status === "md_declined" ? "Lead Declined" : "Lead Dropped"}
+                      {lead.status === "md_approved" ? "Lead Approved" : "Lead Dropped"}
                     </p>
                     {lead.status === "md_approved" && canOpenProposal(lead, profile) && (
                       <Button variant="primary" onClick={() => navigate(`/proposals/${lead.id}`)} style={{ marginTop: "var(--space-3)" }}>

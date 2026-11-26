@@ -19,7 +19,7 @@ import BackButton from "../../components/ui/BackButton";
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 function fmtYM(yyyymm) {
-  if (!yyyymm) return "—";
+  if (!yyyymm) return "-";
   const [y, m] = yyyymm.split("-");
   return `${MONTHS[parseInt(m) - 1]} ${y}`;
 }
@@ -345,7 +345,7 @@ function ShortlistCard({ shortlist, onOpenDetails, onRemoveProject, onDelete }) 
                     <span className="slv-project-icon"><IconFile /></span>
                     <div className="slv-project-info">
                       <span className="slv-project-title">{p.title}</span>
-                      <span className="slv-project-client">{p.client || "—"}</span>
+                      <span className="slv-project-client">{p.client || "-"}</span>
                       <div className="slv-project-meta">
                         {p.location && <span className="slv-project-loc"><IconPin /> {p.location}</span>}
                         {(s.startDate || s.finishDate) && <span className="slv-project-date">{fmtYM(s.startDate)} – {fmtYM(s.finishDate)}</span>}

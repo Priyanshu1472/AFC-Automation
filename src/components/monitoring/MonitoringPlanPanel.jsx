@@ -94,7 +94,7 @@ export default function MonitoringPlanPanel({ projectId, project, items, documen
     const { error: dbErr } = await supabase.from("monitoring_items").delete().eq("id", item.id);
     setBusy(false);
     setDialog(null);
-    if (dbErr) setError(/client_invoice_lines/.test(dbErr.message) ? "It can't be deleted — an invoice has been raised against it (or one of its deliverables)." : dbErr.message);
+    if (dbErr) setError(/client_invoice_lines/.test(dbErr.message) ? "It can't be deleted: an invoice has been raised against it (or one of its deliverables)." : dbErr.message);
     onChanged();
   }
 
@@ -160,7 +160,7 @@ export default function MonitoringPlanPanel({ projectId, project, items, documen
         <div className="mon-card-elapsed">
           <div className="mon-card-bar-row">
             <div className="mon-card-bar"><span style={{ width: `${isDone ? 100 : elapsed ? elapsed.pct : 0}%` }} /></div>
-            <span className="mon-card-pct">{isDone ? "Done" : elapsed ? `${elapsed.pct}%` : "—"}</span>
+            <span className="mon-card-pct">{isDone ? "Done" : elapsed ? `${elapsed.pct}%` : "-"}</span>
           </div>
           <span className="mon-card-elapsed-label">{isDone ? "Completed" : "Elapsed"}</span>
           <span className="mon-card-elapsed-value">
@@ -172,7 +172,7 @@ export default function MonitoringPlanPanel({ projectId, project, items, documen
           <div className="mon-card-side">
             <div className="mon-card-icons">
               {isDone ? (
-                <button type="button" className="mon-icon-btn" disabled={busy || billed > 0} title={billed > 0 ? "Invoiced — can't reopen" : "Reopen"} aria-label={`Reopen ${item.title}`} onClick={() => setDialog({ type: "reopen", item })}><RotateCcwIcon /></button>
+                <button type="button" className="mon-icon-btn" disabled={busy || billed > 0} title={billed > 0 ? "Invoiced: can't reopen" : "Reopen"} aria-label={`Reopen ${item.title}`} onClick={() => setDialog({ type: "reopen", item })}><RotateCcwIcon /></button>
               ) : (
                 <button type="button" className="mon-icon-btn is-success" disabled={busy} title="Mark complete" aria-label={`Mark ${item.title} complete`} onClick={() => setDialog({ type: "complete", item, openKids })}><CheckCircleIcon /></button>
               )}
@@ -183,7 +183,7 @@ export default function MonitoringPlanPanel({ projectId, project, items, documen
               <button
                 type="button"
                 className="mon-icon-btn is-danger"
-                title={billed > 0 ? "Invoiced — can't be deleted" : "Delete"}
+                title={billed > 0 ? "Invoiced: can't be deleted" : "Delete"}
                 aria-label={`Delete ${item.title}`}
                 disabled={billed > 0}
                 onClick={() => (parent ? setDialog({ type: "delete_nested", item, parent }) : setDialog({ type: "delete", item }))}

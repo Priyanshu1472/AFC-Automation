@@ -2,7 +2,7 @@
    AFC Automation — Design System
    App.css — Tokens · Reset · Base · Utilities
    Palette: Monochrome — Frosted White / Glacier Gray / Steely Ice / Obsidian
-   Status badges: outline-only (earthy sage / ochre / rust / slate)
+   Status badges: filled, bright (green / amber / red / teal / slate)
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
@@ -840,7 +840,7 @@ select.input {
 .form-grid .field.full { grid-column: 1 / -1; }
 
 /* ============================================================
-   10. BADGE / STATUS CHIP — outline style, transparent fill
+   10. BADGE / STATUS CHIP — filled, bright
    ============================================================ */
 .badge {
   display: inline-flex;
@@ -850,9 +850,10 @@ select.input {
   font-weight: 600;
   letter-spacing: 0.04em;
   border-radius: var(--radius-full);
-  padding: 2px 9px;
+  padding: 3px 10px;
   white-space: nowrap;
-  background: transparent;
+  background: var(--bg-surface-3);
+  color: var(--text-secondary);
   border: 1px solid transparent;
 }
 
@@ -864,25 +865,25 @@ select.input {
   flex-shrink: 0;
 }
 
-.badge-success { color: var(--success-dark); border-color: var(--success-dark); }
-.badge-warning { color: var(--warning-dark); border-color: var(--warning-dark); }
-.badge-danger  { color: var(--danger-dark);  border-color: var(--danger-dark); }
-.badge-info    { color: var(--info-dark);    border-color: var(--info-dark); }
-.badge-neutral {
-  background: var(--bg-surface-3);
-  color: var(--text-secondary);
-  border-color: transparent;
-}
-.badge-brand {
-  color: var(--text-primary);
-  border-color: var(--text-primary);
-}
+.badge-success    { background: #16a34a; color: #f2faf6; }
+.badge-warning    { background: #f59e0b; color: #2b1a02; }
+.badge-danger     { background: #dc2626; color: #fdf2f2; }
+.badge-info       { background: #0d9488; color: #f2faf6; }
+.badge-neutral    { background: #64748b; color: #f4f7f5; }
+.badge-brand      { background: var(--brand-600); color: #f2faf6; }
+/* Yellow/pale-green — lead-status-only tiers on the red → orange → yellow →
+   green → pale-green urgency ramp that the other variants don't cover. */
+.badge-yellow     { background: #ffeb3b; color: #3a3000; }
+.badge-pale-green { background: #d9f99d; color: #365314; }
 
-[data-theme="dark"] .badge-success { color: #8fbf7a; border-color: #8fbf7a; }
-[data-theme="dark"] .badge-warning { color: #d3ac5a; border-color: #d3ac5a; }
-[data-theme="dark"] .badge-danger  { color: #d3897a; border-color: #d3897a; }
-[data-theme="dark"] .badge-info    { color: #93a7b3; border-color: #93a7b3; }
-[data-theme="dark"] .badge-brand   { color: var(--text-primary); border-color: var(--text-primary); }
+[data-theme="dark"] .badge-success    { background: #15803d; color: #eafaf0; }
+[data-theme="dark"] .badge-warning    { background: #b45309; color: #fdf1e0; }
+[data-theme="dark"] .badge-danger     { background: #b91c1c; color: #fdeaea; }
+[data-theme="dark"] .badge-info       { background: #0f766e; color: #e4f7f4; }
+[data-theme="dark"] .badge-neutral    { background: #475569; color: #f1f5f9; }
+[data-theme="dark"] .badge-brand      { background: var(--brand-700); color: #eafaf0; }
+[data-theme="dark"] .badge-yellow     { background: #a16207; color: #fef9c3; }
+[data-theme="dark"] .badge-pale-green { background: #4d7c0f; color: #ecfccb; }
 
 /* ============================================================
    11. TABLE

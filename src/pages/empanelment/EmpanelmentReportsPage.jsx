@@ -29,7 +29,7 @@ const STATUS_LABELS = {
 };
 const TERMINAL = ["accepted", "rejected"];
 
-const dash = (v) => (v === 0 ? 0 : v || "—");
+const dash = (v) => (v === 0 ? 0 : v || "-");
 const pct = (part, whole) => (whole ? Math.round((part / whole) * 1000) / 10 : 0);
 const isAccepted = (a) => a.status === "accepted";
 const isRejected = (a) => a.status === "rejected";
@@ -37,14 +37,14 @@ const isInProgress = (a) => !TERMINAL.includes(a.status) && a.status !== "sent";
 const isAwaitingBA = (a) => a.status === "sent" || a.status === "filled";
 
 function fmt(d) {
-  if (!d) return "—";
+  if (!d) return "-";
   const dt = new Date(d);
-  return isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return isNaN(dt.getTime()) ? "-" : dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 const dateKey = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 const daysFrom = (d) => (d ? Math.floor((Date.now() - new Date(d)) / 86400000) : null);
 const daysBetween = (a, b) => (a && b ? Math.max(0, Math.round((new Date(b) - new Date(a)) / 86400000)) : null);
-const codeOf = (a) => a.application_code || "—";
+const codeOf = (a) => a.application_code || "-";
 const sectorsOf = (a) => (Array.isArray(a.reg_sectors_served) ? a.reg_sectors_served : []);
 
 function median(nums) {
@@ -58,7 +58,7 @@ const avg = (nums) => (nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) 
 function groupBy(arr, keyFn) {
   const m = new Map();
   arr.forEach((x) => {
-    const k = keyFn(x) || "—";
+    const k = keyFn(x) || "-";
     if (!m.has(k)) m.set(k, []);
     m.get(k).push(x);
   });
@@ -106,7 +106,7 @@ const REPORTS = [
   },
   {
     id: "status_list", group: "Overview", title: "Application Status Report",
-    desc: "Current pipeline snapshot — every application with its stage and days elapsed.",
+    desc: "Current pipeline snapshot: every application with its stage and days elapsed.",
     build: ({ apps }) => ({
       columns: [
         { key: "org_name", label: "Organisation" }, { key: "code", label: "App Code" }, { key: "ba_email", label: "BP Email" },
@@ -117,7 +117,7 @@ const REPORTS = [
       rows: apps.map((a) => ({
         org_name: dash(a.reg_org_name), code: codeOf(a), ba_email: dash(a.ba_email), team: dash(a.team),
         office: a.office ? OFFICE_LABELS[a.office] || a.office : dash(a.office), po: dash(a.po_name), status_label: STATUS_LABELS[a.status] || a.status,
-        sent_f: fmt(a.created_at), days: daysFrom(a.created_at) ?? "—", provisional: a.provisional_letter_sent ? "Yes" : "No",
+        sent_f: fmt(a.created_at), days: daysFrom(a.created_at) ?? "-", provisional: a.provisional_letter_sent ? "Yes" : "No",
       })),
     }),
   },
@@ -125,7 +125,7 @@ const REPORTS = [
     id: "monthly", group: "Overview", title: "Monthly Trend",
     desc: "Applications raised per month, with how many were empanelled or found ineligible.",
     build: ({ apps }) => {
-      const g = groupBy(apps, (a) => (a.created_at ? new Date(a.created_at).toISOString().slice(0, 7) : "—"));
+      const g = groupBy(apps, (a) => (a.created_at ? new Date(a.created_at).toISOString().slice(0, 7) : "-"));
       return {
         columns: [
           { key: "month", label: "Month" }, { key: "total", label: "Raised" }, { key: "accepted", label: "Empanelled" },
@@ -134,7 +134,7 @@ const REPORTS = [
         rows: [...g.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([key, arr]) => {
           const acc = arr.filter(isAccepted).length, rej = arr.filter(isRejected).length;
           return {
-            month: key === "—" ? "—" : new Date(key + "-01").toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
+            month: key === "-" ? "-" : new Date(key + "-01").toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
             total: arr.length, accepted: acc, rejected: rej, progress: arr.filter(isInProgress).length, rate: pct(acc, acc + rej),
           };
         }),
@@ -182,7 +182,7 @@ const REPORTS = [
       const tats = done.map((a) => daysBetween(a.created_at, a.decided_at)).filter((n) => n !== null);
       const rows = done.map((a) => ({
         org_name: dash(a.reg_org_name), code: codeOf(a), team: dash(a.team), sent_f: fmt(a.created_at),
-        decided_f: fmt(a.decided_at), tat: daysBetween(a.created_at, a.decided_at) ?? "—",
+        decided_f: fmt(a.decided_at), tat: daysBetween(a.created_at, a.decided_at) ?? "-",
       })).sort((x, y) => (y.tat || 0) - (x.tat || 0));
       return {
         kpis: [
@@ -214,7 +214,7 @@ const REPORTS = [
         ],
         rows: filled.map((a) => ({
           org_name: dash(a.reg_org_name), code: codeOf(a), ba_email: dash(a.ba_email),
-          sent_f: fmt(a.created_at), filled_f: fmt(a.form_submitted_at), gap: daysBetween(a.created_at, a.form_submitted_at) ?? "—",
+          sent_f: fmt(a.created_at), filled_f: fmt(a.form_submitted_at), gap: daysBetween(a.created_at, a.form_submitted_at) ?? "-",
         })).sort((x, y) => (y.gap || 0) - (x.gap || 0)),
       };
     },
@@ -262,10 +262,10 @@ const REPORTS = [
         { key: "officer", label: "Project Officer" }, { key: "team", label: "Team" }, { key: "total", label: "Assigned" },
         { key: "accepted", label: "Empanelled" }, { key: "rejected", label: "Ineligible" }, { key: "open", label: "Still Open" }, { key: "rate", label: "Acceptance %" },
       ],
-      rows: [...groupBy(apps, (a) => a.po_name || "—")].map(([officer, arr]) => {
+      rows: [...groupBy(apps, (a) => a.po_name || "-")].map(([officer, arr]) => {
         const acc = arr.filter(isAccepted).length, rej = arr.filter(isRejected).length;
         return {
-          officer, team: arr[0]?.team || "—", total: arr.length, accepted: acc, rejected: rej,
+          officer, team: arr[0]?.team || "-", total: arr.length, accepted: acc, rejected: rej,
           open: arr.filter((a) => !TERMINAL.includes(a.status)).length, rate: pct(acc, acc + rej),
         };
       }).sort((x, y) => y.total - x.total),
@@ -408,7 +408,7 @@ function buildReportPreviewHTML(report, output, filters) {
     : "";
   const headHtml = `<tr>${output.columns.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("")}</tr>`;
   const bodyHtml = output.rows.length
-    ? output.rows.map((row) => `<tr>${output.columns.map((c) => `<td>${escapeHtml(row[c.key] ?? "—")}</td>`).join("")}</tr>`).join("")
+    ? output.rows.map((row) => `<tr>${output.columns.map((c) => `<td>${escapeHtml(row[c.key] ?? "-")}</td>`).join("")}</tr>`).join("")
     : `<tr><td colspan="${output.columns.length}">No data for the selected filters.</td></tr>`;
 
   return `
@@ -447,7 +447,7 @@ function exportPDF(report, output, filters) {
     didDrawPage: () => {
       const w = doc.internal.pageSize.getWidth(), h = doc.internal.pageSize.getHeight();
       doc.setFontSize(7); doc.setTextColor(150);
-      doc.text("AFC India Limited — Confidential", M, h - 20);
+      doc.text("AFC India Limited · Confidential", M, h - 20);
       doc.text(`Page ${doc.internal.getNumberOfPages()}`, w - M, h - 20, { align: "right" });
       doc.setTextColor(0);
     },
@@ -545,7 +545,7 @@ function ReportPreview({ report, output, onExcel, onPdf }) {
               </thead>
               <tbody>
                 {rows.map((row, i) => (
-                  <tr key={i}>{cols.map((c) => <td key={c.key} title={String(row[c.key] ?? "")}>{row[c.key] ?? "—"}</td>)}</tr>
+                  <tr key={i}>{cols.map((c) => <td key={c.key} title={String(row[c.key] ?? "")}>{row[c.key] ?? "-"}</td>)}</tr>
                 ))}
               </tbody>
             </table>

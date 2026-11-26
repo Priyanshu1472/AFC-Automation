@@ -14,7 +14,7 @@ import { BpInvoiceUploadModal } from "./InvoiceModals";
 import { formatINR, fmtDate, openMonitoringFile, BP_INVOICE_STATUS_VARIANTS } from "../../lib/monitoring";
 import "../../styles/Monitoring.css";
 
-const BP_STATUS_LABELS = { requested: "Invoice Requested", received: "Submitted — Awaiting Payment", paid: "Paid" };
+const BP_STATUS_LABELS = { requested: "Invoice Requested", received: "Submitted · Awaiting Payment", paid: "Paid" };
 
 export default function BpInvoiceRequestsCard() {
   const [rows, setRows] = useState(null);

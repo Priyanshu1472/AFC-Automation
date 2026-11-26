@@ -55,7 +55,7 @@ export default function EditLeadPage() {
     <div className="lf-page-head">
       <BackButton to={lead ? `/leads/${lead.id}` : "/leads"} label="Back to Lead" />
       <h1>Edit Lead</h1>
-      {lead && <p>{lead.lead_number} — {lead.title}</p>}
+      {lead && <p>{lead.lead_number} · {lead.title}</p>}
     </div>
   );
 

@@ -69,7 +69,7 @@ function prepStatusOf(l) {
 }
 
 function fmtDate(d) {
-  if (!d) return "—";
+  if (!d) return "-";
   return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -342,10 +342,10 @@ export default function ProposalsListPage() {
             {filtered.length === 0 ? (
               <div className="pp-empty">
                 {view === "mine"
-                  ? "You're not named on any proposal yet — Person Responsible, Reviewer, Recommending Authority, or added as an additional Person Responsible."
+                  ? "You're not named on any proposal yet: Person Responsible, Reviewer, Recommending Authority, or added as an additional Person Responsible."
                   : view === "team"
                     ? "No proposals in preparation for your team yet."
-                    : "No proposals in preparation yet — an approved lead will show up here."}
+                    : "No proposals in preparation yet. An approved lead will show up here."}
               </div>
             ) : (
               <div className="pp-table-wrap">
@@ -372,9 +372,9 @@ export default function ProposalsListPage() {
                               {l.lead_number}
                             </button>
                           </td>
-                          <td>{l.client_name || <span className="pp-td-muted">—</span>}</td>
-                          <td className="pp-td-muted">{l.bp_names || l.ba?.full_name || "—"}</td>
-                          <td className="pp-td-muted">{l.pr?.full_name || "—"}</td>
+                          <td>{l.client_name || <span className="pp-td-muted">-</span>}</td>
+                          <td className="pp-td-muted">{l.bp_names || l.ba?.full_name || "-"}</td>
+                          <td className="pp-td-muted">{l.pr?.full_name || "-"}</td>
                           <td className={overdue ? "pp-td-date--overdue" : ""}>{fmtDate(l.submission_deadline)}</td>
                           <td>
                             <Badge className="pp-status-badge" variant={proposal?.locked ? "neutral" : "success"}>{proposal?.locked ? "Locked" : proposal ? "In Progress" : "Not Started"}</Badge>
@@ -385,7 +385,7 @@ export default function ProposalsListPage() {
                             {proposal ? (
                               <Badge className="pp-outcome-badge" variant={CLIENT_RESPONSE_VARIANTS[proposal.client_response]}>{outcomeLabel(proposal)}</Badge>
                             ) : (
-                              <span className="pp-td-muted">—</span>
+                              <span className="pp-td-muted">-</span>
                             )}
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
@@ -414,7 +414,7 @@ export default function ProposalsListPage() {
                                   <ArrowRightIcon />
                                 </button>
                               ) : (
-                                !proposal?.chat_opened_at && <span className="pp-td-muted">—</span>
+                                !proposal?.chat_opened_at && <span className="pp-td-muted">-</span>
                               )}
                             </div>
                           </td>

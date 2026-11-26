@@ -167,7 +167,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, leadStatus, onLeadTra
         showToast(data?.error || "Failed to raise query.", "danger");
         return;
       }
-      showToast("Query raised — PMT has been notified.", "success");
+      showToast("Query raised. PMT has been notified.", "success");
       setJustification("");
       setShowRaiseForm(false);
       fetchQueries();
@@ -220,7 +220,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, leadStatus, onLeadTra
         add_to_chat: "Raiser added to the lead discussion.",
         decline: "Query declined.",
         transfer: data.pending ? "Transfer request sent to MD for approval." : "Lead transferred.",
-        approve_transfer: "Transfer approved — lead transferred.",
+        approve_transfer: "Transfer approved: lead transferred.",
         reject_transfer: "Transfer request rejected.",
       };
       showToast(toast[action], "success");
@@ -328,7 +328,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, leadStatus, onLeadTra
                 <div key={q.id} className="lq-item">
                   <div className="lq-item-top">
                     <div className="lq-item-who">
-                      <span className="lq-item-name">{queryNames[q.raised_by_id] || "Unknown"} — {q.raised_by_team}</span>
+                      <span className="lq-item-name">{queryNames[q.raised_by_id] || "Unknown"} · {q.raised_by_team}</span>
                       <span className="lq-item-meta">
                         {fmtTime(q.created_at)}
                         {q.edited_at && ` · edited ${fmtTime(q.edited_at)}`}
@@ -371,8 +371,8 @@ export default function LeadQueryPanel({ leadId, leadTeam, leadStatus, onLeadTra
                     <div className="lq-item-response">
                       <span className="lq-item-response-label">Requested:</span>
                       <span>
-                        Transfer to {q.transfer_target_team}, forward to {queryNames[q.transfer_forwarded_to_id] || "—"}
-                        {queryNames[q.resolved_by_id] && ` (by ${queryNames[q.resolved_by_id]})`} — awaiting MD approval
+                        Transfer to {q.transfer_target_team}, forward to {queryNames[q.transfer_forwarded_to_id] || "-"}
+                        {queryNames[q.resolved_by_id] && ` (by ${queryNames[q.resolved_by_id]})`}, awaiting MD approval
                       </span>
                     </div>
                   )}
@@ -382,7 +382,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, leadStatus, onLeadTra
                       <span className="lq-item-response-label">MD:</span>
                       <span>
                         {q.status === "transferred" ? "Approved" : "Transfer rejected"}
-                        {q.md_response && ` — ${q.md_response}`}
+                        {q.md_response && `: ${q.md_response}`}
                       </span>
                     </div>
                   )}
@@ -444,7 +444,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, leadStatus, onLeadTra
                               options={teamOptions.map((t) => ({ value: t, label: t }))}
                               value={transferTeam}
                               onChange={setTransferTeam}
-                              placeholder="— Select team —"
+                              placeholder="Select team"
                               disabled={busy}
                             />
                             <label className="ar-label">Forward to: <span className="ar-required">*</span></label>
@@ -452,7 +452,7 @@ export default function LeadQueryPanel({ leadId, leadTeam, leadStatus, onLeadTra
                               options={transferForwardOptions}
                               value={transferForwardToId}
                               onChange={setTransferForwardToId}
-                              placeholder="— Select a person on that team —"
+                              placeholder="Select a person on that team"
                               disabled={busy || !transferTeam}
                               searchable
                             />
