@@ -22,7 +22,7 @@ import MdTransferLeadDialog from "../../components/leads/MdTransferLeadDialog";
 import EscalateToG3Dialog from "../../components/leads/EscalateToG3Dialog";
 import LeadDuplicatesTable from "../../components/leads/LeadDuplicatesTable";
 import LeadAdditionalResponsiblesPanel from "../../components/leads/LeadAdditionalResponsiblesPanel";
-import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId, displayStatusCfg } from "../../components/leads/leadStatus";
+import { STATUS_MAP, STATUS_FLOW, DELIVERY_TYPE_LABELS, raApproveLabel, isLeadOverdue, overdueEditorId, displayStatusCfg, ADDITIONAL_RESPONSIBLE_ENABLED } from "../../components/leads/leadStatus";
 import { withActiveCounts, personOption } from "../../lib/personActivityCounts";
 import { UserPlusIcon } from "../../components/icons";
 // Reuses the ar-* detail/action/timeline/document styles already defined
@@ -366,7 +366,7 @@ export default function LeadDetailPage() {
   const canManageResponsibles =
     [lead?.person_responsible_id, lead?.reviewer_id, lead?.recommending_authority_id].includes(profile?.id) ||
     ["md", "admin"].includes(profile?.role);
-  const canAddResponsibleNow = canManageResponsibles && !!lead && MANAGEABLE_STATUSES.has(lead.status);
+  const canAddResponsibleNow = ADDITIONAL_RESPONSIBLE_ENABLED && canManageResponsibles && !!lead && MANAGEABLE_STATUSES.has(lead.status);
 
   function availableActions() {
     if (!lead) return [];
