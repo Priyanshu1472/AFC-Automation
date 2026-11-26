@@ -1075,6 +1075,8 @@ export default function LeadDetailPage() {
                 <Card><Card.Body className="ar-view-only">
                   {overdue ? (
                     <span>Submission deadline passed. Only the Person Responsible (or the creator, if none is assigned yet) can edit this lead to update the date.</span>
+                  ) : lead.status === "pa_action_required" ? (
+                    <span>Viewing only. This lead was returned for changes — pending edit &amp; resubmission by the Person Responsible.</span>
                   ) : (
                     <span>Viewing only. Action pending from <strong>{statusCfg.label}</strong>.</span>
                   )}
