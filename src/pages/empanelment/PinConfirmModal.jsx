@@ -56,7 +56,7 @@ export default function PinConfirmModal({ applicationId, action, comment, onClos
       <div className="ar-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="ar-modal-header">
           <h3 className="ar-modal-title">Confirm to {meta.label}</h3>
-          <p className="ar-modal-desc">Enter your 4-digit action PIN to confirm — nothing happens until it&apos;s verified.</p>
+          <p className="ar-modal-desc">Enter your 4-digit action PIN to confirm. Nothing happens until it&apos;s verified.</p>
         </div>
 
         {error && (

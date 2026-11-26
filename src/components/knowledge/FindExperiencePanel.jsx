@@ -216,7 +216,7 @@ export default function FindExperiencePanel({ allLocations, allCountries, allKey
           <label className="field-label">Year</label>
           <div className="kr-range-row">
             <input type="number" className="input" placeholder="From" value={filterYearMin} onChange={(e) => setFilterYearMin(e.target.value)} />
-            <span style={{ color: "var(--text-tertiary)" }}>—</span>
+            <span style={{ color: "var(--text-tertiary)" }}>-</span>
             <input type="number" className="input" placeholder="To" value={filterYearMax} onChange={(e) => setFilterYearMax(e.target.value)} />
           </div>
         </div>
@@ -224,7 +224,7 @@ export default function FindExperiencePanel({ allLocations, allCountries, allKey
           <label className="field-label">Contract Value (₹ Lakh)</label>
           <div className="kr-range-row">
             <input type="number" className="input" placeholder="Min" value={filterValueMin} onChange={(e) => setFilterValueMin(e.target.value)} />
-            <span style={{ color: "var(--text-tertiary)" }}>—</span>
+            <span style={{ color: "var(--text-tertiary)" }}>-</span>
             <input type="number" className="input" placeholder="Max" value={filterValueMax} onChange={(e) => setFilterValueMax(e.target.value)} />
           </div>
         </div>

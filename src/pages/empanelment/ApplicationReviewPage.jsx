@@ -33,11 +33,11 @@ const SLOT_LABELS = {
 
 import { formatSectors, MultilineText, AssignmentsTable, hasAssignments, hasText } from "./baDisplay";
 
-function fmt(val) { return val === null || val === undefined || val === "" ? "—" : val; }
-function fmtDate(val) { if (!val) return "—"; return new Date(val).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
-function fmtMoney(val) { if (!val) return "—"; return "INR " + Number(val).toLocaleString("en-IN"); }
+function fmt(val) { return val === null || val === undefined || val === "" ? "-" : val; }
+function fmtDate(val) { if (!val) return "-"; return new Date(val).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
+function fmtMoney(val) { if (!val) return "-"; return "INR " + Number(val).toLocaleString("en-IN"); }
 function fmtJsonb(val) {
-  if (!val) return "—";
+  if (!val) return "-";
   try { const obj = typeof val === "string" ? JSON.parse(val) : val; return Object.entries(obj).map(([k, v]) => `${k}: ${v}`).join(" | "); }
   catch { return String(val); }
 }
@@ -50,7 +50,7 @@ function DocumentIcon() { return <svg width="14" height="14" viewBox="0 0 24 24"
 function EyeIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>; }
 
 function Row({ label, value, stacked = false }) {
-  if (!value || value === "—") return null;
+  if (!value || value === "-") return null;
   return <div className="ar-row" style={stacked ? { flexDirection: "column", gap: "var(--space-2)" } : undefined}><span className="ar-row-label">{label}</span><span className="ar-row-value">{value}</span></div>;
 }
 
@@ -110,7 +110,7 @@ function IneligibleModal({ onConfirm, onClose }) {
   return (
     <div className="ar-modal-backdrop" onClick={() => onClose()}>
       <div className="ar-modal ar-modal-lg" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div className="ar-modal-header"><h3 className="ar-modal-title">Mark Application Ineligible</h3><p className="ar-modal-desc">Write your remarks — they'll be shared with the BP. You'll be asked to confirm with your action PIN before this is sent.</p></div>
+        <div className="ar-modal-header"><h3 className="ar-modal-title">Mark Application Ineligible</h3><p className="ar-modal-desc">Write your remarks. They'll be shared with the BP. You'll be asked to confirm with your action PIN before this is sent.</p></div>
         <div className="ar-field"><label className="ar-label">Remarks <span className="ar-required">*</span></label><textarea className="input" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="Explain clearly why this application is ineligible..." rows={4} /></div>
         <div className="ar-modal-actions">
           <Button variant="danger" block disabled={!remark.trim()} onClick={() => onConfirm(remark.trim())} icon={<XIcon />}>Mark Ineligible</Button>
@@ -152,7 +152,7 @@ function DocItem({ doc, applicationId }) {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
         <span className="ar-doc-label" style={{ fontWeight: 500, fontSize: 13 }}>{displayLabel}</span>
         <span style={{ fontSize: 11, opacity: 0.55, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fileName}{fileSize ? ` · ${fileSize}` : ""}</span>
-        {err && <span style={{ fontSize: 11, color: "var(--danger)" }}>Could not open — try again</span>}
+        {err && <span style={{ fontSize: 11, color: "var(--danger)" }}>Could not open, try again</span>}
       </div>
       <span className="ar-doc-open">{loading ? "Opening…" : "Open"}</span>
     </div>
@@ -394,7 +394,7 @@ export default function ApplicationReviewPage() {
                   <Badge variant={app.status === "rejected" ? "neutral" : STATUS_BADGE[shownStatus] || "neutral"} dot>{statusText}</Badge>
                 </div>
                 <h1 className="ar-header-email">{app.ba_email}</h1>
-                <p className="ar-header-meta">Code: <strong>{app.application_code}</strong> · Team: <strong>{app.team || "—"}</strong> · Sent: <strong>{fmtDate(app.created_at)}</strong></p>
+                <p className="ar-header-meta">Code: <strong>{app.application_code}</strong> · Team: <strong>{app.team || "-"}</strong> · Sent: <strong>{fmtDate(app.created_at)}</strong></p>
               </div>
             </Card.Body>
           </Card>
@@ -600,7 +600,7 @@ export default function ApplicationReviewPage() {
 
               {role === "md" && provisionalPending && !app.provisional_letter_sent && app.status !== "rejected" && (
                 <Card className="ar-action-card">
-                  <Card.Header title="Provisional Letter — Approval Requested" action={<Badge variant="warning" dot>Your Approval</Badge>} />
+                  <Card.Header title="Provisional Letter · Approval Requested" action={<Badge variant="warning" dot>Your Approval</Badge>} />
                   <Card.Body className="ar-action-body">
                     <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
                       The {advisorLabel}{app.dgm?.full_name ? ` (${app.dgm.full_name})` : ""} has asked to send this BP a provisional empanelment letter, issued in their name. Nothing goes to the BP until you approve.
@@ -623,7 +623,7 @@ export default function ApplicationReviewPage() {
 
               {app.status === "on_hold" && (
                 <Card className="ar-final-card" style={{ borderColor: "rgba(219,36,36,0.3)" }}>
-                  <Card.Header title="On Hold — Awaiting BP Correction" action={<Badge variant="warning">On Hold</Badge>} />
+                  <Card.Header title="On Hold · Awaiting BP Correction" action={<Badge variant="warning">On Hold</Badge>} />
                   <Card.Body className="ar-action-body">
                     <p className="ar-empty-text" style={{ marginBottom: "var(--space-3)" }}>
                       The BP was emailed and can submit corrections for the item(s) below. Review will resume from the stage that raised this hold.

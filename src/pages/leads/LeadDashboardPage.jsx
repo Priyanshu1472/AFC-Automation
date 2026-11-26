@@ -400,8 +400,8 @@ export default function LeadDashboardPage() {
     if (actionRequired > 0) list.push({ tone: "warn", icon: Icon.alert, text: `${actionRequired} lead${actionRequired > 1 ? "s need" : " needs"} changes before it can move on.` });
     if (approvalRate !== null && approvalRate >= 70) list.push({ tone: "good", icon: Icon.check, text: `Strong approval rate of ${approvalRate}% across decided leads.` });
     if (avgTat !== null) list.push({ tone: "info", icon: Icon.trending, text: `Leads take an average of ${avgTat} day${avgTat !== 1 ? "s" : ""} from creation to MD approval.` });
-    if (stalled.length === 0 && total > 0) list.push({ tone: "good", icon: Icon.check, text: "No stalled leads — the pipeline is moving well." });
-    if (total === 0) list.push({ tone: "info", icon: Icon.send, text: "No leads yet — create one to get started." });
+    if (stalled.length === 0 && total > 0) list.push({ tone: "good", icon: Icon.check, text: "No stalled leads. The pipeline is moving well." });
+    if (total === 0) list.push({ tone: "info", icon: Icon.send, text: "No leads yet. Create one to get started." });
     return list.slice(0, 4);
   }, [stalled, nearDeadline, actionRequired, total, approvalRate, avgTat]);
 
@@ -470,7 +470,7 @@ export default function LeadDashboardPage() {
         <div className="ldb-kpi-row">
           <StatTile label="Total Leads" value={total} sub={dateRangeDays ? `Last ${dateRangeDays} days` : "All time"} variant="brand" icon={Icon.send} onClick={() => handleKpiClick("total", "All Leads", filtered)} active={activeKpi === "total"} />
           <StatTile label="In Review" value={inReview} sub="Active pipeline" variant="warning" icon={Icon.clock} onClick={() => handleKpiClick("progress", "In Review", filtered.filter((l) => IN_PROGRESS_STATUSES.includes(l.status)))} active={activeKpi === "progress"} />
-          <StatTile label="Approved" value={approved} sub={approvalRate !== null ? `${approvalRate}% approval rate` : "—"} variant="success" icon={Icon.check} onClick={() => handleKpiClick("approved", "Approved", filtered.filter((l) => l.status === "md_approved"))} active={activeKpi === "approved"} />
+          <StatTile label="Approved" value={approved} sub={approvalRate !== null ? `${approvalRate}% approval rate` : "-"} variant="success" icon={Icon.check} onClick={() => handleKpiClick("approved", "Approved", filtered.filter((l) => l.status === "md_approved"))} active={activeKpi === "approved"} />
           <StatTile label="Declined" value={declined} sub="Final decisions" variant="danger" icon={Icon.x} onClick={() => handleKpiClick("declined", "Declined", filtered.filter((l) => l.status === "md_declined"))} active={activeKpi === "declined"} />
           <StatTile label="Dropped" value={dropped} sub="Withdrawn" variant="neutral" icon={Icon.trash} onClick={() => handleKpiClick("dropped", "Dropped", filtered.filter((l) => l.status === "pa_dropped"))} active={activeKpi === "dropped"} />
           <StatTile label="Action Required" value={actionRequired} sub="Returned for changes" variant="danger" icon={Icon.alert} onClick={() => handleKpiClick("action_required", "Action Required", filtered.filter((l) => l.status === "pa_action_required"))} active={activeKpi === "action_required"} />

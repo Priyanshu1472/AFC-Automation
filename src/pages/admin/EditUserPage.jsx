@@ -25,7 +25,7 @@ const FIELD_HELP = {
   role: "Changing a role controls what this person can see and do going forward. Only Admin and MD can change a role.",
   team: "The working group this person belongs to (e.g. BPDD, BIID). Leave blank for roles that aren't tied to a specific team, like CFO or CS.",
   office: "The physical office this person is based out of.",
-  committee: "Optional review committees — PMT (Lead Generation review, org-wide), G3 (conflict review), Accounts (Proposals payment/EMD verification). A person can hold more than one. Only Admin and MD can change this.",
+  committee: "Optional review committees: PMT (Lead Generation review, org-wide), G3 (conflict review), Accounts (Proposals payment/EMD verification). A person can hold more than one. Only Admin and MD can change this.",
 };
 
 export default function EditUserPage() {
@@ -246,7 +246,7 @@ export default function EditUserPage() {
                   {canEdit ? (
                     <TeamMultiSelect options={teams} value={form.teams} onChange={(v) => set("teams", v)} disabled={saving} />
                   ) : (
-                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{form.teams.length ? form.teams.join(", ") : "—"}</p>
+                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{form.teams.length ? form.teams.join(", ") : "-"}</p>
                   )}
                 </div>
                 <div className="field">
@@ -256,7 +256,7 @@ export default function EditUserPage() {
                   {canEdit ? (
                     <Select options={officeOptions} value={form.office} onChange={(v) => set("office", v)} placeholder="Select office" disabled={saving} />
                   ) : (
-                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{target.office ? OFFICE_LABELS[target.office] || target.office : "—"}</p>
+                    <p className="text-sm text-secondary" style={{ paddingTop: 9 }}>{target.office ? OFFICE_LABELS[target.office] || target.office : "-"}</p>
                   )}
                 </div>
                 {canEditRole ? (
@@ -264,7 +264,7 @@ export default function EditUserPage() {
                     <label className="field-label">
                       Committee <FieldTooltip text={FIELD_HELP.committee} />
                     </label>
-                    <MultiSelect options={committeeOptions} value={form.committees} onChange={(v) => set("committees", v)} placeholder="— None —" disabled={saving} />
+                    <MultiSelect options={committeeOptions} value={form.committees} onChange={(v) => set("committees", v)} placeholder="None" disabled={saving} />
                   </div>
                 ) : (
                   form.committees.length > 0 && (
@@ -277,7 +277,7 @@ export default function EditUserPage() {
                 {profile?.role === "admin" && (
                   <div className="field">
                     <label className="field-label">
-                      Action PIN <FieldTooltip text="The 4-digit PIN this user uses to confirm lead-workflow decisions. One-way hashed — even Admin can't view the current value, only reset it to a new one." />
+                      Action PIN <FieldTooltip text="The 4-digit PIN this user uses to confirm lead-workflow decisions. One-way hashed: even Admin can't view the current value, only reset it to a new one." />
                     </label>
                     <p className="text-sm text-secondary" style={{ paddingTop: 9, display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                       {target.pin_updated_at ? "Set" : "Not set"}
@@ -322,7 +322,7 @@ export default function EditUserPage() {
             <Card.Body>
               <p className="text-sm text-secondary" style={{ marginBottom: "var(--space-3)" }}>
                 Permanently delete {target.full_name}'s account. This cannot be undone, and only succeeds if they have
-                no leads, proposals, or other activity on record — deactivate them instead if you just need to revoke
+                no leads, proposals, or other activity on record. Deactivate them instead if you just need to revoke
                 access.
               </p>
               <Button type="button" variant="danger" onClick={() => setShowDeleteUser(true)}>

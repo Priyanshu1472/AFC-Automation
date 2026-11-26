@@ -88,7 +88,7 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
         return;
       }
       if (parentLeft != null && roundMoney(amount) > parentLeft) {
-        setError(`Deliverables split their milestone's amount — only ${formatINR(parentLeft)} of “${parent.title}”'s ${formatINR(parent.invoice_amount)} is left.`);
+        setError(`Deliverables split their milestone's amount: only ${formatINR(parentLeft)} of “${parent.title}”'s ${formatINR(parent.invoice_amount)} is left.`);
         return;
       }
       if (kind === "milestone" && roundMoney(amount) < kidsTotal) {
@@ -157,7 +157,7 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
             {kind === "deliverable" && milestones.length > 0 && (
               <Field label="Under milestone">
                 <Select
-                  options={[{ value: "", label: "— None —" }, ...milestones.map((m) => ({ value: m.id, label: m.title }))]}
+                  options={[{ value: "", label: "None" }, ...milestones.map((m) => ({ value: m.id, label: m.title }))]}
                   value={form.parent_id}
                   onChange={(v) => set("parent_id", v)}
                 />
@@ -170,7 +170,7 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
 
           {isDeliverable ? (
             <>
-              <Field label="Attach a file" hint="PDF or Word document — optional.">
+              <Field label="Attach a file" hint="PDF or Word document, optional.">
                 <input ref={fileInputRef} type="file" accept={FILE_ACCEPT} style={{ display: "none" }} onChange={(e) => { setFile(e.target.files?.[0] || null); e.target.value = ""; }} />
                 <div className="mon-file-pick">
                   <Button type="button" variant="secondary" size="sm" icon={<PaperclipIcon />} disabled={saving} onClick={() => fileInputRef.current?.click()}>
@@ -184,7 +184,7 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
                 hint={contract == null
                   ? "Set the project's contract value first (Edit Details) to calculate an amount."
                   : parentLeft != null
-                    ? `Optional. Part of “${parent.title}” — ${formatINR(parentLeft)} of its ${formatINR(parent.invoice_amount)} is still unallocated.`
+                    ? `Optional. Part of “${parent.title}”: ${formatINR(parentLeft)} of its ${formatINR(parent.invoice_amount)} is still unallocated.`
                     : left != null
                       ? `Optional. ${formatINR(left)} of the ${formatINR(contract)} contract value is still unallocated.`
                       : "Optional."}
@@ -197,10 +197,10 @@ export function ItemModal({ projectId, kind, item, milestones, defaultParentId =
             <Field
               label="Invoice amount (before GST)"
               hint={parentLeft != null
-                ? `Optional. Part of “${parent.title}” — ${formatINR(parentLeft)} of its ${formatINR(parent.invoice_amount)} is still unallocated.`
+                ? `Optional. Part of “${parent.title}”: ${formatINR(parentLeft)} of its ${formatINR(parent.invoice_amount)} is still unallocated.`
                 : left != null
                   ? `Optional. ${formatINR(left)} of the ${formatINR(contract)} contract value is still unallocated.`
-                  : "Optional — e.g. the MoU's payment for this milestone."}
+                  : "Optional, e.g. the MoU's payment for this milestone."}
             >
               <AmountInput value={form.invoice_amount} onChange={(v) => set("invoice_amount", v)} disabled={saving} ariaLabel="Invoice amount" />
             </Field>
@@ -240,7 +240,7 @@ export function CompleteItemModal({ item, openChildren = 0, onClose, onSaved }) 
         )}
         {item.invoice_on_completion && (
           <p className="mon-modal-lead">
-            This is billable — the team will be alerted to raise the client invoice{item.invoice_amount != null ? ` for ${formatINR(item.invoice_amount)}` : ""}.
+            This is billable. The team will be alerted to raise the client invoice{item.invoice_amount != null ? ` for ${formatINR(item.invoice_amount)}` : ""}.
           </p>
         )}
         <Field label="Completion note (optional)">
@@ -276,7 +276,7 @@ export function NoteModal({ item, onClose, onSaved }) {
       <Modal.Body>
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         <Field label="Notes">
-          <textarea className="input" rows={5} value={remarks} onChange={(e) => setRemarks(e.target.value)} disabled={saving} placeholder="Anything worth tracking against this deliverable — client feedback, internal status, follow-ups…" autoFocus />
+          <textarea className="input" rows={5} value={remarks} onChange={(e) => setRemarks(e.target.value)} disabled={saving} placeholder="Anything worth tracking against this deliverable: client feedback, internal status, follow-ups…" autoFocus />
         </Field>
       </Modal.Body>
       <Modal.Footer>

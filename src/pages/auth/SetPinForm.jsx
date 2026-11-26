@@ -65,7 +65,7 @@ export default function SetPinForm({ hasPin, variant = "login" }) {
   const isSection = variant === "section";
   const heading = hasPin ? "Change Action PIN" : "Set Action PIN";
   const subheading =
-    "A 4-digit PIN used to confirm decisions on leads (accept, approve, decline, escalate, forward, withdraw) — separate from your login password, and known only to you.";
+    "A 4-digit PIN used to confirm decisions on leads (accept, approve, decline, escalate, forward, withdraw). Separate from your login password, and known only to you.";
 
   const alerts = (
     <>

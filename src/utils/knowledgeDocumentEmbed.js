@@ -101,7 +101,7 @@ async function pdfPageParagraphsDocx(bytes, docx, label, pageBreakBeforeFirst, o
     const pageBytes = new Uint8Array(await pageBlob.arrayBuffer());
     const scale = Math.min(1, MAX_DOCX_IMAGE_WIDTH_PX / viewport.width);
 
-    const headingText = pdf.numPages > 1 ? `${label} — Page ${i} of ${pdf.numPages}` : label;
+    const headingText = pdf.numPages > 1 ? `${label} (Page ${i} of ${pdf.numPages})` : label;
     paragraphs.push(headingParagraphDocx(headingText, docx, i > 1 || pageBreakBeforeFirst));
     paragraphs.push(new Paragraph({
       children: [new ImageRun({ data: pageBytes, transformation: { width: Math.round(viewport.width * scale), height: Math.round(viewport.height * scale) } })],
@@ -189,7 +189,7 @@ export async function buildKnowledgeDocumentsDocxChildren(documents, docx, supab
   for (let idx = 0; idx < documents.length; idx++) {
     const doc = documents[idx];
     onProgress?.(idx + 1, documents.length, doc.file_name);
-    const label = `${doc.name} — ${doc.file_name}`;
+    const label = `${doc.name} · ${doc.file_name}`;
     const ext = extOf(doc.file_name);
     try {
       const bytes = await fetchProjectDocumentBytes(doc, supabase);
@@ -531,7 +531,7 @@ export async function buildKnowledgeShortlistBothPdf({ items, supabase, onProgre
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    onProgress?.(i + 1, total, `${item.label} — profile`);
+    onProgress?.(i + 1, total, `${item.label} · profile`);
     await appendProjectProfilePage(pdfDoc, fonts, item.label, item.projectInfoHtml);
   }
 

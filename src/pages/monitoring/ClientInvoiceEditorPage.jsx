@@ -236,13 +236,13 @@ export default function ClientInvoiceEditorPage() {
         <div className="page-title-row">
           <div>
             <h1>{invoiceId ? "Edit Client Invoice" : "Raise Client Invoice"}</h1>
-            <p>{lead.lead_number} — {title} · {nth} invoice</p>
+            <p>{lead.lead_number} · {title} · {nth} invoice</p>
           </div>
         </div>
       </div>
 
-      {!items.length && <Alert variant="warning">Add the milestones and deliverables from the MoU first — an invoice is always raised against one of them.</Alert>}
-      {contract == null && <Alert variant="warning">This project has no contract value yet — set it from <strong>Edit Details</strong> on the project before raising an invoice.</Alert>}
+      {!items.length && <Alert variant="warning">Add the milestones and deliverables from the MoU first. An invoice is always raised against one of them.</Alert>}
+      {contract == null && <Alert variant="warning">This project has no contract value yet. Set it from <strong>Edit Details</strong> on the project before raising an invoice.</Alert>}
 
       <form className="pp-fnp-layout" noValidate onSubmit={(e) => { e.preventDefault(); save(); }}>
         <div className="pp-fnp-form">
@@ -290,7 +290,7 @@ export default function ClientInvoiceEditorPage() {
 
           {lineItems.length > 0 && (
             <Card>
-              <Card.Header title="Amounts" subtitle="Before GST — one line per item on the invoice." />
+              <Card.Header title="Amounts" subtitle="Before GST, one line per item on the invoice." />
               <Card.Body className="inv-form-body">
                 <div className="mon-lines">
                   {lineItems.map((it) => {
@@ -318,9 +318,9 @@ export default function ClientInvoiceEditorPage() {
                   </div>
                 </div>
                 <div className="mon-budget">
-                  <div><span>Amount (before GST)</span><strong>{base != null ? formatINR(base) : "—"}</strong></div>
-                  <div><span>{form.gst_type === "cgst_sgst" ? `CGST ${rate / 2}% + SGST ${rate / 2}%` : `IGST ${rate}%`}</span><strong>{gst != null ? formatINR(gst) : "—"}</strong></div>
-                  <div className="is-total"><span>Invoice total</span><strong>{total != null ? formatINR(total) : "—"}</strong></div>
+                  <div><span>Amount (before GST)</span><strong>{base != null ? formatINR(base) : "-"}</strong></div>
+                  <div><span>{form.gst_type === "cgst_sgst" ? `CGST ${rate / 2}% + SGST ${rate / 2}%` : `IGST ${rate}%`}</span><strong>{gst != null ? formatINR(gst) : "-"}</strong></div>
+                  <div className="is-total"><span>Invoice total</span><strong>{total != null ? formatINR(total) : "-"}</strong></div>
                   {projectLeft != null && (
                     <div className={base > projectLeft ? "is-over" : ""}><span>Left on the {formatINR(contract)} contract</span><strong>{formatINR(projectLeft)}</strong></div>
                   )}
@@ -345,7 +345,7 @@ export default function ClientInvoiceEditorPage() {
               <div className="field">
                 <label className="field-label">Subject</label>
                 <input className="input" value={form.subject} onChange={(e) => set("subject", e.target.value)} disabled={off} placeholder={`Submission of ${nth} Invoice towards ${title}`} />
-                <span className="field-hint">Printed as “Sub:” — leave blank for the default shown.</span>
+                <span className="field-hint">Printed as “Sub:”, leave blank for the default shown.</span>
               </div>
             </Card.Body>
           </Card>
@@ -414,7 +414,7 @@ export default function ClientInvoiceEditorPage() {
                 <p className="pp-fnp-body">We sincerely thank you for giving us an opportunity to undertake the captioned assignment.</p>
                 <p className="pp-fnp-body">
                   We enclose herewith an invoice for <strong>{total != null ? rs(total) : "Rs. …/-"} (Rupees {words} Only inclusive of GST)</strong> being the {nth} invoice
-                  of the captioned assignment which has fallen due on {lineItems.length ? dueOnPhrase(lineItems) : <em className="pp-fnp-placeholder">— pick what it&rsquo;s raised against —</em>}.
+                  of the captioned assignment which has fallen due on {lineItems.length ? dueOnPhrase(lineItems) : <em className="pp-fnp-placeholder">pick what it&rsquo;s raised against</em>}.
                 </p>
                 <p className="pp-fnp-body">We shall be grateful, if you could kindly arrange to release the same at the earliest.</p>
                 <p className="pp-fnp-thanks">Thanking you,<br />Yours faithfully,</p>
@@ -429,7 +429,7 @@ export default function ClientInvoiceEditorPage() {
                 {form.contract_ref && <p className="pp-fnp-body"><strong>Ref:</strong> {form.contract_ref}</p>}
                 <table className="inv-pv-table">
                   <tbody>
-                    <tr><th>Invoice No.</th><td>{form.invoice_number || "—"}</td><th>Invoice Date</th><td>{formatDDMMYYYY(form.invoice_date)}</td></tr>
+                    <tr><th>Invoice No.</th><td>{form.invoice_number || "-"}</td><th>Invoice Date</th><td>{formatDDMMYYYY(form.invoice_date)}</td></tr>
                   </tbody>
                 </table>
                 <table className="inv-pv-table">
@@ -444,19 +444,19 @@ export default function ClientInvoiceEditorPage() {
                         <tr key={it.id}>
                           <td className="inv-pv-sno">{i + 1}.</td>
                           <td>{lineItems.length === 1 ? `${preamble} which has fallen due on ${dueOnPhrase(lineItems)}.` : i === 0 ? <>{preamble}, for the following:<br />{label}</> : label}</td>
-                          <td className="inv-pv-amt">{a ? rs(a) : "—"}</td>
+                          <td className="inv-pv-amt">{a ? rs(a) : "-"}</td>
                         </tr>
                       );
                     })}
                     {form.gst_type === "cgst_sgst" ? (
                       <>
-                        <tr><td className="inv-pv-sno">{lineItems.length + 1}.</td><td>CGST@{rate / 2}%</td><td className="inv-pv-amt">{halfGst != null ? rs(halfGst) : "—"}</td></tr>
-                        <tr><td className="inv-pv-sno">{lineItems.length + 2}.</td><td>SGST@{rate / 2}%</td><td className="inv-pv-amt">{gst != null ? rs(roundMoney(gst - halfGst)) : "—"}</td></tr>
+                        <tr><td className="inv-pv-sno">{lineItems.length + 1}.</td><td>CGST@{rate / 2}%</td><td className="inv-pv-amt">{halfGst != null ? rs(halfGst) : "-"}</td></tr>
+                        <tr><td className="inv-pv-sno">{lineItems.length + 2}.</td><td>SGST@{rate / 2}%</td><td className="inv-pv-amt">{gst != null ? rs(roundMoney(gst - halfGst)) : "-"}</td></tr>
                       </>
                     ) : (
-                      <tr><td className="inv-pv-sno">{lineItems.length + 1}.</td><td>IGST@{rate}%</td><td className="inv-pv-amt">{gst != null ? rs(gst) : "—"}</td></tr>
+                      <tr><td className="inv-pv-sno">{lineItems.length + 1}.</td><td>IGST@{rate}%</td><td className="inv-pv-amt">{gst != null ? rs(gst) : "-"}</td></tr>
                     )}
-                    <tr className="inv-pv-total"><td /><td>Total (Rupees {words} Only inclusive of GST)</td><td className="inv-pv-amt">{total != null ? rs(total) : "—"}</td></tr>
+                    <tr className="inv-pv-total"><td /><td>Total (Rupees {words} Only inclusive of GST)</td><td className="inv-pv-amt">{total != null ? rs(total) : "-"}</td></tr>
                   </tbody>
                 </table>
                 <dl className="inv-pv-facts">
@@ -468,7 +468,7 @@ export default function ClientInvoiceEditorPage() {
                 <table className="inv-pv-table inv-pv-kv"><tbody>{AFC_BANK.map(([k, v]) => <tr key={k}><th>{k}</th><td>{v}</td></tr>)}</tbody></table>
                 <dl className="inv-pv-facts inv-pv-signblock">
                   <div><dt>Signature</dt><dd>:</dd></div>
-                  <div><dt>Name</dt><dd>: {cfoName || "—"}</dd></div>
+                  <div><dt>Name</dt><dd>: {cfoName || "-"}</dd></div>
                   <div><dt>Designation</dt><dd>: CHIEF FINANCIAL OFFICER</dd></div>
                   <div><dt>Dated</dt><dd>: {formatDDMMYYYY(form.invoice_date)}</dd></div>
                 </dl>

@@ -81,7 +81,7 @@ export function isLeadOverdue(lead) {
 // or the lead moves past needing one, at which point isLeadOverdue goes
 // false again and this falls back to the real pipeline status.
 export function displayStatusCfg(lead) {
-  if (isLeadOverdue(lead)) return { label: "Submission Overdue", variant: "warning" };
+  if (isLeadOverdue(lead)) return { label: "Submission Overdue", variant: "danger" };
   return STATUS_MAP[lead?.status] || { label: lead?.status, variant: "neutral" };
 }
 

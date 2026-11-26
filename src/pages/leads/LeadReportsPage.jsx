@@ -42,11 +42,11 @@ const isDropped = (l) => l.status === "pa_dropped";
 const isInProgress = (l) => !TERMINAL.includes(l.status) && l.status !== "pa_action_required";
 
 function fmt(d) {
-  if (!d) return "—";
+  if (!d) return "-";
   const dt = new Date(d);
-  return isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return isNaN(dt.getTime()) ? "-" : dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
-const dash = (v) => (v === 0 ? 0 : v || "—");
+const dash = (v) => (v === 0 ? 0 : v || "-");
 const pct = (part, whole) => (whole ? Math.round((part / whole) * 1000) / 10 : 0);
 const dateKey = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 const daysFrom = (d) => (d ? Math.floor((Date.now() - new Date(d)) / 86400000) : null);
@@ -63,7 +63,7 @@ const avg = (nums) => (nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) 
 function groupBy(arr, keyFn) {
   const m = new Map();
   arr.forEach((x) => {
-    const k = keyFn(x) || "—";
+    const k = keyFn(x) || "-";
     if (!m.has(k)) m.set(k, []);
     m.get(k).push(x);
   });
@@ -109,7 +109,7 @@ const REPORTS = [
   },
   {
     id: "status_list", group: "Overview", title: "Lead Status Report",
-    desc: "Current pipeline snapshot — every lead with its stage and days elapsed.",
+    desc: "Current pipeline snapshot: every lead with its stage and days elapsed.",
     build: ({ leads }) => ({
       columns: [
         { key: "lead_number", label: "Lead #" }, { key: "title", label: "Title" }, { key: "team", label: "Team" },
@@ -121,7 +121,7 @@ const REPORTS = [
         lead_number: dash(l.lead_number), title: dash(l.title), team: dash(l.team),
         source_label: SOURCE_LABELS[l.source] || dash(l.source), type_label: TYPE_LABELS[l.lead_type] || dash(l.lead_type),
         creator: dash(l.creator?.full_name), pr: dash(l.assignee?.full_name), status_label: STATUS_MAP[l.status]?.label || l.status,
-        created_f: fmt(l.created_at), days: daysFrom(l.created_at) ?? "—", deadline_f: fmt(l.submission_deadline),
+        created_f: fmt(l.created_at), days: daysFrom(l.created_at) ?? "-", deadline_f: fmt(l.submission_deadline),
       })),
     }),
   },
@@ -129,7 +129,7 @@ const REPORTS = [
     id: "monthly", group: "Overview", title: "Monthly Trend",
     desc: "Leads created per month, with how many were approved or declined.",
     build: ({ leads }) => {
-      const g = groupBy(leads, (l) => (l.created_at ? new Date(l.created_at).toISOString().slice(0, 7) : "—"));
+      const g = groupBy(leads, (l) => (l.created_at ? new Date(l.created_at).toISOString().slice(0, 7) : "-"));
       return {
         columns: [
           { key: "month", label: "Month" }, { key: "total", label: "Created" }, { key: "approved", label: "Approved" },
@@ -138,7 +138,7 @@ const REPORTS = [
         rows: [...g.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([key, arr]) => {
           const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
           return {
-            month: key === "—" ? "—" : new Date(key + "-01").toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
+            month: key === "-" ? "-" : new Date(key + "-01").toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
             total: arr.length, approved: app, declined: dec, progress: arr.filter(isInProgress).length, rate: pct(app, app + dec),
           };
         }),
@@ -186,7 +186,7 @@ const REPORTS = [
       const tats = done.map((l) => daysBetween(l.created_at, l.decided_at)).filter((n) => n !== null);
       const rows = done.map((l) => ({
         lead_number: dash(l.lead_number), title: dash(l.title), team: dash(l.team), created_f: fmt(l.created_at),
-        decided_f: fmt(l.decided_at), tat: daysBetween(l.created_at, l.decided_at) ?? "—",
+        decided_f: fmt(l.decided_at), tat: daysBetween(l.created_at, l.decided_at) ?? "-",
       })).sort((x, y) => (y.tat || 0) - (x.tat || 0));
       return {
         kpis: [
@@ -218,7 +218,7 @@ const REPORTS = [
   },
   {
     id: "approval_note", group: "Pipeline", title: "Approval Note Review Status",
-    desc: "Where each lead's Approval Note stands — not yet drafted, awaiting PR review, or PR-reviewed.",
+    desc: "Where each lead's Approval Note stands: not yet drafted, awaiting PR review, or PR-reviewed.",
     build: ({ leads }) => {
       const notDrafted = leads.filter((l) => !l.approval_note_data).length;
       const pending = leads.filter((l) => l.approval_note_pending_pr_review).length;
@@ -261,10 +261,10 @@ const REPORTS = [
         { key: "pr", label: "Person Responsible" }, { key: "team", label: "Team" }, { key: "total", label: "Assigned" },
         { key: "approved", label: "Approved" }, { key: "declined", label: "Declined" }, { key: "open", label: "Still Open" }, { key: "rate", label: "Approval %" },
       ],
-      rows: [...groupBy(leads, (l) => l.assignee?.full_name || "—")].map(([pr, arr]) => {
+      rows: [...groupBy(leads, (l) => l.assignee?.full_name || "-")].map(([pr, arr]) => {
         const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
         return {
-          pr, team: arr[0]?.team || "—", total: arr.length, approved: app, declined: dec,
+          pr, team: arr[0]?.team || "-", total: arr.length, approved: app, declined: dec,
           open: arr.filter((l) => !TERMINAL.includes(l.status)).length, rate: pct(app, app + dec),
         };
       }).sort((x, y) => y.total - x.total),
@@ -278,9 +278,9 @@ const REPORTS = [
         { key: "creator", label: "Creator" }, { key: "team", label: "Team" }, { key: "total", label: "Created" },
         { key: "approved", label: "Approved" }, { key: "declined", label: "Declined" }, { key: "rate", label: "Approval %" },
       ],
-      rows: [...groupBy(leads, (l) => l.creator?.full_name || "—")].map(([creator, arr]) => {
+      rows: [...groupBy(leads, (l) => l.creator?.full_name || "-")].map(([creator, arr]) => {
         const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
-        return { creator, team: arr[0]?.team || "—", total: arr.length, approved: app, declined: dec, rate: pct(app, app + dec) };
+        return { creator, team: arr[0]?.team || "-", total: arr.length, approved: app, declined: dec, rate: pct(app, app + dec) };
       }).sort((x, y) => y.total - x.total),
     }),
   },
@@ -313,7 +313,7 @@ const REPORTS = [
     desc: "Leads sourced through each Business Partner.",
     build: ({ leads }) => {
       const withBa = leads.filter((l) => l.assigned_ba_id || l.manual_ba_id);
-      const rows = [...groupBy(withBa, (l) => l.ba_org_name || "—")].map(([ba, arr]) => {
+      const rows = [...groupBy(withBa, (l) => l.ba_org_name || "-")].map(([ba, arr]) => {
         const app = arr.filter(isApproved).length, dec = arr.filter(isDeclined).length;
         return { ba, total: arr.length, approved: app, declined: dec, rate: pct(app, app + dec) };
       }).sort((x, y) => y.total - x.total);
@@ -419,7 +419,7 @@ function buildReportPreviewHTML(report, output, filters) {
     : "";
   const headHtml = `<tr>${output.columns.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("")}</tr>`;
   const bodyHtml = output.rows.length
-    ? output.rows.map((row) => `<tr>${output.columns.map((c) => `<td>${escapeHtml(row[c.key] ?? "—")}</td>`).join("")}</tr>`).join("")
+    ? output.rows.map((row) => `<tr>${output.columns.map((c) => `<td>${escapeHtml(row[c.key] ?? "-")}</td>`).join("")}</tr>`).join("")
     : `<tr><td colspan="${output.columns.length}">No data for the selected filters.</td></tr>`;
 
   return `
@@ -458,7 +458,7 @@ function exportPDF(report, output, filters) {
     didDrawPage: () => {
       const w = doc.internal.pageSize.getWidth(), h = doc.internal.pageSize.getHeight();
       doc.setFontSize(7); doc.setTextColor(150);
-      doc.text("AFC India Limited — Confidential", M, h - 20);
+      doc.text("AFC India Limited · Confidential", M, h - 20);
       doc.text(`Page ${doc.internal.getNumberOfPages()}`, w - M, h - 20, { align: "right" });
       doc.setTextColor(0);
     },
@@ -555,7 +555,7 @@ function ReportPreview({ report, output, onExcel, onPdf }) {
               </thead>
               <tbody>
                 {rows.map((row, i) => (
-                  <tr key={i}>{cols.map((c) => <td key={c.key} title={String(row[c.key] ?? "")}>{row[c.key] ?? "—"}</td>)}</tr>
+                  <tr key={i}>{cols.map((c) => <td key={c.key} title={String(row[c.key] ?? "")}>{row[c.key] ?? "-"}</td>)}</tr>
                 ))}
               </tbody>
             </table>

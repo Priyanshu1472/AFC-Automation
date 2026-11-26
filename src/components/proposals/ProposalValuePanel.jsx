@@ -87,7 +87,7 @@ export default function ProposalValuePanel({ bare = false, proposal, canManage, 
         ) : showForm ? (
           <form className="pp-value-form" onSubmit={save}>
             <label className="field-label" htmlFor="pp-proposed-value">
-              Total proposed value (₹){valueRule === "optional" && <span className="pp-value-optional"> — optional for an EOI</span>}
+              Total proposed value (₹){valueRule === "optional" && <span className="pp-value-optional"> (optional for an EOI)</span>}
             </label>
             <div className="pp-value-form-row">
               <div className="pp-value-input">

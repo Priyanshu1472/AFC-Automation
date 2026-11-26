@@ -293,7 +293,7 @@ export default function LeadChatPanel({ leadId, chatOpenedAt, locked }) {
           )}
 
           {view !== "chat" ? null : locked ? (
-            <p className="ar-chat-locked">Chat closed — this lead has been approved.</p>
+            <p className="ar-chat-locked">Chat closed: this lead has been approved.</p>
           ) : (
             <div className="ar-chat-input-row">
               <MentionInput

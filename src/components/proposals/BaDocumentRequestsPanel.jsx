@@ -134,10 +134,10 @@ export default function BaDocumentRequestsPanel({ bare = false, proposalId, prop
     return (
       <tr key={it.id}>
         <td>{it.item_name}</td>
-        <td>{it.justification || "—"}</td>
+        <td>{it.justification || "-"}</td>
         <td>{it.file_path ? <Badge variant="success">Received</Badge> : <Badge variant="warning">Pending</Badge>}</td>
         <td className="pp-table-nowrap">
-          {it.file_path ? <>{it.file_name} <span className="pp-doc-card-meta">({fmtSize(it.file_size)})</span></> : "—"}
+          {it.file_path ? <>{it.file_name} <span className="pp-doc-card-meta">({fmtSize(it.file_size)})</span></> : "-"}
         </td>
         <td className="pp-table-actions">
           <div className="pp-icon-btn-row">

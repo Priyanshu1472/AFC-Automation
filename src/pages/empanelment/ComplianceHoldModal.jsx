@@ -16,7 +16,7 @@ function FieldRow({ fieldKey, label, checked, comment, onToggle, onCommentChange
         <textarea
           className="input chm-row-comment"
           rows={2}
-          placeholder="Explain what needs correcting — the BP sees this exact note…"
+          placeholder="Explain what needs correcting: the BP sees this exact note…"
           value={comment}
           onChange={(e) => onCommentChange(fieldKey, e.target.value)}
           autoFocus

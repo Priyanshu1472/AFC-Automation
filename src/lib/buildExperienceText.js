@@ -14,7 +14,7 @@ export function buildExperienceText(project, keywordDetails = []) {
 
   const keywordsBlock = keywordDetails
     .filter((k) => k.name)
-    .map((k) => `KEYWORD:\n${k.name}\n\nKEYWORD EXPERIENCE:\n${k.description || "—"}`)
+    .map((k) => `KEYWORD:\n${k.name}\n\nKEYWORD EXPERIENCE:\n${k.description || "-"}`)
     .join("\n\n");
 
   const keywordsText = keywordDetails

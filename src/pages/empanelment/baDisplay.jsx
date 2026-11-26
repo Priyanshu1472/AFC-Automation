@@ -7,7 +7,7 @@
 export function formatSectors(ba) {
   let list = ba?.sectors_served;
   if (typeof list === "string") { try { list = JSON.parse(list); } catch { list = [list]; } }
-  if (!Array.isArray(list) || list.length === 0) return "—";
+  if (!Array.isArray(list) || list.length === 0) return "-";
   const named = list.filter((s) => s !== "Others");
   if (list.includes("Others")) {
     const other = (ba.other_sectors || "").trim();
@@ -18,7 +18,7 @@ export function formatSectors(ba) {
 
 // Long free text (Core Expertise etc.) with the BP's line breaks preserved.
 export function MultilineText({ text }) {
-  if (text === null || text === undefined || String(text).trim() === "") return "—";
+  if (text === null || text === undefined || String(text).trim() === "") return "-";
   return <span style={{ whiteSpace: "pre-line", fontWeight: 400, lineHeight: 1.6 }}>{String(text).trim()}</span>;
 }
 
@@ -41,7 +41,7 @@ function parseAssignments(val) {
 // Returns null when nothing was filled, so callers' "hide empty row" logic works.
 export function AssignmentsTable({ value }) {
   const rows = parseAssignments(value);
-  if (rows.length === 0) return "—";
+  if (rows.length === 0) return "-";
   const cell = { padding: "8px 10px", borderBottom: "1px solid var(--border-subtle)", textAlign: "left", verticalAlign: "top", fontWeight: 400, lineHeight: 1.45, wordBreak: "normal", overflowWrap: "normal" };
   const wide = { minWidth: 170 };
   return (
@@ -57,7 +57,7 @@ export function AssignmentsTable({ value }) {
           {rows.map((row, i) => (
             <tr key={i}>
               <td style={cell}>{i + 1}</td>
-              {ASSIGNMENT_COLS.map(([k]) => <td key={k} style={k === "title" || k === "client" || k === "role" ? { ...cell, ...wide } : cell}>{String(row[k] ?? "").trim() || "—"}</td>)}
+              {ASSIGNMENT_COLS.map(([k]) => <td key={k} style={k === "title" || k === "client" || k === "role" ? { ...cell, ...wide } : cell}>{String(row[k] ?? "").trim() || "-"}</td>)}
             </tr>
           ))}
         </tbody>

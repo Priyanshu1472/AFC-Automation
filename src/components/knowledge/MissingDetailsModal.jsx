@@ -21,7 +21,7 @@ export default function MissingDetailsModal({ projectTitle, missingFields, onClo
 
         <div className="md-body">
           {missingFields.length === 0 ? (
-            <p className="md-empty">Nothing missing — every field is filled in.</p>
+            <p className="md-empty">Nothing missing: every field is filled in.</p>
           ) : (
             <ul className="md-list">
               {missingFields.map((label) => (

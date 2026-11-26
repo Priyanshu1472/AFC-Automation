@@ -36,10 +36,10 @@ import BackButton from "../../components/ui/BackButton";
 import { bpListText } from "../../lib/leadBusinessPartners";
 
 function fmt(v) {
-  return v === null || v === undefined || v === "" ? "—" : v;
+  return v === null || v === undefined || v === "" ? "-" : v;
 }
 function fmtDate(v) {
-  if (!v) return "—";
+  if (!v) return "-";
   return new Date(v).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 function fmtSize(bytes) {
@@ -48,7 +48,7 @@ function fmtSize(bytes) {
 }
 
 function Row({ label, value }) {
-  if (!value || value === "—") return null;
+  if (!value || value === "-") return null;
   return (
     <div className="ar-row">
       <span className="ar-row-label">{label}</span>
@@ -177,7 +177,7 @@ function DocItem({ doc, leadId }) {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
         <span className="ar-doc-label" style={{ fontWeight: 500, fontSize: 13 }}>{doc.name}</span>
         <span style={{ fontSize: 11, opacity: 0.55 }}>{fmtSize(doc.size)}</span>
-        {err && <span style={{ fontSize: 11, color: "var(--danger)" }}>Could not open — try again</span>}
+        {err && <span style={{ fontSize: 11, color: "var(--danger)" }}>Could not open, try again</span>}
       </div>
       <span className="ar-doc-open">{loading ? "Opening…" : "Open"}</span>
     </div>
@@ -293,7 +293,7 @@ export default function LeadDetailPage() {
       .select("user_id, user:user_id(full_name)")
       .eq("lead_id", id)
       .order("created_at");
-    setAdditionalResponsibles((additionalRows || []).map((r) => ({ user_id: r.user_id, full_name: r.user?.full_name || "—" })));
+    setAdditionalResponsibles((additionalRows || []).map((r) => ({ user_id: r.user_id, full_name: r.user?.full_name || "-" })));
 
     const { data: proposal } = await supabase
       .from("proposal_preparations")
@@ -754,7 +754,7 @@ export default function LeadDetailPage() {
                 <div className="ld-dup-card-head">
                   <h2>Possible duplications</h2>
                   <p>
-                    {lead.lead_number} matches {duplicateRefs.length === 1 ? "1 existing lead" : `${duplicateRefs.length} existing leads`} — here's what's the same.
+                    {lead.lead_number} matches {duplicateRefs.length === 1 ? "1 existing lead" : `${duplicateRefs.length} existing leads`}. Here's what's the same.
                   </p>
                 </div>
                 <LeadDuplicatesTable refs={duplicateRefs} currentLeadId={lead.id} currentLeadNumber={lead.lead_number} />
@@ -1076,7 +1076,7 @@ export default function LeadDetailPage() {
                   {overdue ? (
                     <span>Submission deadline passed. Only the Person Responsible (or the creator, if none is assigned yet) can edit this lead to update the date.</span>
                   ) : lead.status === "pa_action_required" ? (
-                    <span>Viewing only. This lead was returned for changes — pending edit &amp; resubmission by the Person Responsible.</span>
+                    <span>Viewing only. This lead was returned for changes: pending edit &amp; resubmission by the Person Responsible.</span>
                   ) : (
                     <span>Viewing only. Action pending from <strong>{statusCfg.label}</strong>.</span>
                   )}

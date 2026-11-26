@@ -196,7 +196,7 @@ export default function FeeNotesPanel({ bare = false, proposalId, feeNotes, lead
                         <tr key={f.key}>
                           <td>{f.label}</td>
                           <td>{BORNE_BY_LABELS[note[`${f.key}_borne_by`]] || "AFC"}</td>
-                          <td>{note[`${f.key}_payment_mode`] ? PAYMENT_MODE_LABELS[note[`${f.key}_payment_mode`]] : "—"}</td>
+                          <td>{note[`${f.key}_payment_mode`] ? PAYMENT_MODE_LABELS[note[`${f.key}_payment_mode`]] : "-"}</td>
                           <td className="pp-num">₹{Number(note[`${f.key}_amount`]).toLocaleString("en-IN")}</td>
                         </tr>
                       ))}

@@ -5,8 +5,8 @@ import { supabase, extractFunctionErrorMessage } from "./supabase";
 export const MONITORING_BUCKET = "monitoring-documents";
 
 export const DOCUMENT_CATEGORIES = [
-  { key: "mou_client", label: "MoU — Client" },
-  { key: "mou_bp", label: "MoU — Business Partner" },
+  { key: "mou_client", label: "MoU (Client)" },
+  { key: "mou_bp", label: "MoU (Business Partner)" },
   { key: "work_order", label: "Work Order" },
   { key: "client_document", label: "Client Document / Proof" },
   { key: "deliverable", label: "Deliverable Attachment" },
@@ -28,14 +28,14 @@ export const BP_INVOICE_STATUS_VARIANTS = { requested: "warning", received: "inf
 export const DUE_SOON_DAYS = 7;
 
 export function formatINR(value, { decimals = true } = {}) {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || value === "") return "-";
   const n = Number(value);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   return "₹" + n.toLocaleString("en-IN", decimals ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 0 });
 }
 
 export function fmtDate(d) {
-  if (!d) return "—";
+  if (!d) return "-";
   // Plain YYYY-MM-DD dates are calendar dates — parse as local, not UTC.
   const date = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(`${d}T00:00:00`) : new Date(d);
   return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });

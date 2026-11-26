@@ -80,7 +80,7 @@ export default function SupportWidget({ open: openProp, onOpenChange, showTrigge
         continue;
       }
       if (file.size > MAX_ATTACHMENT_BYTES) {
-        showToast(`"${file.name}" is too large — each image must be under 5MB.`, "danger");
+        showToast(`"${file.name}" is too large: each image must be under 5MB.`, "danger");
         continue;
       }
       accepted.push({ file, previewUrl: URL.createObjectURL(file) });
@@ -121,7 +121,7 @@ export default function SupportWidget({ open: openProp, onOpenChange, showTrigge
         showToast(data?.error || "Failed to send. Please try again.", "danger");
         return;
       }
-      showToast("Sent — support has been notified.", "success");
+      showToast("Sent. Support has been notified.", "success");
       resetForm();
       setOpen(false);
     } catch (err) {
@@ -161,7 +161,7 @@ export default function SupportWidget({ open: openProp, onOpenChange, showTrigge
           </div>
 
           <div className="support-widget-body">
-            <p className="support-widget-hint">Tell us what's going wrong — a screen name, an error, anything that didn't make sense.</p>
+            <p className="support-widget-hint">Tell us what's going wrong: a screen name, an error, anything that didn't make sense.</p>
 
             <textarea
               className="support-widget-textarea"

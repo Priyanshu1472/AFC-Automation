@@ -78,7 +78,7 @@ const FIELD_VALIDATORS = {
 };
 
 function fmtValue(key, val) {
-  if (val === null || val === undefined || val === "") return "—";
+  if (val === null || val === undefined || val === "") return "-";
   if (key === "date_of_incorporation" || key === "last_bs_filed") {
     const d = new Date(val);
     return isNaN(d.getTime()) ? String(val) : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
@@ -88,15 +88,15 @@ function fmtValue(key, val) {
     let obj = val;
     if (typeof obj === "string") { try { obj = JSON.parse(obj); } catch { return String(val); } }
     const entries = Object.entries(obj || {}).filter(([, v]) => v !== "" && v !== null && v !== undefined);
-    return entries.length ? entries.map(([k, v]) => `${k}: ${v}`).join(" | ") : "—";
+    return entries.length ? entries.map(([k, v]) => `${k}: ${v}`).join(" | ") : "-";
   }
-  if (key === "sectors_served") return Array.isArray(val) ? val.join(", ") || "—" : String(val);
+  if (key === "sectors_served") return Array.isArray(val) ? val.join(", ") || "-" : String(val);
   if (key === "assignments") {
     let arr = val;
     if (typeof arr === "string") { try { arr = JSON.parse(arr); } catch { return String(val); } }
-    if (!Array.isArray(arr)) return "—";
+    if (!Array.isArray(arr)) return "-";
     const filled = arr.filter((a) => a?.title || a?.client);
-    return filled.length ? filled.map((a) => a.title || a.client).join(", ") : "—";
+    return filled.length ? filled.map((a) => a.title || a.client).join(", ") : "-";
   }
   return String(val);
 }
@@ -290,7 +290,7 @@ export default function EmpanelmentCorrectionPage() {
           <div className="bf-success-icon" aria-hidden="true"><CheckCircleIcon /></div>
           <Badge variant="success">Submitted</Badge>
           <h2>Correction Submitted</h2>
-          <p>Thank you — your correction has been submitted and the application is back with AFC India Limited for review.</p>
+          <p>Thank you! Your correction has been submitted and the application is back with AFC India Limited for review.</p>
           <Button variant="secondary" onClick={() => navigate("/login")}>Back to Login</Button>
         </div>
       </div>
@@ -321,7 +321,7 @@ export default function EmpanelmentCorrectionPage() {
         {flags && flags.length > 0 && (
           <>
             <FormSection tag="Application" title={orgName || "Your Application"} singleCol>
-              <p className="bf-field-hint">{flags.length} item{flags.length !== 1 ? "s" : ""} flagged for correction — highlighted below. Everything else is shown as previously submitted and cannot be changed here.</p>
+              <p className="bf-field-hint">{flags.length} item{flags.length !== 1 ? "s" : ""} flagged for correction, highlighted below. Everything else is shown as previously submitted and cannot be changed here.</p>
             </FormSection>
 
             {formError && <Alert variant="danger" onClose={() => setFormError("")}>{formError}</Alert>}
@@ -341,7 +341,7 @@ export default function EmpanelmentCorrectionPage() {
             </FormSection>
 
             <FormSection tag="Clarification" tagVariant="warning" title="Clarification for AFC India Limited" singleCol>
-              <Field label="Clarification" required error={clarificationError} full hint="Briefly explain what you corrected and why — this is shown to the reviewer in the application's activity timeline.">
+              <Field label="Clarification" required error={clarificationError} full hint="Briefly explain what you corrected and why. This is shown to the reviewer in the application's activity timeline.">
                 <TextArea value={clarification} onChange={(e) => { setClarification(e.target.value); if (clarificationError) setClarificationError(""); }} placeholder="e.g. Updated the registered office address to match our latest incorporation certificate." rows={3} />
               </Field>
             </FormSection>

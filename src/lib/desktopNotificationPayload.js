@@ -24,7 +24,7 @@ export function notificationTag(row) {
 
 export function buildDesktopPayload(row) {
   const d = describeNotification(row);
-  const lines = [[d.ref, d.subject].filter(Boolean).join(" — "), d.detail].filter(Boolean);
+  const lines = [[d.ref, d.subject].filter(Boolean).join(" · "), d.detail].filter(Boolean);
   return {
     title: d.alert || "AFC PMIS",
     options: {

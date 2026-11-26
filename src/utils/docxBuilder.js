@@ -16,10 +16,10 @@ export function parseSummary(raw) {
 }
 
 export function formatMonth(yyyymm) {
-  if (!yyyymm) return "—";
+  if (!yyyymm) return "-";
   const [y, m] = String(yyyymm).split("-");
   const mi = parseInt(m, 10) - 1;
-  if (!y || isNaN(mi) || mi < 0 || mi > 11) return "—";
+  if (!y || isNaN(mi) || mi < 0 || mi > 11) return "-";
   return `${MONTHS_FULL[mi]} ${y}`;
 }
 
@@ -139,7 +139,7 @@ export function buildProjectRows(project, keywords = [], selectedKwNames = [], d
   ]}));
 
   rows.push(new TableRow({ children: [
-    cell([ plain("Description of Project:", true), plain(v.brief || "—") ], { span: 2, width: TW }),
+    cell([ plain("Description of Project:", true), plain(v.brief || "-") ], { span: 2, width: TW }),
   ]}));
 
   const svc = [ plain("Description of actual services provided by your staff within the assignment:", true) ];
@@ -148,7 +148,7 @@ export function buildProjectRows(project, keywords = [], selectedKwNames = [], d
     spacing: { after: 20 },
     children: [ run("• " + k.name + ": ", true), run(k.description) ],
   })));
-  if (!v.services && !kwSel.length) svc.push(plain("—"));
+  if (!v.services && !kwSel.length) svc.push(plain("-"));
   rows.push(new TableRow({ children: [ cell(svc, { span: 2, width: TW }) ]}));
 
   return { rows, TW, colWidths };
@@ -175,7 +175,7 @@ export function buildPreviewHTML(project, keywords = [], selectedKwNames = [], i
       kwSel.map(k => `<li><strong>${esc(k.name)}:</strong> ${esc(k.description)}</li>`).join("") +
       "</ul>";
   }
-  if (!svcHtml) svcHtml = "—";
+  if (!svcHtml) svcHtml = "-";
 
   const td = 'style="width:50%;vertical-align:top;"';
 
@@ -206,7 +206,7 @@ export function buildPreviewHTML(project, keywords = [], selectedKwNames = [], i
     <td ${td}>${f("Name of associated Consultants, if any:", v.assoc)}</td>
     <td ${td}>${f("Name of senior professional staff of your consulting firm / organization involved and designation and / or functions performed (e.g. Project Director/Coordinator, Team Leader):", v.senior)}</td>
   </tr>
-  <tr><td colspan="2"><strong>Description of Project:</strong><br>${esc(v.brief) || "—"}</td></tr>
+  <tr><td colspan="2"><strong>Description of Project:</strong><br>${esc(v.brief) || "-"}</td></tr>
   <tr><td colspan="2"><strong>Description of actual services provided by your staff within the assignment:</strong><br>${svcHtml}</td></tr>
 </table>
 `;

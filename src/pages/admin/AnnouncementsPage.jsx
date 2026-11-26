@@ -115,7 +115,7 @@ export default function AnnouncementsPage() {
       {confirming && (
         <ConfirmDialog
           title="Send this update?"
-          message="Every active user will see this as a full-screen popup the next time they log in or return to the app. This can't be edited or withdrawn afterward — only replaced by sending a new one."
+          message="Every active user will see this as a full-screen popup the next time they log in or return to the app. This can't be edited or withdrawn afterward, only replaced by sending a new one."
           confirmLabel="Send"
           variant="primary"
           loading={sending}

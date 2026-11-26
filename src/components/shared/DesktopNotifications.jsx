@@ -76,7 +76,7 @@ function PushDeviceStatus({ userId }) {
   }
 
   if (push.state === "registered") {
-    return <p className="desktop-notif-help desktop-notif-device-ok">This device is set up — notifications arrive even when PMIS is closed.</p>;
+    return <p className="desktop-notif-help desktop-notif-device-ok">This device is set up: notifications arrive even when PMIS is closed.</p>;
   }
   if (push.state === "checking" || push.state === "off") {
     return <p className="desktop-notif-help">Setting up this device…</p>;
@@ -132,7 +132,7 @@ export function DesktopNotificationToggle() {
         </div>
       )}
       {blocked && <p className="desktop-notif-menu-help">{BLOCKED_HELP}</p>}
-      {unsupported && <p className="desktop-notif-menu-help">Not supported in this browser — use Chrome or Edge.</p>}
+      {unsupported && <p className="desktop-notif-menu-help">Not supported in this browser. Use Chrome or Edge.</p>}
     </div>
   );
 }
@@ -241,7 +241,7 @@ export function DesktopNotificationPrompt() {
       <div className="desktop-notif-prompt-body">
         <span className="desktop-notif-prompt-title">Get desktop notifications</span>
         <span className="desktop-notif-prompt-text">
-          See new PMIS alerts on your desktop — even when PMIS isn't open.
+          See new PMIS alerts on your desktop, even when PMIS isn't open.
         </span>
         <span className="desktop-notif-prompt-actions">
           <button type="button" className="btn btn-primary btn-sm" onClick={enable} disabled={busy}>

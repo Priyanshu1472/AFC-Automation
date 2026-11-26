@@ -73,7 +73,7 @@ export default function MyProfilePage() {
       return;
     }
     if (file.size > MAX_AVATAR_UPLOAD_BYTES) {
-      showToast("That image is too large — please choose one under 10 MB.", "danger");
+      showToast("That image is too large. Please choose one under 10 MB.", "danger");
       return;
     }
     setCropFile(file);

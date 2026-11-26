@@ -20,11 +20,11 @@ import "../../styles/EmpanelmentListPage.css";
 import ManualBusinessPartnersList from "../../components/empanelment/ManualBusinessPartnersList";
 import { formatSectors, MultilineText, AssignmentsTable, hasAssignments, hasText } from "./baDisplay";
 
-function fmt(val) { return val === null || val === undefined || val === "" ? "—" : val; }
-function fmtDate(val) { if (!val) return "—"; return new Date(val).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
-function fmtMoney(val) { if (val === null || val === undefined || val === "") return "—"; return "INR " + Number(val).toLocaleString("en-IN"); }
+function fmt(val) { return val === null || val === undefined || val === "" ? "-" : val; }
+function fmtDate(val) { if (!val) return "-"; return new Date(val).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }); }
+function fmtMoney(val) { if (val === null || val === undefined || val === "") return "-"; return "INR " + Number(val).toLocaleString("en-IN"); }
 function fmtJsonb(val) {
-  if (!val) return "—";
+  if (!val) return "-";
   try { const obj = typeof val === "string" ? JSON.parse(val) : val; return Object.entries(obj).map(([k, v]) => `${k}: ${v}`).join(" | "); }
   catch { return String(val); }
 }
@@ -170,7 +170,7 @@ function DetailField({ label, value }) {
   return (
     <div className="bl-modal-field">
       <span className="bl-modal-field-label">{label}</span>
-      <span className="bl-modal-field-value">{value || "—"}</span>
+      <span className="bl-modal-field-value">{value || "-"}</span>
     </div>
   );
 }
@@ -271,7 +271,7 @@ function StatCard({ label, value, colorClass, loading, active, onClick }) {
       className={`bl-stat-card bl-stat-${colorClass}${active ? " bl-stat-active" : ""}`}
       onClick={onClick}
     >
-      <div className="bl-stat-value">{loading ? "—" : value}</div>
+      <div className="bl-stat-value">{loading ? "-" : value}</div>
       <div className="bl-stat-label">{label}</div>
     </button>
   );
@@ -506,11 +506,11 @@ export default function EmpanelmentListPage() {
                           className={a.ba_reg ? "bl-row-clickable" : undefined}
                           onClick={a.ba_reg ? () => { setSelectedBA(a.ba_reg); setSelectedAppId(a.id); setSelectedAppRow(a); setSelectedReviewerRole(a.po?.role || null); setSelectedAdvisorRole(a.dgm?.role || null); } : undefined}
                         >
-                          <td className="bl-col-code"><span className="bl-app-code">{a.application_code || "—"}</span></td>
+                          <td className="bl-col-code"><span className="bl-app-code">{a.application_code || "-"}</span></td>
                           <td className="bl-email" title={a.ba_email || ""}>{fmt(a.ba_email)}</td>
                           <td>{a.ba_reg?.org_name ? <span className="bl-org" title={a.ba_reg.org_name}>{fmt(a.ba_reg.org_name)}</span> : <span className="bl-not-filled">Not filled yet</span>}</td>
                           <td className="bl-contact bl-col-contact" title={a.ba_reg?.contact_person || ""}>{fmt(a.ba_reg?.contact_person)}</td>
-                          {canFilterTeam && <td className="bl-col-team">{a.team ? <Badge variant="neutral" className="bl-team-badge">{a.team}</Badge> : "—"}</td>}
+                          {canFilterTeam && <td className="bl-col-team">{a.team ? <Badge variant="neutral" className="bl-team-badge">{a.team}</Badge> : "-"}</td>}
                           <td className="bl-date bl-col-date">{fmtDate(a.created_at)}</td>
                           <td className="bl-col-status"><StatusBadge status={a.status} csReviewed={a.cs_reviewed} reviewerRole={a.po?.role} advisorRole={a.dgm?.role} /></td>
                           <td className="bl-col-actions" onClick={(e) => e.stopPropagation()}>

@@ -153,7 +153,7 @@ export function composeFeeNotePreview({ lead, feeLines, bpName, bpList, submitTo
   const feePhrase = feeListPhrase(feeLines);
   const intro = [];
 
-  intro.push([bold(`${rfpOrEoi} for `), bold(`"${lead.title}"`), bold(` — Requisition of ${feePhrase}`)]);
+  intro.push([bold(`${rfpOrEoi} for `), bold(`"${lead.title}"`), bold(`: Requisition of ${feePhrase}`)]);
 
   const refClause = lead.bid_number ? `, ${refLabel}: ${lead.bid_number},` : "";
   intro.push([

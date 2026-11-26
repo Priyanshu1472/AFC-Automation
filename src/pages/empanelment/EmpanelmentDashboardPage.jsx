@@ -416,8 +416,8 @@ export default function EmpanelmentDashboardPage() {
     if (total - provisionalSent > 0 && (role === "dgm" || role === "agm" || role === "md")) list.push({ tone: "info", icon: Icon.mail, text: `${total - provisionalSent} application${total - provisionalSent > 1 ? "s haven't" : " hasn't"} had a provisional letter sent yet.` });
     if (acceptRate !== null && acceptRate >= 70) list.push({ tone: "good", icon: Icon.check, text: `Strong acceptance rate of ${acceptRate}% across decided applications.` });
     if (avgTat !== null) list.push({ tone: "info", icon: Icon.trending, text: `Applications take an average of ${avgTat} day${avgTat !== 1 ? "s" : ""} from being sent to being accepted.` });
-    if (stalled.length === 0 && total > 0) list.push({ tone: "good", icon: Icon.check, text: "No stalled applications — the pipeline is moving well." });
-    if (total === 0) list.push({ tone: "info", icon: Icon.send, text: "No applications yet — start by sending an empanelment form." });
+    if (stalled.length === 0 && total > 0) list.push({ tone: "good", icon: Icon.check, text: "No stalled applications. The pipeline is moving well." });
+    if (total === 0) list.push({ tone: "info", icon: Icon.send, text: "No applications yet. Start by sending an empanelment form." });
     return list.slice(0, 4);
   }, [stalled, onHold, total, provisionalSent, role, acceptRate, avgTat]);
 
@@ -486,7 +486,7 @@ export default function EmpanelmentDashboardPage() {
         <div className="edb-kpi-row">
           <StatTile label="Total Applications" value={total} sub={dateRangeDays ? `Last ${dateRangeDays} days` : "All time"} variant="brand" icon={Icon.send} onClick={() => handleKpiClick("total", "All Applications", filtered)} active={activeKpi === "total"} />
           <StatTile label="In Progress" value={inProgress} sub="Active pipeline" variant="warning" icon={Icon.clock} onClick={() => handleKpiClick("progress", "In Progress", filtered.filter((a) => IN_PROGRESS_STATUSES.includes(a.status)))} active={activeKpi === "progress"} />
-          <StatTile label="Empanelled" value={accepted} sub={acceptRate !== null ? `${acceptRate}% acceptance rate` : "—"} variant="success" icon={Icon.check} onClick={() => handleKpiClick("accepted", "Empanelled", filtered.filter((a) => a.status === "accepted"))} active={activeKpi === "accepted"} />
+          <StatTile label="Empanelled" value={accepted} sub={acceptRate !== null ? `${acceptRate}% acceptance rate` : "-"} variant="success" icon={Icon.check} onClick={() => handleKpiClick("accepted", "Empanelled", filtered.filter((a) => a.status === "accepted"))} active={activeKpi === "accepted"} />
           <StatTile label={INELIGIBLE_LABEL} value={rejected} sub="Final decisions" variant="danger" icon={Icon.x} onClick={() => handleKpiClick("rejected", INELIGIBLE_LABEL, filtered.filter((a) => a.status === "rejected"))} active={activeKpi === "rejected"} />
           <StatTile label="On Hold" value={onHold} sub="Awaiting BP correction" variant="neutral" icon={Icon.pause} onClick={() => handleKpiClick("hold", "On Hold", filtered.filter((a) => a.status === "on_hold"))} active={activeKpi === "hold"} />
           {avgTat !== null && <StatTile label="Avg. Time to Accept" value={`${avgTat}d`} sub="Sent → accepted" variant="info" icon={Icon.trending} />}

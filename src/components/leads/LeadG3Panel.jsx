@@ -71,7 +71,7 @@ export default function LeadG3Panel({ leadId, leadStatus, onResolved }) {
         showToast(data?.error || "Failed to resolve the escalation.", "danger");
         return;
       }
-      showToast("Lead accepted — the other conflicting leads have been dropped.", "success");
+      showToast("Lead accepted. The other conflicting leads have been dropped.", "success");
       setAcceptingId(null);
       setPin("");
       fetchEscalation();
@@ -96,7 +96,7 @@ export default function LeadG3Panel({ leadId, leadStatus, onResolved }) {
             className="ar-field"
             style={{ borderBottom: "1px solid var(--border-primary)", paddingBottom: "var(--space-3)", marginBottom: "var(--space-3)" }}
           >
-            <p style={{ margin: 0, fontWeight: 600 }}>{m.leadNumber} — {m.team}</p>
+            <p style={{ margin: 0, fontWeight: 600 }}>{m.leadNumber} · {m.team}</p>
             <p className="ar-empty-text" style={{ margin: "2px 0 var(--space-2)" }}>{m.title}</p>
             {acceptingId === m.id ? (
               <>

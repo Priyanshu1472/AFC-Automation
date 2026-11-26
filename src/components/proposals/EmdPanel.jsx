@@ -47,8 +47,8 @@ const CHOICES = [
 ];
 
 const CHOSEN_TOAST = {
-  refund: "EMD Refund chosen — mark it Received once the client returns it.",
-  pbg: "Converted to PBG — the EMD will be adjusted in the PBG Note.",
+  refund: "EMD Refund chosen. Mark it Received once the client returns it.",
+  pbg: "Converted to PBG. The EMD will be adjusted in the PBG Note.",
   on_completion: "EMD will be refunded on completion of the project.",
 };
 
@@ -212,7 +212,7 @@ export default function EmdPanel({ bare = false,
               </span>
             )}
             {isTeam && track && !teamEditable && (
-              <span className="pp-choice-note">Locked — it has already gone forward for approval.</span>
+              <span className="pp-choice-note">Locked: it has already gone forward for approval.</span>
             )}
           </div>
         )}
@@ -250,7 +250,7 @@ export default function EmdPanel({ bare = false,
               {isTeam ? (
                 <div className="pp-seg" role="radiogroup" aria-label="EMD refund">
                   <button type="button" role="radio" aria-checked={status === "pending"} className={`pp-seg-btn${status === "pending" ? " is-on" : ""}`} disabled={!!busy || status === "pending"} onClick={setPending}>Pending</button>
-                  <button type="button" role="radio" aria-checked={status === "received"} className={`pp-seg-btn${status === "received" ? " is-on" : ""}`} disabled={!!busy || status === "received"} onClick={() => act("set_refund_received", { received: true }, "Marked received — upload the proof and forward it to Accounts.")}>Received</button>
+                  <button type="button" role="radio" aria-checked={status === "received"} className={`pp-seg-btn${status === "received" ? " is-on" : ""}`} disabled={!!busy || status === "received"} onClick={() => act("set_refund_received", { received: true }, "Marked received. Upload the proof and forward it to Accounts.")}>Received</button>
                 </div>
               ) : (
                 <Badge variant={EMD_STATUS_VARIANTS[status]}>{EMD_STATUS_LABELS[status]}</Badge>

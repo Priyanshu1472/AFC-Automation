@@ -107,7 +107,7 @@ describe("LeadChatPanel", () => {
     await waitFor(() => screen.getByRole("button", { name: "Open chat" }));
     openWidget();
     await waitFor(() => expect(screen.getByText("Hello team")).toBeInTheDocument());
-    expect(screen.getByText("Chat closed — this lead has been approved.")).toBeInTheDocument();
+    expect(screen.getByText("Chat closed: this lead has been approved.")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Type a message… use @ to tag someone")).not.toBeInTheDocument();
   });
 

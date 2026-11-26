@@ -109,7 +109,7 @@ export default function Turnstile({ onVerify, onExpire }) {
       <div ref={containerRef} />
       {!error && slow && (
         <p className="field-hint">
-          Still loading verification — this can take a moment on a slow connection.{" "}
+          Still loading verification. This can take a moment on a slow connection.{" "}
           <button type="button" className="afc-link-btn" onClick={retry}>Try again</button>
         </p>
       )}

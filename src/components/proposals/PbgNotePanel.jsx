@@ -120,7 +120,7 @@ export default function PbgNotePanel({ bare = false, proposal, lead, note, finan
     <>
       <div className="pp-pbg-stats">
         <div><span>PBG amount</span><strong>{formatINR(pbg)}</strong></div>
-        <div><span>EMD adjusted</span><strong>{adjusted > 0 ? formatINR(adjusted) : "—"}</strong></div>
+        <div><span>EMD adjusted</span><strong>{adjusted > 0 ? formatINR(adjusted) : "-"}</strong></div>
         <div className="is-key"><span>{adjusted > 0 ? "To submit" : "Full PBG to submit"}</span><strong>{formatINR(toFurnish)}</strong></div>
       </div>
 
@@ -196,7 +196,7 @@ export default function PbgNotePanel({ bare = false, proposal, lead, note, finan
               {note.payment_reference ? ` · Ref: ${note.payment_reference}` : ""}
             </p>
           ) : (
-            <p className="pp-fin-wait">Approved by Accounts — upload the payment proof and mark the payment done.</p>
+            <p className="pp-fin-wait">Approved by Accounts. Upload the payment proof and mark the payment done.</p>
           )}
           {note.accounts_remark && <p className="pp-fin-quote"><span>Accounts remarks</span>{note.accounts_remark}</p>}
           <span className="pp-fin-sub">Payment proof</span>
@@ -243,11 +243,11 @@ export default function PbgNotePanel({ bare = false, proposal, lead, note, finan
       )}
       {modal === "ra_approve" && (
         <FinanceActionModal title="Approve PBG Note" intro="Your signature goes on the note as Recommending Authority, and it moves to the MD." confirmLabel="Approve & Forward" withPin
-          run={run("ra_approve")} onClose={() => setModal(null)} onSuccess={done("Approved — sent to the MD.")} />
+          run={run("ra_approve")} onClose={() => setModal(null)} onSuccess={done("Approved, sent to the MD.")} />
       )}
       {modal === "md_approve" && (
         <FinanceActionModal title="Approve PBG Note" intro="Your signature goes on the note, and it moves to the Accounts Committee." confirmLabel="Approve" withPin
-          run={run("md_approve")} onClose={() => setModal(null)} onSuccess={done("Approved — sent to Accounts.")} />
+          run={run("md_approve")} onClose={() => setModal(null)} onSuccess={done("Approved, sent to Accounts.")} />
       )}
       {modal === "accounts_approve" && (
         <FinanceActionModal title="Approve for Payment" intro="Confirm the note and proofs are in order. The PBG then waits for payment." confirmLabel="Approve" withPin

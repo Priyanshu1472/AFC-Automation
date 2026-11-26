@@ -103,7 +103,7 @@ async function doSync(userId, { fresh = false } = {}) {
   }
   const reg = await getRegistration();
   if (!reg || !userId) {
-    setStatus({ state: "unavailable", error: "PMIS isn't installed in this browser yet — reload the page." });
+    setStatus({ state: "unavailable", error: "PMIS isn't installed in this browser yet. Reload the page." });
     return false;
   }
   let sub = await reg.pushManager.getSubscription();

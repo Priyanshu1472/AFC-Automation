@@ -10,7 +10,7 @@ import "../../styles/BaFormPage.css";
 
 function statusMessage(status, csReviewed) {
   if (status === "on_hold") return { variant: "warning", text: "One or more items need your correction before review can continue." };
-  if (status === "accepted") return { variant: "success", text: "Congratulations — your application has been accepted. Check your email for your portal login details." };
+  if (status === "accepted") return { variant: "success", text: "Congratulations! Your application has been accepted. Check your email for your portal login details." };
   if (status === "rejected") return { variant: "info", text: "After careful evaluation, this application has been found ineligible for empanelment at this time." };
   if (status === "sent") return { variant: "info", text: "We're waiting for you to fill and submit the empanelment form." };
   const stage = STATUS_FLOW.find((s) => s.key === displayStatus(status, csReviewed));

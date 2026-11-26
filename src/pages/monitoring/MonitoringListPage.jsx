@@ -142,7 +142,7 @@ export default function MonitoringListPage() {
           <Card>
             {filtered.length === 0 ? (
               <div className="pp-empty">
-                {teamScoped.length === 0 ? "No projects in Monitoring yet — a proposal appears here once it's recorded as Awarded." : "No projects match these filters."}
+                {teamScoped.length === 0 ? "No projects in Monitoring yet. A proposal appears here once it's recorded as Awarded." : "No projects match these filters."}
               </div>
             ) : (
               <div className="pp-table-wrap">
@@ -159,8 +159,8 @@ export default function MonitoringListPage() {
                             <div className="mon-cell-title">{r.lead?.title}</div>
                             <div className="pp-td-muted mon-cell-sub">{r.lead?.lead_number}</div>
                           </td>
-                          <td>{r.lead?.client_name || <span className="pp-td-muted">—</span>}</td>
-                          <td className="pp-td-muted">{r.lead?.ba?.full_name || "—"}</td>
+                          <td>{r.lead?.client_name || <span className="pp-td-muted">-</span>}</td>
+                          <td className="pp-td-muted">{r.lead?.ba?.full_name || "-"}</td>
                           <td>{formatINR(r.contract_value, { decimals: false })}</td>
                           <td>
                             {r.total ? (
@@ -171,7 +171,7 @@ export default function MonitoringListPage() {
                             ) : <span className="pp-td-muted">Not planned</span>}
                           </td>
                           <td className={r.nextDue && itemTiming(r.nextDue) === "overdue" ? "pp-td-date--overdue" : ""}>
-                            {r.nextDue ? fmtDate(r.nextDue.due_date) : <span className="pp-td-muted">—</span>}
+                            {r.nextDue ? fmtDate(r.nextDue.due_date) : <span className="pp-td-muted">-</span>}
                           </td>
                           <td>
                             <div className="mon-attn">
@@ -179,7 +179,7 @@ export default function MonitoringListPage() {
                               {r.toInvoice > 0 && <span className="mon-tag is-overdue">{r.toInvoice} to invoice</span>}
                               {r.dueSoon > 0 && <span className="mon-tag is-due_soon">{r.dueSoon} due soon</span>}
                               {r.outstanding > 0 && <span className="mon-tag is-billable">{formatINR(r.outstanding, { decimals: false })} unpaid</span>}
-                              {!r.overdue && !r.toInvoice && !r.dueSoon && !r.outstanding && <span className="pp-td-muted">—</span>}
+                              {!r.overdue && !r.toInvoice && !r.dueSoon && !r.outstanding && <span className="pp-td-muted">-</span>}
                             </div>
                           </td>
                           <td><Badge variant={PROJECT_STATUS_VARIANTS[r.status]}>{PROJECT_STATUS_LABELS[r.status]}</Badge></td>

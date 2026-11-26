@@ -22,13 +22,13 @@ import "../../styles/CompanyDocumentsPanel.css";
 const BUCKET = "company-documents";
 
 function fmtSize(bytes) {
-  if (!bytes) return "—";
+  if (!bytes) return "-";
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function fmtDate(iso) {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -133,7 +133,7 @@ function CompanyDocumentForm({ doc, onSaved, onCancel }) {
             onChange={(e) => setFile(e.target.files?.[0] || null)}
             disabled={saving}
           />
-          {isEdit && <span className="field-hint">Current file: {doc.file_name}{file ? " — will be replaced" : ""}</span>}
+          {isEdit && <span className="field-hint">Current file: {doc.file_name}{file ? " (will be replaced)" : ""}</span>}
         </div>
       </div>
       {error && <div className="field-error" style={{ marginTop: 8 }}>{error}</div>}
@@ -253,7 +253,7 @@ export default function CompanyDocumentsPage() {
                         <div className="cdp-doc-name">{doc.name}</div>
                         <div className="cdp-doc-file">{doc.file_name}</div>
                       </td>
-                      <td>{doc.uploader?.full_name || "—"}</td>
+                      <td>{doc.uploader?.full_name || "-"}</td>
                       <td>{fmtDate(doc.created_at)}</td>
                       <td>{fmtSize(doc.file_size)}</td>
                       <td>

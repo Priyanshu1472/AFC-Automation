@@ -39,10 +39,10 @@ function StatusBadge({ lead }) {
 }
 
 function fmt(v) {
-  return v === null || v === undefined || v === "" ? "—" : v;
+  return v === null || v === undefined || v === "" ? "-" : v;
 }
 function fmtDate(v) {
-  if (!v) return "—";
+  if (!v) return "-";
   return new Date(v).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -55,7 +55,7 @@ function leadTypeLabel(l) {
   const source = SOURCE_LABELS[l.source];
   const type = l.lead_type ? l.lead_type.toUpperCase() : null;
   if (type && source) return `${type} · ${source}`;
-  return type || source || "—";
+  return type || source || "-";
 }
 
 // Restores search/filter/page state after a trip out to a lead's detail
@@ -398,7 +398,7 @@ export default function LeadListPage() {
                     <tr key={l.id} className="ll-row-clickable" onClick={() => navigate(`/leads/${l.id}`)}>
                       <td><span className="ll-lead-number">{l.lead_number}</span></td>
                       <td className="ll-title" title={l.title}>{fmt(l.title)}</td>
-                      {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "—"}</td>}
+                      {canFilterTeam && <td>{l.team ? <Badge variant="neutral">{l.team}</Badge> : "-"}</td>}
                       <td className="ll-name-cell" title={l.assignee?.full_name || ""}>{fmt(l.assignee?.full_name)}</td>
                       <td>{leadTypeLabel(l)}</td>
                       <td className="ll-col-status"><StatusBadge lead={l} /></td>

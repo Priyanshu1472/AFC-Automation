@@ -103,7 +103,7 @@ export default function EscalateToG3Dialog({ leadId, queryId, requireConflictLea
             Conflicting Leads {requireConflictLeads && <span className="ar-required">*</span>}
           </label>
           <MultiSelect
-            options={conflictLeadOptions.map((l) => ({ value: l.id, label: `${l.lead_number} — ${l.title}`, group: l.team }))}
+            options={conflictLeadOptions.map((l) => ({ value: l.id, label: `${l.lead_number} · ${l.title}`, group: l.team }))}
             value={selectedConflictIds}
             onChange={setSelectedConflictIds}
             placeholder={conflictLeadOptions.length ? "Search by lead number or title" : "No other eligible leads found."}
@@ -112,7 +112,7 @@ export default function EscalateToG3Dialog({ leadId, queryId, requireConflictLea
           <span className="field-hint">
             {requireConflictLeads
               ? "Select the leads this one conflicts with."
-              : "Optional — add a specific conflicting lead if you know of one."}
+              : "Optional. Add a specific conflicting lead if you know of one."}
           </span>
         </div>
         <div className="ar-field">
@@ -120,7 +120,7 @@ export default function EscalateToG3Dialog({ leadId, queryId, requireConflictLea
             Escalate To <span className="ar-required">*</span>
           </label>
           <MultiSelect
-            options={g3MemberOptions.map((u) => ({ value: u.id, label: `${u.full_name} — ${u.team || "—"}` }))}
+            options={g3MemberOptions.map((u) => ({ value: u.id, label: `${u.full_name} · ${u.team || "-"}` }))}
             value={selectedG3Ids}
             onChange={setSelectedG3Ids}
             placeholder={g3MemberOptions.length ? "Search G3 committee members" : "No active G3 committee members found."}

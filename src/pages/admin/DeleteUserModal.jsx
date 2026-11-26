@@ -27,7 +27,7 @@ export default function DeleteUserModal({ targetUserId, targetName, targetEmail,
   async function handleSubmit() {
     setError("");
     if (!adminPassword) return setError("Enter your own password to confirm.");
-    if (!emailMatches) return setError("Typed email doesn't match — type it exactly to confirm.");
+    if (!emailMatches) return setError("Typed email doesn't match. Type it exactly to confirm.");
 
     setLoading(true);
     try {
@@ -60,7 +60,7 @@ export default function DeleteUserModal({ targetUserId, targetName, targetEmail,
       <Modal.Body>
         {error && <Alert variant="danger" onClose={() => setError("")}>{error}</Alert>}
         <Alert variant="warning">
-          This removes their login and profile entirely — it only succeeds if they have no leads, proposals, or other
+          This removes their login and profile entirely. It only succeeds if they have no leads, proposals, or other
           activity on record. If they do, deactivate the account instead (Users list → Deactivate); that keeps their
           history intact and can be reversed.
         </Alert>

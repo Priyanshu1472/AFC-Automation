@@ -269,14 +269,14 @@ export function KeywordDropdown({ allKeywords, selectedKeywords, onToggle, onAdd
           </div>
 
           <div className="efp-kw-footer">
-            {selectedCount === 0 ? "Select keywords that apply to this project" : `${selectedCount} selected — click a keyword below to add description`}
+            {selectedCount === 0 ? "Select keywords that apply to this project" : `${selectedCount} selected: click a keyword below to add description`}
           </div>
         </div>
       )}
 
       {selectedCount > 0 && (
         <div className="efp-kw-selected-wrap">
-          <div className="efp-kw-selected-label">Selected — click to add description</div>
+          <div className="efp-kw-selected-label">Selected: click to add description</div>
           <div className="efp-kw-chips">
             {Object.keys(selectedKeywords).map((kw) => (
               <span key={kw} onClick={() => onSetActive(activeKeyword === kw ? null : kw)} className={`efp-kw-chip${activeKeyword === kw ? " efp-kw-chip--active" : ""}`}>

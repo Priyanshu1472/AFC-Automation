@@ -81,7 +81,7 @@ function ToggleButton({ user, isSelf, togglingId, onToggle }) {
 function EditButton({ user, isSelf, onEdit }) {
   if (isSelf) return null;
   return (
-    <Tooltip text="Fix a mistake on this account — name, team, office, or (Admin/MD only) role.">
+    <Tooltip text="Fix a mistake on this account: name, team, office, or (Admin/MD only) role.">
       <Button variant="secondary" size="sm" onClick={() => onEdit(user)}>
         Edit
       </Button>
@@ -116,7 +116,7 @@ function userCommittees(u) {
 
 function CommitteeBadges({ user }) {
   const list = userCommittees(user);
-  if (!list.length) return "—";
+  if (!list.length) return "-";
   return (
     <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
       {list.map((c) => (
@@ -397,7 +397,7 @@ export default function UserListPage() {
                               <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_ABBR[u.role] || u.role}</Badge>
                             </Tooltip>
                           </td>
-                          <td>{u.office ? OFFICE_LABELS[u.office] || u.office : "—"}</td>
+                          <td>{u.office ? OFFICE_LABELS[u.office] || u.office : "-"}</td>
                           <td><CommitteeBadges user={u} /></td>
                           <td><Badge variant={u.is_active ? "success" : "danger"} dot>{u.is_active ? "Active" : "Inactive"}</Badge></td>
                           {canManage && (
@@ -465,7 +465,7 @@ export default function UserListPage() {
                       <th>Email</th>
                       <th>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                          Designation <FieldTooltip text="A staff member's designation determines what they can see and do — see the Designation field on the Create User page for the full hierarchy." />
+                          Designation <FieldTooltip text="A staff member's designation determines what they can see and do. See the Designation field on the Create User page for the full hierarchy." />
                         </span>
                       </th>
                       <th>Office</th>
@@ -489,8 +489,8 @@ export default function UserListPage() {
                             <Badge className="ul-role-badge" variant={ROLE_VARIANT[u.role] || "neutral"}>{ROLE_ABBR[u.role] || u.role}</Badge>
                           </Tooltip>
                         </td>
-                        <td>{u.office ? OFFICE_LABELS[u.office] || u.office : "—"}</td>
-                        <td>{u.team || "—"}</td>
+                        <td>{u.office ? OFFICE_LABELS[u.office] || u.office : "-"}</td>
+                        <td>{u.team || "-"}</td>
                         <td><CommitteeBadges user={u} /></td>
                         <td>
                           <Badge variant={u.is_active ? "success" : "danger"} dot>

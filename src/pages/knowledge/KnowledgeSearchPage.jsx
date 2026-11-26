@@ -30,9 +30,9 @@ function parseYM(yyyymm) {
   return { year: parseInt(y), month: parseInt(m) - 1 };
 }
 function fmtYM(yyyymm) {
-  if (!yyyymm) return "—";
+  if (!yyyymm) return "-";
   const { year, month } = parseYM(yyyymm);
-  if (!year) return "—";
+  if (!year) return "-";
   return `${MONTHS[month]} ${year}`;
 }
 
@@ -133,7 +133,7 @@ export default function KnowledgeSearchPage() {
     const projKwMap = {};
     kwDetails.forEach((d) => {
       if (!projKwMap[d.project_id]) projKwMap[d.project_id] = [];
-      projKwMap[d.project_id].push({ name: kwMap[d.keyword_id] || "—", description: d.description });
+      projKwMap[d.project_id].push({ name: kwMap[d.keyword_id] || "-", description: d.description });
     });
     return projects.map((p) => {
       const s = p.summary || {};
@@ -392,10 +392,10 @@ export default function KnowledgeSearchPage() {
                 >
                   <td className="kr-td-num">{tablePg.start + i + 1}</td>
                   <td title={p.shortform ? `${p.title} (${p.shortform})` : p.title}><div className="kr-td-title">{p.title}</div>{p.shortform && <div className="kr-td-shortform">{p.shortform}</div>}</td>
-                  <td title={p.client || ""}><div className="kr-td-client">{p.client || <span className="kr-td-muted">—</span>}</div></td>
-                  <td title={p.location || ""}>{p.location ? <span className="kr-td-loc"><IconPin /> <span className="kr-td-ellipsis">{p.location}</span></span> : <span className="kr-td-muted">—</span>}</td>
+                  <td title={p.client || ""}><div className="kr-td-client">{p.client || <span className="kr-td-muted">-</span>}</div></td>
+                  <td title={p.location || ""}>{p.location ? <span className="kr-td-loc"><IconPin /> <span className="kr-td-ellipsis">{p.location}</span></span> : <span className="kr-td-muted">-</span>}</td>
                   <td className="kr-td-date" title={`${fmtYM(p.startDate)} – ${fmtYM(p.finishDate)}`}>{fmtYM(p.startDate)} – {fmtYM(p.finishDate)}</td>
-                  <td className="kr-td-date" title={p.capitalCost != null ? `₹${p.capitalCost} Lakh` : ""}>{p.capitalCost != null ? `₹${p.capitalCost} Lakh` : <span className="kr-td-muted">—</span>}</td>
+                  <td className="kr-td-date" title={p.capitalCost != null ? `₹${p.capitalCost} Lakh` : ""}>{p.capitalCost != null ? `₹${p.capitalCost} Lakh` : <span className="kr-td-muted">-</span>}</td>
                   <td><MissingDetailsBtn p={p} /></td>
                   <td>
                     <div className="kr-td-actions">
@@ -552,7 +552,7 @@ export default function KnowledgeSearchPage() {
             <FilterField label="Project Value (₹ Lakh)">
               <div className="kr-range-row">
                 <input type="number" className="input" placeholder="Min" value={filterMin} onChange={(e) => updateFilterMin(e.target.value)} />
-                <span style={{ color: "var(--text-tertiary)" }}>—</span>
+                <span style={{ color: "var(--text-tertiary)" }}>-</span>
                 <input type="number" className="input" placeholder="Max" value={filterMax} onChange={(e) => updateFilterMax(e.target.value)} />
               </div>
             </FilterField>

@@ -72,7 +72,7 @@ function ProjectDetailsModal({ project, invoicedBase, allocated, onClose, onSave
       if (value < invoicedBase) { setError(`The contract value can't be less than the ${formatINR(invoicedBase)} already invoiced (before GST).`); return; }
       if (value < allocated) { setError(`The contract value can't be less than the ${formatINR(allocated)} set across milestones and deliverables.`); return; }
     } else if (invoicedBase > 0) {
-      setError("The contract value can't be cleared — invoices have already been raised against it.");
+      setError("The contract value can't be cleared. Invoices have already been raised against it.");
       return;
     }
     let share = null;
@@ -133,7 +133,7 @@ function ProjectDetailsModal({ project, invoicedBase, allocated, onClose, onSave
           </Field>
 
           <h3 className="mon-form-section">Client billing details</h3>
-          <Field label="Client name & address" hint="As it should appear on the invoice — one line per row.">
+          <Field label="Client name & address" hint="As it should appear on the invoice, one line per row.">
             <textarea className="input" rows={4} value={form.client_address} onChange={(e) => set("client_address", e.target.value)} disabled={saving} placeholder={"The Secretary\nTea Board India\n14, B.T.M Sarani\nKolkata-700001"} />
           </Field>
           <Field label="Client GSTIN" hint="A Delhi GSTIN (07…) is billed CGST + SGST; any other state IGST.">
@@ -249,15 +249,15 @@ export default function MonitoringProjectPage() {
 
   const alerts = [
     ...overdue.map((i) => ({ key: `o-${i.id}`, tone: "danger", text: `${i.kind === "milestone" ? "Milestone" : "Deliverable"} “${i.title}” is ${dueLabel(i).toLowerCase()}.` })),
-    ...toInvoice.map((i) => ({ key: `i-${i.id}`, tone: "danger", text: `“${i.title}” is complete — raise the client invoice${Number(i.invoice_amount) > 0 ? ` (${formatINR(i.invoice_amount)})` : ""}.`, action: canEdit ? { label: "Raise Invoice", run: () => raiseInvoice(i.id) } : null })),
+    ...toInvoice.map((i) => ({ key: `i-${i.id}`, tone: "danger", text: `“${i.title}” is complete. Raise the client invoice${Number(i.invoice_amount) > 0 ? ` (${formatINR(i.invoice_amount)})` : ""}.`, action: canEdit ? { label: "Raise Invoice", run: () => raiseInvoice(i.id) } : null })),
     ...bpReceived.map((b) => {
       const note = noteByBp[b.id];
-      if (!note) return { key: `b-${b.id}`, tone: "warning", text: `BP invoice ${b.invoice_number} (${formatINR(b.amount)}) received — make the payment note for Accounts.`, action: canEdit ? toInvoicesTab : null };
-      if (note.status === "draft") return { key: `b-${b.id}`, tone: "warning", text: `The payment note for BP invoice ${b.invoice_number} is still a draft — send it to Accounts.`, action: canEdit ? toInvoicesTab : null };
-      return { key: `b-${b.id}`, tone: "info", text: `Payment note sent — Accounts to pay BP invoice ${b.invoice_number} (${formatINR(b.amount)}).` };
+      if (!note) return { key: `b-${b.id}`, tone: "warning", text: `BP invoice ${b.invoice_number} (${formatINR(b.amount)}) received. Make the payment note for Accounts.`, action: canEdit ? toInvoicesTab : null };
+      if (note.status === "draft") return { key: `b-${b.id}`, tone: "warning", text: `The payment note for BP invoice ${b.invoice_number} is still a draft. Send it to Accounts.`, action: canEdit ? toInvoicesTab : null };
+      return { key: `b-${b.id}`, tone: "info", text: `Payment note sent. Accounts to pay BP invoice ${b.invoice_number} (${formatINR(b.amount)}).` };
     }),
-    ...paidNoBpRequest.map((i) => ({ key: `r-${i.id}`, tone: "warning", text: `Client paid invoice ${i.invoice_number} — ask the Business Partner for their invoice.`, action: canEdit ? toInvoicesTab : null })),
-    ...dueSoon.map((i) => ({ key: `s-${i.id}`, tone: "info", text: `“${i.title}” — ${dueLabel(i).toLowerCase()} (${fmtDate(i.due_date)}).` })),
+    ...paidNoBpRequest.map((i) => ({ key: `r-${i.id}`, tone: "warning", text: `Client paid invoice ${i.invoice_number}. Ask the Business Partner for their invoice.`, action: canEdit ? toInvoicesTab : null })),
+    ...dueSoon.map((i) => ({ key: `s-${i.id}`, tone: "info", text: `“${i.title}”: ${dueLabel(i).toLowerCase()} (${fmtDate(i.due_date)}).` })),
   ];
 
   const money = invoiceTotals(invoices);
@@ -266,7 +266,7 @@ export default function MonitoringProjectPage() {
   const doneCount = items.filter((i) => i.status === "completed").length;
   const nextDue = live && items.filter((i) => i.status !== "completed" && i.due_date).sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
   const period = project.start_date || project.end_date
-    ? `${project.start_date ? fmtDate(project.start_date) : "—"} to ${project.end_date ? fmtDate(project.end_date) : "—"}`
+    ? `${project.start_date ? fmtDate(project.start_date) : "-"} to ${project.end_date ? fmtDate(project.end_date) : "-"}`
     : "";
   const counts = { plan: items.length, invoices: invoices.length, documents: documents.length };
 
@@ -307,7 +307,7 @@ export default function MonitoringProjectPage() {
             </div>
             <div className="mon-kpi mon-kpi-purple">
               <span className="mon-kpi-label">Progress</span>
-              <span className="mon-kpi-value">{items.length ? `${doneCount}/${items.length}` : "—"}</span>
+              <span className="mon-kpi-value">{items.length ? `${doneCount}/${items.length}` : "-"}</span>
               <span className="mon-kpi-sub">{!live ? "Project completed" : nextDue ? `Next: ${fmtDate(nextDue.due_date)}` : items.length ? "Nothing pending with a date" : "No milestones yet"}</span>
             </div>
             <div className="mon-kpi mon-kpi-amber">
@@ -385,7 +385,7 @@ export default function MonitoringProjectPage() {
                     expandable={false}
                     action={canEdit ? <Button size="sm" onClick={() => raiseInvoice()}>+ Raise Invoice</Button> : null}
                   >
-                    <InvoiceList entries={entries} emptyText="No invoices raised yet — raise one against a milestone or its deliverables." onChanged={fetchAll} />
+                    <InvoiceList entries={entries} emptyText="No invoices raised yet. Raise one against a milestone or its deliverables." onChanged={fetchAll} />
                   </Collapsible>
                 </Card>
               )}
@@ -397,11 +397,11 @@ export default function MonitoringProjectPage() {
                   <Card className="pp-summary-card">
                     <Collapsible title="Team" icon={<UsersIcon />} expandable={false}>
                       <div className="pp-summary">
-                        <div className="pp-summary-item"><span>Person Responsible</span><strong>{lead.pr?.full_name || "—"}</strong></div>
-                        <div className="pp-summary-item"><span>Reviewer</span><strong>{lead.rev?.full_name || "—"}</strong></div>
-                        <div className="pp-summary-item"><span>Recommending Authority</span><strong>{lead.aa?.full_name || "—"}</strong></div>
-                        <div className="pp-summary-item"><span>Business Partner</span><strong>{lead.ba?.full_name || "—"}</strong></div>
-                        {hasBp && <div className="pp-summary-item"><span>BP Revenue Share</span><strong>{project.bp_share_pct != null ? `${project.bp_share_pct}%` : "—"}</strong></div>}
+                        <div className="pp-summary-item"><span>Person Responsible</span><strong>{lead.pr?.full_name || "-"}</strong></div>
+                        <div className="pp-summary-item"><span>Reviewer</span><strong>{lead.rev?.full_name || "-"}</strong></div>
+                        <div className="pp-summary-item"><span>Recommending Authority</span><strong>{lead.aa?.full_name || "-"}</strong></div>
+                        <div className="pp-summary-item"><span>Business Partner</span><strong>{lead.ba?.full_name || "-"}</strong></div>
+                        {hasBp && <div className="pp-summary-item"><span>BP Revenue Share</span><strong>{project.bp_share_pct != null ? `${project.bp_share_pct}%` : "-"}</strong></div>}
                       </div>
                     </Collapsible>
                   </Card>
@@ -410,11 +410,11 @@ export default function MonitoringProjectPage() {
                       <div className="pp-summary">
                         <div className="pp-summary-item"><span>Proposed Value</span><strong>{formatINR(project.proposal?.proposed_value)}</strong></div>
                         <div className="pp-summary-item"><span>Contract Value</span><strong>{formatINR(project.contract_value)}</strong></div>
-                        <div className="pp-summary-item"><span>Period</span><strong>{period || "—"}</strong></div>
-                        <div className="pp-summary-item"><span>Agreement Ref.</span><strong className="mon-notes">{project.contract_ref || "—"}</strong></div>
-                        <div className="pp-summary-item"><span>Client Address</span><strong className="mon-notes">{project.client_address || "—"}</strong></div>
-                        <div className="pp-summary-item"><span>Client GSTIN</span><strong>{project.client_gstin || "—"}</strong></div>
-                        <div className="pp-summary-item"><span>Notes</span><strong className="mon-notes">{project.notes || "—"}</strong></div>
+                        <div className="pp-summary-item"><span>Period</span><strong>{period || "-"}</strong></div>
+                        <div className="pp-summary-item"><span>Agreement Ref.</span><strong className="mon-notes">{project.contract_ref || "-"}</strong></div>
+                        <div className="pp-summary-item"><span>Client Address</span><strong className="mon-notes">{project.client_address || "-"}</strong></div>
+                        <div className="pp-summary-item"><span>Client GSTIN</span><strong>{project.client_gstin || "-"}</strong></div>
+                        <div className="pp-summary-item"><span>Notes</span><strong className="mon-notes">{project.notes || "-"}</strong></div>
                       </div>
                     </Collapsible>
                   </Card>

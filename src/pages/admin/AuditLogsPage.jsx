@@ -125,19 +125,19 @@ function AuditLogDetailModal({ log, onClose }) {
         <div className="al-detail-grid">
           <div className="al-detail-row">
             <span className="al-detail-label">Actor</span>
-            <span className="al-detail-value">{log.actor?.full_name || "—"}</span>
+            <span className="al-detail-value">{log.actor?.full_name || "-"}</span>
           </div>
           <div className="al-detail-row">
             <span className="al-detail-label">Designation</span>
-            <span className="al-detail-value"><Badge variant="info">{ROLE_LABELS[log.action_by_role] || log.action_by_role || "—"}</Badge></span>
+            <span className="al-detail-value"><Badge variant="info">{ROLE_LABELS[log.action_by_role] || log.action_by_role || "-"}</Badge></span>
           </div>
           <div className="al-detail-row">
             <span className="al-detail-label">Team</span>
-            <span className="al-detail-value">{log.actor?.team || "—"}</span>
+            <span className="al-detail-value">{log.actor?.team || "-"}</span>
           </div>
           <div className="al-detail-row">
             <span className="al-detail-label">Office</span>
-            <span className="al-detail-value">{log.actor?.office ? OFFICE_LABELS[log.actor.office] || log.actor.office : "—"}</span>
+            <span className="al-detail-value">{log.actor?.office ? OFFICE_LABELS[log.actor.office] || log.actor.office : "-"}</span>
           </div>
           <div className="al-detail-row">
             <span className="al-detail-label">Action</span>
@@ -145,7 +145,7 @@ function AuditLogDetailModal({ log, onClose }) {
           </div>
           <div className="al-detail-row al-detail-row-full">
             <span className="al-detail-label">Comment</span>
-            <p className="al-detail-comment">{log.comment || "—"}</p>
+            <p className="al-detail-comment">{log.comment || "-"}</p>
           </div>
         </div>
       </Modal.Body>
@@ -351,25 +351,25 @@ export default function AuditLogsPage() {
                             {new Date(log.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </td>
-                        <td className="al-actor">{log.actor?.full_name || (isEmp ? "Business Partner" : "—")}</td>
+                        <td className="al-actor">{log.actor?.full_name || (isEmp ? "Business Partner" : "-")}</td>
                         <td>
-                          <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp || isLead ? log.actor_role : log.action_by_role] || (isEmp || isLead ? log.actor_role : log.action_by_role) || "—"}</Badge>
+                          <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp || isLead ? log.actor_role : log.action_by_role] || (isEmp || isLead ? log.actor_role : log.action_by_role) || "-"}</Badge>
                         </td>
                         {isEmp ? (
-                          <td className="al-team">{log.application?.application_code || "—"}</td>
+                          <td className="al-team">{log.application?.application_code || "-"}</td>
                         ) : isLead ? (
                           <td className="al-team">
-                            {log.lead?.lead_number || "—"}
+                            {log.lead?.lead_number || "-"}
                             {log.lead?.team && <span className="text-xs text-tertiary" style={{ display: "block" }}>{log.lead.team}</span>}
                           </td>
                         ) : (
-                          <td className="al-team">{log.actor?.team || "—"}</td>
+                          <td className="al-team">{log.actor?.team || "-"}</td>
                         )}
                         <td>
                           <ActionBadge action={log.action} meta={actionMeta} />
                         </td>
                         <td className="al-comment" title={log.comment || ""}>
-                          {log.comment ? <span className="al-comment-text">{log.comment}</span> : <span className="al-comment-empty">—</span>}
+                          {log.comment ? <span className="al-comment-text">{log.comment}</span> : <span className="al-comment-empty">-</span>}
                         </td>
                       </tr>
                     ))}
@@ -391,7 +391,7 @@ export default function AuditLogsPage() {
                     }
                   >
                     <div className="al-mobile-card-top">
-                      <span className="al-actor">{log.actor?.full_name || (isEmp ? "Business Partner" : "—")}</span>
+                      <span className="al-actor">{log.actor?.full_name || (isEmp ? "Business Partner" : "-")}</span>
                       <ActionBadge action={log.action} meta={actionMeta} />
                     </div>
                     <div className="al-mobile-card-meta">
@@ -399,7 +399,7 @@ export default function AuditLogsPage() {
                         {new Date(log.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} ·{" "}
                         {new Date(log.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                       </span>
-                      <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp || isLead ? log.actor_role : log.action_by_role] || (isEmp || isLead ? log.actor_role : log.action_by_role) || "—"}</Badge>
+                      <Badge className="al-role-badge" variant="info">{ROLE_LABELS[isEmp || isLead ? log.actor_role : log.action_by_role] || (isEmp || isLead ? log.actor_role : log.action_by_role) || "-"}</Badge>
                       {isEmp && log.application?.application_code && <span className="text-xs text-tertiary">{log.application.application_code}</span>}
                       {isLead && log.lead?.lead_number && <span className="text-xs text-tertiary">{log.lead.lead_number}{log.lead.team ? ` · ${log.lead.team}` : ""}</span>}
                       {!isEmp && !isLead && log.actor?.team && <span className="text-xs text-tertiary">{log.actor.team}</span>}
