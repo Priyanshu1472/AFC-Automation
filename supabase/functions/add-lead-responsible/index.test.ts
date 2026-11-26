@@ -79,12 +79,6 @@ Deno.test("add-lead-responsible - lead already dropped -> 400", async () => {
   assertEquals(res.status, 400);
 });
 
-Deno.test("add-lead-responsible - lead already declined -> 400", async () => {
-  const client = buildClient({ lead: leadRow({ status: "md_declined" }) });
-  const res = await handleRequest(req(), client as never);
-  assertEquals(res.status, 400);
-});
-
 Deno.test("add-lead-responsible - past Recommending Authority review -> 400, even for the named PR", async () => {
   const client = buildClient({ lead: leadRow({ status: "pmt_review" }) });
   const res = await handleRequest(req(), client as never);

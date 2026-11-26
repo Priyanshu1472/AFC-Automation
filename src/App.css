@@ -865,19 +865,25 @@ select.input {
   flex-shrink: 0;
 }
 
-.badge-success { background: #16a34a; color: #f2faf6; }
-.badge-warning { background: #f59e0b; color: #2b1a02; }
-.badge-danger  { background: #dc2626; color: #fdf2f2; }
-.badge-info    { background: #0d9488; color: #f2faf6; }
-.badge-neutral { background: #64748b; color: #f4f7f5; }
-.badge-brand   { background: var(--brand-600); color: #f2faf6; }
+.badge-success    { background: #16a34a; color: #f2faf6; }
+.badge-warning    { background: #f59e0b; color: #2b1a02; }
+.badge-danger     { background: #dc2626; color: #fdf2f2; }
+.badge-info       { background: #0d9488; color: #f2faf6; }
+.badge-neutral    { background: #64748b; color: #f4f7f5; }
+.badge-brand      { background: var(--brand-600); color: #f2faf6; }
+/* Yellow/pale-green — lead-status-only tiers on the red → orange → yellow →
+   green → pale-green urgency ramp that the other variants don't cover. */
+.badge-yellow     { background: #ffeb3b; color: #3a3000; }
+.badge-pale-green { background: #d9f99d; color: #365314; }
 
-[data-theme="dark"] .badge-success { background: #15803d; color: #eafaf0; }
-[data-theme="dark"] .badge-warning { background: #b45309; color: #fdf1e0; }
-[data-theme="dark"] .badge-danger  { background: #b91c1c; color: #fdeaea; }
-[data-theme="dark"] .badge-info    { background: #0f766e; color: #e4f7f4; }
-[data-theme="dark"] .badge-neutral { background: #475569; color: #f1f5f9; }
-[data-theme="dark"] .badge-brand   { background: var(--brand-700); color: #eafaf0; }
+[data-theme="dark"] .badge-success    { background: #15803d; color: #eafaf0; }
+[data-theme="dark"] .badge-warning    { background: #b45309; color: #fdf1e0; }
+[data-theme="dark"] .badge-danger     { background: #b91c1c; color: #fdeaea; }
+[data-theme="dark"] .badge-info       { background: #0f766e; color: #e4f7f4; }
+[data-theme="dark"] .badge-neutral    { background: #475569; color: #f1f5f9; }
+[data-theme="dark"] .badge-brand      { background: var(--brand-700); color: #eafaf0; }
+[data-theme="dark"] .badge-yellow     { background: #a16207; color: #fef9c3; }
+[data-theme="dark"] .badge-pale-green { background: #4d7c0f; color: #ecfccb; }
 
 /* ============================================================
    11. TABLE

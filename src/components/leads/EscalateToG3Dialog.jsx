@@ -34,7 +34,7 @@ export default function EscalateToG3Dialog({ leadId, queryId, requireConflictLea
     supabase
       .from("leads")
       .select("id, lead_number, title, team")
-      .not("status", "in", "(po_assignment,g3_review,md_approved,md_declined,pa_dropped)")
+      .not("status", "in", "(po_assignment,g3_review,md_approved,pa_dropped)")
       .neq("id", leadId)
       .order("team")
       .order("lead_number")

@@ -3,16 +3,15 @@ import { isDeadlinePassed } from "../../lib/deadline";
 // LeadDetailPage so the label/color for a given status never drifts
 // between the two.
 export const STATUS_MAP = {
-  po_assignment: { label: "Awaiting Assignment", variant: "warning" },
-  pa_review: { label: "PR Review", variant: "warning" },
-  recommending_authority_review: { label: "Recommending Authority", variant: "warning" },
-  pmt_review: { label: "PMT", variant: "info" },
-  g3_review: { label: "G3 Committee Review", variant: "warning" },
+  po_assignment: { label: "Awaiting Assignment", variant: "pale-green" },
+  pa_review: { label: "PR Review", variant: "yellow" },
+  recommending_authority_review: { label: "Recommending Authority", variant: "yellow" },
+  pmt_review: { label: "PMT", variant: "yellow" },
+  g3_review: { label: "G3 Committee Review", variant: "yellow" },
   md_review: { label: "MD Approval Pending", variant: "neutral" },
-  pa_action_required: { label: "Action Required", variant: "danger" },
+  pa_action_required: { label: "Action Required", variant: "warning" },
   pa_dropped: { label: "Dropped", variant: "danger" },
   md_approved: { label: "Approved", variant: "success" },
-  md_declined: { label: "Declined", variant: "danger" },
 };
 
 // The full possible pipeline, in order. G3 is an optional waypoint — only a
@@ -60,7 +59,7 @@ export const DELIVERY_TYPE_LABELS = {
 
 // A finished lead never goes "overdue" — matches advance-lead-stage's own
 // TERMINAL_STATUSES and update-lead's identical constant.
-export const TERMINAL_STATUSES = ["md_approved", "md_declined", "pa_dropped"];
+export const TERMINAL_STATUSES = ["md_approved", "pa_dropped"];
 
 // A lead whose submission deadline has passed and isn't already finished —
 // every normal pipeline action gets blocked once this is true (see

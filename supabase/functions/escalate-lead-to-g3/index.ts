@@ -51,7 +51,7 @@ import { regenerateApprovalNote } from "../_shared/leadApprovalPdf.ts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-const INELIGIBLE_CONFLICT_STATUSES = new Set(["po_assignment", "g3_review", "md_approved", "md_declined", "pa_dropped"]);
+const INELIGIBLE_CONFLICT_STATUSES = new Set(["po_assignment", "g3_review", "md_approved", "pa_dropped"]);
 
 type LeadRow = {
   id: string;

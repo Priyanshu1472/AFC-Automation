@@ -29,7 +29,7 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 
 // A finished lead never goes "overdue" — mirrors leadStatus.js's identical
 // TERMINAL_STATUSES on the frontend and advance-lead-stage's copy.
-const TERMINAL_STATUSES = new Set(["md_approved", "md_declined", "pa_dropped"]);
+const TERMINAL_STATUSES = new Set(["md_approved", "pa_dropped"]);
 
 const BUCKET = "lead-documents";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;

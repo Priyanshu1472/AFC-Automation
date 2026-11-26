@@ -665,7 +665,7 @@ export default function LeadDetailPage() {
 
   const overdue = isLeadOverdue(lead);
   const statusCfg = displayStatusCfg(lead);
-  const isTerminal = ["md_approved", "md_declined", "pa_dropped"].includes(lead.status);
+  const isTerminal = ["md_approved", "pa_dropped"].includes(lead.status);
   const actions = availableActions();
   const currentFlowIdx = STATUS_FLOW.findIndex((s) => s.key === lead.status);
   // Every uploaded/generated document lives under Lead Records now — the
@@ -930,8 +930,7 @@ export default function LeadDetailPage() {
 
               {/* md_approved has no ACTIONS_BY_STATUS entry anymore — Drop
                   was the one action still open there, and it's gone now
-                  that Drop is removed entirely past PMT review. md_declined
-                  has no entry either (actions.length is already 0 there).
+                  that Drop is removed entirely past PMT review.
                   pa_dropped's own "Claim Lead" action deliberately keeps
                   its existing isTerminal-suppressed behavior. */}
               {actions.length > 0 && !isTerminal && (
@@ -1087,7 +1086,7 @@ export default function LeadDetailPage() {
                 <Card className={`ar-final-card ar-final-${lead.status === "md_approved" ? "accepted" : "rejected"}`}>
                   <Card.Body>
                     <p className="ar-final-title">
-                      {lead.status === "md_approved" ? "Lead Approved" : lead.status === "md_declined" ? "Lead Declined" : "Lead Dropped"}
+                      {lead.status === "md_approved" ? "Lead Approved" : "Lead Dropped"}
                     </p>
                     {lead.status === "md_approved" && canOpenProposal(lead, profile) && (
                       <Button variant="primary" onClick={() => navigate(`/proposals/${lead.id}`)} style={{ marginTop: "var(--space-3)" }}>

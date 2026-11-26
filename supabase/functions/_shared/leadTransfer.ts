@@ -5,7 +5,7 @@
 // on the lead). Only ever runs on MD's say-so: MD transferring directly,
 // or MD approving a transfer PMT requested.
 // Works at any lead status, including
-// terminal ones (md_approved/md_declined/pa_dropped) — a lead can be
+// terminal ones (md_approved/pa_dropped) — a lead can be
 // transferred even after MD approval, per product decision; any downstream
 // Proposal Preparation/Fee Note already created stays tied to the old
 // lead_id/team as-is (deliberately not touched or migrated).

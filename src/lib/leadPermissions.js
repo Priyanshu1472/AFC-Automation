@@ -36,7 +36,7 @@ export const leadCan = {
   //   already passed PMT and is now back for rework. A lead sent back by
   //   the Recommending Authority has no Drop at all — only Edit & Resubmit.
   drop: (profile, lead) => {
-    if (["md_declined", "pa_dropped"].includes(lead.status)) return false;
+    if (lead.status === "pa_dropped") return false;
     if (lead.status === "po_assignment") return !!profile?.id && profile.id === lead.forwarded_to_id;
     if (lead.status === "pa_review") {
       return !!profile?.id && [lead.person_responsible_id, lead.reviewer_id, lead.recommending_authority_id].includes(profile.id);
