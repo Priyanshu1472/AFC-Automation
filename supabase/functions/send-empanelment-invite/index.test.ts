@@ -189,6 +189,25 @@ Deno.test("send-empanelment-invite - rejects a Project Assistant reviewer when t
   assertEquals(json.error, "Your team has an active Project Officer — select them instead of a Project Assistant.");
 });
 
+Deno.test("send-empanelment-invite - CCs the sender's own email on the invite", async () => {
+  const original = globalThis.fetch;
+  let capturedBody: Record<string, unknown> | null = null;
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    capturedBody = JSON.parse(init?.body as string);
+    return new Response(JSON.stringify({ id: "e1" }), { status: 200 });
+  }) as unknown as typeof fetch;
+  try {
+    const res = await handleRequest(
+      req({ ba_email: "ba@org.com", project_officer_id: PO_ID }),
+      client({ caller: callerRow({ email: "sender@afc.com" }) }) as never,
+    );
+    assertEquals(res.status, 200);
+    assertEquals(capturedBody?.cc, ["sender@afc.com"]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("send-empanelment-invite - success returns the new application_id and email_sent status", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = okFetch;

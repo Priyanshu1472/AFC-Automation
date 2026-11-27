@@ -21,6 +21,7 @@ import { ChatIcon, ActivityIcon } from "../../components/icons";
 import { CLIENT_RESPONSE_VARIANTS, outcomeLabel, leadTypeLabel, isAccountsCommittee, isMyProposal, isTeamProposal } from "../../lib/proposalPrep";
 import "../../styles/ProposalPreparationPage.css";
 import { isDeadlinePassed } from "../../lib/deadline";
+import { prepStatusOf, proposalStatusBadges, emdStatusBadges, feePaymentPendingOf, emdAccountsPendingOf } from "../../lib/proposalListStatus";
 
 // "In Preparation" covers both "no proposal_preparations row yet" and "row
 // exists but the client hasn't responded" — i.e. everything that isn't yet
@@ -41,42 +42,12 @@ function accountsPendingOf(l) {
   return feePaymentPendingOf(l) || emdAccountsPendingOf(l);
 }
 
-// Split of accountsPendingOf by table column: the fee note sits under
-// "Proposal Status", everything EMD/PBG under "EMD Status".
-function feePaymentPendingOf(l) {
-  if (l.feeNote?.status === "approved" && l.feeNote?.payment_status !== "paid") return "Payment Due";
-  return null;
-}
-
-function emdAccountsPendingOf(l) {
-  if (l.emd?.status === "pending_accounts") return l.emd.track === "pbg" ? "PBG with Accounts" : "EMD Verification";
-  if (l.pbgNote?.status === "pending_accounts") return "PBG Note Review";
-  if (l.pbgNote?.status === "pending_payment") return "PBG Payment Due";
-  return null;
-}
-
-// What the EMD is waiting on, for the lead's own team.
-function emdBadgeOf(l) {
-  if (l.pbgNote?.status === "completed") return { label: "PBG Done", variant: "success" };
-  if (l.pbgNote && ["pending_ra", "pending_md"].includes(l.pbgNote.status)) return { label: "PBG Note in Approval", variant: "warning" };
-  if (!l.emd) return null;
-  if (l.emd.status === "completed") return { label: l.emd.track === "pbg" ? "PBG Done" : "EMD Refunded", variant: "success" };
-  if (l.emd.status === "pending") return { label: "EMD Refund Pending", variant: "warning" };
-  if (l.emd.status === "awaiting_completion") return { label: "EMD on Completion", variant: "neutral" };
-  return null;
-}
-
 const PREP_STATUS_OPTIONS = [
   { value: "all", label: "All" },
   { value: "not_started", label: "Not Started" },
   { value: "in_progress", label: "In Progress" },
   { value: "locked", label: "Locked" },
 ];
-
-function prepStatusOf(l) {
-  if (!l.proposal) return "not_started";
-  return l.proposal.locked ? "locked" : "in_progress";
-}
 
 function fmtDate(d) {
   if (!d) return "-";
@@ -134,8 +105,8 @@ export default function ProposalsListPage() {
     const proposalIds = (proposalRows || []).map((p) => p.id);
     const [{ data: noteRows }, { data: emdRows }, { data: additionalRows }, { data: pbgRows }] = proposalIds.length
       ? await Promise.all([
-        supabase.from("fee_notes").select("proposal_id, status, payment_status").in("proposal_id", proposalIds),
-        supabase.from("proposal_emd_tracking").select("proposal_id, track, status").in("proposal_id", proposalIds),
+        supabase.from("fee_notes").select("proposal_id, status, payment_status, emd_amount").in("proposal_id", proposalIds),
+        supabase.from("proposal_emd_tracking").select("proposal_id, track, status, emd_amount").in("proposal_id", proposalIds),
         supabase.from("proposal_additional_responsibles").select("proposal_id, user_id").in("proposal_id", proposalIds),
         supabase.from("proposal_pbg_notes").select("proposal_id, status").in("proposal_id", proposalIds),
       ])
@@ -363,9 +334,8 @@ export default function ProposalsListPage() {
                     {filtered.map((l) => {
                       const proposal = l.proposal;
                       const overdue = !!l.submission_deadline && isDeadlinePassed(l.submission_deadline) && !proposal?.locked;
-                      const emdPending = emdAccountsPendingOf(l);
-                      const emdBadge = emdPending ? { label: emdPending, variant: "warning" } : emdBadgeOf(l);
-                      const feePending = feePaymentPendingOf(l);
+                      const statusBadges = proposalStatusBadges(l);
+                      const emdBadges = emdStatusBadges(l);
                       return (
                         <tr key={l.id} className="pp-row-clickable" onClick={() => navigate(`/proposals/${l.id}`)}>
                           <td>
@@ -384,8 +354,9 @@ export default function ProposalsListPage() {
                           <td>{leadTypeLabel(l)}</td>
                           <td className={overdue ? "pp-td-date--overdue" : ""}>{fmtDate(l.submission_deadline)}</td>
                           <td>
-                            <Badge className="pp-status-badge" variant={proposal?.locked ? "neutral" : "success"}>{proposal?.locked ? "Locked" : proposal ? "In Progress" : "Not Started"}</Badge>
-                            {feePending && <Badge className="pp-status-badge pp-status-badge--extra" variant="warning">{feePending}</Badge>}
+                            {statusBadges.map((b, i) => (
+                              <Badge key={b.label} className={`pp-status-badge${i > 0 ? " pp-status-badge--extra" : ""}`} variant={b.variant} title={b.title}>{b.label}</Badge>
+                            ))}
                           </td>
                           <td>
                             {proposal ? (
@@ -395,9 +366,9 @@ export default function ProposalsListPage() {
                             )}
                           </td>
                           <td>
-                            {emdBadge ? (
-                              <Badge className="pp-status-badge" variant={emdBadge.variant}>{emdBadge.label}</Badge>
-                            ) : (
+                            {emdBadges.length ? emdBadges.map((b, i) => (
+                              <Badge key={b.label} className={`pp-status-badge${i > 0 ? " pp-status-badge--extra" : ""}`} variant={b.variant} title={b.title}>{b.label}</Badge>
+                            )) : (
                               <span className="pp-td-muted">-</span>
                             )}
                           </td>

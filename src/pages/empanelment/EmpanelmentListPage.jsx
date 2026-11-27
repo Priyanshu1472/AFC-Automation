@@ -15,6 +15,8 @@ import Select from "../../components/ui/Select";
 import Tooltip from "../../components/ui/Tooltip";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import { TrashIcon } from "../../components/icons";
 import "../../styles/EmpanelmentListPage.css";
 
 import ManualBusinessPartnersList from "../../components/empanelment/ManualBusinessPartnersList";
@@ -280,8 +282,11 @@ function StatCard({ label, value, colorClass, loading, active, onClick }) {
 export default function EmpanelmentListPage() {
   const navigate = useNavigate();
   const { profile, activeTeam } = useAuth();
+  const { showToast } = useToast();
 
   const [applications, setApplications] = useState([]);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState("all");
@@ -320,6 +325,24 @@ export default function EmpanelmentListPage() {
   useEffect(() => {
     fetchApplications();
   }, [fetchApplications]);
+
+  async function confirmDelete() {
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-empanelment-application", {
+        body: { application_id: deleteTarget.id },
+      });
+      if (error) { showToast(await extractFunctionErrorMessage(error, "Could not delete this application."), "danger"); return; }
+      if (!data?.success) { showToast(data?.error || "Could not delete this application.", "danger"); return; }
+      setApplications((prev) => prev.filter((a) => a.id !== deleteTarget.id));
+      showToast("Application deleted.", "success");
+      setDeleteTarget(null);
+    } catch (err) {
+      showToast(err.message || "Could not delete this application.", "danger");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   // Realtime: any change to an application visible to this user (RLS still
   // governs what postgres_changes actually delivers) triggers a light
@@ -521,6 +544,11 @@ export default function EmpanelmentListPage() {
                                 </Tooltip>
                               )}
                               <LetterIcons app={a} />
+                              {a.sent_by === profile?.id && a.status === "sent" && (
+                                <Tooltip text="Delete invitation">
+                                  <button type="button" className="bl-icon-btn bl-icon-danger" aria-label="Delete invitation" onClick={() => setDeleteTarget(a)}><TrashIcon /></button>
+                                </Tooltip>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -570,6 +598,17 @@ export default function EmpanelmentListPage() {
           <Select options={DATE_FILTER_OPTIONS} value={dateFilter} onChange={setDateFilter} placeholder="All Time" />
         </FilterField>
       </FilterDrawer>
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete invitation?"
+          message={`The empanelment invite sent to ${deleteTarget.ba_email} (Code: ${deleteTarget.application_code}) will be permanently deleted.`}
+          confirmLabel="Delete"
+          loading={deleting}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

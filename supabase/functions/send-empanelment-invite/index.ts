@@ -201,6 +201,7 @@ export async function handleRequest(req: Request, adminClient: ReturnType<typeof
 
     const emailSent = await sendResendEmail({
       to: normalizedEmail,
+      cc: caller.email,
       subject: "Business Partner Empanelment Form — AFC India Limited",
       html,
     });

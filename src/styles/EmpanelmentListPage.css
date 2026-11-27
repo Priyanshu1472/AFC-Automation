@@ -293,6 +293,12 @@
 
 .bl-icon-btn:disabled { opacity: 0.55; cursor: wait; }
 
+.bl-icon-btn.bl-icon-danger:hover:not(:disabled) {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border-color: var(--danger);
+}
+
 /* ── Provisional / Empanelment letter indicators ─────────── */
 .bl-letter-icons {
   display: inline-flex;
