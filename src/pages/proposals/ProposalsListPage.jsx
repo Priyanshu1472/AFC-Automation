@@ -17,8 +17,8 @@ import Select from "../../components/ui/Select";
 import Alert from "../../components/ui/Alert";
 import PageLoader from "../../components/ui/PageLoader";
 import FilterDrawer, { FilterButton, FilterField } from "../../components/ui/FilterDrawer";
-import { ChatIcon, ArrowRightIcon, ActivityIcon } from "../../components/icons";
-import { CLIENT_RESPONSE_VARIANTS, outcomeLabel, canOpenProposal, isAccountsCommittee, isMyProposal, isTeamProposal } from "../../lib/proposalPrep";
+import { ChatIcon, ActivityIcon } from "../../components/icons";
+import { CLIENT_RESPONSE_VARIANTS, outcomeLabel, leadTypeLabel, isAccountsCommittee, isMyProposal, isTeamProposal } from "../../lib/proposalPrep";
 import "../../styles/ProposalPreparationPage.css";
 import { isDeadlinePassed } from "../../lib/deadline";
 
@@ -38,7 +38,17 @@ const QUICK_FILTERS = {
 };
 
 function accountsPendingOf(l) {
+  return feePaymentPendingOf(l) || emdAccountsPendingOf(l);
+}
+
+// Split of accountsPendingOf by table column: the fee note sits under
+// "Proposal Status", everything EMD/PBG under "EMD Status".
+function feePaymentPendingOf(l) {
   if (l.feeNote?.status === "approved" && l.feeNote?.payment_status !== "paid") return "Payment Due";
+  return null;
+}
+
+function emdAccountsPendingOf(l) {
   if (l.emd?.status === "pending_accounts") return l.emd.track === "pbg" ? "PBG with Accounts" : "EMD Verification";
   if (l.pbgNote?.status === "pending_accounts") return "PBG Note Review";
   if (l.pbgNote?.status === "pending_payment") return "PBG Payment Due";
@@ -99,13 +109,9 @@ export default function ProposalsListPage() {
   const teamOptions = [{ value: "all", label: "All Teams" }, ...teams.map((t) => ({ value: t, label: t }))];
 
   // "My Proposals" / "Team Proposals" / "Organization Proposals" — every
-  // user gets all three (unlike LeadListPage's role-gated "All Leads"), but
-  // a role with no team and never personally named on a lead (md/cfo/cs/
-  // admin, and Accounts Committee members) would land on an empty "My
-  // Proposals" AND an empty "Team Proposals" — default those straight to
-  // Organization instead of a tab that's always blank for them.
-  const defaultsToOrg = ["md", "cfo", "cs", "admin"].includes(profile?.role) || isAccounts;
-  const [view, setView] = useState(defaultsToOrg ? "organization" : "mine");
+  // user gets all three (unlike LeadListPage's role-gated "All Leads"), and
+  // the page always opens on My Proposals.
+  const [view, setView] = useState("mine");
 
   const fetchAll = useCallback(async () => {
     const { data: leadRows, error: err } = await supabase
@@ -351,13 +357,15 @@ export default function ProposalsListPage() {
               <div className="pp-table-wrap">
                 <table className="table">
                   <thead>
-                    <tr><th>Lead Number</th><th>Client</th><th>BP</th><th>Person Responsible</th><th>Submission Date</th><th>Status</th><th>Outcome</th><th>Actions</th></tr>
+                    <tr><th>Lead Number</th><th>Client</th><th>Lead Type</th><th>Submission Date</th><th>Proposal Status</th><th>Outcome</th><th>EMD Status</th><th className="pp-col-actions">Actions</th></tr>
                   </thead>
                   <tbody>
                     {filtered.map((l) => {
                       const proposal = l.proposal;
                       const overdue = !!l.submission_deadline && isDeadlinePassed(l.submission_deadline) && !proposal?.locked;
-                      const canOpen = canOpenProposal(l, profile);
+                      const emdPending = emdAccountsPendingOf(l);
+                      const emdBadge = emdPending ? { label: emdPending, variant: "warning" } : emdBadgeOf(l);
+                      const feePending = feePaymentPendingOf(l);
                       return (
                         <tr key={l.id} className="pp-row-clickable" onClick={() => navigate(`/proposals/${l.id}`)}>
                           <td>
@@ -366,20 +374,18 @@ export default function ProposalsListPage() {
                               className="pp-lead-number-link"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/leads/${l.id}`);
+                                navigate(`/leads/${l.id}`, { state: { from: "proposals" } });
                               }}
                             >
                               {l.lead_number}
                             </button>
                           </td>
                           <td>{l.client_name || <span className="pp-td-muted">-</span>}</td>
-                          <td className="pp-td-muted">{l.bp_names || l.ba?.full_name || "-"}</td>
-                          <td className="pp-td-muted">{l.pr?.full_name || "-"}</td>
+                          <td>{leadTypeLabel(l)}</td>
                           <td className={overdue ? "pp-td-date--overdue" : ""}>{fmtDate(l.submission_deadline)}</td>
                           <td>
                             <Badge className="pp-status-badge" variant={proposal?.locked ? "neutral" : "success"}>{proposal?.locked ? "Locked" : proposal ? "In Progress" : "Not Started"}</Badge>
-                            {accountsPendingOf(l) && <Badge className="pp-status-badge pp-status-badge--extra" variant="warning">{accountsPendingOf(l)}</Badge>}
-                            {!accountsPendingOf(l) && emdBadgeOf(l) && <Badge className="pp-status-badge pp-status-badge--extra" variant={emdBadgeOf(l).variant}>{emdBadgeOf(l).label}</Badge>}
+                            {feePending && <Badge className="pp-status-badge pp-status-badge--extra" variant="warning">{feePending}</Badge>}
                           </td>
                           <td>
                             {proposal ? (
@@ -388,7 +394,14 @@ export default function ProposalsListPage() {
                               <span className="pp-td-muted">-</span>
                             )}
                           </td>
-                          <td onClick={(e) => e.stopPropagation()}>
+                          <td>
+                            {emdBadge ? (
+                              <Badge className="pp-status-badge" variant={emdBadge.variant}>{emdBadge.label}</Badge>
+                            ) : (
+                              <span className="pp-td-muted">-</span>
+                            )}
+                          </td>
+                          <td className="pp-col-actions" onClick={(e) => e.stopPropagation()}>
                             <div className="pp-action-icons">
                               {proposal?.chat_opened_at && (
                                 <button
@@ -409,13 +422,7 @@ export default function ProposalsListPage() {
                                   <ActivityIcon />
                                 </button>
                               )}
-                              {canOpen ? (
-                                <button type="button" className="pp-icon-btn" title="Open Proposal" aria-label="Open proposal" onClick={() => navigate(`/proposals/${l.id}`)}>
-                                  <ArrowRightIcon />
-                                </button>
-                              ) : (
-                                !proposal?.chat_opened_at && <span className="pp-td-muted">-</span>
-                              )}
+                              {!proposal?.chat_opened_at && !(proposal && monitoringByProposal[proposal.id]) && <span className="pp-td-muted">-</span>}
                             </div>
                           </td>
                         </tr>

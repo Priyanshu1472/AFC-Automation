@@ -197,10 +197,12 @@ export default function LeadDetailPage() {
   const backTo = fromDuplicate ? undefined
     : location.state?.from === "home" ? "/home"
     : location.state?.from === "proposal" ? `/proposals/${id}`
+    : location.state?.from === "proposals" ? "/proposals"
     : "/leads";
   const backLabel = fromDuplicate ? `Back to ${location.state.leadNumber || "Lead"}`
     : location.state?.from === "home" ? "Back to Home"
     : location.state?.from === "proposal" ? "Back to Proposal"
+    : location.state?.from === "proposals" ? "Back to Proposals"
     : "Back to Leads";
   const { profile } = useAuth();
   const { showToast } = useToast();
