@@ -472,6 +472,12 @@ verify_jwt = false
 import_map = "./functions/submit-empanelment-correction/deno.json"
 entrypoint = "./functions/submit-empanelment-correction/index.ts"
 
+[functions.delete-empanelment-application]
+enabled = true
+verify_jwt = true
+import_map = "./functions/delete-empanelment-application/deno.json"
+entrypoint = "./functions/delete-empanelment-application/index.ts"
+
 [functions.get-empanelment-correction-info]
 enabled = true
 verify_jwt = false
