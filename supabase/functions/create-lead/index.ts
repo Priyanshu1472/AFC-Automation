@@ -23,7 +23,6 @@ import {
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 const BUCKET = "lead-documents";
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_FILES = 10;
 const MAGIC: Record<string, number[]> = {
   "application/pdf": [0x25, 0x50, 0x44, 0x46],
@@ -39,10 +38,12 @@ function clean(val: FormDataEntryValue | null): string {
 }
 
 async function validateDocument(file: File): Promise<string> {
-  const magic = MAGIC[file.type];
-  if (!magic) return `"${file.name}" must be a PDF, Word, or Excel document.`;
-  if (file.size > MAX_FILE_SIZE) return `"${file.name}" exceeds the 10 MB limit.`;
   if (file.size === 0) return `"${file.name}" is empty.`;
+  // Every document type is allowed now — the magic-byte check below only
+  // still runs for the handful of types we have a known signature for
+  // (catches a corrupted/mismatched file), never to reject a type outright.
+  const magic = MAGIC[file.type];
+  if (!magic) return "";
   const bytes = new Uint8Array(await file.slice(0, magic.length).arrayBuffer());
   for (let i = 0; i < magic.length; i++) {
     if (bytes[i] !== magic[i]) return `"${file.name}" does not appear to be a valid document.`;
